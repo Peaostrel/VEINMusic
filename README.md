@@ -1,6 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/Peaostrel/VEINMusic/main/frontend/public/logo.png" alt="VEIN Music Logo" width="150" height="auto" />
-  <h1>V E I N &nbsp; M U S I C &nbsp; T R A C K E R</h1>
+  <h1>V E I N &nbsp; M U S I C &nbsp;</h1>
   
   [![Python](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat&logo=fastapi)](https://fastapi.tiangolo.com/)
   [![Next.js](https://img.shields.io/badge/Frontend-Next.js-000000?style=flat&logo=next.js)](https://nextjs.org/)
@@ -17,7 +16,7 @@
 * **Универсальный скроблинг**: Браузерное расширение собирает данные о прослушиваниях из Яндекс Музыки, Spotify, VK Музыки и SoundCloud.
 * **Статистика и Уровни**:
   - Успешным прослушиванием (скроблем) считается прослушивание трека более чем на 85%.
-  - За каждый скроубл начисляется 1 XP.
+  - За каждый скробл начисляется 1 XP.
   - Пользователь повышает Уровень и ранг (Новичок, Любитель, Меломан, Легенда) при накоплении XP.
 * **Достижения**: Открываются при достижении целей (например, определенное количество прослушанных треков и жанров).
 * **Глобальный рейтинг (Leaderboard)**: Таблица лидеров среди всех пользователей платформы.
