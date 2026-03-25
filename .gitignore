@@ -1,0 +1,52 @@
+# --- VEIN Music Tracker .gitignore ---
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+*.db
+
+# Node
+node_modules/
+.next/
+dist/
+build/
+*.log
+.eslintcache
+
+# User Data & Secrets
+uploads/*
+!uploads/.gitkeep
+.env
+.env.local
+config.json
+
+# OS Garbage
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.tmp
+*.bak
+
+# Dev & Legacy Trash (Explicitly hide what we couldn't delete)
+check_links.py
+copy_vk_logo.py
+copy_vk_logo_listdir.py
+db_count.py
+scan_colors.js
+screenshot.js
+search_main.py
+start_server.py
+test_encode.bat
+test_read.bat
+test_scrobble.py
+test_single.py
+test_track_counting.py
+test_write_node.js
+direct_screenshot.bat
+package.json
+package-lock.json
+C:\tmp\cleanup_vein.py
