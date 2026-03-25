@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@tailwindcss/postcss": "^4.2.1"
+  },
+  "devDependencies": {
+    "@types/react-syntax-highlighter": "^15.5.13"
+  }
+}
