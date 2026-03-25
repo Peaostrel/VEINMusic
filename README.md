@@ -1,4 +1,14 @@
-# VEIN Music Tracker
+<div align="center">
+  <img src="https://raw.githubusercontent.com/Peaostrel/VEINMusic/main/frontend/public/logo.png" alt="VEIN Music Logo" width="150" height="auto" />
+  <h1>V E I N &nbsp; M U S I C &nbsp; T R A C K E R</h1>
+  
+  [![Python](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat&logo=fastapi)](https://fastapi.tiangolo.com/)
+  [![Next.js](https://img.shields.io/badge/Frontend-Next.js-000000?style=flat&logo=next.js)](https://nextjs.org/)
+  [![Extension](https://img.shields.io/badge/Extension-Chrome-4285F4?style=flat&logo=google-chrome)]()
+  [![Discord](https://img.shields.io/badge/Discord-Rich_Presence-5865F2?style=flat&logo=discord)]()
+</div>
+
+<br>
 
 Система сбора музыкальной статистики и скроблинга. Проект перехватывает воспроизведение треков в браузере и агрегирует их в едином пользовательском веб-профиле.
 
@@ -51,6 +61,5 @@
    - Нажмите "Загрузить распакованное расширение" (Load unpacked) и выберите папку `music-extension`.
    
 4. **Привязка расширения к профилю:**
-   - Авторизуйтесь на сайте VEIN Music.
-   - В разделе "Настройки" подключите "VEIN Web Extension".
-   - Скопируйте предоставленный Token в всплывающее окно расширения, чтобы начать скроблеж в ваш аккаунт.
+   - Просто авторизуйтесь на запущенном сайте VEIN Music.
+   - Расширение **полностью автоматически** обнаружит вашу сессию и подтянет ключ доступа в фоновом режиме. Никаких кнопок нажимать не нужно — скроблинг начнется моментально!
