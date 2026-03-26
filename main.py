@@ -27,8 +27,8 @@ import requests
 import asyncio
 import base64
 
-SPOTIFY_CLIENT_ID = "7810decd8fad497ca8c549ac36c4025b"
-SPOTIFY_CLIENT_SECRET = "124d5d2c54884784b1f91896e45668f1"
+SPOTIFY_CLIENT_ID = "1"
+SPOTIFY_CLIENT_SECRET = "1"
 SPOTIFY_REDIRECT_URI = "http://127.0.0.1:8000/auth/spotify/callback"
 
 DEVELOPERS = {"peaostrel"} 
