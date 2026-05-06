@@ -40,7 +40,6 @@
 - `music-extension/` — Код расширения.
 - `main.py` — Основной сервер и Cloud-воркер.
 - `discord_rpc.py` — Скрипт для Discord Rich Presence (запускается отдельно).
-- `start.bat` — Скрипт для быстрого запуска Backend + Frontend.
 
 ## 🚀 Как запустить
 
@@ -50,8 +49,9 @@
    cd VEINMusic
    ```
 
-2. **Запуск сервера и фронтенда (Windows):**
-   Запустите файл `start.bat`. Он автоматически поднимет `main.py` (FastAPI) и `frontend` (Next.js), после чего откроет браузер.
+2. **Запуск сервера и фронтенда:**
+   - **Backend**: `uvicorn main:app --reload`
+   - **Frontend**: `cd frontend && npm run dev`
 
 3. **Установка расширения-скробблера:**
    - Откройте браузер на базе Chromium.
