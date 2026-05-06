@@ -9,7 +9,7 @@
 
 <br>
 
-[![VEIN Music Preview](preview.png)](https://music.vein.guru)
+[![VEIN Music Preview](preview.jpg)](https://music.vein.guru)
 
 Система сбора музыкальной статистики и скроблинга. Проект перехватывает воспроизведение треков в браузере и агрегирует их в едином пользовательском веб-профиле.
 
