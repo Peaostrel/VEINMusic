@@ -47,6 +47,4 @@ test_single.py
 test_track_counting.py
 test_write_node.js
 direct_screenshot.bat
-package.json
-package-lock.json
-C:\tmp\cleanup_vein.py
+check_users.py

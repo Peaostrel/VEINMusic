@@ -11,9 +11,17 @@ import Footer from './Footer';
  */
 import type { Metadata } from "next";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'VEIN Music',
   description: 'Твой музыкальный профиль',
+  manifest: '/manifest.json',
+  themeColor: '#ffcc00',
+  viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'VEIN Music',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

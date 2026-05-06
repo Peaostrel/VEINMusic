@@ -48,7 +48,8 @@ export default function Auth() {
     const endpoint = isLogin ? '/auth/login' : '/auth/register';
 
     try {
-      const res = await fetch(`http://127.0.0.1:8000${endpoint}`, {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+      const res = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
@@ -147,47 +148,18 @@ export default function Auth() {
               {apiKey}
             </div>
             
-            {!hasExtension ? (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-5 mb-8 text-left">
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-2xl">⚠️</span>
-                  <h3 className="text-red-400 font-bold text-lg">Расширение не найдено</h3>
-                </div>
-                <p className="text-gray-300 text-sm font-medium leading-relaxed mb-4">
-                  Доступ к функционалу закрыт. Необходимо установить и включить официальное браузерное расширение <b>VEIN Scrobbler</b>.
-                </p>
-                <div className="flex items-center justify-center bg-black/40 p-3 rounded-lg animate-pulse">
-                  <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">Ожидание модуля...</span>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-5 mb-8 flex items-center justify-center gap-3">
-                <span className="text-2xl">✅</span>
-                <span className="text-green-400 font-bold">Расширение активно!</span>
-              </div>
-            )}
+            <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-5 mb-8 flex items-center justify-center gap-3">
+              <span className="text-2xl">⚡</span>
+              <span className="text-green-400 font-bold">Система готова к работе!</span>
+            </div>
 
             <div className="space-y-3">
               <button 
                 onClick={() => window.location.href = `/user/${username}`}
-                disabled={!hasExtension}
-                className={`w-full font-black py-4 rounded-xl transition-all text-lg ${hasExtension ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] text-[#121212] shadow-[0_0_20px_var(--accent-glow)] hover:scale-[1.02]' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}
+                className="w-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] text-[#121212] font-black py-4 rounded-xl transition-all text-lg shadow-[0_0_20px_var(--accent-glow)] hover:scale-[1.02]"
               >
-                {hasExtension ? 'ВОЙТИ В СИСТЕМУ' : 'ЖДЕМ РАСШИРЕНИЕ...'}
+                ВОЙТИ В СИСТЕМУ
               </button>
-              
-              {!hasExtension && (
-                  <button 
-                    onClick={() => {
-                      localStorage.removeItem('username');
-                      localStorage.removeItem('apiKey');
-                      setStep('form');
-                    }}
-                    className="w-full text-gray-500 hover:text-red-400 text-sm font-bold mt-4 transition-colors"
-                  >
-                    Выйти из аккаунта
-                  </button>
-              )}
             </div>
           </div>
         )}

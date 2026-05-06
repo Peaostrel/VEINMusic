@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { PlatformDistribution, GenreCloud, ActivityBarChart } from '@/components/StatsCharts';
+import { PieChart, ListMusic, Clock, CalendarDays, Share2, Award } from 'lucide-react';
 
 const getPlatformIcon = (source: string) => {
     switch (source) {
@@ -24,7 +26,7 @@ const getArtistUrl = (artist: string, source: string) => {
         case 'youtube_music': return `https://music.youtube.com/search?q=${q}`;
         case 'soundcloud': return `https://soundcloud.com/search/people?q=${q}`;
         case 'apple_music': return `https://music.apple.com/search?term=${q}`;
-        case 'yandex': return `http://127.0.0.1:8000/api/redirect?source=yandex&type=artist&q=${q}`;
+        case 'yandex': return `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/redirect?source=yandex&type=artist&q=${q}`;
         default: return '#';
     }
 };
@@ -38,14 +40,14 @@ const getAlbumUrl = (album: string, artist: string, source: string) => {
         case 'youtube_music': return `https://music.youtube.com/search?q=${q}`;
         case 'soundcloud': return `https://soundcloud.com/search/albums?q=${q}`;
         case 'apple_music': return `https://music.apple.com/search?term=${q}`;
-        case 'yandex': return `http://127.0.0.1:8000/api/redirect?source=yandex&type=album&q=${q}`;
+        case 'yandex': return `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/redirect?source=yandex&type=album&q=${q}`;
         default: return '#';
     }
 };
 
 const getTrackUrl = (t: any) => {
     if (t.source === 'yandex' && (!t.track_url || !t.track_url.includes('/track/'))) {
-        return `http://127.0.0.1:8000/api/redirect?source=yandex&type=track&q=${encodeURIComponent(t.artist + ' ' + (t.title || ''))}`;
+        return `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/redirect?source=yandex&type=track&q=${encodeURIComponent(t.artist + ' ' + (t.title || ''))}`;
     }
     return t.track_url || '#';
 };
@@ -60,7 +62,7 @@ export default function DetailedStats() {
     useEffect(() => {
         if (!username) return;
         setLoading(true);
-        fetch(`http://127.0.0.1:8000/api/detailed-stats/${username}?period=${period}`, { cache: 'no-store' })
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/detailed-stats/${username}?period=${period}`, { cache: 'no-store' })
             .then(res => res.json())
             .then(data => {
                 setStats(data);
@@ -73,7 +75,7 @@ export default function DetailedStats() {
         return <div className="min-h-screen text-[var(--accent-text)] flex items-center justify-center font-bold text-2xl animate-pulse">Сбор данных...</div>;
     }
 
-    const { user, total_time_min, total_scrobbles, unique_artists, unique_tracks, top_artists, top_tracks, top_albums = [], activity_graph, hours_activity, days_activity } = stats;
+    const { user, total_time_min, total_scrobbles, unique_artists, unique_tracks, top_artists, top_tracks, top_albums = [], activity_graph, hours_activity, days_activity, genre_counts = {}, source_counts = {} } = stats;
     
     const hours = Math.floor(total_time_min / 60);
     const minutes = total_time_min % 60;
@@ -172,56 +174,44 @@ export default function DetailedStats() {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
                     <div>
-                        <h3 className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-4">Время суток</h3>
-                        {maxHourCount > 0 ? (
-                            <div className="flex items-end gap-1 h-36">
-                                {Object.entries(hours_activity || {}).map(([hour, count]: [string, any]) => {
-                                    const height = maxHourCount > 0 ? (count / maxHourCount) * 100 : 0;
-                                    return (
-                                        <div key={hour} className="flex-1 flex flex-col justify-end items-center group relative h-full">
-                                            <div className="absolute -top-8 opacity-0 group-hover:opacity-100 bg-[#222] border border-white/10 text-white text-[10px] px-2 py-1 rounded z-10 whitespace-nowrap transition-all duration-200 pointer-events-none shadow-xl transform scale-95 group-hover:scale-100">
-                                                {count}
-                                            </div>
-                                            <div className="w-full relative flex items-end justify-center h-[calc(100%-20px)]">
-                                                <div 
-                                                    className="w-full bg-gradient-to-t from-[var(--accent)]/20 to-[var(--accent)]/50 group-hover:from-[var(--accent)]/50 group-hover:to-[var(--accent)] rounded-t-sm transition-all duration-500" 
-                                                    style={{ height: `${Math.max(height, count > 0 ? 5 : 0)}%` }}
-                                                ></div>
-                                            </div>
-                                            <div className="text-[8px] text-gray-600 font-mono mt-1 h-[14px] flex items-center justify-center shrink-0">{hour}</div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                        <h3 className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <Clock className="w-3 h-3" /> Время суток
+                        </h3>
+                        {Object.keys(hours_activity || {}).length > 0 ? (
+                            <ActivityBarChart data={hours_activity} color="var(--accent)" />
                         ) : (
                             <div className="h-36 flex items-center justify-center text-gray-600 text-sm font-bold bg-white/5 rounded-xl">Нет данных</div>
                         )}
                     </div>
 
                     <div>
-                        <h3 className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-4">Дни недели</h3>
-                        {maxDayCount > 0 ? (
-                            <div className="flex flex-col justify-between h-36">
-                                {Object.entries(days_activity || {}).map(([day, count]: [string, any]) => {
-                                    const width = maxDayCount > 0 ? (count / maxDayCount) * 100 : 0;
-                                    return (
-                                        <div key={day} className="flex items-center gap-3 group">
-                                            <div className="w-6 text-[10px] font-bold text-gray-500 group-hover:text-white transition-colors text-right">{day}</div>
-                                            <div className="flex-grow bg-white/5 h-3 rounded-full overflow-hidden relative">
-                                                <div 
-                                                    className="h-full bg-gradient-to-r from-[var(--accent)]/40 to-[var(--accent)] group-hover:shadow-[0_0_10px_var(--accent-glow)] transition-all duration-500 rounded-full" 
-                                                    style={{ width: `${Math.max(width, count > 0 ? 2 : 0)}%` }}
-                                                ></div>
-                                            </div>
-                                            <div className="w-6 text-[10px] font-bold text-white text-left opacity-0 group-hover:opacity-100 transition-opacity">{count}</div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                        <h3 className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <CalendarDays className="w-3 h-3" /> Дни недели
+                        </h3>
+                        {Object.keys(days_activity || {}).length > 0 ? (
+                            <ActivityBarChart data={days_activity} color="#fff" />
                         ) : (
                             <div className="h-36 flex items-center justify-center text-gray-600 text-sm font-bold bg-white/5 rounded-xl">Нет данных</div>
                         )}
                     </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                <div className="bg-[#121212]/70 p-6 rounded-2xl border border-white/5 shadow-xl">
+                    <h2 className="text-xl font-black text-white mb-6 flex items-center gap-2">
+                        <Award className="w-5 h-5 text-[var(--accent)]" /> Музыкальное ДНК
+                    </h2>
+                    <div className="min-h-[200px] flex items-center justify-center">
+                        <GenreCloud data={genre_counts} />
+                    </div>
+                </div>
+
+                <div className="bg-[#121212]/70 p-6 rounded-2xl border border-white/5 shadow-xl">
+                    <h2 className="text-xl font-black text-white mb-6 flex items-center gap-2">
+                        <PieChart className="w-5 h-5 text-[var(--accent)]" /> Распределение платформ
+                    </h2>
+                    <PlatformDistribution data={source_counts} />
                 </div>
             </div>
 

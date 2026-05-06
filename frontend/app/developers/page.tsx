@@ -34,7 +34,7 @@ export default function Developers() {
 
   const pythonExample = `import requests
 
-url = "http://127.0.0.1:8000/api/scrobble"
+url = "https://api.music.vein.guru/api/scrobble"
 payload = {
     "api_key": "твой_секретный_ключ",
     "title": "Демиург",
@@ -48,7 +48,7 @@ payload = {
 response = requests.post(url, json=payload)
 print(response.json())`;
 
-  const curlExample = `curl -X POST http://127.0.0.1:8000/api/scrobble \\
+  const curlExample = `curl -X POST https://api.music.vein.guru/api/scrobble \\
 -H "Content-Type: application/json" \\
 -d '{
   "api_key": "твой_секретный_ключ",
@@ -60,7 +60,7 @@ print(response.json())`;
   const getUserExample = `import requests
 
 username = "peaostrel"
-url = f"http://127.0.0.1:8000/api/user/{username}"
+url = f"https://api.music.vein.guru/api/user/{username}"
 
 response = requests.get(url)
 data = response.json()

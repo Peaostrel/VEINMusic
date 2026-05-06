@@ -1,6 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Heart, MessageCircle, Users, ExternalLink } from 'lucide-react';
 
 const getPlatformIcon = (source: string) => {
     switch (source) {
@@ -24,16 +26,22 @@ const getPlatformIcon = (source: string) => {
 import About from './about/page';
 
 interface FeedItem {
+  id: number;
   username: string;
   cover_url?: string;
   source: string;
   title: string;
   artist: string;
+  likes_count: number;
+  comments_count: number;
+  listening_with?: string[];
+  is_playing?: boolean;
 }
 
 export default function Home() {
   const [globalHistory, setGlobalHistory] = useState<FeedItem[]>([]);
   const [friendsHistory, setFriendsHistory] = useState<FeedItem[]>([]);
+  const [twins, setTwins] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFeed, setActiveFeed] = useState('global');
   const [username, setUsername] = useState<string | null>(null);
@@ -43,13 +51,17 @@ export default function Home() {
     setUsername(user);
 
     const fetchFeeds = async () => {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
       try {
-        const globalRes = await fetch('http://127.0.0.1:8000/api/global-history');
+        const globalRes = await fetch(`${API_URL}/api/global-history`);
         setGlobalHistory(await globalRes.json());
 
         if (user) {
-            const friendsRes = await fetch(`http://127.0.0.1:8000/api/friends-history/${user}`);
+            const friendsRes = await fetch(`${API_URL}/api/friends-history/${user}`);
             setFriendsHistory(await friendsRes.json());
+            
+            const twinsRes = await fetch(`${API_URL}/api/discovery/taste-twins?username=${user}`);
+            setTwins(await twinsRes.json());
         }
       } catch (e) {
           console.error(e);
@@ -62,6 +74,21 @@ export default function Home() {
     const interval = setInterval(fetchFeeds, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  const toggleLike = async (e: React.MouseEvent, scrobbleId: number) => {
+    e.stopPropagation();
+    const apiKey = localStorage.getItem('api_key');
+    if (!apiKey) return;
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+    try {
+        await fetch(`${API_URL}/api/scrobble/${scrobbleId}/like`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ api_key: apiKey })
+        });
+        // Optimistic update or just wait for next fetch
+    } catch (e) { console.error(e); }
+  };
 
   const currentFeed = activeFeed === 'global' ? globalHistory : friendsHistory;
 
@@ -110,39 +137,118 @@ export default function Home() {
             )}
         </div>
 
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 opacity-50">
-            {[1,2,3,4,5,6].map(i => <div key={i} className="h-24 bg-[#1e1e1e] rounded-2xl animate-pulse"></div>)}
-          </div>
-        ) : activeFeed === 'friends' && friendsHistory.length === 0 ? (
-          <div className="bg-[#1e1e1e]/50 backdrop-blur-md border border-white/5 p-10 rounded-2xl text-center text-gray-500 font-bold">
-            Тут пусто. Подпишись на кого-нибудь, чтобы видеть их треки здесь!
-          </div>
-        ) : currentFeed.length === 0 ? (
-          <div className="bg-[#1e1e1e]/50 backdrop-blur-md border border-white/5 p-10 rounded-2xl text-center text-gray-500 font-bold">
-            Пока тихо... Врубай музыку!
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {currentFeed.map((item, idx) => (
-              <div key={idx} className="bg-[#1a1a1a]/80 backdrop-blur-sm border border-white/5 p-4 rounded-2xl flex items-center gap-4 hover:bg-[#1f1f1f] hover:border-[var(--accent)]/30 hover:-translate-y-1 hover:shadow-[0_10px_25px_-5px_var(--accent-glow-strong)] transition-all duration-300 group cursor-pointer" onClick={() => window.location.href = `/user/${item.username}`}>
-                <div className="w-14 h-14 bg-black rounded-lg overflow-hidden shrink-0 shadow-md">
-                  <img src={item.cover_url || "https://placehold.co/100x100/282828/ffcc00?text=🎵"} alt="Cover" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                </div>
-                <div className="truncate flex-grow">
-                  <div className="font-bold text-white truncate group-hover:text-[var(--accent)] transition-colors flex items-center gap-1.5 mb-0.5">
-                      {getPlatformIcon(item.source)}
-                      {item.title}
-                  </div>
-                  <div className="text-xs text-gray-400 truncate mb-1">{item.artist}</div>
-                  <div className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">
-                    @{item.username}
-                  </div>
-                </div>
+        <div className="flex flex-col lg:flex-row gap-8">
+          <div className="flex-grow">
+            {loading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 opacity-50">
+                {[1,2,3,4,5,6].map(i => <div key={i} className="h-32 bg-[#1e1e1e] rounded-2xl animate-pulse"></div>)}
               </div>
-            ))}
+            ) : activeFeed === 'friends' && friendsHistory.length === 0 ? (
+              <div className="bg-[#1e1e1e]/50 backdrop-blur-md border border-white/5 p-10 rounded-2xl text-center text-gray-500 font-bold">
+                Тут пусто. Подпишись на кого-нибудь, чтобы видеть их треки здесь!
+              </div>
+            ) : currentFeed.length === 0 ? (
+              <div className="bg-[#1e1e1e]/50 backdrop-blur-md border border-white/5 p-10 rounded-2xl text-center text-gray-500 font-bold">
+                Пока тихо... Врубай музыку!
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <AnimatePresence mode="popLayout">
+                    {currentFeed.map((item, idx) => (
+                    <motion.div 
+                        layout
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        key={item.id || idx} 
+                        className="bg-[#1a1a1a]/80 backdrop-blur-sm border border-white/5 p-4 rounded-2xl flex flex-col gap-4 hover:bg-[#1f1f1f] hover:border-[var(--accent)]/30 hover:-translate-y-1 hover:shadow-[0_10px_25px_-5px_var(--accent-glow-strong)] transition-all duration-300 group cursor-pointer relative overflow-hidden" 
+                        onClick={() => window.location.href = `/user/${item.username}`}
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="w-16 h-16 bg-black rounded-xl overflow-hidden shrink-0 shadow-lg relative">
+                                <img src={item.cover_url || "https://placehold.co/100x100/282828/ffcc00?text=🎵"} alt="Cover" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                {item.is_playing && (
+                                    <div className="absolute inset-0 bg-[var(--accent)]/10 animate-pulse flex items-center justify-center">
+                                        <div className="flex gap-0.5 items-end h-3">
+                                            <div className="w-0.5 bg-[var(--accent)] animate-[music-bar_0.8s_ease-in-out_infinite]"></div>
+                                            <div className="w-0.5 bg-[var(--accent)] animate-[music-bar_1.2s_ease-in-out_infinite]"></div>
+                                            <div className="w-0.5 bg-[var(--accent)] animate-[music-bar_1.0s_ease-in-out_infinite]"></div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="truncate flex-grow">
+                                <div className="font-bold text-white truncate group-hover:text-[var(--accent)] transition-colors flex items-center gap-1.5 mb-0.5">
+                                    {getPlatformIcon(item.source)}
+                                    {item.title}
+                                </div>
+                                <div className="text-xs text-gray-400 truncate mb-1">{item.artist}</div>
+                                <div className="flex items-center justify-between">
+                                    <div className="text-[10px] text-gray-500 uppercase tracking-wider font-black">
+                                        @{item.username}
+                                    </div>
+                                    {item.listening_with && item.listening_with.length > 0 && (
+                                        <div className="flex items-center gap-1 text-[10px] font-bold text-[var(--accent-text)] bg-[var(--accent)]/10 px-2 py-0.5 rounded-full border border-[var(--accent)]/20 animate-pulse">
+                                            <Users className="w-2.5 h-2.5" />
+                                            Слушает с {item.listening_with[0]}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-4 pt-3 border-t border-white/5 mt-1">
+                            <button 
+                                onClick={(e) => toggleLike(e, item.id)}
+                                className="flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-red-500 transition-colors group/like"
+                            >
+                                <Heart className={`w-4 h-4 ${item.likes_count > 0 ? 'fill-red-500 text-red-500' : ''}`} />
+                                {item.likes_count || 0}
+                            </button>
+                            <button className="flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-[var(--accent)] transition-colors">
+                                <MessageCircle className="w-4 h-4" />
+                                {item.comments_count || 0}
+                            </button>
+                        </div>
+                    </motion.div>
+                    ))}
+                </AnimatePresence>
+              </div>
+            )}
           </div>
-        )}
+
+          <div className="w-full lg:w-80 shrink-0 space-y-6">
+            {username && twins.length > 0 && (
+                <div className="bg-[#121212]/80 backdrop-blur-md border border-white/5 rounded-2xl p-6 shadow-xl sticky top-24">
+                    <h3 className="text-lg font-black text-white mb-6 flex items-center gap-2">
+                        <Users className="w-5 h-5 text-[var(--accent)]" /> Taste Twins
+                    </h3>
+                    <div className="space-y-6">
+                        {twins.map((twin) => (
+                            <Link href={`/user/${twin.username}`} key={twin.username} className="block group">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white/5 group-hover:border-[var(--accent)] transition-all">
+                                        <img src={twin.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${twin.username}&backgroundColor=transparent`} className="w-full h-full object-cover" alt="Avatar" />
+                                    </div>
+                                    <div className="flex-grow">
+                                        <div className="font-bold text-sm text-white group-hover:text-[var(--accent)] transition-colors">{twin.display_name}</div>
+                                        <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">@{twin.username}</div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-sm font-black text-[var(--accent)]">{twin.match}%</div>
+                                        <div className="text-[8px] text-gray-600 font-bold uppercase">MATCH</div>
+                                    </div>
+                                </div>
+                                <div className="text-[10px] text-gray-400 italic">
+                                    Общие: {twin.common_artists.join(', ')}
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                </div>
+            )}
+          </div>
+        </div>
       </div>
 
     </div>

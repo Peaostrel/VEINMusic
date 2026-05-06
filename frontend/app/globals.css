@@ -36,3 +36,8 @@ body {
 .animation-delay-2000 {
   animation-delay: 2s;
 }
+
+@keyframes music-bar {
+  0%, 100% { height: 4px; }
+  50% { height: 12px; }
+}

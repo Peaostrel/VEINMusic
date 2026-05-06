@@ -65,38 +65,11 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const [isBlocked, setIsBlocked] = useState(false);
-
   useEffect(() => {
-      if (pathname === '/auth') return;
-
       const uname = localStorage.getItem('username');
       const key = localStorage.getItem('apiKey');
-
       if (!uname || !key) return;
-
-      const checkExt = () => document.documentElement.getAttribute('data-vein-extension') === 'installed';
-
-      if (!checkExt()) {
-          setIsBlocked(true); 
-          const timer = setTimeout(() => {
-              if (!checkExt()) {
-                  window.location.replace('/auth'); 
-              } else {
-                  setIsBlocked(false);
-              }
-          }, 1000); 
-          return () => clearTimeout(timer);
-      }
-
-      const bouncer = setInterval(() => {
-          if (!checkExt()) {
-              setIsBlocked(true);
-              window.location.replace('/auth');
-          }
-      }, 1000);
-
-      return () => clearInterval(bouncer);
+      // Блокировка расширением временно отключена
   }, [pathname]);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -206,10 +179,11 @@ export default function Navbar() {
   }, [currentTheme]);
 
   useEffect(() => {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
       const storedUser = localStorage.getItem('username');
       if (isValidUser(storedUser)) {
         setUsername(storedUser);
-        fetch(`http://127.0.0.1:8000/api/user/${storedUser}`).then(res => res.json()).then(data => { 
+        fetch(`${API_URL}/api/user/${storedUser}`).then(res => res.json()).then(data => { 
                 setUserProfile(data);
                 if (data.theme) { localStorage.setItem('site_theme', data.theme); window.dispatchEvent(new Event('theme_update')); }
         }).catch(() => {});
@@ -227,8 +201,9 @@ export default function Navbar() {
 
   useEffect(() => {
     if (searchQuery.length < 2) { setSearchResults([]); return; }
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
     const delay = setTimeout(() => {
-      fetch(`http://127.0.0.1:8000/api/search/users?q=${searchQuery}`).then(res => res.json()).then(data => { setSearchResults(data); setIsSearchOpen(true); }).catch(()=>{});
+      fetch(`${API_URL}/api/search/users?q=${searchQuery}`).then(res => res.json()).then(data => { setSearchResults(data); setIsSearchOpen(true); }).catch(()=>{});
     }, 300);
     return () => clearTimeout(delay);
   }, [searchQuery]);
@@ -242,17 +217,6 @@ export default function Navbar() {
 
   const avatar = userProfile?.avatar_url || (isValidUser(username) ? `https://api.dicebear.com/9.x/micah/svg?seed=${username}&backgroundColor=transparent` : '');
 
-  if (isBlocked) {
-      return (
-          <div className="fixed inset-0 z-[999999] bg-[#121212] flex flex-col items-center justify-center pointer-events-auto">
-              <div className="animate-pulse flex flex-col items-center text-center px-4">
-                  <span className="text-5xl mb-6">🛡️</span>
-                  <h2 className="text-3xl font-black text-white mb-2 tracking-tight">ДОСТУП ЗАКРЫТ</h2>
-                  <p className="text-gray-500 font-medium">Ожидание модуля VEIN Scrobbler...</p>
-              </div>
-          </div>
-      );
-  }
 
   return (
     <>
@@ -281,7 +245,26 @@ export default function Navbar() {
           <div className="flex-grow max-w-md relative" ref={searchRef}>
               <div className="relative">
                   <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">🔍</span>
-                  <input type="text" placeholder="Поиск профилей..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setIsSearchOpen(true); }} onFocus={() => { if(searchResults.length > 0 || searchQuery.length >= 2) setIsSearchOpen(true); }}
+                  {/* Dummy inputs to trick Firefox/Chrome autofill */}
+                  <input type="text" style={{display: 'none'}} aria-hidden="true" />
+                  <input type="password" style={{display: 'none'}} aria-hidden="true" />
+                  
+                  <input 
+                      type="search" 
+                      id="vein_music_search_v2"
+                      name="vein_music_search_v2"
+                      placeholder="Поиск профилей..." 
+                      value={searchQuery} 
+                      onChange={(e) => { setSearchQuery(e.target.value); setIsSearchOpen(true); }} 
+                      onFocus={(e) => { 
+                          e.target.removeAttribute('readonly');
+                          if(searchResults.length > 0 || searchQuery.length >= 2) setIsSearchOpen(true); 
+                      }}
+                      readOnly
+                      autoComplete="off"
+                      spellCheck="false"
+                      autoCorrect="off"
+                      autoCapitalize="none"
                       className="w-full bg-[#1a1a1a]/80 border border-white/10 text-white text-sm rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-[var(--accent)] transition-colors backdrop-blur-md"
                   />
               </div>
@@ -302,6 +285,7 @@ export default function Navbar() {
               )}
           </div>
           <div className="flex items-center gap-2 sm:gap-4 font-bold text-sm shrink-0">
+            <Link href="/feed" className="text-gray-400 hover:text-[var(--accent-text)] transition p-2 rounded-lg hover:bg-white/5"><span className="text-lg">📡</span> <span className="hidden md:inline ml-1">Лента</span></Link>
             <Link href="/leaderboard" className="text-gray-400 hover:text-[var(--accent-text)] transition p-2 rounded-lg hover:bg-white/5"><span className="text-lg">🏆</span> <span className="hidden md:inline ml-1">Топ</span></Link>
             {isValidUser(username) ? (
               <div className="relative" ref={dropdownRef}>

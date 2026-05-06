@@ -7,12 +7,12 @@ export default function Footer() {
 
   useEffect(() => {
     const fetchStats = () => {
-      fetch('http://127.0.0.1:8000/api/public-stats')
+      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/public-stats`)
         .then(res => res.ok ? res.json() : null)
         .then(data => {
           if (data) {
             setStats({
-              users: data.total_users,
+              users: data.online,
               scrobbles: String(data.total_scrobbles),
               uniqueTracks: String(data.total_tracks),
               status: 'Online'

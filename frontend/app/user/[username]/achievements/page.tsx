@@ -88,7 +88,7 @@ export default function AchievementsPage() {
 
     useEffect(() => {
         if (!username) return;
-        fetch(`http://127.0.0.1:8000/api/achievements/all/${username}`)
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/achievements/all/${username}`)
             .then(res => {
                 if (!res.ok) throw new Error('Not found or Server Error');
                 return res.json();

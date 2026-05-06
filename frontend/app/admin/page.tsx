@@ -67,7 +67,7 @@ export default function AdminPanel() {
       return;
     }
 
-    fetch(`http://127.0.0.1:8000/api/admin/stats?api_key=${apiKey}`, { cache: 'no-store' })
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/stats?api_key=${apiKey}`, { cache: 'no-store' })
       .then(async (res) => {
         if (!res.ok) {
             const err = await res.json();
@@ -98,7 +98,7 @@ export default function AdminPanel() {
   const handleSaveUserEdit = async () => {
       const apiKey = localStorage.getItem('apiKey');
       try {
-          const res = await fetch(`http://127.0.0.1:8000/api/admin/users/${editingUser.username}`, {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${editingUser.username}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
@@ -119,7 +119,7 @@ export default function AdminPanel() {
       const apiKey = localStorage.getItem('apiKey');
       if(!confirm(`ВНИМАНИЕ! Полностью стереть историю треков пользователя ${username}? Это нельзя отменить!`)) return;
       try {
-          const res = await fetch(`http://127.0.0.1:8000/api/admin/users/${username}/scrobbles?api_key=${apiKey}`, { method: 'DELETE' });
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${username}/scrobbles?api_key=${apiKey}`, { method: 'DELETE' });
           if(res.ok) {
               alert("История очищена!");
               loadData();
@@ -131,7 +131,7 @@ export default function AdminPanel() {
       const apiKey = localStorage.getItem('apiKey');
       if(!confirm(`Точно удалить пользователя ${username} навсегда?`)) return;
       try {
-          const res = await fetch(`http://127.0.0.1:8000/api/admin/users/${username}?api_key=${apiKey}`, { method: 'DELETE' });
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${username}?api_key=${apiKey}`, { method: 'DELETE' });
           if(res.ok) loadData();
           else alert(await res.text());
       } catch(e) { alert("Ошибка сети"); }
@@ -142,7 +142,7 @@ export default function AdminPanel() {
       const newLvl = prompt(`Новый уровень для ${username}:`, String(currentLevel));
       if(!newLvl || isNaN(parseInt(newLvl)) || parseInt(newLvl) < 1) return;
       try {
-          const res = await fetch(`http://127.0.0.1:8000/api/admin/users/${username}/level`, {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${username}/level`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ api_key: apiKey, new_level: parseInt(newLvl) })
@@ -155,7 +155,7 @@ export default function AdminPanel() {
   const handleToggleVerify = async (username: string, currentStatus: boolean) => {
       const apiKey = localStorage.getItem('apiKey');
       try {
-          const res = await fetch(`http://127.0.0.1:8000/api/admin/users/${username}/verify`, {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${username}/verify`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ api_key: apiKey, is_verified: !currentStatus })
@@ -175,7 +175,7 @@ export default function AdminPanel() {
       const achId = prompt(`ID ачивки для ${username}:\n\n${achs}`);
       if(!achId || isNaN(Number(achId))) return;
       try {
-          const res = await fetch(`http://127.0.0.1:8000/api/admin/users/${username}/achievements`, {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${username}/achievements`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ api_key: apiKey, achievement_id: parseInt(achId) })
@@ -190,7 +190,7 @@ export default function AdminPanel() {
   const handleCreateAch = async () => {
       const apiKey = localStorage.getItem('apiKey');
       try {
-          const res = await fetch(`http://127.0.0.1:8000/api/admin/achievements`, {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/achievements`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ api_key: apiKey, ...newAch, rule_value: parseInt(String(newAch.rule_value)) || 0, reward_xp: parseInt(String(newAch.reward_xp)) || 0 })
@@ -206,7 +206,7 @@ export default function AdminPanel() {
       if (!editingAch) return;
       const apiKey = localStorage.getItem('apiKey');
       try {
-          const res = await fetch(`http://127.0.0.1:8000/api/admin/achievements/${editingAch.id}`, {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/achievements/${editingAch.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ api_key: apiKey, ...editingAch, rule_value: parseInt(String(editingAch.rule_value)) || 0, reward_xp: parseInt(String(editingAch.reward_xp)) || 0 })
@@ -222,7 +222,7 @@ export default function AdminPanel() {
       if(!confirm("Удалить ачивку? Она пропадет у всех юзеров.")) return;
       const apiKey = localStorage.getItem('apiKey');
       try {
-          const res = await fetch(`http://127.0.0.1:8000/api/admin/achievements/${id}?api_key=${apiKey}`, { method: 'DELETE' });
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/achievements/${id}?api_key=${apiKey}`, { method: 'DELETE' });
           if(res.ok) loadData();
           else alert(await res.text());
       } catch(e) { alert("Ошибка сети"); }
@@ -242,7 +242,7 @@ export default function AdminPanel() {
       if(!confirm(`Точно удалить этот трек из глобальной БД? Все скробблы с ним будут УНИЧТОЖЕНЫ!`)) return;
       const apiKey = localStorage.getItem('apiKey');
       try {
-          const res = await fetch(`http://127.0.0.1:8000/api/admin/tracks/${id}?api_key=${apiKey}`, { method: 'DELETE' });
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/tracks/${id}?api_key=${apiKey}`, { method: 'DELETE' });
           if(res.ok) loadData();
           else alert(await res.text());
       } catch(e) { alert("Ошибка сети"); }

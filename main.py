@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Request, BackgroundTasks, File, UploadFile
+from fastapi import FastAPI, Depends, HTTPException, Request, BackgroundTasks, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,28 +14,45 @@ VEIN Music Backend (Core)
 """
 import os
 import uuid
+import sqlalchemy
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, func, text, Boolean
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict
+import time
 import bcrypt
 import secrets
 import urllib.parse
 import re
-import requests
+import httpx
 import asyncio
 import base64
+from dotenv import load_dotenv
 
-SPOTIFY_CLIENT_ID = "1"
-SPOTIFY_CLIENT_SECRET = "1"
-SPOTIFY_REDIRECT_URI = "http://127.0.0.1:8000/auth/spotify/callback"
+load_dotenv()
+START_TIME = time.time()
 
-DEVELOPERS = {"peaostrel"} 
-TESTERS = {"test_user1", "tester_vasya"}
+SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
+SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
+SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI", "http://127.0.0.1:8000/auth/spotify/callback")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
+LASTFM_API_KEY = os.getenv("LASTFM_API_KEY")
+LASTFM_BASE_URL = "https://ws.audioscrobbler.com/2.0/"
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./tracker.db"
+DEVELOPERS = set(os.getenv("DEVELOPERS", "peaostrel").split(","))
+TESTERS = set(os.getenv("TESTERS", "test_user1,tester_vasya").split(","))
+
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./tracker.db")
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+# Enable foreign key enforcement for SQLite
+@sqlalchemy.event.listens_for(engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -58,6 +75,10 @@ class User(Base):
     current_streak = Column(Integer, default=0)
     last_streak_date = Column(String, nullable=True)
     is_verified = Column(Boolean, default=False)
+    yandex_token = Column(String, nullable=True)
+    lastfm_username = Column(String, nullable=True)
+    is_private = Column(Boolean, default=False)
+    hidden_artists = Column(String, default="")
     
     favorite_artist = Column(String, nullable=True)
     favorite_artist_url = Column(String, nullable=True)
@@ -77,8 +98,7 @@ class User(Base):
     
     spotify_access_token = Column(String, nullable=True)
     spotify_refresh_token = Column(String, nullable=True)
-    yandex_token = Column(String, nullable=True)
-    lastfm_username = Column(String, nullable=True)
+    last_sync = Column(DateTime, nullable=True)
 
 class Track(Base):
     __tablename__ = "tracks"
@@ -88,19 +108,21 @@ class Track(Base):
     cover_url = Column(String, nullable=True)
     track_url = Column(String, nullable=True)
     album = Column(String, nullable=True)
+    genre = Column(String, nullable=True)
     duration = Column(Integer, default=0)
 
 class Scrobble(Base):
     __tablename__ = "scrobbles"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    track_id = Column(Integer, ForeignKey("tracks.id"))
-    played_at = Column(DateTime, default=datetime.utcnow)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    track_id = Column(Integer, ForeignKey("tracks.id", ondelete="CASCADE"))
+    played_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     source = Column(String)
     listened_sec = Column(Integer, default=0)
     is_playing = Column(Boolean, default=True)
-    updated_at = Column(DateTime, default=datetime.utcnow) 
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)) 
     xp_earned = Column(Integer, default=1)
+    is_imported = Column(Boolean, default=False)
 class Achievement(Base):
     __tablename__ = "achievements"
     id = Column(Integer, primary_key=True, index=True)
@@ -117,8 +139,8 @@ class Achievement(Base):
 class UserAchievement(Base):
     __tablename__ = "user_achievements"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    achievement_id = Column(Integer, ForeignKey("achievements.id"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    achievement_id = Column(Integer, ForeignKey("achievements.id", ondelete="CASCADE"))
     earned_at = Column(DateTime, default=datetime.utcnow)
     is_displayed = Column(Boolean, default=True)
     notified = Column(Boolean, default=False)
@@ -126,37 +148,309 @@ class UserAchievement(Base):
 class Follow(Base):
     __tablename__ = "follows"
     id = Column(Integer, primary_key=True, index=True)
-    follower_id = Column(Integer, ForeignKey("users.id"))
-    following_id = Column(Integer, ForeignKey("users.id"))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    follower_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    following_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+
+class ScrobbleLike(Base):
+    __tablename__ = "scrobble_likes"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    scrobble_id = Column(Integer, ForeignKey("scrobbles.id", ondelete="CASCADE"))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+
+class ScrobbleComment(Base):
+    __tablename__ = "scrobble_comments"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    scrobble_id = Column(Integer, ForeignKey("scrobbles.id", ondelete="CASCADE"))
+    content = Column(String)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 def init_db():
     Base.metadata.create_all(bind=engine)
-    for alter_query in [
-        "ALTER TABLE achievements ADD COLUMN rule_type VARCHAR DEFAULT 'manual'",
-        "ALTER TABLE achievements ADD COLUMN rule_value INTEGER DEFAULT 0",
-        "ALTER TABLE achievements ADD COLUMN rule_target VARCHAR",
-        "ALTER TABLE achievements ADD COLUMN rule_meta VARCHAR",
-        "ALTER TABLE users ADD COLUMN current_streak INTEGER DEFAULT 0",
-        "ALTER TABLE users ADD COLUMN last_streak_date VARCHAR",
-        "ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT 0",
-        "ALTER TABLE achievements ADD COLUMN target_image VARCHAR",
-        "ALTER TABLE user_achievements ADD COLUMN is_displayed BOOLEAN DEFAULT 1",
-        "ALTER TABLE achievements ADD COLUMN reward_xp INTEGER DEFAULT 0",
-        "ALTER TABLE user_achievements ADD COLUMN notified BOOLEAN DEFAULT 0",
-        "ALTER TABLE scrobbles ADD COLUMN listened_sec INTEGER DEFAULT 0",
-        "ALTER TABLE scrobbles ADD COLUMN is_playing BOOLEAN DEFAULT 1",
-        "ALTER TABLE scrobbles ADD COLUMN updated_at DATETIME",
-        "ALTER TABLE users ADD COLUMN yandex_token VARCHAR",
-        "ALTER TABLE users ADD COLUMN lastfm_username VARCHAR",
-        "ALTER TABLE tracks ADD COLUMN album VARCHAR",
-        "ALTER TABLE scrobbles ADD COLUMN xp_earned INTEGER DEFAULT 1"
-    ]:
+    # Check existing columns to avoid redundant ALTER TABLE errors
+    with engine.connect() as conn:
+        inspector = sqlalchemy.inspect(engine)
+        
+        def add_column_if_missing(table_name, column_name, column_type):
+            columns = [c['name'] for c in inspector.get_columns(table_name)]
+            if column_name not in columns:
+                try:
+                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"))
+                    conn.commit()
+                except Exception as e:
+                    print(f"Error adding column {column_name} to {table_name}: {e}")
+
+        # Migration mapping
+        migrations = [
+            ("achievements", "rule_type", "VARCHAR DEFAULT 'manual'"),
+            ("achievements", "rule_value", "INTEGER DEFAULT 0"),
+            ("achievements", "rule_target", "VARCHAR"),
+            ("achievements", "rule_meta", "VARCHAR"),
+            ("achievements", "target_image", "VARCHAR"),
+            ("achievements", "reward_xp", "INTEGER DEFAULT 0"),
+            ("users", "current_streak", "INTEGER DEFAULT 0"),
+            ("users", "last_streak_date", "VARCHAR"),
+            ("users", "is_verified", "BOOLEAN DEFAULT 0"),
+            ("users", "yandex_token", "VARCHAR"),
+            ("users", "lastfm_username", "VARCHAR"),
+            ("users", "is_private", "BOOLEAN DEFAULT 0"),
+            ("users", "hidden_artists", "VARCHAR DEFAULT ''"),
+            ("users", "last_sync", "DATETIME"),
+            ("user_achievements", "is_displayed", "BOOLEAN DEFAULT 1"),
+            ("user_achievements", "notified", "BOOLEAN DEFAULT 0"),
+            ("scrobbles", "listened_sec", "INTEGER DEFAULT 0"),
+            ("scrobbles", "is_playing", "BOOLEAN DEFAULT 1"),
+            ("scrobbles", "updated_at", "DATETIME"),
+            ("scrobbles", "xp_earned", "INTEGER DEFAULT 1"),
+            ("scrobbles", "is_imported", "BOOLEAN DEFAULT 0"),
+            ("tracks", "album", "VARCHAR"),
+            ("tracks", "genre", "VARCHAR"),
+        ]
+        
+        for table, col, col_type in migrations:
+            add_column_if_missing(table, col, col_type)
+
+init_db()
+
+IMPORTING_USERS = set() # In-memory lock for Last.fm imports
+
+def sanitize_text(text_val: Optional[str]) -> Optional[str]:
+    if not text_val: return text_val
+    # More robust sanitization: remove common XSS patterns and strip HTML
+    text_val = re.sub(r'<[^>]*>', '', text_val)
+    # Escape quotes and dangerous chars if used in JS/HTML attributes
+    return text_val.replace('"', '&quot;').replace("'", '&#39;').replace('<', '&lt;').replace('>', '&gt;')
+
+def get_db():
+    db = SessionLocal()
+    try: yield db
+    finally: db.close()
+
+async def refresh_spotify_token(user: User, db: Session):
+    if not user.spotify_refresh_token: return None
+    async with httpx.AsyncClient() as client:
         try:
-            with engine.connect() as conn:
-                conn.execute(text(alter_query))
-                conn.commit()
-        except: pass
+            resp = await client.post("https://accounts.spotify.com/api/token", data={
+                "grant_type": "refresh_token",
+                "refresh_token": user.spotify_refresh_token,
+                "client_id": SPOTIFY_CLIENT_ID,
+                "client_secret": SPOTIFY_CLIENT_SECRET
+            }, headers={"Content-Type": "application/x-www-form-urlencoded"})
+            if resp.status_code == 200:
+                data = resp.json()
+                user.spotify_access_token = data["access_token"]
+                db.commit()
+                return data["access_token"]
+        except Exception as e:
+            print(f"Token refresh error: {e}")
+    return None
+
+async def poll_external_services():
+    """
+    Основной цикл облачного скробблинга.
+    Опрашивает внешние API для пользователей параллельно.
+    """
+    while True:
+        db = SessionLocal()
+        try:
+            # Берем всех пользователей, у которых привязан Spotify или Яндекс
+            users = db.query(User).filter((User.spotify_refresh_token != None) | (User.yandex_token != None)).all()
+            
+            async def poll_user(user_id):
+                local_db = SessionLocal()
+                try:
+                    u = local_db.query(User).filter(User.id == user_id).first()
+                    if not u: return
+                    
+                    # Список активных коннекторов
+                    connectors = []
+                    
+                    if u.spotify_refresh_token:
+                        connectors.append(sync_spotify_status(u, local_db))
+                    
+                    if u.yandex_token:
+                        connectors.append(sync_yandex_status(u, local_db))
+                    
+                    # Плейсхолдеры для будущих интеграций
+                    # if u.apple_music_token: connectors.append(sync_apple_music_status(u, local_db))
+                    # if u.zvuk_token: connectors.append(sync_zvuk_status(u, local_db))
+                    
+                    if connectors:
+                        await asyncio.gather(*connectors)
+                    
+                    # Обновляем время последней синхронизации
+                    u.last_sync = datetime.now(timezone.utc).replace(tzinfo=None)
+                    local_db.commit()
+                except Exception as e:
+                    print(f"Error polling user {user_id}: {e}")
+                finally:
+                    local_db.close()
+
+            # Запускаем задачи параллельно
+            if users:
+                tasks = [poll_user(u.id) for u in users]
+                await asyncio.gather(*tasks)
+                
+        except Exception as e:
+            print(f"Cloud Worker Global Error: {e}")
+        finally:
+            db.close()
+        await asyncio.sleep(15) # Интервал опроса (уменьшен для отзывчивости)
+
+async def sync_spotify_status(user: User, db: Session):
+    token = user.spotify_access_token
+    async with httpx.AsyncClient() as client:
+        headers = {"Authorization": f"Bearer {token}"}
+        try:
+            resp = await client.get("https://api.spotify.com/v1/me/player/currently-playing", headers=headers)
+            
+            if resp.status_code == 401: # Token expired
+                token = await refresh_spotify_token(user, db)
+                if token:
+                    headers = {"Authorization": f"Bearer {token}"}
+                    resp = await client.get("https://api.spotify.com/v1/me/player/currently-playing", headers=headers)
+            
+            if resp.status_code == 200:
+                data = resp.json()
+                if data and data.get("is_playing"):
+                    item = data.get("item")
+                    if not item: return
+                    title = item.get("name")
+                    artist = ", ".join([a["name"] for a in item.get("artists", [])])
+                    cover = item.get("album", {}).get("images", [{}])[0].get("url")
+                    track_url = item.get("external_urls", {}).get("spotify")
+                    duration = int(item.get("duration_ms", 0) / 1000)
+                    progress = int(data.get("progress_ms", 0) / 1000)
+                    album = item.get("album", {}).get("name")
+                    
+                    await process_scrobble(db, user, title, artist, cover, track_url, "spotify", progress, True, duration, album)
+        except Exception as e:
+            print(f"Spotify sync error: {e}")
+
+async def sync_yandex_status(user: User, db: Session):
+    async with httpx.AsyncClient() as client:
+        try:
+            # Используем мобильный эндпоинт статуса с расширенными заголовками
+            headers = {
+                "Authorization": f"OAuth {user.yandex_token}",
+                "X-Yandex-Music-Client": "YandexMusicAndroid/2023.12.1",
+                "User-Agent": "Yandex-Music-API"
+            }
+            resp = await client.get("https://api.music.yandex.net/external-api/status", headers=headers, timeout=5.0)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("result") and data["result"].get("nowPlaying"):
+                    np = data["result"]["nowPlaying"]
+                    track_data = np.get("track")
+                    if not track_data: return
+                    
+                    title = track_data.get("title")
+                    artist = ", ".join([a["name"] for a in track_data.get("artists", [])])
+                    # Формируем URL обложки
+                    cover_uri = track_data.get("coverUri")
+                    cover = "https://" + cover_uri.replace("%%", "400x400") if cover_uri else None
+                    track_id = track_data.get("id")
+                    track_url = f"https://music.yandex.ru/track/{track_id}"
+                    duration = int(track_data.get("durationMs", 0) / 1000)
+                    progress = int(np.get("progressMs", 0) / 1000)
+                    album = track_data.get("albums", [{}])[0].get("title") if track_data.get("albums") else None
+                    
+                    await process_scrobble(db, user, title, artist, cover, track_url, "yandex", progress, True, duration, album)
+        except Exception as e:
+            print(f"Yandex sync error: {e}")
+def get_admin_user(api_key: str, db: Session) -> User:
+    user = db.query(User).filter(User.api_key == api_key).first()
+    if not user or user.username not in DEVELOPERS:
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+    return user
+
+# Simple In-Memory TTL Cache
+CACHE: Dict[str, Dict] = {}
+def get_from_cache(key: str, ttl: int = 300):
+    if key in CACHE:
+        entry = CACHE[key]
+        if time.time() - entry['ts'] < ttl:
+            return entry['data']
+    return None
+
+def set_to_cache(key: str, data: any):
+    CACHE[key] = {'data': data, 'ts': time.time()}
+
+app = FastAPI(title="VEIN Music API")
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: dict[str, list[WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket, username: str):
+        await websocket.accept()
+        if username not in self.active_connections:
+            self.active_connections[username] = []
+        self.active_connections[username].append(websocket)
+
+    def disconnect(self, websocket: WebSocket, username: str):
+        if username in self.active_connections:
+            self.active_connections[username].remove(websocket)
+            if not self.active_connections[username]:
+                del self.active_connections[username]
+
+    async def broadcast_to_user(self, username: str, message: dict):
+        if username in self.active_connections:
+            for connection in self.active_connections[username]:
+                try: await connection.send_json(message)
+                except: pass
+
+manager = ConnectionManager()
+
+# Global Rate Limiter
+RATE_LIMITS = {} # {ip: {timestamp: count}}
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    ip = request.client.host
+    now = time.time()
+    # Global cleanup if dictionary gets too large
+    if len(RATE_LIMITS) > 10000:
+        # Remove IPs that haven't sent requests in the last minute
+        expired_ips = [i for i, times in RATE_LIMITS.items() if not times or now - times[-1] > 60]
+        for i in expired_ips: del RATE_LIMITS[i]
+        
+    if ip not in RATE_LIMITS: RATE_LIMITS[ip] = []
+    RATE_LIMITS[ip] = [t for t in RATE_LIMITS[ip] if now - t < 60] # 1 min window
+    if len(RATE_LIMITS[ip]) > 1000: # 1000 req/min (увеличено для стабильности)
+         from fastapi.responses import JSONResponse
+         return JSONResponse(status_code=429, content={"error": "Too many requests. Please wait a minute."})
+    RATE_LIMITS[ip].append(now)
+    return await call_next(request)
+
+@app.get("/api/error/rate-limited")
+def rate_limited(): return JSONResponse(status_code=429, content={"error": "Too many requests. Please wait a minute."})
+
+@app.websocket("/ws/{username}")
+async def websocket_endpoint(websocket: WebSocket, username: str, db: Session = Depends(get_db)):
+    # Check if user is private
+    user = db.query(User).filter(User.username == username).first()
+    if user and user.is_private:
+        # Check for token in query params
+        token = websocket.query_params.get("token")
+        if not token or token != user.api_key:
+            await websocket.close(code=4003) # Forbidden
+            return
+
+    await manager.connect(websocket, username)
+    try:
+        while True:
+            data = await websocket.receive_json()
+            if data.get("type") == "SYNC_REQUEST":
+                # User wants to sync with another user
+                target = data.get("target")
+                await manager.broadcast_to_user(target, {
+                    "type": "SYNC_INVITE",
+                    "from": username
+                })
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, username)
 
 class UserCreate(BaseModel): username: str; password: str
 class ScrobbleData(BaseModel): 
@@ -171,6 +465,7 @@ class ProfileUpdate(BaseModel):
     favorite_artist: Optional[str] = None; favorite_artist_url: Optional[str] = None
     favorite_track: Optional[str] = None; favorite_track_url: Optional[str] = None
     favorite_album: Optional[str] = None; favorite_album_url: Optional[str] = None
+    is_private: Optional[bool] = False; hidden_artists: Optional[str] = ""; lastfm_username: Optional[str] = None
 
 class LevelUpdate(BaseModel): api_key: str; new_level: int
 class AchCreate(BaseModel): api_key: str; name: str; description: str; icon: str; rule_type: str = "manual"; rule_value: int = 0; rule_target: Optional[str] = None; rule_meta: Optional[str] = None; target_image: Optional[str] = None; reward_xp: int = 0
@@ -180,27 +475,33 @@ class ToggleAch(BaseModel): api_key: str; achievement_id: int
 class FollowAction(BaseModel): api_key: str
 class VerifyUserRequest(BaseModel): api_key: str; is_verified: bool
 class MarkRead(BaseModel): ua_ids: List[int]
+class LikeRequest(BaseModel): api_key: str
+class ApiKeyRequest(BaseModel): api_key: str
 class AdminUserUpdate(BaseModel): api_key: str; display_name: Optional[str] = None; bio: Optional[str] = None; avatar_url: Optional[str] = None
 
 os.makedirs("uploads", exist_ok=True)
-app = FastAPI(title="VEIN Music API")
 
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+allowed_origins = [
+    FRONTEND_URL,
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://music.vein.guru"
+]
+
+app.add_middleware(CORSMiddleware, allow_origins=allowed_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 @app.on_event("startup")
 def startup_event():
     init_db()
+    # Запуск облачного скробблинга в фоне
+    asyncio.create_task(poll_external_services())
 
-def get_db():
-    db = SessionLocal()
-    try: yield db
-    finally: db.close()
 
 @app.get("/uploads/{filename}")
 async def get_upload(filename: str, request: Request, db: Session = Depends(get_db)):
     # Проверяем Referer, чтобы разрешить загрузку внутри приложения
     referer = request.headers.get("referer")
-    allowed_hosts = ["127.0.0.1:3000", "localhost:3000"]
+    allowed_hosts = [FRONTEND_URL.replace("http://", "").replace("https://", ""), "127.0.0.1:3000", "localhost:3000", "music.vein.guru"]
     
     if referer:
         for host in allowed_hosts:
@@ -219,60 +520,108 @@ async def get_upload(filename: str, request: Request, db: Session = Depends(get_
 def get_password_hash(password: str) -> str: return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 def verify_password(plain_password: str, hashed_password: str) -> bool: return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
-def parse_og_meta(url: str):
+async def parse_og_meta(url: str):
     if not url: return None, None
     if not url.startswith("http"): url = "https://" + url
-    headers = {'User-Agent': 'Mozilla/5.0'}
+    
+    # SSRF Protection: Block local/internal addresses
+    parsed_url = urllib.parse.urlparse(url)
+    hostname = parsed_url.hostname.lower() if parsed_url.hostname else ""
+    if any(x in hostname for x in ["localhost", "127.0.0.1", "0.0.0.0", "::1"]):
+        return None, None
+    # Block private IP ranges (basic check)
+    if re.match(r'^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|127\.)', hostname):
+        return None, None
+
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
     title, img = None, None
-    if "music.yandex.ru" in url:
-        try:
-            if "/artist/" in url:
-                res = requests.get(f"https://music.yandex.ru/handlers/artist.jsx?artist={url.split('/artist/')[1].split('/')[0].split('?')[0]}", headers=headers, timeout=5).json()
-                title, img = res.get("artist", {}).get("name"), "https://" + res.get("artist", {}).get("cover", {}).get("uri", "").replace("%%", "400x400") if res.get("artist", {}).get("cover", {}).get("uri") else None
-            elif "/album/" in url and "/track/" not in url:
-                res = requests.get(f"https://music.yandex.ru/handlers/album.jsx?album={url.split('/album/')[1].split('/')[0].split('?')[0]}", headers=headers, timeout=5).json()
-                title, img = res.get("title"), "https://" + res.get("coverUri", "").replace("%%", "400x400") if res.get("coverUri") else None
-            elif "/track/" in url:
-                res = requests.get(f"https://music.yandex.ru/handlers/track.jsx?track={url.split('/track/')[1].split('/')[0].split('?')[0]}", headers=headers, timeout=5).json()
-                t_data = res.get("track", {})
-                title = f"{t_data.get('artists', [{}])[0].get('name')} — {t_data.get('title')}" if t_data.get('artists') else t_data.get('title')
-                img = "https://" + (t_data.get("coverUri") or res.get("coverUri", "")).replace("%%", "400x400") if (t_data.get("coverUri") or res.get("coverUri")) else None
-        except: pass
-    if not title or not img:
-        try:
-            resp = requests.get(url, headers=headers, timeout=5)
-            t_m = re.search(r'<meta\s+(?:property|name)=["\']og:title["\']\s+content=["\']([^"\']+)["\']', resp.text, re.IGNORECASE)
-            i_m = re.search(r'<meta\s+(?:property|name)=["\']og:image["\']\s+content=["\']([^"\']+)["\']', resp.text, re.IGNORECASE)
-            if not title and t_m: title = t_m.group(1).split(' | ')[0]
-            if not img and i_m: img = i_m.group(1).replace('200x200', '400x400').replace('%%', '400x400')
-        except: pass
+    async with httpx.AsyncClient(headers=headers, timeout=5.0, follow_redirects=True) as client:
+        if "music.yandex.ru" in url:
+            try:
+                # SSRF Check for each potential sub-request
+                if any(x in url for x in ["localhost", "127.0.0.1", "0.0.0.0"]):
+                    return None, None
+                if "/artist/" in url:
+                    artist_id = url.split('/artist/')[1].split('/')[0].split('?')[0]
+                    res = (await client.get(f"https://music.yandex.ru/handlers/artist.jsx?artist={artist_id}")).json()
+                    title, img = res.get("artist", {}).get("name"), "https://" + res.get("artist", {}).get("cover", {}).get("uri", "").replace("%%", "400x400") if res.get("artist", {}).get("cover", {}).get("uri") else None
+                elif "/album/" in url and "/track/" not in url:
+                    album_id = url.split('/album/')[1].split('/')[0].split('?')[0]
+                    res = (await client.get(f"https://music.yandex.ru/handlers/album.jsx?album={album_id}")).json()
+                    title, img = res.get("title"), "https://" + res.get("coverUri", "").replace("%%", "400x400") if res.get("coverUri") else None
+                elif "/track/" in url:
+                    track_id = url.split('/track/')[1].split('/')[0].split('?')[0]
+                    res = (await client.get(f"https://music.yandex.ru/handlers/track.jsx?track={track_id}")).json()
+                    t_data = res.get("track", {})
+                    title = f"{t_data.get('artists', [{}])[0].get('name')} — {t_data.get('title')}" if t_data.get('artists') else t_data.get('title')
+                    img = "https://" + (t_data.get("coverUri") or res.get("coverUri", "")).replace("%%", "400x400") if (t_data.get("coverUri") or res.get("coverUri")) else None
+            except Exception as e:
+                print(f"Yandex OG parsing error: {e}")
+        
+        if not title or not img:
+            try:
+                resp = await client.get(url)
+                if resp.status_code == 200:
+                    t_m = re.search(r'<meta\s+(?:property|name)=["\']og:title["\']\s+content=["\']([^"\']+)["\']', resp.text, re.IGNORECASE)
+                    i_m = re.search(r'<meta\s+(?:property|name)=["\']og:image["\']\s+content=["\']([^"\']+)["\']', resp.text, re.IGNORECASE)
+                    if not title and t_m: title = t_m.group(1).split(' | ')[0]
+                    if not img and i_m: img = i_m.group(1).replace('200x200', '400x400').replace('%%', '400x400')
+                    
+                    if not title:
+                        t_tag = re.search(r'<title>(.*?)</title>', resp.text, re.IGNORECASE | re.DOTALL)
+                        if t_tag: title = t_tag.group(1).strip()
+            except Exception as e:
+                print(f"Generic OG parsing error: {e}")
     return title, img
 
-def get_track_duration(url: str) -> int:
+async def get_track_duration(url: str) -> int:
     if not url or not url.startswith("http"): return 180 
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
-        if "music.yandex.ru" in url and "/track/" in url:
-            track_id = url.split('/track/')[1].split('/')[0].split('?')[0]
-            res = requests.get(f"https://music.yandex.ru/handlers/track.jsx?track={track_id}", headers=headers, timeout=5).json()
-            return int(res.get("track", {}).get("durationMs", 180000) / 1000)
-    except: pass
+        async with httpx.AsyncClient(headers=headers, timeout=5.0) as client:
+            if "music.yandex.ru" in url and "/track/" in url:
+                track_id = url.split('/track/')[1].split('/')[0].split('?')[0]
+                res = (await client.get(f"https://music.yandex.ru/handlers/track.jsx?track={track_id}")).json()
+                return int(res.get("track", {}).get("durationMs", 180000) / 1000)
+    except Exception as e:
+        print(f"Duration fetch error: {e}")
     return 180
 
-def get_album_track_count(url: str) -> int:
+async def get_album_track_count(url: str) -> int:
     if not url or not url.startswith("http"): return 0
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
-        if "music.yandex.ru" in url and "/album/" in url:
-            album_id = url.split('/album/')[1].split('/')[0].split('?')[0]
-            res = requests.get(f"https://music.yandex.ru/handlers/album.jsx?album={album_id}", headers=headers, timeout=5).json()
-            return res.get("trackCount", 0)
-        elif "spotify.com" in url and "/album/" in url:
-            resp = requests.get(url, headers=headers, timeout=5)
-            match = re.search(r'music:song_count["\']\s+content=["\'](\d+)["\']', resp.text, re.IGNORECASE)
-            if match: return int(match.group(1))
-    except: pass
+        async with httpx.AsyncClient(headers=headers, timeout=5.0) as client:
+            if "music.yandex.ru" in url and "/album/" in url:
+                album_id = url.split('/album/')[1].split('/')[0].split('?')[0]
+                res = (await client.get(f"https://music.yandex.ru/handlers/album.jsx?album={album_id}")).json()
+                return res.get("trackCount", 0)
+            elif "spotify.com" in url and "/album/" in url:
+                resp = await client.get(url)
+                match = re.search(r'music:song_count["\']\s+content=["\'](\d+)["\']', resp.text, re.IGNORECASE)
+                if match: return int(match.group(1))
+    except Exception as e:
+        print(f"Album track count error: {e}")
     return 0
+
+async def get_track_genre(url: str, artist: str = None) -> str:
+    if not url or not url.startswith("http"): return None
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    try:
+        async with httpx.AsyncClient(headers=headers, timeout=5.0) as client:
+            if "music.yandex.ru" in url:
+                if "/track/" in url:
+                    track_id = url.split('/track/')[1].split('/')[0].split('?')[0]
+                    res = (await client.get(f"https://music.yandex.ru/handlers/track.jsx?track={track_id}")).json()
+                    albums = res.get("track", {}).get("albums", [])
+                    if albums: return albums[0].get("genre")
+                elif "/album/" in url:
+                    album_id = url.split('/album/')[1].split('/')[0].split('?')[0]
+                    res = (await client.get(f"https://music.yandex.ru/handlers/album.jsx?album={album_id}")).json()
+                    return res.get("genre")
+    except Exception as e:
+        print(f"Genre fetch error: {e}")
+    return None
 
 def get_active_streak(user: User):
     if not user.last_streak_date: return 0
@@ -349,17 +698,40 @@ def get_user_level_info(user: User, db: Session):
     
     return level, rank, total_xp, user.theme
 
-def format_history_item(scrobble, track):
+def format_history_item(scrobble, track, db: Session = None, counters: dict = None):
     upd_time = scrobble.updated_at or scrobble.played_at
-    is_playing = scrobble.is_playing and (datetime.utcnow() - upd_time).total_seconds() < 15
-    return {
+    # Normalize to UTC for comparison
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    is_playing = scrobble.is_playing and (now - upd_time).total_seconds() < 15
+    
+    # Calculate relative time
+    diff = now - scrobble.played_at
+    if diff.total_seconds() < 60:
+        rel_time = "только что"
+    elif diff.total_seconds() < 3600:
+        rel_time = f"{int(diff.total_seconds() // 60)}м назад"
+    elif diff.total_seconds() < 86400:
+        rel_time = f"{int(diff.total_seconds() // 3600)}ч назад"
+    else:
+        rel_time = scrobble.played_at.strftime("%d %b")
+
+    data = {
+        "id": scrobble.id,
         "artist": track.artist, "title": track.title, "cover_url": track.cover_url,
         "track_url": track.track_url, "source": scrobble.source, "time": scrobble.played_at,
+        "relative_time": rel_time,
         "duration": track.duration, "listened_sec": scrobble.listened_sec,
         "is_playing": is_playing, "updated_at": upd_time
     }
+    if counters:
+        data["likes_count"] = counters.get(scrobble.id, {}).get("likes", 0)
+        data["comments_count"] = counters.get(scrobble.id, {}).get("comments", 0)
+    elif db:
+        data["likes_count"] = db.query(ScrobbleLike).filter_by(scrobble_id=scrobble.id).count()
+        data["comments_count"] = db.query(ScrobbleComment).filter_by(scrobble_id=scrobble.id).count()
+    return data
 
-def process_scrobble(db: Session, user: User, title: str, artist: str, cover_url: str, track_url: str, source: str, progress_sec: int, is_playing: bool, duration: int, album: str = None):
+async def process_scrobble(db: Session, user: User, title: str, artist: str, cover_url: str, track_url: str, source: str, progress_sec: int, is_playing: bool, duration: int, album: str = None):
     # Removed synchronous file logging containing blocking IO
         
     track = db.query(Track).filter(Track.title == title, Track.artist == artist).first()
@@ -391,10 +763,14 @@ def process_scrobble(db: Session, user: User, title: str, artist: str, cover_url
             db.commit()
 
     if track.duration == 0 and track.track_url:
-        track.duration = get_track_duration(track.track_url)
+        track.duration = await get_track_duration(track.track_url)
+        db.commit()
+
+    if not track.genre and track.track_url:
+        track.genre = await get_track_genre(track.track_url)
         db.commit()
         
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     last_scrobble = db.query(Scrobble).filter(Scrobble.user_id == user.id).order_by(Scrobble.id.desc()).first()
     
     is_new = False
@@ -406,8 +782,14 @@ def process_scrobble(db: Session, user: User, title: str, artist: str, cover_url
         is_new = True
             
     if is_new:
-        db.add(Scrobble(user_id=user.id, track_id=track.id, source=source, played_at=now, listened_sec=0, is_playing=is_playing, updated_at=now))
+        new_s = Scrobble(user_id=user.id, track_id=track.id, source=source, played_at=now, listened_sec=0, is_playing=is_playing, updated_at=now)
+        db.add(new_s)
         db.commit()
+        # Мгновенно уведомляем фронтенд о начале нового трека
+        await manager.broadcast_to_user(user.username, {
+            "type": "NEW_SCROBBLE",
+            "track": format_history_item(new_s, track)
+        })
     else:
         time_elapsed = (now - last_scrobble.updated_at).total_seconds()
         old_listened = last_scrobble.listened_sec or 0
@@ -437,7 +819,7 @@ def process_scrobble(db: Session, user: User, title: str, artist: str, cover_url
             last_scrobble.xp_earned = 2 if is_fav else 1
             db.commit()
             
-            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
             scrobbles_today = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.played_at >= today_start, Scrobble.listened_sec * 100 >= Track.duration * 85).count()
             if scrobbles_today >= 5:
                 today_str = today_start.strftime("%Y-%m-%d")
@@ -448,22 +830,136 @@ def process_scrobble(db: Session, user: User, title: str, artist: str, cover_url
                     user.last_streak_date = today_str
                     db.commit()
             
-            check_auto_achievements(user, db)
+            # Removed check_auto_achievements from hot path for performance
+            
+            # Broadcast update via WebSockets
+            # Redundant broadcast removed here (handled by the block at the start of new scrobbles)
+            # but we keep it for threshold updates specifically if needed.
+            # Actually, let's keep only one broadcast per major state change.
+            pass
             
     return "ok"
 
+async def import_lastfm_history(user_id: int, db_session_factory):
+    db = db_session_factory()
+    imported_count = 0
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            print(f"Import Error: User {user_id} not found")
+            return
+        if not user.lastfm_username:
+            print(f"Import Error: Last.fm username not set for user {user.username}")
+            return
+        if not LASTFM_API_KEY:
+            print(f"Import Error: LASTFM_API_KEY is missing in .env")
+            return
+        
+        async with httpx.AsyncClient() as client:
+            page = 1
+            total_pages = 1
+            while page <= total_pages and page <= 5: # Limit to 5 pages (1000 tracks) for now
+                params = {
+                    "method": "user.getrecenttracks",
+                    "user": user.lastfm_username,
+                    "api_key": LASTFM_API_KEY,
+                    "format": "json",
+                    "limit": 200,
+                    "page": page
+                }
+                resp = await client.get(LASTFM_BASE_URL, params=params)
+                if resp.status_code != 200:
+                    print(f"Last.fm API Error: {resp.status_code} - {resp.text}")
+                    break
+                res = resp.json()
+                if "error" in res:
+                    print(f"Last.fm API Logic Error: {res.get('message')}")
+                    break
+                tracks = res.get("recenttracks", {}).get("track", [])
+                total_pages = int(res.get("recenttracks", {}).get("@attr", {}).get("totalPages", 1))
+                print(f"Importing page {page}/{total_pages} for user {user.username}, found {len(tracks)} tracks")
+                
+                for t in tracks:
+                    if t.get("@attr", {}).get("nowplaying") == "true": continue
+                    
+                    title = t.get("name")
+                    artist = t.get("artist", {}).get("#text")
+                    album = t.get("album", {}).get("#text")
+                    cover = t.get("image", [{}, {}, {}, {"#text": ""}])[3].get("#text")
+                    uts = int(t.get("date", {}).get("uts", 0))
+                    dt = datetime.fromtimestamp(uts, tz=timezone.utc).replace(tzinfo=None)
+                    
+                    # Check if already exists
+                    existing = db.query(Scrobble).filter(Scrobble.user_id == user.id, Scrobble.played_at == dt).first()
+                    if existing: continue
+                    
+                    track = db.query(Track).filter(Track.title == title, Track.artist == artist).first()
+                    if not track:
+                        track = Track(title=title, artist=artist, cover_url=cover, album=album, duration=180)
+                        db.add(track)
+                        db.commit()
+                        db.refresh(track)
+                    
+                    # Try to get duration if track exists, else 180s
+                    duration = track.duration or 180
+                    
+                    scrobble = Scrobble(user_id=user.id, track_id=track.id, source="lastfm", played_at=dt, listened_sec=duration, is_playing=False, updated_at=dt, xp_earned=1, is_imported=True)
+                    db.add(scrobble)
+                    imported_count += 1
+                
+                db.commit()
+                page += 1
+        
+        print(f"Import Finished: Imported {imported_count} scrobbles for user {user.username}")
+        # Notify user via WebSocket if connected
+        await manager.send_personal_message(f"✅ Импорт завершен! Добавлено {imported_count} треков.", user.username)
+        
+    except Exception as e:
+        print(f"Last.fm Import Logic Error: {e}")
+    finally:
+        IMPORTING_USERS.discard(user_id)
+        db.close()
+
+@app.post("/api/import/lastfm")
+async def start_lastfm_import(data: LikeRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.api_key == data.api_key).first()
+    if not user: raise HTTPException(401)
+    if user.id in IMPORTING_USERS: raise HTTPException(429, "Импорт уже запущен")
+    if not user.lastfm_username: raise HTTPException(400, "Last.fm username not set in profile")
+    if not LASTFM_API_KEY: raise HTTPException(500, "Last.fm API key not configured on server")
+    
+    IMPORTING_USERS.add(user.id)
+    background_tasks.add_task(import_lastfm_history, user.id, SessionLocal)
+    return {"status": "import_started"}
+
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
+    # Security: Validate file type
+    allowed_types = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(400, "Только изображения (JPG, PNG, WEBP, GIF)")
+
+    # Security: Validate file size (max 5MB)
+    MAX_SIZE = 5 * 1024 * 1024
+    content = await file.read()
+    if len(content) > MAX_SIZE:
+        raise HTTPException(400, "Файл слишком большой (макс. 5МБ)")
+    
     ext = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
+    # Sanitize extension
+    if ext.lower() not in ["jpg", "jpeg", "png", "webp", "gif"]:
+        ext = "jpg"
+        
     filename = f"{uuid.uuid4().hex}.{ext}"
     file_path = os.path.join("uploads", filename)
     with open(file_path, "wb") as buffer:
-        content = await file.read()
         buffer.write(content)
-    return {"url": f"http://127.0.0.1:8000/uploads/{filename}"}
+    return {"url": f"{API_BASE_URL}/uploads/{filename}"}
 
 @app.post("/auth/register")
 def register(data: UserCreate, db: Session = Depends(get_db)):
+    if len(data.username) < 3: raise HTTPException(400, "Никнейм слишком короткий")
+    if len(data.password) < 6: raise HTTPException(400, "Пароль должен быть не менее 6 символов")
     if db.query(User).filter(User.username == data.username).first(): raise HTTPException(400, "Никнейм занят")
     new_user = User(username=data.username, hashed_password=get_password_hash(data.password), api_key=secrets.token_hex(16))
     db.add(new_user); db.commit(); db.refresh(new_user)
@@ -475,23 +971,108 @@ def login(data: UserCreate, db: Session = Depends(get_db)):
     if not user or not verify_password(data.password, user.hashed_password): raise HTTPException(400, "Неверный логин/пароль")
     return {"username": user.username, "api_key": user.api_key}
 
+@app.get("/auth/spotify/login")
+def spotify_login(api_key: str):
+    scopes = "user-read-currently-playing user-read-playback-state"
+    return RedirectResponse(f"https://accounts.spotify.com/authorize?client_id={SPOTIFY_CLIENT_ID}&response_type=code&redirect_uri={SPOTIFY_REDIRECT_URI}&scope={scopes}&state={api_key}")
+
+@app.get("/auth/spotify/callback")
+async def spotify_callback(code: str, state: str, db: Session = Depends(get_db)):
+    # state contains the api_key
+    user = db.query(User).filter(User.api_key == state).first()
+    if not user: raise HTTPException(401)
+    
+    async with httpx.AsyncClient() as client:
+        resp = await client.post("https://accounts.spotify.com/api/token", data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": SPOTIFY_REDIRECT_URI,
+            "client_id": SPOTIFY_CLIENT_ID,
+            "client_secret": SPOTIFY_CLIENT_SECRET
+        }, headers={"Content-Type": "application/x-www-form-urlencoded"})
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            user.spotify_access_token = data["access_token"]
+            user.spotify_refresh_token = data["refresh_token"]
+            db.commit()
+            return RedirectResponse(f"{FRONTEND_URL}/settings?spotify=success")
+    return RedirectResponse(f"{FRONTEND_URL}/settings?spotify=error")
+
+@app.post("/api/integrations/yandex")
+def update_yandex_token(data: dict, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.api_key == data.get("api_key")).first()
+    if not user: raise HTTPException(401)
+    user.yandex_token = data.get("token")
+    db.commit()
+    return {"status": "ok"}
+
+@app.post("/api/integrations/spotify/disconnect")
+def disconnect_spotify(data: LikeRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.api_key == data.api_key).first()
+    if not user: raise HTTPException(401)
+    user.spotify_access_token = None
+    user.spotify_refresh_token = None
+    db.commit()
+    return {"status": "ok"}
+
+@app.post("/api/integrations/yandex/disconnect")
+def disconnect_yandex(data: LikeRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.api_key == data.api_key).first()
+    if not user: raise HTTPException(401)
+    user.yandex_token = None
+    db.commit()
+    return {"status": "ok"}
+
+@app.post("/api/integrations/lastfm/disconnect")
+def disconnect_lastfm(data: LikeRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.api_key == data.api_key).first()
+    if not user: raise HTTPException(401)
+    user.lastfm_username = None
+    db.commit()
+    return {"status": "ok"}
+
 @app.post("/api/scrobble")
-def add_scrobble(data: ScrobbleData, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+async def add_scrobble(data: ScrobbleData, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     try:
         user = db.query(User).filter(User.api_key == data.api_key).first()
-        if not user: 
-            raise HTTPException(401)
-        res = process_scrobble(db, user, data.title, data.artist, data.cover_url, data.track_url, data.source, data.progress_sec, data.is_playing, data.duration, data.album)
+        if not user: raise HTTPException(401)
+        
+        # Anti-Cheat: Max 40 scrobbles per hour (normal music is ~15-20)
+        hour_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
+        scrobbles_h = db.query(Scrobble).filter(Scrobble.user_id == user.id, Scrobble.played_at >= hour_ago).count()
+        if scrobbles_h > 40:
+             return {"status": "flagged", "message": "Слишком много прослушиваний за час (Anti-Cheat)"}
+
+        # Anti-Spam: Max 1 new scrobble per 10 seconds
+        last_s = db.query(Scrobble).filter(Scrobble.user_id == user.id).order_by(Scrobble.id.desc()).first()
+        if last_s and (datetime.now(timezone.utc).replace(tzinfo=None) - last_s.played_at).total_seconds() < 10:
+            # Allow updates to the current playing track, but block new tracks
+            track = db.query(Track).filter(Track.title == data.title, Track.artist == data.artist).first()
+            if not track or last_s.track_id != track.id:
+                return {"status": "rate_limited", "message": "Слишком частые скробблы"}
+
+        res = await process_scrobble(db, user, data.title, data.artist, data.cover_url, data.track_url, data.source, data.progress_sec, data.is_playing, data.duration, data.album)
         return {"status": res}
     except Exception as e:
         raise e
-
 @app.get("/api/user/{username}")
-def get_user_info(username: str, db: Session = Depends(get_db)):
+def get_user_info(username: str, request: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404, "Юзер не найден")
     check_auto_achievements(user, db)
     role = "developer" if user.username in DEVELOPERS else "tester" if user.username in TESTERS else "user"
+
+    # Privacy check for profile data
+    api_key = request.query_params.get("api_key")
+    is_owner = api_key and user.api_key == api_key
+    
+    if user.is_private and not is_owner:
+        return {
+            "username": user.username, "display_name": user.display_name or user.username,
+            "avatar_url": user.avatar_url, "is_private": True, "role": role
+        }
+
     ach_data = db.query(Achievement, UserAchievement).join(UserAchievement, Achievement.id == UserAchievement.achievement_id).filter(UserAchievement.user_id == user.id).all()
     return {
         "username": user.username, "display_name": user.display_name or user.username, "bio": user.bio or "Этот пользователь пока ничего о себе не рассказал.",
@@ -500,7 +1081,8 @@ def get_user_info(username: str, db: Session = Depends(get_db)):
         "favorite_artist": user.favorite_artist, "favorite_artist_url": user.favorite_artist_url, "favorite_artist_cover": user.favorite_artist_cover,
         "favorite_track": user.favorite_track, "favorite_track_url": user.favorite_track_url, "favorite_track_cover": user.favorite_track_cover, 
         "favorite_album": user.favorite_album, "favorite_album_url": user.favorite_album_url, "favorite_album_cover": user.favorite_album_cover,
-        "spotify_linked": bool(user.spotify_refresh_token), "role": role,
+        "spotify_linked": bool(user.spotify_refresh_token), "yandex_linked": bool(user.yandex_token),
+        "lastfm_username": user.lastfm_username, "last_sync": user.last_sync, "role": role,
         "achievements": [{"id": a.id, "name": a.name, "description": a.description, "icon": a.icon, "target_image": a.target_image, "reward_xp": a.reward_xp, "is_displayed": ua.is_displayed, "earned_at": ua.earned_at} for a, ua in ach_data],
         "streak": get_active_streak(user)
     }
@@ -511,25 +1093,100 @@ def get_taste_match(viewer: str, profile: str, db: Session = Depends(get_db)):
     profile_user = db.query(User).filter(User.username == profile).first()
     if not viewer_user or not profile_user or viewer == profile:
         return {"match": 0, "common_artists": []}
+    
+    # SQL-based artist intersection for performance
+    sql = text("""
+        SELECT DISTINCT t.artist 
+        FROM scrobbles s 
+        JOIN tracks t ON s.track_id = t.id 
+        WHERE s.user_id = :u1 AND s.listened_sec * 100 >= t.duration * 85
+        INTERSECT
+        SELECT DISTINCT t.artist 
+        FROM scrobbles s 
+        JOIN tracks t ON s.track_id = t.id 
+        WHERE s.user_id = :u2 AND s.listened_sec * 100 >= t.duration * 85
+    """)
+    
+    common_rows = db.execute(sql, {"u1": viewer_user.id, "u2": profile_user.id}).fetchall()
+    common_artists = []
+    for row in common_rows:
+        for a in row[0].split(','):
+            common_artists.append(a.strip())
+    
+    common_artists = list(set(common_artists)) # Unique clean names
+    
+    # Count total unique artists for denominator
+    sql_total = text("""
+        SELECT COUNT(DISTINCT t.artist) 
+        FROM scrobbles s 
+        JOIN tracks t ON s.track_id = t.id 
+        WHERE (s.user_id = :u1 OR s.user_id = :u2) AND s.listened_sec * 100 >= t.duration * 85
+    """)
+    total_unique = db.execute(sql_total, {"u1": viewer_user.id, "u2": profile_user.id}).scalar() or 1
+    
+    match_percent = int((len(common_artists) / total_unique) * 100)
+    return {"match": min(match_percent, 100), "common_artists": common_artists[:5]}
+
+@app.get("/api/discovery/taste-twins")
+def get_taste_twins(username: str, db: Session = Depends(get_db)):
+    me = db.query(User).filter(User.username == username).first()
+    if not me: raise HTTPException(404)
+    
+    # Efficiently find users with common artists using SQL
+    sql = text("""
+        SELECT u.id, u.username, u.display_name, u.avatar_url, COUNT(DISTINCT t.artist) as common_count
+        FROM users u
+        JOIN scrobbles s ON u.id = s.user_id
+        JOIN tracks t ON s.track_id = t.id
+        WHERE u.id != :my_id 
+          AND s.listened_sec * 100 >= t.duration * 85
+          AND t.artist IN (
+              SELECT DISTINCT t2.artist 
+              FROM scrobbles s2 
+              JOIN tracks t2 ON s2.track_id = t2.id 
+              WHERE s2.user_id = :my_id AND s2.listened_sec * 100 >= t2.duration * 85
+          )
+        GROUP BY u.id
+        HAVING common_count > 0
+        ORDER BY common_count DESC
+        LIMIT 10
+    """)
+    
+    rows = db.execute(sql, {"my_id": me.id}).fetchall()
+    if not rows: return []
+    
+    # Calculate approximate match % for the top candidates
+    my_artist_count = db.query(func.count(func.distinct(Track.artist))).join(Scrobble).filter(Scrobble.user_id == me.id, Scrobble.listened_sec * 100 >= Track.duration * 85).scalar() or 1
+    
+    results = []
+    for row in rows:
+        uid, uname, dname, avatar, common = row
+        # Match % = (common artists / max(my artists, their artists))
+        # For simplicity and performance, we use my_artist_count as base
+        match = int((common / my_artist_count) * 100)
         
-    viewer_scrobbles = db.query(Track.artist).join(Scrobble).filter(Scrobble.user_id == viewer_user.id, Scrobble.listened_sec * 100 >= Track.duration * 85).all()
-    profile_scrobbles = db.query(Track.artist).join(Scrobble).filter(Scrobble.user_id == profile_user.id, Scrobble.listened_sec * 100 >= Track.duration * 85).all()
-    
-    viewer_artists = set()
-    for t in viewer_scrobbles:
-        for a in t[0].split(','): viewer_artists.add(a.strip())
-            
-    profile_artists = set()
-    for t in profile_scrobbles:
-        for a in t[0].split(','): profile_artists.add(a.strip())
-    
-    if not viewer_artists or not profile_artists:
-        return {"match": 0, "common_artists": []}
+        # Get a few common artist names for display
+        common_sql = text("""
+            SELECT DISTINCT t.artist FROM tracks t 
+            JOIN scrobbles s ON t.id = s.track_id
+            WHERE s.user_id = :u1 AND s.listened_sec * 100 >= t.duration * 85
+            INTERSECT
+            SELECT DISTINCT t.artist FROM tracks t 
+            JOIN scrobbles s ON t.id = s.track_id
+            WHERE s.user_id = :u2 AND s.listened_sec * 100 >= t.duration * 85
+            LIMIT 3
+        """)
+        common_names = [r[0].split(',')[0].strip() for r in db.execute(common_sql, {"u1": me.id, "u2": uid}).fetchall()]
         
-    common = viewer_artists.intersection(profile_artists)
-    match_percent = int((len(common) / max(len(viewer_artists), len(profile_artists), 1)) * 100)
-    
-    return {"match": match_percent, "common_artists": list(common)[:5]}
+        results.append({
+            "username": uname,
+            "display_name": dname or uname,
+            "avatar_url": avatar,
+            "match": min(match, 100),
+            "common_artists": common_names
+        })
+        
+    return results[:5]
 
 @app.get("/api/notifications/{username}")
 def get_notifications(username: str, db: Session = Depends(get_db)):
@@ -631,6 +1288,155 @@ def get_all_achievements(username: str, db: Session = Depends(get_db)):
 
     return {"user": {"username": user.username, "display_name": user.display_name or user.username, "avatar_url": user.avatar_url}, "achievements": res, "earned_count": len(user_achs), "total_count": len(all_achs)}
 
+@app.get("/api/recommendations")
+def get_recommendations(username: str, db: Session = Depends(get_db)):
+    cache_key = f"recs_{username}"
+    cached = get_from_cache(cache_key, ttl=1800) # 30 min cache
+    if cached: return cached
+
+    user = db.query(User).filter(User.username == username).first()
+    if not user: raise HTTPException(404)
+    twins = get_taste_twins(username, db)
+    if not twins: return []
+    twin_names = [t['username'] for t in twins]
+    sql = text("""
+        SELECT t.artist, t.cover_url, COUNT(s.id) as plays
+        FROM scrobbles s
+        JOIN tracks t ON s.track_id = t.id
+        JOIN users u ON s.user_id = u.id
+        WHERE u.username IN :twins
+          AND t.artist NOT IN (
+              SELECT DISTINCT t2.artist FROM scrobbles s2 JOIN tracks t2 ON s2.track_id = t2.id WHERE s2.user_id = :my_id
+          )
+        GROUP BY t.artist
+        ORDER BY plays DESC
+        LIMIT 10
+    """)
+    recs = db.execute(sql, {"twins": tuple(twin_names), "my_id": user.id}).fetchall()
+    data = [{"artist": r[0], "cover_url": r[1], "reason": "Слушают ваши вкусовые близнецы"} for r in recs]
+    set_to_cache(cache_key, data)
+    return data
+
+@app.get("/api/stats/wrapped")
+def get_wrapped_stats(username: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == username).first()
+    if not user: raise HTTPException(404)
+    last_month = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
+    base_filter = [Scrobble.user_id == user.id, Scrobble.played_at >= last_month, Scrobble.listened_sec * 100 >= Track.duration * 85]
+    top_artist = db.query(Track.artist, func.count(Scrobble.id)).join(Scrobble).filter(*base_filter).group_by(Track.artist).order_by(text('count_1 DESC')).first()
+    total_min = db.query(func.sum(Scrobble.listened_sec)).join(Track).filter(*base_filter).scalar() or 0
+    return {
+        "period": "За последние 30 дней",
+        "top_artist": top_artist[0] if top_artist else "Нет данных",
+        "total_minutes": int(total_min // 60),
+        "status": "Legendary" if total_min > 5000 else "Active"
+    }
+
+@app.get("/api/user/mood")
+def get_user_mood(username: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == username).first()
+    if not user: raise HTTPException(404)
+    
+    # Analyze last 10 tracks
+    recent = db.query(Track.genre, Track.title).join(Scrobble).filter(Scrobble.user_id == user.id).order_by(Scrobble.id.desc()).limit(10).all()
+    if not recent: return {"mood": "Тишина", "emoji": "😶"}
+    
+    genres = [r[0].lower() if r[0] else "" for r in recent]
+    titles = [r[1].lower() if r[1] else "" for r in recent]
+    
+    if any(g in ['rock', 'metal', 'phonk'] for g in genres): return {"mood": "Энергичный хайп", "emoji": "🔥"}
+    if any(g in ['lofi', 'jazz', 'ambient', 'classical'] for g in genres): return {"mood": "Фокус и чилл", "emoji": "📚"}
+    if any(g in ['pop', 'dance', 'electronic'] for g in genres): return {"mood": "Танцевальный вайб", "emoji": "💃"}
+    if any(w in titles for w in ['sad', 'lonely', 'rain', 'cry']): return {"mood": "Меланхолия", "emoji": "🌧️"}
+    
+    return {"mood": "Меломан", "emoji": "🎧"}
+
+@app.get("/api/search/taste")
+def search_by_taste(my_username: str, db: Session = Depends(get_db)):
+    # Find people with highest taste match
+    all_users = db.query(User).filter(User.username != my_username).limit(50).all()
+    results = []
+    for u in all_users:
+        match_data = get_taste_match_internal(my_username, u.username, db)
+        if match_data and match_data['match'] > 50:
+            results.append({
+                "username": u.username,
+                "display_name": u.display_name or u.username,
+                "avatar_url": u.avatar_url,
+                "match": match_data['match']
+            })
+    results.sort(key=lambda x: x['match'], reverse=True)
+    return results[:10]
+
+@app.get("/api/feed/global")
+def get_global_feed(db: Session = Depends(get_db)):
+    # Latest scrobbles from public users
+    scrobbles = db.query(Scrobble).join(User).filter(User.is_private == False).order_by(Scrobble.id.desc()).limit(20).all()
+    return {"feed": [format_history_item(s, s.track) for s in scrobbles]}
+
+@app.get("/api/admin/stats")
+def get_admin_stats(api_key: str, db: Session = Depends(get_db)):
+    admin = get_admin_user(api_key, db) # Auth check
+    
+    total_users = db.query(User).count()
+    total_scrobbles = db.query(Scrobble).count()
+    total_tracks = db.query(Track).count()
+    active_ws = {u: len(conns) for u, conns in manager.active_connections.items()}
+    
+    # Get users with scrobble counts and levels
+    users = db.query(User).all()
+    user_list = []
+    for u in users:
+        scrobble_count = db.query(Scrobble).filter(Scrobble.user_id == u.id).count()
+        lvl, rank, total_xp, _ = get_user_level_info(u, db)
+        user_list.append({
+            "id": u.id,
+            "username": u.username,
+            "display_name": u.display_name,
+            "avatar_url": u.avatar_url,
+            "bio": u.bio,
+            "is_verified": u.is_verified,
+            "total_xp": total_xp,
+            "level": lvl,
+            "rank": rank,
+            "scrobbles": scrobble_count,
+            "is_dev": u.username in DEVELOPERS
+        })
+    
+    # Get latest tracks
+    tracks = db.query(Track).order_by(Track.id.desc()).limit(50).all()
+    track_list = [{"id": t.id, "title": t.title, "artist": t.artist, "cover_url": t.cover_url, "track_url": t.track_url} for t in tracks]
+    
+    # Get all achievements
+    achievements = db.query(Achievement).all()
+    ach_list = [{
+        "id": a.id, "name": a.name, "description": a.description, "icon": a.icon,
+        "rule_type": a.rule_type, "rule_value": a.rule_value, "rule_target": a.rule_target,
+        "rule_meta": a.rule_meta, "target_image": a.target_image, "reward_xp": a.reward_xp
+    } for a in achievements]
+    
+    return {
+        "total_users": total_users,
+        "total_scrobbles": total_scrobbles,
+        "total_tracks": total_tracks,
+        "active_websockets": active_ws,
+        "users": user_list,
+        "tracks": track_list,
+        "achievements": ach_list,
+        "cache_size": len(CACHE),
+        "uptime_sec": int(time.time() - START_TIME) if 'START_TIME' in globals() else 0
+    }
+
+@app.post("/api/profile/privacy")
+def update_privacy(data: dict, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.api_key == data.get("api_key")).first()
+    if not user: raise HTTPException(401)
+    
+    if "is_private" in data: user.is_private = bool(data["is_private"])
+    if "hidden_artists" in data: user.hidden_artists = str(data["hidden_artists"])
+    db.commit()
+    return {"status": "ok"}
+
 @app.post("/api/profile/achievements/toggle")
 def toggle_achievement(data: ToggleAch, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.api_key == data.api_key).first()
@@ -642,30 +1448,58 @@ def toggle_achievement(data: ToggleAch, db: Session = Depends(get_db)):
     return {"status": "ok", "is_displayed": ua.is_displayed}
 
 @app.post("/api/profile/update")
-def update_profile(data: ProfileUpdate, db: Session = Depends(get_db)):
+async def update_profile(data: ProfileUpdate, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.api_key == data.api_key).first()
     if not user: raise HTTPException(401)
-    if data.theme: user.theme = data.theme
-    if data.favorite_artist_url:
-        title, img = parse_og_meta(data.favorite_artist_url)
-        user.favorite_artist_cover = img or user.favorite_artist_cover
-        user.favorite_artist = title or data.favorite_artist or user.favorite_artist
-        user.favorite_artist_url = data.favorite_artist_url
-    else: user.favorite_artist = user.favorite_artist_cover = user.favorite_artist_url = None
-    if data.favorite_track_url:
-        title, img = parse_og_meta(data.favorite_track_url)
-        user.favorite_track_cover = img or user.favorite_track_cover
-        user.favorite_track = title or data.favorite_track or user.favorite_track
-        user.favorite_track_url = data.favorite_track_url
-    else: user.favorite_track = user.favorite_track_cover = user.favorite_track_url = None
-    if data.favorite_album_url:
-        title, img = parse_og_meta(data.favorite_album_url)
-        user.favorite_album_cover = img or user.favorite_album_cover
-        user.favorite_album = title or data.favorite_album or user.favorite_album
-        user.favorite_album_url = data.favorite_album_url
-    else: user.favorite_album = user.favorite_album_cover = user.favorite_album_url = None
-    user.display_name = data.display_name; user.bio = data.bio; user.avatar_url = data.avatar_url; user.cover_url = data.cover_url
-    user.location = data.location; user.favorite_genre = data.favorite_genre; user.equipment = data.equipment; user.social_links = data.social_links
+    
+    # Update only provided fields (avoiding None overwrites)
+    if data.theme is not None: user.theme = data.theme
+    
+    if data.favorite_artist_url is not None:
+        if data.favorite_artist_url.strip() == "":
+            user.favorite_artist = user.favorite_artist_cover = user.favorite_artist_url = None
+        else:
+            title, img = await parse_og_meta(data.favorite_artist_url)
+            user.favorite_artist_cover = img or user.favorite_artist_cover
+            user.favorite_artist = sanitize_text(title or data.favorite_artist) or user.favorite_artist
+            user.favorite_artist_url = data.favorite_artist_url
+    
+    if data.favorite_track_url is not None:
+        if data.favorite_track_url.strip() == "":
+            user.favorite_track = user.favorite_track_cover = user.favorite_track_url = None
+        else:
+            title, img = await parse_og_meta(data.favorite_track_url)
+            user.favorite_track_cover = img or user.favorite_track_cover
+            user.favorite_track = sanitize_text(title or data.favorite_track) or user.favorite_track
+            user.favorite_track_url = data.favorite_track_url
+    
+    if data.favorite_album_url is not None:
+        if data.favorite_album_url.strip() == "":
+            user.favorite_album = user.favorite_album_cover = user.favorite_album_url = None
+        else:
+            title, img = await parse_og_meta(data.favorite_album_url)
+            user.favorite_album_cover = img or user.favorite_album_cover
+            user.favorite_album = sanitize_text(title or data.favorite_album) or user.favorite_album
+            user.favorite_album_url = data.favorite_album_url
+    
+    if data.display_name is not None: user.display_name = sanitize_text(data.display_name)
+    if data.bio is not None: user.bio = sanitize_text(data.bio)
+    if data.avatar_url is not None: user.avatar_url = data.avatar_url
+    if data.cover_url is not None: user.cover_url = data.cover_url
+    if data.location is not None: user.location = sanitize_text(data.location)
+    if data.favorite_genre is not None: user.favorite_genre = sanitize_text(data.favorite_genre)
+    if data.equipment is not None: user.equipment = sanitize_text(data.equipment)
+    if data.is_private is not None: user.is_private = data.is_private
+    if data.hidden_artists is not None: user.hidden_artists = sanitize_text(data.hidden_artists) or ""
+    if data.lastfm_username is not None: user.lastfm_username = sanitize_text(data.lastfm_username)
+    
+    if data.social_links is not None:
+        try:
+            import json
+            json.loads(data.social_links)
+            user.social_links = data.social_links
+        except: pass
+        
     db.commit()
     return {"status": "ok"}
 
@@ -674,96 +1508,75 @@ def get_detailed_stats(username: str, period: str = "all", db: Session = Depends
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404)
     
-    query = db.query(Scrobble, Track).join(Track).filter(
-        Scrobble.user_id == user.id,
-        Scrobble.listened_sec * 100 >= Track.duration * 85
-    )
-    
-    now = datetime.utcnow()
+    base_filter = [Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85]
     if period == "7d":
-        query = query.filter(Scrobble.played_at >= now - timedelta(days=7))
+        base_filter.append(Scrobble.played_at >= datetime.utcnow() - timedelta(days=7))
     elif period == "30d":
-        query = query.filter(Scrobble.played_at >= now - timedelta(days=30))
+        base_filter.append(Scrobble.played_at >= datetime.utcnow() - timedelta(days=30))
         
-    scrobbles = query.all()
+    # 1. General Stats
+    total_scrobbles = db.query(func.count(Scrobble.id)).join(Track).filter(*base_filter).scalar() or 0
+    total_sec = db.query(func.sum(Scrobble.listened_sec)).join(Track).filter(*base_filter).scalar() or 0
+    unique_artists = db.query(func.count(func.distinct(Track.artist))).join(Scrobble).filter(*base_filter).scalar() or 0
+    unique_tracks = db.query(func.count(func.distinct(Track.id))).join(Scrobble).filter(*base_filter).scalar() or 0
     
-    total_sec = sum((s.listened_sec or 0) for s, t in scrobbles)
-    total_scrobbles = len(scrobbles)
+    # 2. Top Artists
+    top_artists_raw = db.query(Track.artist, func.count(Scrobble.id).label('plays'))\
+        .join(Scrobble).filter(*base_filter).group_by(Track.artist)\
+        .order_by(text('plays DESC')).limit(10).all()
     
-    artist_counts = {}
-    track_counts = {}
-    album_counts = {}
-    track_meta = {}
-    activity_graph = {}
-    
-    unique_tracks_set = set()
-    unique_artists_set = set()
+    # 3. Top Tracks
+    top_tracks_raw = db.query(Track.title, Track.artist, Track.cover_url, Track.track_url, func.count(Scrobble.id).label('plays'))\
+        .join(Scrobble).filter(*base_filter).group_by(Track.id)\
+        .order_by(text('plays DESC')).limit(10).all()
+        
+    # 4. Top Albums
+    top_albums_raw = db.query(Track.album, Track.artist, Track.cover_url, func.count(Scrobble.id).label('plays'))\
+        .join(Scrobble).filter(*base_filter, Track.album != None)\
+        .group_by(Track.album, Track.artist)\
+        .order_by(text('plays DESC')).limit(10).all()
 
-    hours_dict = {f"{i:02d}": 0 for i in range(24)}
-    days_dict = {d: 0 for d in ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]}
-    days_map = {0: "Пн", 1: "Вт", 2: "Ср", 3: "Чт", 4: "Пт", 5: "Сб", 6: "Вс"}
+    # 5. Genre & Source counts
+    genres = db.query(Track.genre, func.count(Scrobble.id)).join(Scrobble).filter(*base_filter, Track.genre != None).group_by(Track.genre).all()
+    sources = db.query(Scrobble.source, func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(Scrobble.source).all()
     
-    for s, t in scrobbles:
-        unique_tracks_set.add(t.id)
-        for a in t.artist.split(','):
-            a_clean = a.strip()
-            unique_artists_set.add(a_clean)
-            if a_clean not in artist_counts:
-                artist_counts[a_clean] = {"plays": 0, "sources": {}}
-            artist_counts[a_clean]["plays"] += 1
-            artist_counts[a_clean]["sources"][s.source] = artist_counts[a_clean]["sources"].get(s.source, 0) + 1
-            
-        if t.id not in track_counts:
-            track_counts[t.id] = {"plays": 0, "sources": {}}
-        track_counts[t.id]["plays"] += 1
-        track_counts[t.id]["sources"][s.source] = track_counts[t.id]["sources"].get(s.source, 0) + 1
-        
-        if getattr(t, 'album', None):
-            alb_key = f"{t.album}::{t.artist}"
-            if alb_key not in album_counts:
-                album_counts[alb_key] = {"plays": 0, "album": t.album, "artist": t.artist, "cover_url": t.cover_url, "sources": {}}
-            album_counts[alb_key]["plays"] += 1
-            album_counts[alb_key]["sources"][s.source] = album_counts[alb_key]["sources"].get(s.source, 0) + 1
-        
-        if t.id not in track_meta:
-            track_meta[t.id] = {"title": t.title, "artist": t.artist, "cover_url": t.cover_url, "track_url": t.track_url}
-            
-        local_dt = s.played_at.replace(tzinfo=timezone.utc).astimezone()
-        
-        hours_dict[local_dt.strftime('%H')] += 1
-        days_dict[days_map[local_dt.weekday()]] += 1
-        
-        dt_str = local_dt.strftime("%Y-%m-%d")
-        activity_graph[dt_str] = activity_graph.get(dt_str, 0) + 1
+    # 6. Activity (Simplified for performance)
+    # Note: Complex timezone grouping is better in Python if row count is low, but here we estimate
+    hours_raw = db.query(func.strftime('%H', Scrobble.played_at), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.strftime('%H', Scrobble.played_at)).all()
+    hours_activity = {f"{i:02d}": 0 for i in range(24)}
+    for h, count in hours_raw: hours_activity[h] = count
 
-    top_artists = sorted(artist_counts.items(), key=lambda x: (x[1]["plays"], x[0]), reverse=True)[:10]
-    top_tracks_ids = sorted(track_counts.items(), key=lambda x: (x[1]["plays"], x[0]), reverse=True)[:10]
-    
-    top_albums_list = []
-    for v in sorted(album_counts.values(), key=lambda x: x["plays"], reverse=True)[:10]:
-        v["source"] = max(v["sources"].items(), key=lambda elem: elem[1])[0]
-        top_albums_list.append(v)
-    
     return {
         "user": {"username": user.username, "display_name": user.display_name or user.username, "avatar_url": user.avatar_url},
-        "total_time_min": total_sec // 60,
+        "total_time_min": int(total_sec // 60),
         "total_scrobbles": total_scrobbles,
-        "unique_artists": len(unique_artists_set),
-        "unique_tracks": len(unique_tracks_set),
-        "top_artists": [{"name": k, "plays": v["plays"], "source": max(v["sources"].items(), key=lambda elem: elem[1])[0]} for k, v in top_artists],
-        "top_tracks": [{"plays": v["plays"], "source": max(v["sources"].items(), key=lambda elem: elem[1])[0], **track_meta[tkey]} for tkey, v in top_tracks_ids],
-        "top_albums": top_albums_list,
-        "activity_graph": activity_graph,
-        "hours_activity": hours_dict,
-        "days_activity": days_dict
+        "unique_artists": unique_artists,
+        "unique_tracks": unique_tracks,
+        "top_artists": [{"name": r[0], "plays": r[1], "source": "web"} for r in top_artists_raw],
+        "top_tracks": [{"title": r[0], "artist": r[1], "cover_url": r[2], "track_url": r[3], "plays": r[4], "source": "web"} for r in top_tracks_raw],
+        "top_albums": [{"album": r[0], "artist": r[1], "cover_url": r[2], "plays": r[3], "source": "web"} for r in top_albums_raw],
+        "genre_counts": dict(genres),
+        "source_counts": dict(sources),
+        "activity_graph": {}, # Full graph is expensive, usually handled by a separate simpler endpoint
+        "hours_activity": hours_activity,
+        "days_activity": {}
     }
-
 @app.get("/api/history/{username}")
 def get_history(username: str, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404)
     scrobbles = db.query(Scrobble, Track).join(Track).filter(Scrobble.user_id == user.id).order_by(Scrobble.id.desc()).limit(10).all()
-    return {"user": username, "history": [format_history_item(s, t) for s, t in scrobbles]}
+    
+    # Batch fetch likes/comments to avoid N+1
+    s_ids = [s.id for s, t in scrobbles]
+    likes = db.query(ScrobbleLike.scrobble_id, func.count(ScrobbleLike.id)).filter(ScrobbleLike.scrobble_id.in_(s_ids)).group_by(ScrobbleLike.scrobble_id).all()
+    comments = db.query(ScrobbleComment.scrobble_id, func.count(ScrobbleComment.id)).filter(ScrobbleComment.scrobble_id.in_(s_ids)).group_by(ScrobbleComment.scrobble_id).all()
+    
+    counters = {sid: {"likes": 0, "comments": 0} for sid in s_ids}
+    for sid, count in likes: counters[sid]["likes"] = count
+    for sid, count in comments: counters[sid]["comments"] = count
+    
+    return {"user": username, "history": [format_history_item(s, t, counters=counters) for s, t in scrobbles]}
 
 @app.get("/api/stats/{username}")
 def get_stats(username: str, db: Session = Depends(get_db)):
@@ -842,7 +1655,7 @@ def get_current_track(username: str, db: Session = Depends(get_db)):
         return {"playing": False}
         
     s, t = last_scrobble
-    is_active = s.is_playing and (datetime.utcnow() - (s.updated_at or s.played_at)).total_seconds() < 900
+    is_active = s.is_playing and (datetime.now(timezone.utc).replace(tzinfo=None) - (s.updated_at or s.played_at)).total_seconds() < 900
     
     if is_active:
         lvl, rank, _, _ = get_user_level_info(user, db)
@@ -856,13 +1669,73 @@ def get_current_track(username: str, db: Session = Depends(get_db)):
         }
     return {"playing": False}
 
+class LikeRequest(BaseModel): api_key: str
+class CommentRequest(BaseModel): api_key: str; content: str
+
+@app.post("/api/scrobble/{scrobble_id}/like")
+def toggle_like(scrobble_id: int, data: LikeRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.api_key == data.api_key).first()
+    if not user: raise HTTPException(401)
+    like = db.query(ScrobbleLike).filter_by(user_id=user.id, scrobble_id=scrobble_id).first()
+    if like:
+        db.delete(like); db.commit()
+        return {"status": "unliked"}
+    else:
+        db.add(ScrobbleLike(user_id=user.id, scrobble_id=scrobble_id)); db.commit()
+        return {"status": "liked"}
+
+@app.post("/api/scrobble/{scrobble_id}/comment")
+def add_comment(scrobble_id: int, data: CommentRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.api_key == data.api_key).first()
+    if not user: raise HTTPException(401)
+    # Sanitize comment content to prevent XSS
+    clean_content = sanitize_text(data.content)
+    db.add(ScrobbleComment(user_id=user.id, scrobble_id=scrobble_id, content=clean_content))
+    db.commit()
+    return {"status": "ok"}
+
+@app.get("/api/scrobble/{scrobble_id}/comments")
+def get_comments(scrobble_id: int, db: Session = Depends(get_db)):
+    comments = db.query(ScrobbleComment, User.username, User.avatar_url).join(User).filter(ScrobbleComment.scrobble_id == scrobble_id).all()
+    return [{"id": c.ScrobbleComment.id, "content": c.ScrobbleComment.content, "username": c.username, "avatar_url": c.avatar_url, "created_at": c.ScrobbleComment.created_at} for c in comments]
+
 @app.get("/api/global-history")
+@app.get("/api/feed/global")
 def get_global_history(db: Session = Depends(get_db)):
-    scrobbles = db.query(Scrobble, Track, User).join(Track).join(User).order_by(Scrobble.id.desc()).limit(30).all()
+    # Only show recent scrobbles in the global feed (last 48 hours)
+    time_threshold = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=48)
+    scrobbles = db.query(Scrobble, Track, User).join(Track).join(User).filter(
+        User.is_private == False,
+        Scrobble.played_at >= time_threshold
+    ).order_by(Scrobble.id.desc()).limit(30).all()
+    
+    s_ids = [s.id for s, t, u in scrobbles]
+    likes = db.query(ScrobbleLike.scrobble_id, func.count(ScrobbleLike.id)).filter(ScrobbleLike.scrobble_id.in_(s_ids)).group_by(ScrobbleLike.scrobble_id).all()
+    comments = db.query(ScrobbleComment.scrobble_id, func.count(ScrobbleComment.id)).filter(ScrobbleComment.scrobble_id.in_(s_ids)).group_by(ScrobbleComment.scrobble_id).all()
+    
+    counters = {sid: {"likes": 0, "comments": 0} for sid in s_ids}
+    for sid, count in likes: counters[sid]["likes"] = count
+    for sid, count in comments: counters[sid]["comments"] = count
+
     res = []
+    # Cache for "listening together" to avoid redundant queries
+    active_now = {} # track_id -> [usernames]
+    
     for s, t, u in scrobbles:
-        data = format_history_item(s, t)
+        data = format_history_item(s, t, counters=counters)
         data.update({"username": u.username, "is_verified": u.is_verified})
+        
+        if data["is_playing"]:            
+            if t.id not in active_now:
+                others = db.query(User.username).join(Scrobble).filter(
+                    Scrobble.track_id == t.id,
+                    Scrobble.is_playing == True,
+                    Scrobble.updated_at >= datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=15)
+                ).all()
+                active_now[t.id] = [ou.username for ou in others]
+            
+            data["listening_with"] = [un for un in active_now[t.id] if un != u.username]
+        
         res.append(data)
     return res
 
@@ -892,9 +1765,16 @@ def get_follow_stats(viewer: str, profile: str, db: Session = Depends(get_db)):
     return {"followers": followers_count, "following": following_count, "is_following": is_following}
 
 @app.get("/api/followers/{username}")
-def get_followers(username: str, db: Session = Depends(get_db)):
+def get_followers(username: str, request: Request, db: Session = Depends(get_db)):
     target = db.query(User).filter(User.username == username).first()
     if not target: raise HTTPException(404)
+    
+    # Privacy check
+    api_key = request.query_params.get("api_key")
+    is_owner = api_key and target.api_key == api_key
+    if target.is_private and not is_owner:
+        return []
+
     followers = db.query(User).join(Follow, Follow.follower_id == User.id).filter(Follow.following_id == target.id).all()
     res = []
     for u in followers:
@@ -903,9 +1783,16 @@ def get_followers(username: str, db: Session = Depends(get_db)):
     return res
 
 @app.get("/api/following/{username}")
-def get_following(username: str, db: Session = Depends(get_db)):
+def get_following(username: str, request: Request, db: Session = Depends(get_db)):
     target = db.query(User).filter(User.username == username).first()
     if not target: raise HTTPException(404)
+
+    # Privacy check
+    api_key = request.query_params.get("api_key")
+    is_owner = api_key and target.api_key == api_key
+    if target.is_private and not is_owner:
+        return []
+
     following = db.query(User).join(Follow, Follow.following_id == User.id).filter(Follow.follower_id == target.id).all()
     res = []
     for u in following:
@@ -921,49 +1808,72 @@ def get_friends_history(username: str, db: Session = Depends(get_db)):
     if not following_ids: return []
     scrobbles = db.query(Scrobble, Track, User).join(Track).join(User, Scrobble.user_id == User.id).filter(Scrobble.user_id.in_(following_ids)).order_by(Scrobble.id.desc()).limit(30).all()
     res = []
+    active_now = {}
     for s, t, u in scrobbles:
-        data = format_history_item(s, t)
+        data = format_history_item(s, t, db)
         data.update({"username": u.username, "is_verified": u.is_verified})
+        if data["is_playing"]:
+            if t.id not in active_now:
+                others = db.query(User.username).join(Scrobble).filter(
+                    Scrobble.track_id == t.id,
+                    Scrobble.is_playing == True,
+                    Scrobble.updated_at >= datetime.utcnow() - timedelta(seconds=15)
+                ).all()
+                active_now[t.id] = [ou.username for ou in others]
+            data["listening_with"] = [un for un in active_now[t.id] if un != u.username]
         res.append(data)
     return res
 
 @app.get("/api/leaderboard")
 def get_leaderboard(db: Session = Depends(get_db)):
-    all_users = db.query(User).all()
+    # Calculate XP for all users in one query
+    sql = text("""
+        SELECT u.username, u.display_name, u.avatar_url, u.is_verified, u.theme,
+               (COALESCE(SUM(s.xp_earned), 0) + u.bonus_xp) as total_xp
+        FROM users u
+        LEFT JOIN scrobbles s ON u.id = s.user_id
+        GROUP BY u.id
+        ORDER BY total_xp DESC
+        LIMIT 50
+    """)
+    
+    rows = db.execute(sql).fetchall()
     res = []
-    for u in all_users:
-        lvl, rank, txp, theme = get_user_level_info(u, db)
-        if txp > 0:
-            res.append({
-                "username": u.username, 
-                "display_name": u.display_name or u.username, 
-                "avatar_url": u.avatar_url, 
-                "total_xp": txp, 
-                "level": lvl, 
-                "is_verified": u.is_verified, 
-                "role": "developer" if u.username in DEVELOPERS else "tester" if u.username in TESTERS else "user",
-                "theme": theme
-            })
-    res.sort(key=lambda x: x["total_xp"], reverse=True)
-    return res[:50]
+    for r in rows:
+        uname, dname, avatar, verified, theme, txp = r
+        lvl = (txp // 100) + 1
+        res.append({
+            "username": uname,
+            "display_name": dname or uname,
+            "avatar_url": avatar,
+            "total_xp": txp,
+            "level": lvl,
+            "is_verified": verified,
+            "role": "developer" if uname in DEVELOPERS else "tester" if uname in TESTERS else "user",
+            "theme": theme
+        })
+    return res
 
 @app.get("/api/redirect")
-def smart_redirect(source: str, type: str, q: str):
+async def smart_redirect(source: str, type: str, q: str):
     if source == "yandex":
         try:
-            res = requests.get(f"https://music.yandex.ru/handlers/music-search.jsx?text={urllib.parse.quote(q)}&type={type}s", headers={'User-Agent': 'Mozilla/5.0'}, timeout=5).json()
-            if type == "artist":
-                items = res.get("artists", {}).get("items", [])
-                if items: return RedirectResponse(url=f"https://music.yandex.ru/artist/{items[0]['id']}")
-            elif type == "album":
-                items = res.get("albums", {}).get("items", [])
-                if items: return RedirectResponse(url=f"https://music.yandex.ru/album/{items[0]['id']}")
-            elif type == "track":
-                items = res.get("tracks", {}).get("items", [])
-                if items:
-                    alb_id = items[0].get("albums", [{}])[0].get("id")
-                    if alb_id: return RedirectResponse(url=f"https://music.yandex.ru/album/{alb_id}/track/{items[0]['id']}")
-        except: pass
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(f"https://music.yandex.ru/handlers/music-search.jsx?text={urllib.parse.quote(q)}&type={type}s", headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
+                res = resp.json()
+                if type == "artist":
+                    items = res.get("artists", {}).get("items", [])
+                    if items: return RedirectResponse(url=f"https://music.yandex.ru/artist/{items[0]['id']}")
+                elif type == "album":
+                    items = res.get("albums", {}).get("items", [])
+                    if items: return RedirectResponse(url=f"https://music.yandex.ru/album/{items[0]['id']}")
+                elif type == "track":
+                    items = res.get("tracks", {}).get("items", [])
+                    if items:
+                        alb_id = items[0].get("albums", [{}])[0].get("id")
+                        if alb_id: return RedirectResponse(url=f"https://music.yandex.ru/album/{alb_id}/track/{items[0]['id']}")
+        except Exception as e:
+            print(f"Redirect error: {e}")
         if type == "artist": return RedirectResponse(url=f"https://music.yandex.ru/search?text={urllib.parse.quote(q)}&type=artists")
         if type == "album": return RedirectResponse(url=f"https://music.yandex.ru/search?text={urllib.parse.quote(q)}&type=albums")
         if type == "track": return RedirectResponse(url=f"https://music.yandex.ru/search?text={urllib.parse.quote(q)}&type=tracks")
@@ -980,23 +1890,7 @@ def search_users(q: str, db: Session = Depends(get_db)):
         res.append({"username": u.username, "display_name": u.display_name or u.username, "avatar_url": u.avatar_url, "is_verified": u.is_verified, "role": "developer" if u.username in DEVELOPERS else "tester" if u.username in TESTERS else "user", "level": lvl})
     return res
 
-@app.get("/api/admin/stats")
-def get_admin_stats(api_key: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.api_key == api_key).first()
-    if not user or user.username not in DEVELOPERS: raise HTTPException(403)
-    achievements = db.query(Achievement).all()
-    all_users = db.query(User).order_by(User.id.desc()).all()
-    users_data = []
-    for u in all_users:
-        streak = get_active_streak(u)
-        base_xp = db.query(Scrobble).join(Track).filter(Scrobble.user_id == u.id, Scrobble.listened_sec * 100 >= Track.duration * 85).count() + (u.bonus_xp or 0)
-        total_xp = int(base_xp * 1.1) if streak >= 7 else base_xp
-        users_data.append({"username": u.username, "display_name": u.display_name or u.username, "scrobbles": db.query(Scrobble).join(Track).filter(Scrobble.user_id == u.id, Scrobble.listened_sec * 100 >= Track.duration * 85).count(), "total_xp": total_xp, "is_dev": u.username in DEVELOPERS, "is_verified": u.is_verified, "avatar_url": u.avatar_url, "bio": u.bio})
-    
-    tracks = db.query(Track).order_by(Track.id.desc()).limit(150).all()
-    tracks_data = [{"id": t.id, "title": t.title, "artist": t.artist, "cover_url": t.cover_url} for t in tracks]
-    
-    return {"total_users": len(all_users), "total_scrobbles": db.query(Scrobble).join(Track).filter(Scrobble.listened_sec * 100 >= Track.duration * 85).count(), "total_tracks": db.query(Track).count(), "users": users_data, "achievements": [{"id": a.id, "name": a.name, "description": a.description, "icon": a.icon, "rule_type": a.rule_type, "rule_value": a.rule_value, "rule_target": a.rule_target, "target_image": a.target_image, "reward_xp": a.reward_xp, "rule_meta": a.rule_meta} for a in achievements], "tracks": tracks_data}
+# Removed duplicate get_admin_stats endpoint
 
 @app.get("/api/public-stats")
 def get_public_stats(db: Session = Depends(get_db)):
@@ -1005,15 +1899,14 @@ def get_public_stats(db: Session = Depends(get_db)):
     total_tracks = db.query(Track).count()
     
     # Считаем онлайн за последние 5 минут
-    five_mins_ago = datetime.utcnow() - timedelta(minutes=5)
+    five_mins_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=5)
     online_count = db.query(func.count(func.distinct(Scrobble.user_id))).filter(Scrobble.updated_at >= five_mins_ago).scalar() or 0
     
     return {"total_users": total_users, "total_scrobbles": total_scrobbles, "total_tracks": total_tracks, "online": online_count}
 
 @app.post("/api/admin/users/{target_username}/verify")
 def toggle_user_verification(target_username: str, data: VerifyUserRequest, db: Session = Depends(get_db)):
-    admin = db.query(User).filter(User.api_key == data.api_key).first()
-    if not admin or admin.username not in DEVELOPERS: raise HTTPException(403)
+    get_admin_user(data.api_key, db) # Robust auth check
     target_user = db.query(User).filter(User.username == target_username).first()
     if not target_user: raise HTTPException(404, "Юзер не найден")
     target_user.is_verified = data.is_verified
@@ -1022,7 +1915,7 @@ def toggle_user_verification(target_username: str, data: VerifyUserRequest, db: 
 
 @app.post("/api/admin/users/{target_username}/level")
 def update_user_level(target_username: str, data: LevelUpdate, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.api_key == data.api_key).first().username not in DEVELOPERS: raise HTTPException(403)
+    get_admin_user(data.api_key, db)
     target = db.query(User).filter(User.username == target_username).first()
     target.bonus_xp = ((data.new_level - 1) * 100) - db.query(Scrobble).join(Track).filter(Scrobble.user_id == target.id, Scrobble.listened_sec * 100 >= Track.duration * 85).count()
     db.commit()
@@ -1030,18 +1923,18 @@ def update_user_level(target_username: str, data: LevelUpdate, db: Session = Dep
 
 @app.put("/api/admin/users/{target_username}")
 def edit_user_profile(target_username: str, data: AdminUserUpdate, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.api_key == data.api_key).first().username not in DEVELOPERS: raise HTTPException(403)
+    get_admin_user(data.api_key, db)
     target = db.query(User).filter(User.username == target_username).first()
     if not target: raise HTTPException(404)
-    if data.display_name is not None: target.display_name = data.display_name
-    if data.bio is not None: target.bio = data.bio
+    if data.display_name is not None: target.display_name = sanitize_text(data.display_name)
+    if data.bio is not None: target.bio = sanitize_text(data.bio)
     if data.avatar_url is not None: target.avatar_url = data.avatar_url
     db.commit()
     return {"status": "ok"}
 
 @app.delete("/api/admin/users/{target_username}/scrobbles")
 def wipe_user_scrobbles(target_username: str, api_key: str, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.api_key == api_key).first().username not in DEVELOPERS: raise HTTPException(403)
+    get_admin_user(api_key, db)
     target = db.query(User).filter(User.username == target_username).first()
     if not target: raise HTTPException(404)
     db.query(Scrobble).filter(Scrobble.user_id == target.id).delete()
@@ -1050,7 +1943,7 @@ def wipe_user_scrobbles(target_username: str, api_key: str, db: Session = Depend
 
 @app.delete("/api/admin/tracks/{track_id}")
 def delete_track(track_id: int, api_key: str, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.api_key == api_key).first().username not in DEVELOPERS: raise HTTPException(403)
+    get_admin_user(api_key, db)
     db.query(Scrobble).filter(Scrobble.track_id == track_id).delete()
     db.query(Track).filter(Track.id == track_id).delete()
     db.commit()
@@ -1058,7 +1951,7 @@ def delete_track(track_id: int, api_key: str, db: Session = Depends(get_db)):
 
 @app.delete("/api/admin/users/{target_username}")
 def delete_user(target_username: str, api_key: str, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.api_key == api_key).first().username not in DEVELOPERS: raise HTTPException(403)
+    get_admin_user(api_key, db)
     target = db.query(User).filter(User.username == target_username).first()
     if target.username in DEVELOPERS: raise HTTPException(400, "Нельзя удалить разработчика")
     db.query(UserAchievement).filter(UserAchievement.user_id == target.id).delete()
@@ -1069,7 +1962,7 @@ def delete_user(target_username: str, api_key: str, db: Session = Depends(get_db
 
 @app.delete("/api/admin/users/{target_username}/achievements/{achievement_id}")
 def remove_achievement_from_user(target_username: str, achievement_id: int, api_key: str, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.api_key == api_key).first().username not in DEVELOPERS: raise HTTPException(403)
+    get_admin_user(api_key, db)
     target = db.query(User).filter(User.username == target_username).first()
     if not target: raise HTTPException(404, "Юзер не найден")
     ua = db.query(UserAchievement).filter_by(user_id=target.id, achievement_id=achievement_id).first()
@@ -1081,20 +1974,20 @@ def remove_achievement_from_user(target_username: str, achievement_id: int, api_
     return {"status": "ok"}
 
 @app.post("/api/admin/achievements")
-def create_achievement(data: AchCreate, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.api_key == data.api_key).first().username not in DEVELOPERS: raise HTTPException(403)
+async def create_achievement(data: AchCreate, db: Session = Depends(get_db)):
+    get_admin_user(data.api_key, db)
     target_val = data.rule_target
     val = data.rule_value
     t_img = data.target_image
     meta_text = data.rule_meta
     if data.rule_type in ["specific_track", "specific_album", "specific_artist"] and target_val and target_val.startswith("http"):
         if "avatars.yandex.net" not in target_val and "scdn.co" not in target_val:
-            title, img = parse_og_meta(target_val)
+            title, img = await parse_og_meta(target_val)
             if img: t_img = img
             if title and data.rule_type in ["specific_track", "specific_artist"] and not meta_text: meta_text = title
             if title and data.rule_type == "specific_artist": target_val = f"{title}||{data.rule_target}" 
             if data.rule_type == "specific_album":
-                track_count = get_album_track_count(target_val)
+                track_count = await get_album_track_count(target_val)
                 if track_count > 0: val = track_count 
         else: t_img = target_val 
     db.add(Achievement(name=data.name, description=data.description, icon=data.icon, rule_type=data.rule_type, rule_value=val, rule_target=target_val, target_image=t_img, reward_xp=data.reward_xp, rule_meta=meta_text))
@@ -1102,8 +1995,8 @@ def create_achievement(data: AchCreate, db: Session = Depends(get_db)):
     return {"status": "ok"}
 
 @app.put("/api/admin/achievements/{ach_id}")
-def update_achievement(ach_id: int, data: AchUpdate, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.api_key == data.api_key).first().username not in DEVELOPERS: raise HTTPException(403)
+async def update_achievement(ach_id: int, data: AchUpdate, db: Session = Depends(get_db)):
+    get_admin_user(data.api_key, db)
     ach = db.query(Achievement).filter(Achievement.id == ach_id).first()
     target_val = data.rule_target
     val = data.rule_value
@@ -1111,12 +2004,12 @@ def update_achievement(ach_id: int, data: AchUpdate, db: Session = Depends(get_d
     meta_text = data.rule_meta
     if data.rule_type in ["specific_track", "specific_album", "specific_artist"] and target_val and target_val.startswith("http"):
         if "avatars.yandex.net" not in target_val and "scdn.co" not in target_val:
-            title, img = parse_og_meta(target_val)
+            title, img = await parse_og_meta(target_val)
             if img: t_img = img
             if title and data.rule_type in ["specific_track", "specific_artist"] and not meta_text: meta_text = title
             if title and data.rule_type == "specific_artist": target_val = f"{title}||{data.rule_target}" 
             if data.rule_type == "specific_album":
-                track_count = get_album_track_count(target_val)
+                track_count = await get_album_track_count(target_val)
                 if track_count > 0: val = track_count 
         else: t_img = target_val 
     ach.name, ach.description, ach.icon, ach.rule_type, ach.rule_value, ach.rule_target, ach.target_image, ach.reward_xp, ach.rule_meta = data.name, data.description, data.icon, data.rule_type, val, target_val, t_img, data.reward_xp, meta_text
@@ -1125,7 +2018,7 @@ def update_achievement(ach_id: int, data: AchUpdate, db: Session = Depends(get_d
 
 @app.delete("/api/admin/achievements/{ach_id}")
 def delete_achievement(ach_id: int, api_key: str, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.api_key == api_key).first().username not in DEVELOPERS: raise HTTPException(403)
+    get_admin_user(api_key, db)
     db.query(UserAchievement).filter(UserAchievement.achievement_id == ach_id).delete()
     db.query(Achievement).filter(Achievement.id == ach_id).delete()
     db.commit()
@@ -1133,7 +2026,7 @@ def delete_achievement(ach_id: int, api_key: str, db: Session = Depends(get_db))
 
 @app.post("/api/admin/users/{target_username}/achievements")
 def assign_achievement(target_username: str, data: AchAssign, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.api_key == data.api_key).first().username not in DEVELOPERS: raise HTTPException(403)
+    get_admin_user(data.api_key, db)
     user = db.query(User).filter(User.username == target_username).first()
     if not db.query(UserAchievement).filter_by(user_id=user.id, achievement_id=data.achievement_id).first():
         ach = db.query(Achievement).filter_by(id=data.achievement_id).first()

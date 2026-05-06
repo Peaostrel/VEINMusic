@@ -6,7 +6,7 @@
  * премиальные карточки локации/жанров/аппаратуры.
  */
 "use client";
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getRankInfo, getNextRankInfo, LvlBadge, VerifiedBadge } from '../../Navbar';
 
@@ -63,14 +63,14 @@ const getArtistUrl = (artist: string, source: string) => {
     case 'youtube_music': return `https://music.youtube.com/search?q=${q}`;
     case 'soundcloud': return `https://soundcloud.com/search/people?q=${q}`;
     case 'apple_music': return `https://music.apple.com/search?term=${q}`;
-    case 'yandex': return `http://127.0.0.1:8000/api/redirect?source=yandex&type=artist&q=${q}`;
+    case 'yandex': return `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/redirect?source=yandex&type=artist&q=${q}`;
     default: return '#';
   }
 };
 
 const getTrackUrl = (t: any) => {
   if (t.source === 'yandex' && (!t.track_url || !t.track_url.includes('/track/'))) {
-    return `http://127.0.0.1:8000/api/redirect?source=yandex&type=track&q=${encodeURIComponent(t.artist + ' ' + (t.title || ''))}`;
+    return `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/redirect?source=yandex&type=track&q=${encodeURIComponent(t.artist + ' ' + (t.title || ''))}`;
   }
   return t.track_url || '#';
 };
@@ -98,6 +98,12 @@ export default function Profile() {
   const [isMyProfile, setIsMyProfile] = useState(false);
   const [isLogged, setIsLogged] = useState(false);
   const [countries, setCountries] = useState<any[]>([]);
+  const [error, setError] = useState('');
+  const [recs, setRecs] = useState<any[]>([]);
+  const [wrapped, setWrapped] = useState<any>(null);
+  const [mood, setMood] = useState<any>(null);
+  const [accentColor, setAccentColor] = useState<string>('');
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     fetch('https://restcountries.com/v3.1/all?fields=name,translations,cca2,flag')
@@ -126,13 +132,17 @@ export default function Profile() {
     const fetchAllData = async () => {
       try {
         const viewer = localStorage.getItem('username') || 'null';
+        const apiKey = localStorage.getItem('apiKey') || 'null';
         const ts = Date.now();
-        const [hRes, sRes, uRes, fRes, tRes] = await Promise.all([
-          fetch(`http://127.0.0.1:8000/api/history/${username}?t=${ts}`).then(r => r.ok ? r.json() : { history: [] }),
-          fetch(`http://127.0.0.1:8000/api/stats/${username}?t=${ts}`).then(r => r.ok ? r.json() : {}),
-          fetch(`http://127.0.0.1:8000/api/user/${username}?t=${ts}`).then(r => r.ok ? r.json() : null),
-          fetch(`http://127.0.0.1:8000/api/follow-stats/${username}?t=${ts}`).then(r => r.ok ? r.json() : null),
-          viewer !== 'null' && viewer !== username ? fetch(`http://127.0.0.1:8000/api/taste-match/${viewer}/${username}?t=${ts}`).then(r => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null),
+        const [hRes, sRes, uRes, fRes, tRes, rRes, wRes, mRes] = await Promise.all([
+          fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/history/${username}?t=${ts}&api_key=${apiKey}`).then(r => r.ok ? r.json() : { history: [] }),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/stats/${username}?t=${ts}&api_key=${apiKey}`).then(r => r.ok ? r.json() : {}),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/user/${username}?t=${ts}&api_key=${apiKey}`).then(r => r.ok ? r.json() : null),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/follow-stats/${username}?t=${ts}&api_key=${apiKey}`).then(r => r.ok ? r.json() : null),
+          viewer !== 'null' && viewer !== username ? fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/taste-match/${viewer}/${username}?t=${ts}&api_key=${apiKey}`).then(r => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/recommendations?username=${username}`).then(r => r.ok ? r.json() : []),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/stats/wrapped?username=${username}`).then(r => r.ok ? r.json() : null),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/user/mood?username=${username}`).then(r => r.ok ? r.json() : null)
         ]);
 
         setData({
@@ -140,8 +150,14 @@ export default function Profile() {
           taste: tRes,
           followStats: fRes || { followers: 0, following: 0, is_following: false }
         });
+        setRecs(rRes);
+        setWrapped(wRes);
+        setMood(mRes);
+        if (!uRes) setError('User not found');
+        else setError('');
       } catch (err) {
         console.error("Ошибка загрузки профиля:", err);
+        setError('Ошибка подключения к серверу');
       } finally {
         setLoading(false);
       }
@@ -150,7 +166,7 @@ export default function Profile() {
     const checkNotifications = async () => {
       if (!isMyProfile) return;
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/notifications/${username}`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/notifications/${username}`);
         if (res.ok) {
           const unread = await res.json();
           if (unread.length > 0) {
@@ -160,14 +176,8 @@ export default function Profile() {
                 if (!newToasts.some((t: any) => t.ach_id === ach.ua_id)) {
                   const toastId = ach.ua_id + '-' + Date.now() + '-' + Math.random();
                   newToasts.push({
-                    id: toastId,
-                    ach_id: ach.ua_id,
-                    name: ach.name,
-                    icon: ach.icon,
-                    xp: ach.reward_xp,
-                    image: ach.target_image
+                    id: toastId, ach_id: ach.ua_id, name: ach.name, icon: ach.icon, xp: ach.reward_xp, image: ach.target_image
                   });
-                  // Самоуничтожение тоста
                   setTimeout(() => {
                     setToasts((current: any[]) => current.filter((t: any) => t.id !== toastId));
                   }, 6000);
@@ -176,7 +186,7 @@ export default function Profile() {
               return newToasts;
             });
 
-            await fetch(`http://127.0.0.1:8000/api/notifications/${username}/read`, {
+            await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/notifications/${username}/read`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ ua_ids: unread.map((d: any) => d.ua_id) })
@@ -186,22 +196,32 @@ export default function Profile() {
       } catch (e) { }
     };
 
-    let isSubscribed = true;
-    let timeoutId: NodeJS.Timeout;
+    fetchAllData();
+    checkNotifications();
 
-    const pollData = async () => {
-      if (!isSubscribed) return;
-      await Promise.allSettled([fetchAllData(), checkNotifications()]);
-      if (isSubscribed) {
-        timeoutId = setTimeout(pollData, 800); // Поллинг с паузой вместо глупого setInterval
+    // WebSocket Integration
+    const apiKey = localStorage.getItem('apiKey') || 'null';
+    const wsUrl = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace('http', 'ws') + `/ws/${username}?token=${apiKey}`;
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'NEW_SCROBBLE') {
+        setData((prev: any) => {
+          const newHistory = [msg.track, ...prev.history.filter((h: any) => h.id !== msg.track.id)].slice(0, 50);
+          return { ...prev, history: newHistory };
+        });
+        checkNotifications();
+      } else if (msg.type === 'SYNC_INVITE') {
+        if (confirm(`Пользователь ${msg.from} хочет слушать музыку вместе! Перейти к нему?`)) {
+          router.push(`/user/${msg.from}`);
+        }
       }
     };
 
-    pollData();
-
     return () => {
-      isSubscribed = false;
-      clearTimeout(timeoutId);
+      if (wsRef.current) wsRef.current.close();
     };
   }, [username, isMyProfile]);
 
@@ -216,13 +236,32 @@ export default function Profile() {
     };
   }, [data.user?.theme]);
 
+  // Dynamic Theme from Cover Art
+  useEffect(() => {
+    const cover = data.history[0]?.cover_url;
+    if (!cover) return;
+
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.src = cover;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      canvas.width = 1; canvas.height = 1;
+      ctx.drawImage(img, 0, 0, 1, 1);
+      const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+      setAccentColor(`rgb(${r}, ${g}, ${b})`);
+    };
+  }, [data.history[0]?.cover_url]);
+
   // Таймеры для уведомлений теперь создаются индивидуально при их добавлении
 
   const handleFollow = async () => {
     const apiKey = localStorage.getItem('apiKey');
     if (!apiKey) return router.push('/auth');
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/follow/${username}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/follow/${username}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ api_key: apiKey })
       });
       if (res.ok) {
@@ -237,13 +276,46 @@ export default function Profile() {
   const openFollowModal = async (type: string) => {
     setFollowModal({ isOpen: true, type, title: type === 'followers' ? 'Подписчики' : 'Подписки', users: [], loading: true });
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/${type}/${username}`);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/${type}/${username}`);
       if (res.ok) {
         const fetchedUsers = await res.json();
         setFollowModal((prev: any) => ({ ...prev, users: fetchedUsers, loading: false }));
       }
     } catch (err) {
       setFollowModal((prev: any) => ({ ...prev, loading: false }));
+    }
+  };
+
+    const [importLoading, setImportLoading] = useState(false);
+  const handleLastfmImport = async () => {
+    const apiKey = localStorage.getItem('apiKey');
+    if (!apiKey) return alert('Ошибка: API ключ не найден. Перезайдите в систему.');
+    
+    setImportLoading(true);
+    try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/import/lastfm`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ api_key: apiKey })
+        });
+        
+        if (res.ok) {
+            alert('🚀 Импорт запущен в фоновом режиме. История скоро обновится!');
+        } else {
+            let errorMessage = 'Не удалось запустить импорт';
+            try {
+                const err = await res.json();
+                errorMessage = err.detail || errorMessage;
+            } catch (parseErr) {
+                errorMessage = `Ошибка сервера (${res.status})`;
+            }
+            alert(`Ошибка: ${errorMessage}`);
+        }
+    } catch (e) { 
+        console.error(e); 
+        alert('Ошибка сети: Бэкенд не отвечает. Проверьте соединение.');
+    } finally {
+        setImportLoading(false);
     }
   };
 
@@ -263,10 +335,19 @@ export default function Profile() {
   let socialLinks = [];
   try { socialLinks = JSON.parse(u.social_links || "[]"); } catch (e) { }
 
+  if (u.is_private) return (
+    <div className="min-h-screen flex flex-col items-center justify-center pt-24 px-4 text-center">
+       <div className="text-6xl mb-6">🔒</div>
+       <h1 className="text-4xl font-black text-white mb-2 uppercase tracking-tighter">Это приватный профиль</h1>
+       <p className="text-gray-500 font-bold max-w-md">Пользователь ограничил доступ к своей статистике и истории прослушиваний.</p>
+       <button onClick={() => router.push('/')} className="mt-8 bg-white/5 hover:bg-white/10 text-white font-bold px-8 py-3 rounded-xl border border-white/10 transition-all">На главную</button>
+    </div>
+  );
+
   const displayedAchs = u.achievements?.filter((a: any) => a.is_displayed !== false) || [];
 
   return (
-    <div className="max-w-6xl mx-auto relative px-4 md:px-0">
+    <div className="max-w-6xl mx-auto relative px-4 md:px-0" style={{ '--dynamic-accent': accentColor } as any}>
       <style>{`
         @keyframes fireFlicker {
           0%, 100% { transform: scale(1) rotate(-3deg); filter: drop-shadow(0 0 5px rgba(255, 100, 0, 0.4)); }
@@ -276,6 +357,9 @@ export default function Profile() {
           display: inline-block;
           transform-origin: bottom center;
           animation: fireFlicker 1s infinite ease-in-out;
+        }
+        :root {
+          --accent: var(--dynamic-accent, #ffcc00);
         }
       `}</style>
       <div className="fixed top-24 right-4 z-[9999] flex flex-col gap-3 pointer-events-none">
@@ -374,15 +458,37 @@ export default function Profile() {
         <button onClick={() => router.push(`/user/${username}/stats`)} className="bg-white/5 border border-white/10 text-white px-5 py-2.5 text-sm rounded-lg hover:bg-white/10 transition backdrop-blur-sm flex items-center gap-2 font-bold">
           📊 Подробная статистика
         </button>
+        {isMyProfile && (
+          <button 
+            onClick={handleLastfmImport} 
+            disabled={importLoading}
+            className={`bg-red-500/10 border border-red-500/30 text-red-400 px-5 py-2.5 text-sm rounded-lg hover:bg-red-500/20 transition backdrop-blur-sm flex items-center gap-2 font-bold ${importLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            title="Импортировать историю из Last.fm"
+          >
+            <img src="https://www.svgrepo.com/show/353982/lastfm.svg" className="w-4 h-4" alt="Last.fm" />
+            {importLoading ? 'Запуск...' : 'Импорт Last.fm'}
+          </button>
+        )}
         <button onClick={() => setShowWrapped(true)} className="bg-white/5 border border-white/10 text-white px-5 py-2.5 text-sm rounded-lg hover:bg-white/10 transition backdrop-blur-sm flex items-center gap-2 font-bold">
           📸 Поделиться
         </button>
+        {!isMyProfile && isLogged && (
+          <button onClick={() => wsRef.current?.send(JSON.stringify({type: 'SYNC_REQUEST', target: username}))} className="bg-[var(--accent)]/10 border border-[var(--accent)]/30 text-[var(--accent-text)] px-5 py-2.5 text-sm rounded-lg hover:bg-[var(--accent)]/20 transition backdrop-blur-sm flex items-center gap-2 font-bold">
+            🤝 Слушать вместе
+          </button>
+        )}
         {isMyProfile && (
           <button onClick={() => router.push('/settings')} className="bg-white/5 border border-white/10 text-white px-5 py-2.5 text-sm rounded-lg hover:bg-white/10 transition backdrop-blur-sm flex items-center gap-2 font-bold">
             ⚙️ Настройки
           </button>
         )}
       </div>
+
+      {error && (
+        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl text-center font-bold animate-pulse backdrop-blur-md">
+          ⚠️ {error}
+        </div>
+      )}
 
       <div className="rounded-2xl shadow-2xl border border-white/5 relative mb-12 bg-[#121212]/80 backdrop-blur-md">
         {/* Блок Обложки (чистый баннер без затемнений текста) */}
@@ -419,6 +525,11 @@ export default function Profile() {
 
           <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-4">
             <p className="text-[var(--accent-text)] font-bold text-sm">@{username}</p>
+            {mood && (
+              <div className="flex items-center gap-1.5 bg-white/5 px-2 py-1 rounded-full border border-white/10 text-[10px] font-black uppercase tracking-tighter text-white" title="Настроение прослушивания">
+                <span>{mood.emoji}</span> {mood.mood}
+              </div>
+            )}
 
             <div className="flex items-center gap-2 text-xs font-bold text-gray-400 bg-black/50 px-2 py-1 rounded-md border border-white/5">
               <span onClick={() => openFollowModal('followers')} className="hover:text-white transition-colors cursor-pointer" title="Посмотреть подписчиков">{data.followStats.followers} подписчиков</span>
@@ -604,6 +715,22 @@ export default function Profile() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-20">
         <div className="lg:col-span-2 space-y-8">
+          
+          {recs.length > 0 && (
+            <div className="bg-[#121212]/50 backdrop-blur-md p-6 rounded-2xl border border-[var(--accent)]/20">
+              <h2 className="text-xl font-black mb-6 flex items-center gap-3 text-[var(--accent-text)]"><span className="text-2xl">✨</span> Рекомендации</h2>
+              <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
+                {recs.map((r, i) => (
+                  <div key={i} className="min-w-[150px] bg-white/5 p-3 rounded-xl border border-white/5 hover:border-[var(--accent)] transition-all group">
+                    <img src={r.cover_url || "https://placehold.co/150x150/282828/ffcc00?text=🎤"} className="w-full aspect-square rounded-lg object-cover mb-3 group-hover:scale-105 transition-transform" />
+                    <p className="font-bold text-sm text-white truncate">{r.artist}</p>
+                    <p className="text-[10px] text-gray-500 mt-1">{r.reason}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="bg-[#121212]/50 backdrop-blur-md p-6 rounded-2xl shadow-xl border border-white/5">
             <h2 className="text-xl font-black mb-6 flex items-center gap-3 text-[var(--accent-text)]"><span className="text-2xl">🎵</span> История</h2>
             {data.history.length === 0 ? <p className="text-gray-400 font-medium">Тут пока пусто.</p> : (
@@ -616,7 +743,7 @@ export default function Profile() {
                     <li key={idx} className={`p-3 rounded-xl flex justify-between items-center transition-all duration-300 group relative ${isLatest ? 'bg-gradient-to-r from-white/10 to-transparent border-l-4 border-[var(--accent)] shadow-md' : 'bg-white/5 hover:bg-white/10 border border-transparent hover:border-white/5'}`}>
                       <div className="flex items-center gap-4 pr-2 w-full min-w-0">
                         <div className="w-12 h-12 rounded bg-black shrink-0 overflow-hidden shadow z-10 pointer-events-auto relative">
-                          <img src={item.cover_url || "https://placehold.co/100x100/282828/ffcc00?text=🎵"} className="w-full h-full object-cover" />
+                          <img src={item.cover_url || "https://placehold.co/100x100/282828/ffcc00?text=🎵"} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = "https://placehold.co/100x100/282828/ffcc00?text=🎵"; }} />
                         </div>
                         <div className="flex flex-col justify-center flex-grow min-w-[0] overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                           <div className="flex items-center gap-1.5 mb-0.5 w-max">
@@ -677,6 +804,26 @@ export default function Profile() {
         </div>
 
         <div className="space-y-8">
+          
+          {wrapped && (
+            <div className="bg-gradient-to-br from-[var(--accent)]/20 to-black p-6 rounded-2xl border border-[var(--accent)]/30 shadow-[0_0_30px_var(--accent-glow)] relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--accent)]/10 blur-3xl rounded-full"></div>
+              <h2 className="text-xl font-black mb-4 flex items-center gap-2 text-white"><span className="text-xl">📊</span> Итоги месяца</h2>
+              <div className="space-y-4 relative z-10">
+                <div>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Топ артист</p>
+                  <p className="text-lg font-black text-[var(--accent-text)]">{wrapped.top_artist}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Прослушано</p>
+                  <p className="text-lg font-black text-white">{wrapped.total_minutes} мин.</p>
+                </div>
+                <div className="pt-2 border-t border-white/10">
+                  <span className="bg-white/10 px-2 py-1 rounded text-[10px] font-black uppercase text-[var(--accent-text)]">{wrapped.status} Listener</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="bg-[#121212]/50 backdrop-blur-md p-6 rounded-2xl shadow-xl border border-white/5">
             <h2 className="text-xl font-black mb-4 flex items-center gap-2 text-[var(--accent-text)]"><span className="text-xl animate-fire">🔥</span> Топ треков</h2>
@@ -684,7 +831,7 @@ export default function Profile() {
               {data.stats.top_tracks?.map((item: any, idx: number) => (
                 <li key={idx} className={`p-2 rounded-xl flex gap-3 items-start transition-all border group relative ${item.is_playing ? 'bg-[var(--accent)]/10 border-[var(--accent)] shadow-[0_0_15px_var(--accent-glow)]' : 'bg-white/5 border-transparent hover:bg-white/10 hover:border-white/5'}`}>
                   <div className="relative w-10 h-10 rounded bg-[#1a1a1a] shrink-0 overflow-hidden shadow-sm mt-0.5">
-                    <img src={item.cover_url || "https://placehold.co/100x100/282828/ffcc00?text=🎵"} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                    <img src={item.cover_url || "https://placehold.co/100x100/282828/ffcc00?text=🎵"} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" onError={(e) => { e.currentTarget.src = "https://placehold.co/100x100/282828/ffcc00?text=🎵"; }} />
                   </div>
                   <div className="flex-grow min-w-[0] flex flex-col justify-center overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                     <div className="flex items-center gap-2 mb-0.5 w-max">
