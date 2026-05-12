@@ -2,45 +2,58 @@
 VEIN Music Discord RPC
 ----------------------
 Скрипт для интеграции текущего прослушивания в статус профиля Discord.
-1. Получает данные о текущем треке через API бэкенда.
-2. Обновляет "Rich Presence" статус (название, артист, обложка, уровень).
-3. Добавляет кнопку перехода в профиль пользователя.
 """
 from pypresence import Presence
 import time
 import requests
-
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-USERNAME = os.getenv("VEIN_USERNAME", "peaostrel") # Change this in .env or set environment variable
+USERNAME = os.getenv("VEIN_USERNAME", "peaostrel")
 CLIENT_ID = os.getenv("DISCORD_CLIENT_ID", '1483530998435156146')
 API_BASE = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
 FRONTEND_BASE = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 RPC = Presence(CLIENT_ID)
-RPC.connect()
-print(f"Discord RPC Подключен! Отслеживаю: {USERNAME}")
+connected = False
 
+def connect_rpc():
+    global connected
+    try:
+        RPC.connect()
+        connected = True
+        print(f"✅ Discord RPC Подключен! Отслеживаю: {USERNAME}")
+    except Exception as e:
+        connected = False
+        print(f"❌ Не удалось подключиться к Discord (он запущен?): {e}")
+
+connect_rpc()
 last_track = None
 
-# Use system proxies by default unless overridden
-proxies = None
-
 while True:
+    if not connected:
+        time.sleep(10)
+        connect_rpc()
+        continue
+
     try:
-        res = requests.get(f"{API_BASE}/api/current-track/{USERNAME}", proxies=proxies).json()
+        response = requests.get(f"{API_BASE}/api/current-track/{USERNAME}", timeout=10)
+        if response.status_code != 200:
+            print(f"⚠️ Ошибка API: {response.status_code}")
+            time.sleep(10)
+            continue
+            
+        res = response.json()
         
         if res.get("playing"):
             current = f"{res['title']} - {res['artist']}"
             if current != last_track:
-                cover = res.get("cover_url")
-                if not cover:
-                    cover = "logo"
-                
+                cover = res.get("cover_url") or "logo"
                 lvl_text = f"LVL {res.get('level', 1)} | {res.get('rank', 'Турист')}"
+                
+                track_url = res.get("track_url") or f"{FRONTEND_BASE}/user/{USERNAME}"
                     
                 RPC.update(
                     state=res['artist'],
@@ -50,8 +63,8 @@ while True:
                     small_image="logo",
                     small_text="VEIN Music",
                     buttons=[
-                        {"label": "View Profile", "url": f"{FRONTEND_BASE}/user/{USERNAME}"},
-                        {"label": "Listen on VEIN", "url": f"{FRONTEND_BASE}/user/{USERNAME}"}
+                        {"label": "Listen on VEIN", "url": track_url},
+                        {"label": "View Profile", "url": f"{FRONTEND_BASE}/user/{USERNAME}"}
                     ]
                 )
                 last_track = current
@@ -61,9 +74,11 @@ while True:
                 RPC.clear()
                 last_track = None
                 print("⏸ Музыка на паузе, скрываю статус.")
+                
     except requests.exceptions.RequestException as e:
         print(f"⚠️ Ошибка связи с API: {e}")
     except Exception as e:
-        print(f"⚠️ Ошибка RPC: {e}")
+        print(f"⚠️ Ошибка RPC (вероятно, Discord закрыт): {e}")
+        connected = False
         
     time.sleep(5)
