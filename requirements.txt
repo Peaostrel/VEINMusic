@@ -6,5 +6,4 @@ pydantic
 httpx
 python-dotenv
 python-multipart
-pypresence
 requests

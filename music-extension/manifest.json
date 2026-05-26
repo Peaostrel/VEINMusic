@@ -44,7 +44,18 @@
       "all_frames": false
     },
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "*://oauth.yandex.ru/*"
+      ],
+      "js": ["yandex_catcher.js"],
+      "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "*://localhost/*",
+        "*://127.0.0.1/*",
+        "*://music.vein.guru/*"
+      ],
       "js": ["sync-key.js"],
       "run_at": "document_end"
     }

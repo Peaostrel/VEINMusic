@@ -1,5 +1,6 @@
 // Проверяем, что мы реально на сайте VEIN, а не где-то еще
-if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+const allowedHosts = ['localhost', '127.0.0.1', 'music.vein.guru'];
+if (allowedHosts.includes(window.location.hostname)) {
     console.log("🔥 [VEIN] Скрипт синхронизации расширения УСПЕШНО ВНЕДРЕН на: " + window.location.href);
 
     // Сразу ставим клеймо, не дожидаясь интервала

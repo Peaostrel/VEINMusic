@@ -264,21 +264,12 @@ async def poll_external_services():
                     u = local_db.query(User).filter(User.id == user_id).first()
                     if not u: return
                     
-                    # Список активных коннекторов
-                    connectors = []
-                    
+                    # Выполняем синхронизации последовательно для безопасности сессии БД
                     if u.spotify_refresh_token:
-                        connectors.append(sync_spotify_status(u, local_db))
+                        await sync_spotify_status(u, local_db)
                     
                     if u.yandex_token:
-                        connectors.append(sync_yandex_status(u, local_db))
-                    
-                    # Плейсхолдеры для будущих интеграций
-                    # if u.apple_music_token: connectors.append(sync_apple_music_status(u, local_db))
-                    # if u.zvuk_token: connectors.append(sync_zvuk_status(u, local_db))
-                    
-                    if connectors:
-                        await asyncio.gather(*connectors)
+                        await sync_yandex_status(u, local_db)
                     
                     # Обновляем время последней синхронизации
                     u.last_sync = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -498,24 +489,11 @@ def startup_event():
 
 
 @app.get("/uploads/{filename}")
-async def get_upload(filename: str, request: Request, db: Session = Depends(get_db)):
-    # Проверяем Referer, чтобы разрешить загрузку внутри приложения
-    referer = request.headers.get("referer")
-    allowed_hosts = [FRONTEND_URL.replace("http://", "").replace("https://", ""), "127.0.0.1:3000", "localhost:3000", "music.vein.guru"]
-    
-    if referer:
-        for host in allowed_hosts:
-            if host in referer:
-                return FileResponse(os.path.join("uploads", filename))
-    
-    # Также разрешаем доступ по API-ключам для отладки или внешних ссылок
-    api_key = request.query_params.get("api_key")
-    if api_key:
-        user = db.query(User).filter(User.api_key == api_key).first()
-        if user:
-            return FileResponse(os.path.join("uploads", filename))
-            
-    raise HTTPException(status_code=403, detail="Доступ запрещен. Изображение доступно только через приложение.")
+async def get_upload(filename: str):
+    file_path = os.path.join("uploads", filename)
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    raise HTTPException(status_code=404, detail="Файл не найден")
 
 def get_password_hash(password: str) -> str: return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 def verify_password(plain_password: str, hashed_password: str) -> bool: return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
@@ -721,7 +699,8 @@ def format_history_item(scrobble, track, db: Session = None, counters: dict = No
         "track_url": track.track_url, "source": scrobble.source, "time": scrobble.played_at,
         "relative_time": rel_time,
         "duration": track.duration, "listened_sec": scrobble.listened_sec,
-        "is_playing": is_playing, "updated_at": upd_time
+        "is_playing": is_playing, "updated_at": upd_time,
+        "is_imported": scrobble.is_imported
     }
     if counters:
         data["likes_count"] = counters.get(scrobble.id, {}).get("likes", 0)
@@ -912,7 +891,7 @@ async def import_lastfm_history(user_id: int, db_session_factory):
         
         print(f"Import Finished: Imported {imported_count} scrobbles for user {user.username}")
         # Notify user via WebSocket if connected
-        await manager.send_personal_message(f"✅ Импорт завершен! Добавлено {imported_count} треков.", user.username)
+        await manager.broadcast_to_user(user.username, {"type": "IMPORT_FINISHED", "message": f"✅ Импорт завершен! Добавлено {imported_count} треков."})
         
     except Exception as e:
         print(f"Last.fm Import Logic Error: {e}")
@@ -1521,17 +1500,17 @@ def get_detailed_stats(username: str, period: str = "all", db: Session = Depends
     unique_tracks = db.query(func.count(func.distinct(Track.id))).join(Scrobble).filter(*base_filter).scalar() or 0
     
     # 2. Top Artists
-    top_artists_raw = db.query(Track.artist, func.count(Scrobble.id).label('plays'))\
+    top_artists_raw = db.query(Track.artist, func.count(Scrobble.id).label('plays'), Scrobble.source)\
         .join(Scrobble).filter(*base_filter).group_by(Track.artist)\
         .order_by(text('plays DESC')).limit(10).all()
     
     # 3. Top Tracks
-    top_tracks_raw = db.query(Track.title, Track.artist, Track.cover_url, Track.track_url, func.count(Scrobble.id).label('plays'))\
+    top_tracks_raw = db.query(Track.title, Track.artist, Track.cover_url, Track.track_url, func.count(Scrobble.id).label('plays'), Scrobble.source)\
         .join(Scrobble).filter(*base_filter).group_by(Track.id)\
         .order_by(text('plays DESC')).limit(10).all()
         
     # 4. Top Albums
-    top_albums_raw = db.query(Track.album, Track.artist, Track.cover_url, func.count(Scrobble.id).label('plays'))\
+    top_albums_raw = db.query(Track.album, Track.artist, Track.cover_url, func.count(Scrobble.id).label('plays'), Scrobble.source)\
         .join(Scrobble).filter(*base_filter, Track.album != None)\
         .group_by(Track.album, Track.artist)\
         .order_by(text('plays DESC')).limit(10).all()
@@ -1552,9 +1531,9 @@ def get_detailed_stats(username: str, period: str = "all", db: Session = Depends
         "total_scrobbles": total_scrobbles,
         "unique_artists": unique_artists,
         "unique_tracks": unique_tracks,
-        "top_artists": [{"name": r[0], "plays": r[1], "source": "web"} for r in top_artists_raw],
-        "top_tracks": [{"title": r[0], "artist": r[1], "cover_url": r[2], "track_url": r[3], "plays": r[4], "source": "web"} for r in top_tracks_raw],
-        "top_albums": [{"album": r[0], "artist": r[1], "cover_url": r[2], "plays": r[3], "source": "web"} for r in top_albums_raw],
+        "top_artists": [{"name": r[0], "plays": r[1], "source": r[2]} for r in top_artists_raw],
+        "top_tracks": [{"title": r[0], "artist": r[1], "cover_url": r[2], "track_url": r[3], "plays": r[4], "source": r[5]} for r in top_tracks_raw],
+        "top_albums": [{"album": r[0], "artist": r[1], "cover_url": r[2], "plays": r[3], "source": r[4]} for r in top_albums_raw],
         "genre_counts": dict(genres),
         "source_counts": dict(sources),
         "activity_graph": {}, # Full graph is expensive, usually handled by a separate simpler endpoint
@@ -1859,19 +1838,21 @@ async def smart_redirect(source: str, type: str, q: str):
     if source == "yandex":
         try:
             async with httpx.AsyncClient() as client:
-                resp = await client.get(f"https://music.yandex.ru/handlers/music-search.jsx?text={urllib.parse.quote(q)}&type={type}s", headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
-                res = resp.json()
-                if type == "artist":
-                    items = res.get("artists", {}).get("items", [])
-                    if items: return RedirectResponse(url=f"https://music.yandex.ru/artist/{items[0]['id']}")
-                elif type == "album":
-                    items = res.get("albums", {}).get("items", [])
-                    if items: return RedirectResponse(url=f"https://music.yandex.ru/album/{items[0]['id']}")
-                elif type == "track":
-                    items = res.get("tracks", {}).get("items", [])
-                    if items:
-                        alb_id = items[0].get("albums", [{}])[0].get("id")
-                        if alb_id: return RedirectResponse(url=f"https://music.yandex.ru/album/{alb_id}/track/{items[0]['id']}")
+                resp = await client.get(f"https://api.music.yandex.net/search?text={urllib.parse.quote(q)}&type=all&page=0", headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
+                if resp.status_code == 200:
+                    res = resp.json().get("result", {})
+                    if type == "artist":
+                        items = res.get("artists", {}).get("results", [])
+                        if items: return RedirectResponse(url=f"https://music.yandex.ru/artist/{items[0]['id']}")
+                    elif type == "album":
+                        items = res.get("albums", {}).get("results", [])
+                        if items: return RedirectResponse(url=f"https://music.yandex.ru/album/{items[0]['id']}")
+                    elif type == "track":
+                        items = res.get("tracks", {}).get("results", [])
+                        if items:
+                            alb_list = items[0].get("albums", [])
+                            alb_id = alb_list[0].get("id") if alb_list else None
+                            if alb_id: return RedirectResponse(url=f"https://music.yandex.ru/album/{alb_id}/track/{items[0]['id']}")
         except Exception as e:
             print(f"Redirect error: {e}")
         if type == "artist": return RedirectResponse(url=f"https://music.yandex.ru/search?text={urllib.parse.quote(q)}&type=artists")

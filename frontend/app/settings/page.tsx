@@ -10,6 +10,41 @@ import { useRouter, useSearchParams } from 'next/navigation';
 const Cropper = dynamic(() => import('react-easy-crop'), { ssr: false }) as any;
 import { createImage, getCroppedImg, fixImageUrl, THEMES } from './utils';
 
+const LOCAL_COUNTRIES = [
+  { name: 'Россия', code: 'RU', flag: '🇷🇺' },
+  { name: 'Беларусь', code: 'BY', flag: '🇧🇾' },
+  { name: 'Казахстан', code: 'KZ', flag: '🇰🇿' },
+  { name: 'Украина', code: 'UA', flag: '🇺🇦' },
+  { name: 'Германия', code: 'DE', flag: '🇩🇪' },
+  { name: 'США', code: 'US', flag: '🇺🇸' },
+  { name: 'Великобритания', code: 'GB', flag: '🇬🇧' },
+  { name: 'Франция', code: 'FR', flag: '🇫🇷' },
+  { name: 'Италия', code: 'IT', flag: '🇮🇹' },
+  { name: 'Испания', code: 'ES', flag: '🇪🇸' },
+  { name: 'Нидерланды', code: 'NL', flag: '🇳🇱' },
+  { name: 'Польша', code: 'PL', flag: '🇵🇱' },
+  { name: 'Финляндия', code: 'FI', flag: '🇫🇮' },
+  { name: 'Швеция', code: 'SE', flag: '🇸🇪' },
+  { name: 'Норвегия', code: 'NO', flag: '🇳🇴' },
+  { name: 'Грузия', code: 'GE', flag: '🇬🇪' },
+  { name: 'Армения', code: 'AM', flag: '🇦🇲' },
+  { name: 'Азербайджан', code: 'AZ', flag: '🇦🇿' },
+  { name: 'Латвия', code: 'LV', flag: '🇱🇻' },
+  { name: 'Литва', code: 'LT', flag: '🇱🇹' },
+  { name: 'Эстония', code: 'EE', flag: '🇪🇪' },
+  { name: 'Молдова', code: 'MD', flag: '🇲🇩' },
+  { name: 'Узбекистан', code: 'UZ', flag: '🇺🇿' },
+  { name: 'Киргизия', code: 'KG', flag: '🇰🇬' },
+  { name: 'Таджикистан', code: 'TJ', flag: '🇹🇯' },
+  { name: 'Туркменистан', code: 'TM', flag: '🇹🇲' },
+  { name: 'Турция', code: 'TR', flag: '🇹🇷' },
+  { name: 'Китай', code: 'CN', flag: '🇨🇳' },
+  { name: 'Япония', code: 'JP', flag: '🇯🇵' },
+  { name: 'Южная Корея', code: 'KR', flag: '🇰🇷' },
+  { name: 'Канада', code: 'CA', flag: '🇨🇦' },
+  { name: 'Австралия', code: 'AU', flag: '🇦🇺' }
+];
+
 function SettingsContent() {
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -23,7 +58,7 @@ function SettingsContent() {
       country: '', city: '', isPrivate: false, hiddenArtists: '', yandexToken: '', lastfmUsername: ''
   });
 
-  const [countries, setCountries] = useState<{name: string, code: string, flag: string}[]>([]);
+  const [countries, setCountries] = useState<{name: string, code: string, flag: string}[]>(LOCAL_COUNTRIES);
   const [cities, setCities] = useState<string[]>([]);
   const [countryCode, setCountryCode] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -415,7 +450,7 @@ function SettingsContent() {
                           <div className="flex items-center justify-between gap-4">
                               <div className="flex items-center gap-4">
                                   <div className="w-12 h-12 bg-[#ffcc00] rounded-xl flex items-center justify-center text-black font-black text-xl">Y</div>
-                                  <div><div className="flex items-center gap-2"><h3 className="font-bold text-lg text-white">Yandex Cloud</h3>{userProfile?.yandex_linked && <span className="bg-[#ffcc00]/20 text-[#ffcc00] text-[10px] px-2 py-0.5 rounded font-bold border border-[#ffcc00]/30">ACTIVE</span>}</div><p className="text-sm text-gray-400">Требуется OAuth токен.</p></div>
+                                  <div><div className="flex items-center gap-2"><h3 className="font-bold text-lg text-white">Yandex Cloud</h3>{userProfile?.yandex_linked && <span className="bg-[#ffcc00]/20 text-[#ffcc00] text-[10px] px-2 py-0.5 rounded font-bold border border-[#ffcc00]/30">ACTIVE</span>}</div><p className="text-sm text-gray-400">Требуется OAuth токен. <a href="https://oauth.yandex.ru/authorize?response_type=token&client_id=23c698c6b1ed4aef973d0348b9ff57f0" target="_blank" rel="noreferrer" className="text-[#ffcc00] hover:underline font-bold ml-1">Получить токен</a></p></div>
                               </div>
                               <div className="flex flex-col gap-2 w-64">
                                   <input 

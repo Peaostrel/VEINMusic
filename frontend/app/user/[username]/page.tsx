@@ -63,16 +63,28 @@ const getArtistUrl = (artist: string, source: string) => {
     case 'youtube_music': return `https://music.youtube.com/search?q=${q}`;
     case 'soundcloud': return `https://soundcloud.com/search/people?q=${q}`;
     case 'apple_music': return `https://music.apple.com/search?term=${q}`;
-    case 'yandex': return `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/redirect?source=yandex&type=artist&q=${q}`;
-    default: return '#';
+    default:
+      // Для Яндекс.Музыки и всех остальных импортированных/неизвестных источников используем умный редирект бэкенда
+      return `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/redirect?source=yandex&type=artist&q=${q}`;
   }
 };
 
 const getTrackUrl = (t: any) => {
-  if (t.source === 'yandex' && (!t.track_url || !t.track_url.includes('/track/'))) {
-    return `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/redirect?source=yandex&type=track&q=${encodeURIComponent(t.artist + ' ' + (t.title || ''))}`;
+  if (!t) return '#';
+  if (t.track_url && t.track_url !== '#') return t.track_url;
+  
+  const query = encodeURIComponent(`${t.artist || ''} ${t.title || ''}`.trim());
+  switch (t.source) {
+    case 'spotify': return `https://open.spotify.com/search/${query}`;
+    case 'vk': return `https://vk.com/audio?q=${query}`;
+    case 'youtube_music': return `https://music.youtube.com/search?q=${query}`;
+    case 'soundcloud': return `https://soundcloud.com/search?q=${query}`;
+    case 'apple_music': return `https://music.apple.com/search?term=${query}`;
+    default:
+      // Для Яндекс.Музыки и всех остальных источников используем умный редирект бэкенда
+      // Он найдет трек через API Яндекса и перенаправит прямо на страницу трека
+      return `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/redirect?source=yandex&type=track&q=${query}`;
   }
-  return t.track_url || '#';
 };
 
 const SocialIcons = {
@@ -81,6 +93,84 @@ const SocialIcons = {
   steam: <img src="https://www.svgrepo.com/show/473800/steam.svg" alt="Steam" className="w-5 h-5 brightness-0 invert group-hover:invert-0 transition-all duration-200" />,
   github: <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.298 24 12c0-6.627-5.373-12-12-12z" /></svg>,
   instagram: <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" /></svg>
+};
+
+const COMMON_COUNTRIES: { [key: string]: string } = {
+  // Russian
+  'россия': 'RU',
+  'российская федерация': 'RU',
+  'украина': 'UA',
+  'беларусь': 'BY',
+  'белоруссия': 'BY',
+  'казахстан': 'KZ',
+  'германия': 'DE',
+  'сша': 'US',
+  'соединенные штаты': 'US',
+  'соединенные штаты америки': 'US',
+  'великобритания': 'GB',
+  'франция': 'FR',
+  'италия': 'IT',
+  'испания': 'ES',
+  'нидерланды': 'NL',
+  'польша': 'PL',
+  'финляндия': 'FI',
+  'швеция': 'SE',
+  'норвегия': 'NO',
+  'грузия': 'GE',
+  'армения': 'AM',
+  'азербайджан': 'AZ',
+  'латвия': 'LV',
+  'литва': 'LT',
+  'эстония': 'EE',
+  'молдова': 'MD',
+  'узбекистан': 'UZ',
+  'киргизия': 'KG',
+  'таджикистан': 'TJ',
+  'туркменистан': 'TM',
+  'турция': 'TR',
+  'китай': 'CN',
+  'япония': 'JP',
+  'южная корея': 'KR',
+  'канада': 'CA',
+  'австралия': 'AU',
+
+  // English
+  'russia': 'RU',
+  'russian federation': 'RU',
+  'ukraine': 'UA',
+  'belarus': 'BY',
+  'kazakhstan': 'KZ',
+  'germany': 'DE',
+  'usa': 'US',
+  'united states': 'US',
+  'united states of america': 'US',
+  'united kingdom': 'GB',
+  'great britain': 'GB',
+  'france': 'FR',
+  'italy': 'IT',
+  'spain': 'ES',
+  'netherlands': 'NL',
+  'poland': 'PL',
+  'finland': 'FI',
+  'sweden': 'SE',
+  'norway': 'NO',
+  'georgia': 'GE',
+  'armenia': 'AM',
+  'azerbaijan': 'AZ',
+  'latvia': 'LV',
+  'lithuania': 'LT',
+  'estonia': 'EE',
+  'moldova': 'MD',
+  'uzbekistan': 'UZ',
+  'kyrgyzstan': 'KG',
+  'tajikistan': 'TJ',
+  'turkmenistan': 'TM',
+  'turkey': 'TR',
+  'china': 'CN',
+  'japan': 'JP',
+  'south korea': 'KR',
+  'canada': 'CA',
+  'australia': 'AU'
 };
 
 export default function Profile() {
@@ -98,6 +188,24 @@ export default function Profile() {
   const [isMyProfile, setIsMyProfile] = useState(false);
   const [isLogged, setIsLogged] = useState(false);
   const [countries, setCountries] = useState<any[]>([]);
+
+  const getCountryCode = (countryName: string): string | null => {
+    if (!countryName) return null;
+    const cleaned = countryName.trim().toLowerCase();
+    
+    // 1. Поиск по словарю популярных стран
+    if (COMMON_COUNTRIES[cleaned]) {
+      return COMMON_COUNTRIES[cleaned];
+    }
+    
+    // 2. Поиск по загруженному списку стран (если restcountries ответил)
+    const found = countries.find(c => c.name.toLowerCase() === cleaned);
+    if (found) {
+      return found.code;
+    }
+    
+    return null;
+  };
   const [error, setError] = useState('');
   const [recs, setRecs] = useState<any[]>([]);
   const [wrapped, setWrapped] = useState<any>(null);
@@ -217,6 +325,9 @@ export default function Profile() {
         if (confirm(`Пользователь ${msg.from} хочет слушать музыку вместе! Перейти к нему?`)) {
           router.push(`/user/${msg.from}`);
         }
+      } else if (msg.type === 'IMPORT_FINISHED') {
+        alert(msg.message);
+        fetchAllData();
       }
     };
 
@@ -318,6 +429,15 @@ export default function Profile() {
         setImportLoading(false);
     }
   };
+
+  if (error) return (
+    <div className="min-h-screen flex flex-col items-center justify-center pt-24 px-4 text-center">
+       <div className="text-6xl mb-6">🔍</div>
+       <h1 className="text-4xl font-black text-white mb-2 uppercase tracking-tighter">Профиль не найден</h1>
+       <p className="text-gray-400 font-bold max-w-md">Пользователя с никнеймом <span className="text-[#ffcc00]">@{username}</span> не существует в нашей базе данных.</p>
+       <button onClick={() => router.push('/')} className="mt-8 bg-white/5 hover:bg-white/10 text-white font-bold px-8 py-3 rounded-xl border border-white/10 transition-all">На главную</button>
+    </div>
+  );
 
   if (loading || !data.user) return <div className="min-h-screen text-[var(--accent-text)] flex items-center justify-center font-bold text-2xl animate-pulse">Подключение к базе...</div>;
 
@@ -640,12 +760,18 @@ export default function Profile() {
                 const parts = u.location.split(',').map((s: string) => s.trim());
                 const countryName = parts[0] || '';
                 const cityName = parts[1] || '';
-                const countryInfo = countries.find(c => c.name.toLowerCase() === countryName.toLowerCase());
-                const flag = countryInfo ? countryInfo.flag : '📍';
+                const code = getCountryCode(countryName);
+                const flagUrl = code ? `https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/${code.toLowerCase()}.svg` : null;
                 
                 return (
                   <div className="flex items-center gap-3 bg-white/5 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] group hover:border-[var(--accent)]/50 transition-all duration-300 w-fit">
-                    <span className="text-2xl drop-shadow-md group-hover:scale-110 transition-transform">{flag}</span>
+                    <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-full overflow-hidden bg-white/5 group-hover:scale-110 transition-transform">
+                      {flagUrl ? (
+                        <img src={flagUrl} alt={countryName} className="w-full h-full object-cover shadow-sm scale-110" />
+                      ) : (
+                        <span className="text-xl">📍</span>
+                      )}
+                    </div>
                     <div className="flex flex-col text-left">
                        <span className="text-[9px] text-gray-500 uppercase tracking-[0.2em] font-black leading-none mb-1">Местоположение</span>
                        <span className="text-sm font-bold text-white leading-none tracking-wide">
@@ -679,7 +805,7 @@ export default function Profile() {
             <div className="flex flex-wrap justify-center md:justify-start gap-4 mt-4">
 
               {u.favorite_artist && (
-                <a href={u.favorite_artist_url || '#'} target="_blank" rel="noreferrer" className="bg-[#121212]/80 p-3 pr-6 rounded-xl border border-white/5 hover:border-[var(--accent)] group transition-all shadow-md flex items-center gap-4 w-max max-w-full">
+                <a href={u.favorite_artist_url && u.favorite_artist_url !== '#' ? u.favorite_artist_url : getArtistUrl(u.favorite_artist, 'yandex')} target="_blank" rel="noreferrer" className="bg-[#121212]/80 p-3 pr-6 rounded-xl border border-white/5 hover:border-[var(--accent)] group transition-all shadow-md flex items-center gap-4 w-max max-w-full">
                   <img src={u.favorite_artist_cover || "https://placehold.co/100x100/282828/ffcc00?text=🎤"} className="w-14 h-14 rounded-full object-cover group-hover:scale-110 transition-transform duration-500 shadow-inner shrink-0" onError={(e) => { e.currentTarget.src = "https://placehold.co/100x100/282828/ffcc00?text=🎤"; }} />
                   <div className="text-left flex flex-col justify-center">
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Любимый артист</p>
@@ -689,7 +815,7 @@ export default function Profile() {
               )}
 
               {u.favorite_track && (
-                <a href={u.favorite_track_url || '#'} target="_blank" rel="noreferrer" className="bg-[#121212]/80 p-3 pr-6 rounded-xl border border-white/5 hover:border-[var(--accent)] group transition-all shadow-md flex items-center gap-4 w-max max-w-full">
+                <a href={u.favorite_track_url && u.favorite_track_url !== '#' ? u.favorite_track_url : getTrackUrl({ artist: u.favorite_artist || '', title: u.favorite_track, source: 'yandex' })} target="_blank" rel="noreferrer" className="bg-[#121212]/80 p-3 pr-6 rounded-xl border border-white/5 hover:border-[var(--accent)] group transition-all shadow-md flex items-center gap-4 w-max max-w-full">
                   <img src={u.favorite_track_cover || "https://placehold.co/100x100/282828/ffcc00?text=🎵"} className="w-14 h-14 rounded object-cover group-hover:scale-110 transition-transform duration-500 shadow-inner shrink-0" onError={(e) => { e.currentTarget.src = "https://placehold.co/100x100/282828/ffcc00?text=🎵"; }} />
                   <div className="text-left flex flex-col justify-center">
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Любимый трек</p>
@@ -699,7 +825,7 @@ export default function Profile() {
               )}
 
               {u.favorite_album && (
-                <a href={u.favorite_album_url || '#'} target="_blank" rel="noreferrer" className="bg-[#121212]/80 p-3 pr-6 rounded-xl border border-white/5 hover:border-[var(--accent)] group transition-all shadow-md flex items-center gap-4 w-max max-w-full">
+                <a href={u.favorite_album_url && u.favorite_album_url !== '#' ? u.favorite_album_url : `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/redirect?source=yandex&type=album&q=${encodeURIComponent(((u.favorite_artist ? u.favorite_artist + ' ' : '') + u.favorite_album).trim())}`} target="_blank" rel="noreferrer" className="bg-[#121212]/80 p-3 pr-6 rounded-xl border border-white/5 hover:border-[var(--accent)] group transition-all shadow-md flex items-center gap-4 w-max max-w-full">
                   <img src={u.favorite_album_cover || "https://placehold.co/100x100/282828/ffcc00?text=💿"} className="w-14 h-14 rounded-md object-cover group-hover:scale-110 transition-transform duration-500 shadow-inner shrink-0" onError={(e) => { e.currentTarget.src = "https://placehold.co/100x100/282828/ffcc00?text=💿"; }} />
                   <div className="text-left flex flex-col justify-center">
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Любимый альбом</p>
@@ -787,7 +913,11 @@ export default function Profile() {
                             <span className="bg-black/50 text-[10px] px-2 py-1 rounded text-gray-300 border border-white/5 font-mono">
                               {new Date(item.time + 'Z').toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                             </span>
-                            {(item.listened_sec || 0) > 0 && (
+                            {item.is_imported ? (
+                              <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider bg-white/5 px-1.5 py-0.5 rounded border border-white/5 shadow-inner">
+                                Импортировано
+                              </span>
+                            ) : (item.listened_sec || 0) > 0 && (
                               <span className="text-[9px] text-gray-400 font-medium uppercase tracking-wider">
                                 Прослушано: {Math.floor(item.listened_sec / 60).toString().padStart(2, '0')}:{(item.listened_sec % 60).toString().padStart(2, '0')}
                               </span>

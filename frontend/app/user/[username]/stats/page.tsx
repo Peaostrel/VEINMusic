@@ -58,6 +58,7 @@ export default function DetailedStats() {
     const [stats, setStats] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [period, setPeriod] = useState('30d');
+    const [hasCheckedFallback, setHasCheckedFallback] = useState(false);
 
     useEffect(() => {
         if (!username) return;
@@ -65,11 +66,17 @@ export default function DetailedStats() {
         fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/detailed-stats/${username}?period=${period}`, { cache: 'no-store' })
             .then(res => res.json())
             .then(data => {
-                setStats(data);
-                setLoading(false);
+                if (period === '30d' && data.total_scrobbles === 0 && !hasCheckedFallback) {
+                    // Если при первой загрузке за последние 30 дней пусто, переключимся на "всё время"
+                    setHasCheckedFallback(true);
+                    setPeriod('all');
+                } else {
+                    setStats(data);
+                    setLoading(false);
+                }
             })
             .catch(() => setLoading(false));
-    }, [username, period]);
+    }, [username, period, hasCheckedFallback]);
 
     if (loading || !stats) {
         return <div className="min-h-screen text-[var(--accent-text)] flex items-center justify-center font-bold text-2xl animate-pulse">Сбор данных...</div>;
