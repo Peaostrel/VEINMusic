@@ -4,7 +4,6 @@
   [![Python](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat&logo=fastapi)](https://fastapi.tiangolo.com/)
   [![Next.js](https://img.shields.io/badge/Frontend-Next.js-000000?style=flat&logo=next.js)](https://nextjs.org/)
   [![Extension](https://img.shields.io/badge/Extension-Chrome-4285F4?style=flat&logo=google-chrome)]()
-  [![Discord](https://img.shields.io/badge/Discord-Rich_Presence-5865F2?style=flat&logo=discord)]()
 </div>
 
 <br>
@@ -24,7 +23,6 @@
   - За каждый скроубл начисляется 1 XP. Повышение уровней и рангов (Новичок -> Легенда).
 * **Достижения**: Автоматические и ручные ачивки за цели (жанры, количество треков, ночные прослушивания).
 * **Социальные функции**: Глобальный Leaderboard, система подписок, лайки и комментарии к скроублам.
-* **Discord RPC**: Локальный скрипт для отображения текущего трека и уровня в статусе Discord.
 * **Профиль пользователя**: 
   - Динамический UI (Color Thief) под обложку трека.
   - Настройки приватности и скрытие артистов.
@@ -34,14 +32,12 @@
 - **Backend**: FastAPI (Python), SQLAlchemy, SQLite, Pydantic v2
 - **Frontend**: Next.js 14+ (React 19), Tailwind CSS 4, Framer Motion, Lucide React
 - **Расширение**: Chrome Manifest V3
-- **Discord RPC**: PyPresence
 
 ## 📁 Структура проекта
 
 - `frontend/` — Веб-интерфейс.
 - `music-extension/` — Код расширения.
 - `main.py` — Основной сервер и Cloud-воркер.
-- `discord_rpc.py` — Скрипт для Discord Rich Presence (запускается отдельно).
 
 ## 🚀 Как запустить
 
