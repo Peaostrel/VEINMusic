@@ -8,7 +8,7 @@ import httpx
 from app.database import get_db
 from app.models import User, UserProfile, UserIntegration
 from app.schemas import UserCreate
-from app.core.security import get_password_hash, verify_password
+from app.core.security import get_password_hash, verify_password, get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -39,7 +39,7 @@ def register(data: UserCreate, response: Response, db: Session = Depends(get_db)
         samesite="lax",
         max_age=30 * 24 * 3600
     )
-    return {"message": "Успешная регистрация", "username": new_user.username, "api_key": new_user.api_key}
+    return {"message": "Успешная регистрация", "username": new_user.username}
 
 @router.post("/login")
 def login(data: UserCreate, response: Response, db: Session = Depends(get_db)):
@@ -56,7 +56,7 @@ def login(data: UserCreate, response: Response, db: Session = Depends(get_db)):
         samesite="lax",
         max_age=30 * 24 * 3600
     )
-    return {"username": user.username, "api_key": user.api_key}
+    return {"username": user.username}
 
 @router.post("/logout")
 def logout(response: Response):
@@ -64,14 +64,13 @@ def logout(response: Response):
     return {"message": "Успешный выход"}
 
 @router.get("/spotify/login")
-def spotify_login(api_key: str):
+def spotify_login(current_user: User = Depends(get_current_user)):
     scopes = "user-read-currently-playing user-read-playback-state"
-    return RedirectResponse(f"https://accounts.spotify.com/authorize?client_id={SPOTIFY_CLIENT_ID}&response_type=code&redirect_uri={SPOTIFY_REDIRECT_URI}&scope={scopes}&state={api_key}")
+    return RedirectResponse(f"https://accounts.spotify.com/authorize?client_id={SPOTIFY_CLIENT_ID}&response_type=code&redirect_uri={SPOTIFY_REDIRECT_URI}&scope={scopes}")
 
 @router.get("/spotify/callback")
-async def spotify_callback(code: str, state: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.api_key == state).first()
-    if not user: raise HTTPException(401)
+async def spotify_callback(code: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user = current_user
     
     async with httpx.AsyncClient() as client:
         resp = await client.post("https://accounts.spotify.com/api/token", data={

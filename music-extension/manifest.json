@@ -13,11 +13,20 @@
 
   "permissions": [
     "storage",
-    "tabs"
+    "tabs",
+    "cookies"
   ],
 
   "host_permissions": [
-    "<all_urls>"
+    "*://*.yandex.ru/*",
+    "*://*.spotify.com/*",
+    "*://*.youtube.com/*",
+    "*://*.vk.com/*",
+    "*://*.soundcloud.com/*",
+    "*://*.apple.com/*",
+    "*://localhost/*",
+    "*://127.0.0.1/*",
+    "*://music.vein.guru/*"
   ],
 
   "action": {
@@ -25,7 +34,6 @@
   },
 
   "background": {
-    "scripts": ["background.js"],
     "service_worker": "background.js"
   },
 
@@ -42,22 +50,6 @@
       "js": ["content.js"],
       "run_at": "document_start",
       "all_frames": false
-    },
-    {
-      "matches": [
-        "*://oauth.yandex.ru/*"
-      ],
-      "js": ["yandex_catcher.js"],
-      "run_at": "document_end"
-    },
-    {
-      "matches": [
-        "*://localhost/*",
-        "*://127.0.0.1/*",
-        "*://music.vein.guru/*"
-      ],
-      "js": ["sync-key.js"],
-      "run_at": "document_end"
     }
   ],
 

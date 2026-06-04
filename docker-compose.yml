@@ -6,9 +6,9 @@ services:
     container_name: veinmusic-postgres
     restart: always
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: veinmusic
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-default_secure_password_please_change}
+      POSTGRES_DB: ${POSTGRES_DB:-veinmusic}
     ports:
       - "5432:5432"
     volumes:
