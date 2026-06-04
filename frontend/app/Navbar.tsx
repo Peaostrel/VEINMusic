@@ -92,7 +92,7 @@ export default function Navbar() {
       if (typeof document === 'undefined') return;
       const root = document.documentElement;
       let r = 0, g = 0, b = 0;
-      let isRainbow = themeKey === 'rainbow';
+      const isRainbow = themeKey === 'rainbow';
       if (!isRainbow) {
           if (themeKey && themeKey.startsWith('#')) {
               const vals = hexToRgbVals(themeKey);

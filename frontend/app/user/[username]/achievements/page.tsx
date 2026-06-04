@@ -22,7 +22,7 @@ function renderDescriptionWithLinks(desc: string, meta: string | null, url: stri
         const escapedWord = escapeRegExp(targetWord);
         const regex = new RegExp(`(${escapedWord})`, 'gi');
         
-        let newNodes: any[] = [];
+        const newNodes: any[] = [];
         nodes.forEach((node, nodeIdx) => {
             if (typeof node !== 'string') {
                 newNodes.push(node);
@@ -50,7 +50,7 @@ function renderDescriptionWithLinks(desc: string, meta: string | null, url: stri
 
     // 2. Затем обрабатываем Markdown [Текст](Ссылка) на оставшихся текстовых нодах
     const mdRegex = /\[(.*?)\]\((.*?)\)/g;
-    let finalNodes: any[] = [];
+    const finalNodes: any[] = [];
 
     nodes.forEach((node, nodeIdx) => {
         if (typeof node !== 'string') {

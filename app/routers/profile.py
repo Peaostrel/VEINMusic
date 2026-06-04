@@ -60,7 +60,8 @@ async def update_profile(data: ProfileUpdate, db: Annotated[Session, Depends(get
         try:
             json.loads(data.social_links)
             user.profile.social_links = data.social_links
-        except: pass
+        except json.JSONDecodeError:
+            pass
         
     db.commit()
     return {"status": "ok"}

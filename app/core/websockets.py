@@ -21,7 +21,8 @@ class ConnectionManager:
             for connection in self.active_connections[username]:
                 try: 
                     await connection.send_json(message)
-                except Exception: 
-                    pass
+                except Exception as e:
+                    import logging
+                    logging.debug(f"Failed to send WS message to {username}: {e}")
 
 manager = ConnectionManager()
