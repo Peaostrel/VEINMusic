@@ -103,7 +103,7 @@ async def search_metadata(query: str, entity_type: str) -> tuple[str, str, str]:
             if lastfm_key:
                 try:
                     # Try to extract artist and name
-                    parts = re.split(r'[ \t]*[-—][ \t]*', query.strip())
+                    parts = [p.strip() for p in query.strip().replace('—', '-').split('-')]
                     if len(parts) >= 2:
                         artist = parts[0]
                         item_name = parts[-1]

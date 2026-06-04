@@ -74,7 +74,7 @@ def check_auto_achievements(user, db: Session):
         elif ach.rule_type == "specific_track" and ach.rule_target:
             if ach.rule_target.startswith("http"):
                 if hasattr(ach, 'rule_meta') and ach.rule_meta:
-                    parts = re.split(r'[ \t]*[-—][ \t]*', ach.rule_meta)
+                    parts = [p.strip() for p in ach.rule_meta.replace('—', '-').split('-')]
                     if len(parts) >= 2: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.artist.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%")) | (Track.title.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%"))).count()
                     else: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.title.ilike(f"%{ach.rule_meta}%")) | (Track.artist.ilike(f"%{ach.rule_meta}%"))).count()
                 else:
@@ -84,7 +84,7 @@ def check_auto_achievements(user, db: Session):
                         count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.track_url.like(f"%/track/{track_id}%")).count()
                     else: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.track_url.like(f"%{target_str}%")).count()
             else:
-                parts = re.split(r'[ \t]*[-—][ \t]*', ach.rule_target)
+                parts = [p.strip() for p in ach.rule_target.replace('—', '-').split('-')]
                 if len(parts) >= 2: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.artist.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%")) | (Track.title.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%"))).count()
                 else: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.title.ilike(f"%{ach.rule_target}%")) | (Track.artist.ilike(f'%{ach.rule_target.split("||")[0] if "||" in ach.rule_target else ach.rule_target}%'))).count()
             if count >= ach.rule_value: granted = True
@@ -330,7 +330,7 @@ def get_all_achievements(username: str, db: Annotated[Session, Depends(get_db)])
             elif a.rule_type == "specific_track" and a.rule_target:
                 if a.rule_target.startswith("http"):
                     if hasattr(a, 'rule_meta') and a.rule_meta:
-                        parts = re.split(r'[ \t]*[-—][ \t]*', a.rule_meta)
+                        parts = [p.strip() for p in a.rule_meta.replace('—', '-').split('-')]
                         if len(parts) < 2: parts = a.rule_meta.split()
                         
                         if len(parts) >= 2:
@@ -347,7 +347,7 @@ def get_all_achievements(username: str, db: Annotated[Session, Depends(get_db)])
                             current_val = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.track_url.like(f"%/track/{track_id}%")).count()
                         else: current_val = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.track_url.like(f"%/track/{target_str}%")).count()
                 else:
-                    parts = re.split(r'[ \t]*[-—][ \t]*', a.rule_target)
+                    parts = [p.strip() for p in a.rule_target.replace('—', '-').split('-')]
                     if len(parts) >= 2: current_val = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.artist.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%")) | (Track.title.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%"))).count()
                     else: current_val = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.title.ilike(f"%{a.rule_target}%")) | (Track.artist.ilike(f'%{a.rule_target.split("||")[0] if "||" in a.rule_target else a.rule_target}%'))).count()
                     
@@ -361,7 +361,7 @@ def get_all_achievements(username: str, db: Annotated[Session, Depends(get_db)])
                 if "||" in a.rule_target: album_name = a.rule_target.split("||")[0]
                 
                 if album_name and not album_name.startswith("http"):
-                    parts = re.split(r'[ \t]*[-—][ \t]*', album_name)
+                    parts = [p.strip() for p in album_name.replace('—', '-').split('-')]
                     if len(parts) >= 2:
                         current_val_text = db.query(func.count(func.distinct(Scrobble.track_id))).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.artist.ilike(f"%{parts[0].strip()}%"), Track.album.ilike(f"%{parts[-1].strip()}%")).scalar() or 0
                     else:
