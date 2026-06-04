@@ -53,10 +53,10 @@ async def update_profile(data: ProfileUpdate, db: Session = Depends(get_db), cur
     if data.display_name is not None: user.profile.display_name = sanitize_text(data.display_name)
     if data.bio is not None: user.profile.bio = sanitize_text(data.bio)
     if data.avatar_url is not None:
-        if data.avatar_url and not data.avatar_url.startswith(("http://", "https://")): raise HTTPException(400, "Invalid URL")
+        if data.avatar_url and not (data.avatar_url.startswith("http:") or data.avatar_url.startswith("https:")): raise HTTPException(400, "Invalid URL")
         user.profile.avatar_url = data.avatar_url
     if data.cover_url is not None:
-        if data.cover_url and not data.cover_url.startswith(("http://", "https://")): raise HTTPException(400, "Invalid URL")
+        if data.cover_url and not (data.cover_url.startswith("http:") or data.cover_url.startswith("https:")): raise HTTPException(400, "Invalid URL")
         user.profile.cover_url = data.cover_url
     if data.location is not None: user.profile.location = sanitize_text(data.location)
     if data.favorite_genre is not None: user.profile.favorite_genre = sanitize_text(data.favorite_genre)
