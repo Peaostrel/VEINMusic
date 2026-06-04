@@ -240,17 +240,16 @@ export default function Profile() {
     const fetchAllData = async () => {
       try {
         const viewer = localStorage.getItem('username') || 'null';
-        const apiKey = localStorage.getItem('apiKey') || 'null';
         const ts = Date.now();
         const [hRes, sRes, uRes, fRes, tRes, rRes, wRes, mRes] = await Promise.all([
-          fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/history/${username}?t=${ts}&api_key=${apiKey}`).then(r => r.ok ? r.json() : { history: [] }),
-          fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/stats/${username}?t=${ts}&api_key=${apiKey}`).then(r => r.ok ? r.json() : {}),
-          fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/user/${username}?t=${ts}&api_key=${apiKey}`).then(r => r.ok ? r.json() : null),
-          fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/follow-stats/${username}?t=${ts}&api_key=${apiKey}`).then(r => r.ok ? r.json() : null),
-          viewer !== 'null' && viewer !== username ? fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/taste-match/${viewer}/${username}?t=${ts}&api_key=${apiKey}`).then(r => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null),
-          fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/recommendations?username=${username}`).then(r => r.ok ? r.json() : []),
-          fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/stats/wrapped?username=${username}`).then(r => r.ok ? r.json() : null),
-          fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/user/mood?username=${username}`).then(r => r.ok ? r.json() : null)
+          fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/history/${username}?t=${ts}`, { credentials: 'include' }).then(r => r.ok ? r.json() : { history: [] }).catch(e => { console.error('history err', e); return { history: [] }; }),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/stats/${username}?t=${ts}`, { credentials: 'include' }).then(r => r.ok ? r.json() : {}).catch(e => { console.error('stats err', e); return {}; }),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/user/${username}?t=${ts}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null).catch(e => { console.error('user err', e); return null; }),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/follow-stats/${viewer}/${username}?t=${ts}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null).catch(e => { console.error('follow err', e); return null; }),
+          viewer !== 'null' && viewer !== username ? fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/taste-match/${viewer}/${username}?t=${ts}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/recommendations?username=${username}`, { credentials: 'include' }).then(r => r.ok ? r.json() : []).catch(e => { console.error('recs err', e); return []; }),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/stats/wrapped?username=${username}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null).catch(e => { console.error('wrapped err', e); return null; }),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/user/mood?username=${username}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null).catch(e => { console.error('mood err', e); return null; })
         ]);
 
         setData({
@@ -274,7 +273,7 @@ export default function Profile() {
     const checkNotifications = async () => {
       if (!isMyProfile) return;
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/notifications/${username}`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/notifications/${username}`, { credentials: 'include' });
         if (res.ok) {
           const unread = await res.json();
           if (unread.length > 0) {
@@ -294,7 +293,7 @@ export default function Profile() {
               return newToasts;
             });
 
-            await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/notifications/${username}/read`, {
+            await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/notifications/${username}/read`, { credentials: 'include', 
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ ua_ids: unread.map((d: any) => d.ua_id) })
@@ -308,8 +307,7 @@ export default function Profile() {
     checkNotifications();
 
     // WebSocket Integration
-    const apiKey = localStorage.getItem('apiKey') || 'null';
-    const wsUrl = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace('http', 'ws') + `/ws/${username}?token=${apiKey}`;
+    const wsUrl = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace('http', 'ws') + `/ws/${username}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -369,11 +367,10 @@ export default function Profile() {
   // Таймеры для уведомлений теперь создаются индивидуально при их добавлении
 
   const handleFollow = async () => {
-    const apiKey = localStorage.getItem('apiKey');
-    if (!apiKey) return router.push('/auth');
+    
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/follow/${username}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ api_key: apiKey })
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/follow/${username}`, { credentials: 'include', 
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ })
       });
       if (res.ok) {
         const result = await res.json();
@@ -387,7 +384,7 @@ export default function Profile() {
   const openFollowModal = async (type: string) => {
     setFollowModal({ isOpen: true, type, title: type === 'followers' ? 'Подписчики' : 'Подписки', users: [], loading: true });
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/${type}/${username}`);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/${type}/${username}`, { credentials: 'include' });
       if (res.ok) {
         const fetchedUsers = await res.json();
         setFollowModal((prev: any) => ({ ...prev, users: fetchedUsers, loading: false }));
@@ -399,15 +396,12 @@ export default function Profile() {
 
     const [importLoading, setImportLoading] = useState(false);
   const handleLastfmImport = async () => {
-    const apiKey = localStorage.getItem('apiKey');
-    if (!apiKey) return alert('Ошибка: API ключ не найден. Перезайдите в систему.');
-    
     setImportLoading(true);
     try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/import/lastfm`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/import/lastfm`, { credentials: 'include', 
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ api_key: apiKey })
+            body: JSON.stringify({ })
         });
         
         if (res.ok) {

@@ -7,3 +7,7 @@ httpx
 python-dotenv
 python-multipart
 requests
+psycopg2-binary
+slowapi
+asyncpg
+alembic

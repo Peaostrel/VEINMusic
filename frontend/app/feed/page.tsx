@@ -9,7 +9,7 @@ export default function GlobalFeed() {
 
     const fetchFeed = async () => {
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/global-history`);
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/global-history`, { credentials: 'include' });
             if (res.ok) {
                 const data = await res.json();
                 setFeed(data || []);

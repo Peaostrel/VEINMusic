@@ -1,0 +1,137 @@
+import httpx
+import asyncio
+from datetime import datetime, timezone
+from sqlalchemy.orm import Session
+import os
+
+from app.database import SessionLocal
+from app.models import User
+# We will import process_scrobble locally or pass it as a callback to avoid circular imports.
+
+SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
+SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
+
+async def refresh_spotify_token(user: User, db: Session):
+    if not user.integration.spotify_refresh_token: return None
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post("https://accounts.spotify.com/api/token", data={
+                "grant_type": "refresh_token",
+                "refresh_token": user.integration.spotify_refresh_token,
+                "client_id": SPOTIFY_CLIENT_ID,
+                "client_secret": SPOTIFY_CLIENT_SECRET
+            }, headers={"Content-Type": "application/x-www-form-urlencoded"})
+            if resp.status_code == 200:
+                data = resp.json()
+                user.integration.spotify_access_token = data["access_token"]
+                db.commit()
+                return data["access_token"]
+        except Exception as e:
+            print(f"Token refresh error: {e}")
+    return None
+
+async def sync_spotify_status(user: User, db: Session, process_func):
+    token = user.integration.spotify_access_token
+    async with httpx.AsyncClient() as client:
+        headers = {"Authorization": f"Bearer {token}"}
+        try:
+            resp = await client.get("https://api.spotify.com/v1/me/player/currently-playing", headers=headers)
+            
+            if resp.status_code == 401:
+                token = await refresh_spotify_token(user, db)
+                if token:
+                    headers = {"Authorization": f"Bearer {token}"}
+                    resp = await client.get("https://api.spotify.com/v1/me/player/currently-playing", headers=headers)
+            
+            if resp.status_code == 200:
+                data = resp.json()
+                if data and data.get("is_playing"):
+                    item = data.get("item")
+                    if not item: return
+                    title = item.get("name")
+                    artist = ", ".join([a["name"] for a in item.get("artists", [])])
+                    cover = item.get("album", {}).get("images", [{}])[0].get("url")
+                    track_url = item.get("external_urls", {}).get("spotify")
+                    duration = int(item.get("duration_ms", 0) / 1000)
+                    progress = int(data.get("progress_ms", 0) / 1000)
+                    album = item.get("album", {}).get("name")
+                    
+                    await process_func(db, user, title, artist, cover, track_url, "spotify", progress, True, duration, album)
+        except Exception as e:
+            print(f"Spotify sync error: {e}")
+
+async def sync_yandex_status(user: User, db: Session, process_func):
+    async with httpx.AsyncClient() as client:
+        try:
+            headers = {
+                "Authorization": f"OAuth {user.integration.yandex_token}",
+                "X-Yandex-Music-Client": "YandexMusicAndroid/2023.12.1",
+                "User-Agent": "Yandex-Music-API"
+            }
+            resp = await client.get("https://api.music.yandex.net/external-api/status", headers=headers, timeout=5.0)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("result") and data["result"].get("nowPlaying"):
+                    np = data["result"]["nowPlaying"]
+                    track_data = np.get("track")
+                    if not track_data: return
+                    
+                    title = track_data.get("title")
+                    artist = ", ".join([a["name"] for a in track_data.get("artists", [])])
+                    cover_uri = track_data.get("coverUri")
+                    cover = "https://" + cover_uri.replace("%%", "400x400") if cover_uri else None
+                    track_id = track_data.get("id")
+                    track_url = f"https://music.yandex.ru/track/{track_id}"
+                    duration = int(track_data.get("durationMs", 0) / 1000)
+                    progress = int(np.get("progressMs", 0) / 1000)
+                    album = track_data.get("albums", [{}])[0].get("title") if track_data.get("albums") else None
+                    
+                    await process_func(db, user, title, artist, cover, track_url, "yandex", progress, True, duration, album)
+        except Exception as e:
+            print(f"Yandex sync error: {e}")
+
+async def poll_external_services(process_func):
+    """
+    Основной цикл облачного скробблинга.
+    """
+    import random
+    while True:
+        db = SessionLocal()
+        try:
+            from app.models import UserIntegration
+            users = db.query(User).join(UserIntegration).filter((UserIntegration.spotify_refresh_token != None) | (UserIntegration.yandex_token != None)).all()
+            
+            async def poll_user(user_id):
+                local_db = SessionLocal()
+                try:
+                    u = local_db.query(User).filter(User.id == user_id).first()
+                    if not u: return
+                    
+                    if u.integration.spotify_refresh_token:
+                        await sync_spotify_status(u, local_db, process_func)
+                    
+                    if u.integration.yandex_token:
+                        await sync_yandex_status(u, local_db, process_func)
+                    
+                    u.integration.last_sync = datetime.utcnow()
+                    local_db.commit()
+                except Exception as e:
+                    print(f"Error polling user {user_id}: {e}")
+                finally:
+                    local_db.close()
+
+            if users:
+                # Add jitter to polling to prevent rate limits
+                # Poll every 30-45 seconds per user
+                tasks = []
+                for u in users:
+                    await asyncio.sleep(random.uniform(0.1, 1.0)) # Jitter between users
+                    tasks.append(poll_user(u.id))
+                await asyncio.gather(*tasks)
+                
+        except Exception as e:
+            print(f"Cloud Worker Global Error: {e}")
+        finally:
+            db.close()
+        # Increased delay from 15 to 30 to avoid rate limits
+        await asyncio.sleep(30)

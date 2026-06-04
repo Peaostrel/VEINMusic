@@ -63,7 +63,7 @@ export default function DetailedStats() {
     useEffect(() => {
         if (!username) return;
         setLoading(true);
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/detailed-stats/${username}?period=${period}`, { cache: 'no-store' })
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/detailed-stats/${username}?period=${period}`, { credentials: 'include',  cache: 'no-store' })
             .then(res => res.json())
             .then(data => {
                 if (period === '30d' && data.total_scrobbles === 0 && !hasCheckedFallback) {

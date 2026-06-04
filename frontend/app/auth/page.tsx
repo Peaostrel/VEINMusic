@@ -13,13 +13,10 @@ export default function Auth() {
   const [hasExtension, setHasExtension] = useState(false);
   const router = useRouter();
 
-  // 1. Автоматически кидаем залогиненного юзера на экран проверки
   useEffect(() => {
     const storedUser = localStorage.getItem('username');
-    const storedKey = localStorage.getItem('apiKey');
-    if (storedUser && storedKey) {
+    if (storedUser) {
       setUsername(storedUser);
-      setApiKey(storedKey);
       setStep('success');
     }
   }, []);
@@ -52,6 +49,7 @@ export default function Auth() {
       const res = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ username, password })
       });
 
@@ -64,10 +62,8 @@ export default function Auth() {
       }
 
       localStorage.setItem('username', data.username);
-      localStorage.setItem('apiKey', data.api_key);
       window.dispatchEvent(new Event('themeChanged'));
 
-      setApiKey(data.api_key);
       setStep('success');
       
     } catch (err) {

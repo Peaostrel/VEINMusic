@@ -9,7 +9,7 @@ export default function About() {
   useEffect(() => {
     setUsername(localStorage.getItem('username'));
 
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/public-stats`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/public-stats`, { credentials: 'include' })
       .then(res => res.json())
       .then(data => setStats(data))
       .catch(() => {});
@@ -67,10 +67,10 @@ export default function About() {
       {/* STATS Section */}
       <div className="w-full grid grid-cols-2 md:grid-cols-4 gap-4 px-4 mb-24 relative z-10 animate-fade-up delay-300 opacity-0" style={{ animationFillMode: 'forwards' }}>
         {[
-          { label: 'Скроблено', value: stats.total_scrobbles.toLocaleString() + ' 🎵' },
-          { label: 'Треков в базе', value: stats.total_tracks.toLocaleString() + ' 💿' },
-          { label: 'Слушателей', value: stats.total_users.toLocaleString() + ' 👥' },
-          { label: 'Онлайн', value: stats.online + ' 🔥' }
+          { label: 'Скроблено', value: (stats?.total_scrobbles || 0).toLocaleString() + ' 🎵' },
+          { label: 'Треков в базе', value: (stats?.total_tracks || 0).toLocaleString() + ' 💿' },
+          { label: 'Слушателей', value: (stats?.total_users || 0).toLocaleString() + ' 👥' },
+          { label: 'Онлайн', value: (stats?.online || 0) + ' 🔥' }
         ].map((item, idx) => (
           <div key={idx} className="bg-[#121212]/60 backdrop-blur-md border border-white/5 p-6 rounded-2xl text-center shadow-lg hover:border-[var(--accent)]/30 transition-all group">
             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1 group-hover:text-[var(--accent)] transition-colors">{item.label}</p>

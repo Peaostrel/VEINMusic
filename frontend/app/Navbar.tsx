@@ -67,8 +67,7 @@ export default function Navbar() {
 
   useEffect(() => {
       const uname = localStorage.getItem('username');
-      const key = localStorage.getItem('apiKey');
-      if (!uname || !key) return;
+      if (!uname) return;
       // Блокировка расширением временно отключена
   }, [pathname]);
 
@@ -183,7 +182,7 @@ export default function Navbar() {
       const storedUser = localStorage.getItem('username');
       if (isValidUser(storedUser)) {
         setUsername(storedUser);
-        fetch(`${API_URL}/api/user/${storedUser}`).then(res => res.json()).then(data => { 
+        fetch(`${API_URL}/api/user/${storedUser}`, { credentials: 'include' }).then(res => res.json()).then(data => { 
                 setUserProfile(data);
                 if (data.theme) { localStorage.setItem('site_theme', data.theme); window.dispatchEvent(new Event('theme_update')); }
         }).catch(() => {});
@@ -203,13 +202,19 @@ export default function Navbar() {
     if (searchQuery.length < 2) { setSearchResults([]); return; }
     const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
     const delay = setTimeout(() => {
-      fetch(`${API_URL}/api/search/users?q=${searchQuery}`).then(res => res.json()).then(data => { setSearchResults(data); setIsSearchOpen(true); }).catch(()=>{});
+      fetch(`${API_URL}/api/search/users?q=${searchQuery}`, { credentials: 'include' }).then(res => res.json()).then(data => { setSearchResults(data); setIsSearchOpen(true); }).catch(()=>{});
     }, 300);
     return () => clearTimeout(delay);
   }, [searchQuery]);
 
-  const handleLogout = () => {
-      localStorage.removeItem('username'); localStorage.removeItem('apiKey');
+  const handleLogout = async () => {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+      try {
+          await fetch(`${API_URL}/auth/logout`, { method: 'POST', credentials: 'include' });
+      } catch (e) {
+          console.error("Logout failed:", e);
+      }
+      localStorage.removeItem('username');
       localStorage.setItem('site_theme', 'classic'); setUsername(null); setUserProfile(null);
       delete (window as any).__ACTIVE_PROFILE_THEME__; window.dispatchEvent(new Event('theme_update'));
       setIsDropdownOpen(false); window.location.href = '/auth'; 

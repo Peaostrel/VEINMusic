@@ -61,13 +61,9 @@ export default function AdminPanel() {
   const router = useRouter();
 
   const loadData = () => {
-    const apiKey = localStorage.getItem('apiKey');
-    if (!apiKey) {
-      router.push('/');
-      return;
-    }
+    
 
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/stats?api_key=${apiKey}`, { cache: 'no-store' })
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/stats`, { credentials: 'include',  cache: 'no-store' })
       .then(async (res) => {
         if (!res.ok) {
             const err = await res.json();
@@ -96,13 +92,11 @@ export default function AdminPanel() {
 
   // --- УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ ---
   const handleSaveUserEdit = async () => {
-      const apiKey = localStorage.getItem('apiKey');
       try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${editingUser.username}`, {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${editingUser.username}`, { credentials: 'include', 
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
-                  api_key: apiKey, 
                   display_name: editingUser.display_name,
                   bio: editingUser.bio,
                   avatar_url: editingUser.avatar_url
@@ -116,10 +110,9 @@ export default function AdminPanel() {
   };
 
   const handleWipeScrobbles = async (username: string) => {
-      const apiKey = localStorage.getItem('apiKey');
       if(!confirm(`ВНИМАНИЕ! Полностью стереть историю треков пользователя ${username}? Это нельзя отменить!`)) return;
       try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${username}/scrobbles?api_key=${apiKey}`, { method: 'DELETE' });
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${username}/scrobbles`, { credentials: 'include',  method: 'DELETE' });
           if(res.ok) {
               alert("История очищена!");
               loadData();
@@ -128,24 +121,22 @@ export default function AdminPanel() {
   };
 
   const handleDeleteUser = async (username: string) => {
-      const apiKey = localStorage.getItem('apiKey');
       if(!confirm(`Точно удалить пользователя ${username} навсегда?`)) return;
       try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${username}?api_key=${apiKey}`, { method: 'DELETE' });
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${username}`, { credentials: 'include',  method: 'DELETE' });
           if(res.ok) loadData();
           else alert(await res.text());
       } catch(e) { alert("Ошибка сети"); }
   };
 
   const handleEditLevel = async (username: string, currentLevel: number) => {
-      const apiKey = localStorage.getItem('apiKey');
       const newLvl = prompt(`Новый уровень для ${username}:`, String(currentLevel));
       if(!newLvl || isNaN(parseInt(newLvl)) || parseInt(newLvl) < 1) return;
       try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${username}/level`, {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${username}/level`, { credentials: 'include', 
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ api_key: apiKey, new_level: parseInt(newLvl) })
+              body: JSON.stringify({ new_level: parseInt(newLvl) })
           });
           if(res.ok) loadData();
           else alert(await res.text());
@@ -153,12 +144,11 @@ export default function AdminPanel() {
   };
 
   const handleToggleVerify = async (username: string, currentStatus: boolean) => {
-      const apiKey = localStorage.getItem('apiKey');
       try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${username}/verify`, {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${username}/verify`, { credentials: 'include', 
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ api_key: apiKey, is_verified: !currentStatus })
+              body: JSON.stringify({ is_verified: !currentStatus })
           });
           if (res.ok) loadData(); 
           else {
@@ -170,15 +160,14 @@ export default function AdminPanel() {
 
   // --- УПРАВЛЕНИЕ АЧИВКАМИ ---
   const handleGiveAch = async (username: string) => {
-      const apiKey = localStorage.getItem('apiKey');
       const achs = stats?.achievements.map((a: Achievement) => `${a.id} - ${a.name}`).join('\n');
       const achId = prompt(`ID ачивки для ${username}:\n\n${achs}`);
       if(!achId || isNaN(Number(achId))) return;
       try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${username}/achievements`, {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${username}/achievements`, { credentials: 'include', 
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ api_key: apiKey, achievement_id: parseInt(achId) })
+              body: JSON.stringify({ achievement_id: parseInt(achId) })
           });
           if(res.ok) {
               alert("Ачивка выдана!");
@@ -188,12 +177,11 @@ export default function AdminPanel() {
   };
 
   const handleCreateAch = async () => {
-      const apiKey = localStorage.getItem('apiKey');
       try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/achievements`, {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/achievements`, { credentials: 'include', 
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ api_key: apiKey, ...newAch, rule_value: parseInt(String(newAch.rule_value)) || 0, reward_xp: parseInt(String(newAch.reward_xp)) || 0 })
+              body: JSON.stringify({ ...newAch, rule_value: parseInt(String(newAch.rule_value)) || 0, reward_xp: parseInt(String(newAch.reward_xp)) || 0 })
           });
           if(res.ok) {
               setNewAch({ name: '', description: '', icon: '', rule_type: 'manual', rule_value: 0, rule_target: '', rule_meta: '', target_image: '', reward_xp: 0 });
@@ -204,12 +192,11 @@ export default function AdminPanel() {
 
   const handleUpdateAch = async () => {
       if (!editingAch) return;
-      const apiKey = localStorage.getItem('apiKey');
       try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/achievements/${editingAch.id}`, {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/achievements/${editingAch.id}`, { credentials: 'include', 
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ api_key: apiKey, ...editingAch, rule_value: parseInt(String(editingAch.rule_value)) || 0, reward_xp: parseInt(String(editingAch.reward_xp)) || 0 })
+              body: JSON.stringify({ ...editingAch, rule_value: parseInt(String(editingAch.rule_value)) || 0, reward_xp: parseInt(String(editingAch.reward_xp)) || 0 })
           });
           if(res.ok) {
               setEditingAch(null);
@@ -220,9 +207,8 @@ export default function AdminPanel() {
 
   const handleDeleteAch = async (id: number) => {
       if(!confirm("Удалить ачивку? Она пропадет у всех юзеров.")) return;
-      const apiKey = localStorage.getItem('apiKey');
       try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/achievements/${id}?api_key=${apiKey}`, { method: 'DELETE' });
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/achievements/${id}`, { credentials: 'include',  method: 'DELETE' });
           if(res.ok) loadData();
           else alert(await res.text());
       } catch(e) { alert("Ошибка сети"); }
@@ -240,9 +226,8 @@ export default function AdminPanel() {
   // --- УПРАВЛЕНИЕ ТРЕКАМИ ---
   const handleDeleteTrack = async (id: number) => {
       if(!confirm(`Точно удалить этот трек из глобальной БД? Все скробблы с ним будут УНИЧТОЖЕНЫ!`)) return;
-      const apiKey = localStorage.getItem('apiKey');
       try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/tracks/${id}?api_key=${apiKey}`, { method: 'DELETE' });
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/tracks/${id}`, { credentials: 'include',  method: 'DELETE' });
           if(res.ok) loadData();
           else alert(await res.text());
       } catch(e) { alert("Ошибка сети"); }

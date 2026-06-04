@@ -13,7 +13,7 @@ export default function Footer() {
 
         <div className="flex flex-wrap items-center justify-center gap-6 text-sm font-medium text-gray-500">
             <Link href="/developers" className="hover:text-[var(--accent)] transition-colors">API для разработчиков</Link>
-            <a href="https://github.com" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">GitHub</a>
+            <a href="https://github.com/Peaostrel/VEINMusic" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">GitHub</a>
             <span className="cursor-not-allowed opacity-50">Правила</span>
         </div>
 

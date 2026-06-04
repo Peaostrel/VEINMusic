@@ -53,15 +53,18 @@ export default function Home() {
     const fetchFeeds = async () => {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
       try {
-        const globalRes = await fetch(`${API_URL}/api/global-history`);
-        setGlobalHistory(await globalRes.json());
+        const globalRes = await fetch(`${API_URL}/api/global-history`, { credentials: 'include' });
+        const globalData = await globalRes.json();
+        setGlobalHistory(Array.isArray(globalData) ? globalData : []);
 
         if (user) {
-            const friendsRes = await fetch(`${API_URL}/api/friends-history/${user}`);
-            setFriendsHistory(await friendsRes.json());
+            const friendsRes = await fetch(`${API_URL}/api/friends-history/${user}`, { credentials: 'include' });
+            const friendsData = await friendsRes.json();
+            setFriendsHistory(Array.isArray(friendsData) ? friendsData : []);
             
-            const twinsRes = await fetch(`${API_URL}/api/discovery/taste-twins?username=${user}`);
-            setTwins(await twinsRes.json());
+            const twinsRes = await fetch(`${API_URL}/api/discovery/taste-twins?username=${user}`, { credentials: 'include' });
+            const twinsData = await twinsRes.json();
+            setTwins(Array.isArray(twinsData) ? twinsData : []);
         }
       } catch (e) {
           console.error(e);
@@ -77,20 +80,19 @@ export default function Home() {
 
   const toggleLike = async (e: React.MouseEvent, scrobbleId: number) => {
     e.stopPropagation();
-    const apiKey = localStorage.getItem('api_key');
-    if (!apiKey) return;
     const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
     try {
         await fetch(`${API_URL}/api/scrobble/${scrobbleId}/like`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ api_key: apiKey })
+            credentials: 'include'
         });
         // Optimistic update or just wait for next fetch
     } catch (e) { console.error(e); }
   };
 
-  const currentFeed = activeFeed === 'global' ? globalHistory : friendsHistory;
+  const rawFeed = activeFeed === 'global' ? globalHistory : friendsHistory;
+  const currentFeed = Array.isArray(rawFeed) ? rawFeed : [];
 
   if (!username && !loading) {
       return <About />;

@@ -7,7 +7,7 @@ export default function Footer() {
 
   useEffect(() => {
     const fetchStats = () => {
-      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/public-stats`)
+      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/public-stats`, { credentials: 'include' })
         .then(res => res.ok ? res.json() : null)
         .then(data => {
           if (data) {
@@ -46,7 +46,7 @@ export default function Footer() {
             <h4 className="text-white font-bold text-xs uppercase tracking-wider mb-3">Ресурсы</h4>
             <ul className="space-y-2 text-gray-400 text-xs">
               <li><Link href="/developers" className="hover:text-[var(--accent-text)] transition-colors">Для разработчиков (API)</Link></li>
-              <li><a href="https://github.com" target="_blank" rel="noreferrer" className="hover:text-[var(--accent-text)] transition-colors">GitHub</a></li>
+              <li><a href="https://github.com/Peaostrel/VEINMusic" target="_blank" rel="noreferrer" className="hover:text-[var(--accent-text)] transition-colors">GitHub</a></li>
             </ul>
           </div>
 
