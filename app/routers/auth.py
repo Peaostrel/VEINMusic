@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from sqlalchemy.orm import Session
+from typing import Annotated
 import secrets
 from fastapi.responses import RedirectResponse
 import os
@@ -17,8 +18,8 @@ SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI", "http://127.0.0.1:8000/auth/spotify/callback")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
-@router.post("/register")
-def register(data: UserCreate, response: Response, db: Session = Depends(get_db)):
+@router.post("/register", responses={400: {"description": "Bad Request"}})
+def register(data: UserCreate, response: Response, db: Annotated[Session, Depends(get_db)]):
     data.username = data.username.lower()
     if len(data.username) < 3: raise HTTPException(400, "Никнейм слишком короткий")
     if len(data.password) < 6: raise HTTPException(400, "Пароль должен быть не менее 6 символов")
@@ -41,8 +42,8 @@ def register(data: UserCreate, response: Response, db: Session = Depends(get_db)
     )
     return {"message": "Успешная регистрация", "username": new_user.username}
 
-@router.post("/login")
-def login(data: UserCreate, response: Response, db: Session = Depends(get_db)):
+@router.post("/login", responses={400: {"description": "Bad Request"}})
+def login(data: UserCreate, response: Response, db: Annotated[Session, Depends(get_db)]):
     data.username = data.username.lower()
     user = db.query(User).filter(User.username == data.username).first()
     if not user or not verify_password(data.password, user.hashed_password): raise HTTPException(400, "Неверный логин/пароль")
@@ -64,12 +65,12 @@ def logout(response: Response):
     return {"message": "Успешный выход"}
 
 @router.get("/spotify/login")
-def spotify_login(current_user: User = Depends(get_current_user)):
+def spotify_login(current_user: Annotated[User, Depends(get_current_user)]):
     scopes = "user-read-currently-playing user-read-playback-state"
     return RedirectResponse(f"https://accounts.spotify.com/authorize?client_id={SPOTIFY_CLIENT_ID}&response_type=code&redirect_uri={SPOTIFY_REDIRECT_URI}&scope={scopes}")
 
 @router.get("/spotify/callback")
-async def spotify_callback(code: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def spotify_callback(code: str, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
     
     async with httpx.AsyncClient() as client:

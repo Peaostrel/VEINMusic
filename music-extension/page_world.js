@@ -62,9 +62,10 @@ setInterval(() => {
                 if (source === 'yandex' || source === 'vk') {
                     trackCover = coverRaw.replace(/\d+x\d+/, '400x400');
                 } else if (source === 'youtube_music') {
-                    trackCover = coverRaw.replace(/([=\-]?w\d+-h\d+.*)/, '=w500-h500');
-                    if (trackCover === coverRaw && coverRaw.includes('=')) {
+                    if (coverRaw.includes('=')) {
                         trackCover = coverRaw.split('=')[0] + '=w500-h500';
+                    } else {
+                        trackCover = coverRaw;
                     }
                 } else {
                     trackCover = coverRaw;

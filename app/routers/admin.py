@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from typing import Annotated
 import os
 
 from app.database import get_db
@@ -12,13 +13,13 @@ from app.core.websockets import manager
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
-def get_admin_user(current_user: User = Depends(get_current_user)):
+def get_admin_user(current_user: Annotated[User, Depends(get_current_user)]):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Доступ запрещен")
     return current_user
 
 @router.get("/stats")
-def get_admin_stats(db: Session = Depends(get_db), admin: User = Depends(get_admin_user)):
+def get_admin_stats(db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     total_users = db.query(User).count()
     total_scrobbles = db.query(Scrobble).count()
     total_tracks = db.query(Track).count()
@@ -53,16 +54,16 @@ def get_admin_stats(db: Session = Depends(get_db), admin: User = Depends(get_adm
         "tracks": track_list
     }
 
-@router.post("/users/{target_username}/verify")
-def toggle_user_verification(target_username: str, data: VerifyUserRequest, db: Session = Depends(get_db), admin: User = Depends(get_admin_user)):
+@router.post("/users/{target_username}/verify", responses={404: {"description": "Not Found"}})
+def toggle_user_verification(target_username: str, data: VerifyUserRequest, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     target_user = db.query(User).filter(User.username == target_username).first()
     if not target_user: raise HTTPException(404, "Юзер не найден")
     target_user.integration.is_verified = data.is_verified
     db.commit()
     return {"status": "ok", "is_verified": target_user.integration.is_verified}
 
-@router.delete("/users/{target_username}")
-def delete_user(target_username: str, db: Session = Depends(get_db), admin: User = Depends(get_admin_user)):
+@router.delete("/users/{target_username}", responses={404: {"description": "Not Found"}, 400: {"description": "Bad Request"}})
+def delete_user(target_username: str, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     target = db.query(User).filter(User.username == target_username).first()
     if not target: raise HTTPException(404, "Юзер не найден")
     if target.role == "admin": raise HTTPException(400, "Нельзя удалить разработчика")

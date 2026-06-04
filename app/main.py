@@ -43,13 +43,17 @@ app.include_router(scrobbling.router)
 app.include_router(admin.router)
 app.include_router(extended.router)
 
+background_tasks = set()
+
 @app.on_event("startup")
 async def startup_event():
     # Initialize DB (creates tables if they don't exist)
     Base.metadata.create_all(bind=engine)
     
     # Start cloud scrobbling with safe interval
-    asyncio.create_task(poll_external_services(process_scrobble))
+    task = asyncio.create_task(poll_external_services(process_scrobble))
+    background_tasks.add(task)
+    task.add_done_callback(background_tasks.discard)
 
 # Setup WebSocket manually at root
 from fastapi import WebSocket, WebSocketDisconnect, Depends

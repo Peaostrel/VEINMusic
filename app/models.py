@@ -4,6 +4,9 @@ from datetime import datetime, timezone
 
 from app.database import Base
 
+CASCADE_ALL_DELETE = "all, delete"
+FK_USERS_ID = "users.id"
+
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
@@ -12,14 +15,14 @@ class User(Base):
     api_key = Column(String, unique=True, index=True)
     role = Column(String, default="user")
     
-    profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete", lazy="joined")
-    integration = relationship("UserIntegration", back_populates="user", uselist=False, cascade="all, delete", lazy="joined")
-    scrobbles = relationship("Scrobble", back_populates="user", cascade="all, delete")
-    achievements = relationship("UserAchievement", back_populates="user", cascade="all, delete")
+    profile = relationship("UserProfile", back_populates="user", uselist=False, cascade=CASCADE_ALL_DELETE, lazy="joined")
+    integration = relationship("UserIntegration", back_populates="user", uselist=False, cascade=CASCADE_ALL_DELETE, lazy="joined")
+    scrobbles = relationship("Scrobble", back_populates="user", cascade=CASCADE_ALL_DELETE)
+    achievements = relationship("UserAchievement", back_populates="user", cascade=CASCADE_ALL_DELETE)
 
 class UserProfile(Base):
     __tablename__ = "user_profiles"
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), primary_key=True)
     display_name = Column(String, nullable=True)
     bio = Column(String, nullable=True)
     avatar_url = Column(String, nullable=True)
@@ -52,7 +55,7 @@ class UserProfile(Base):
 
 class UserIntegration(Base):
     __tablename__ = "user_integrations"
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), primary_key=True)
     bonus_xp = Column(Integer, default=0)
     current_streak = Column(Integer, default=0)
     last_streak_date = Column(String, nullable=True)
@@ -79,7 +82,7 @@ class Track(Base):
 class Scrobble(Base):
     __tablename__ = "scrobbles"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), index=True)
     track_id = Column(Integer, ForeignKey("tracks.id", ondelete="CASCADE"), index=True)
     played_at = Column(DateTime(timezone=False), default=datetime.utcnow)
     source = Column(String)
@@ -108,7 +111,7 @@ class Achievement(Base):
 class UserAchievement(Base):
     __tablename__ = "user_achievements"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), index=True)
     achievement_id = Column(Integer, ForeignKey("achievements.id", ondelete="CASCADE"), index=True)
     earned_at = Column(DateTime(timezone=False), default=datetime.utcnow)
     is_displayed = Column(Boolean, default=True)
@@ -120,21 +123,21 @@ class UserAchievement(Base):
 class Follow(Base):
     __tablename__ = "follows"
     id = Column(Integer, primary_key=True, index=True)
-    follower_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    following_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    follower_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), index=True)
+    following_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), index=True)
     created_at = Column(DateTime(timezone=False), default=datetime.utcnow)
 
 class ScrobbleLike(Base):
     __tablename__ = "scrobble_likes"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), index=True)
     scrobble_id = Column(Integer, ForeignKey("scrobbles.id", ondelete="CASCADE"), index=True)
     created_at = Column(DateTime(timezone=False), default=datetime.utcnow)
 
 class ScrobbleComment(Base):
     __tablename__ = "scrobble_comments"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), index=True)
     scrobble_id = Column(Integer, ForeignKey("scrobbles.id", ondelete="CASCADE"), index=True)
     content = Column(String)
     created_at = Column(DateTime(timezone=False), default=datetime.utcnow)
