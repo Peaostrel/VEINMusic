@@ -9,12 +9,11 @@ from app.schemas import VerifyUserRequest, LevelUpdate, AdminUserUpdate, AchCrea
 from app.core.security import get_current_user
 from app.core.websockets import manager
 
-DEVELOPERS = set(os.getenv("DEVELOPERS", "peaostrel").split(","))
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 def get_admin_user(current_user: User = Depends(get_current_user)):
-    if current_user.username not in DEVELOPERS:
+    if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Доступ запрещен")
     return current_user
 
@@ -34,7 +33,7 @@ def get_admin_stats(db: Session = Depends(get_db), admin: User = Depends(get_adm
         user_list.append({
             "id": u.id, "username": u.username, "display_name": u.profile.display_name,
             "avatar_url": u.profile.avatar_url, "bio": u.profile.bio, "is_verified": u.integration.is_verified,
-            "is_dev": u.username in DEVELOPERS, "scrobbles": scrobbles_count,
+            "is_dev": u.role == "admin", "scrobbles": scrobbles_count,
             "total_xp": total_xp
         })
         
@@ -66,7 +65,7 @@ def toggle_user_verification(target_username: str, data: VerifyUserRequest, db: 
 def delete_user(target_username: str, db: Session = Depends(get_db), admin: User = Depends(get_admin_user)):
     target = db.query(User).filter(User.username == target_username).first()
     if not target: raise HTTPException(404, "Юзер не найден")
-    if target.username in DEVELOPERS: raise HTTPException(400, "Нельзя удалить разработчика")
+    if target.role == "admin": raise HTTPException(400, "Нельзя удалить разработчика")
     db.query(Follow).filter((Follow.follower_id == target.id) | (Follow.following_id == target.id)).delete()
     db.delete(target); db.commit()
     return {"status": "ok"}

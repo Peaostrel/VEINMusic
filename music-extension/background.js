@@ -1,44 +1,25 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    // Security: Verify sender domain to prevent API key theft from malicious sites
-    const senderUrl = sender.tab ? new URL(sender.tab.url) : null;
-    const isTrusted = senderUrl && (
-        senderUrl.hostname === "music.vein.guru" || 
-        senderUrl.hostname === "localhost" || 
-        senderUrl.hostname === "127.0.0.1"
-    );
-
-    // 1. Принимаем ключи с сайта
-    if (request.type === 'SYNC_KEYS' && isTrusted) {
-        chrome.storage.local.set({
-            username: request.data.username,
-            apiKey: request.data.apiKey
-        });
-    }
-
-    // 2. Стираем ключи, если вышли
-    if (request.type === 'LOGOUT' && isTrusted) {
-        chrome.storage.local.remove(['username', 'apiKey']);
-    }
-
     // 3. Отправляем трек на сервер
     if (request.type === 'SCROBBLE') {
-        chrome.storage.local.get(['apiKey', 'username'], (data) => {
-            if (!data.apiKey || !data.username) {
-                console.log('[VEIN] Отмена: нет ключей, ожидание авторизации.');
-                return;
-            }
-
-            const payload = {
-                ...request.data,
-                username: data.username,
-                api_key: data.apiKey
-            };
-
-            chrome.storage.local.get(['apiUrl'], (settings) => {
-                const API_BASE = settings.apiUrl || 'https://api.music.vein.guru';
+        chrome.storage.local.get(['apiUrl'], (settings) => {
+            const API_BASE = settings.apiUrl || 'https://api.music.vein.guru';
+            
+            // Read api_key from cookie directly
+            chrome.cookies.get({ url: API_BASE, name: "api_key" }, (cookie) => {
+                if (!cookie || !cookie.value) {
+                    console.log('[VEIN] Отмена: нет ключей, ожидание авторизации.');
+                    return;
+                }
+                
+                const apiKey = cookie.value;
+                const payload = request.data;
+                
                 fetch(`${API_BASE}/api/scrobble`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
                     body: JSON.stringify(payload)
                 })
                 .then(res => res.json())

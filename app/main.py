@@ -44,7 +44,7 @@ app.include_router(admin.router)
 app.include_router(extended.router)
 
 @app.on_event("startup")
-def startup_event():
+async def startup_event():
     # Initialize DB (creates tables if they don't exist)
     Base.metadata.create_all(bind=engine)
     

@@ -28,8 +28,7 @@ from app.services.og_parser import parse_og_meta
 
 # --- Missing constants & globals ---
 import os
-DEVELOPERS = set(os.getenv("DEVELOPERS", "peaostrel").split(","))
-TESTERS = set(os.getenv("TESTERS", "test_user1,tester_vasya").split(","))
+# Constants removed in favor of User.role
 LASTFM_API_KEY = os.getenv("LASTFM_API_KEY")
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 LASTFM_BASE_URL = "http://ws.audioscrobbler.com/2.0/"
@@ -46,8 +45,8 @@ def set_to_cache(key: str, data: any):
     CACHE[key] = {'data': data, 'ts': time.time()}
 
 def get_admin_user(current_user: User = Depends(get_current_user)):
-    if current_user.username not in DEVELOPERS:
-        raise HTTPException(403, "Access denied")
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
     return current_user
 
 def get_active_streak(user: User):
@@ -224,10 +223,10 @@ router = APIRouter(tags=["extended"])
 def get_user_info(username: str, request: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404, "Юзер не найден")
-    role = "developer" if user.username in DEVELOPERS else "tester" if user.username in TESTERS else "user"
+    role = user.role or "user"
 
     # Privacy check for profile data
-    api_key = request.query_params.get("api_key")
+    api_key = request.cookies.get("api_key") or request.headers.get("Authorization", "").replace("Bearer ", "")
     is_owner = api_key and user.api_key == api_key
     
     if user.profile.is_private and not is_owner:
@@ -684,7 +683,7 @@ def get_followers(username: str, request: Request, db: Session = Depends(get_db)
     res = []
     for u in followers:
         lvl, rank, _, theme = get_user_level_info(u, db)
-        res.append({"username": u.username, "display_name": u.profile.display_name or u.username, "avatar_url": u.profile.avatar_url, "is_verified": u.integration.is_verified, "role": "developer" if u.username in DEVELOPERS else "tester" if u.username in TESTERS else "user", "level": lvl})
+        res.append({"username": u.username, "display_name": u.profile.display_name or u.username, "avatar_url": u.profile.avatar_url, "is_verified": u.integration.is_verified, "role": u.role or "user", "level": lvl})
     return res
 
 
@@ -704,7 +703,7 @@ def get_following(username: str, request: Request, db: Session = Depends(get_db)
     res = []
     for u in following:
         lvl, rank, _, theme = get_user_level_info(u, db)
-        res.append({"username": u.username, "display_name": u.profile.display_name or u.username, "avatar_url": u.profile.avatar_url, "is_verified": u.integration.is_verified, "role": "developer" if u.username in DEVELOPERS else "tester" if u.username in TESTERS else "user", "level": lvl})
+        res.append({"username": u.username, "display_name": u.profile.display_name or u.username, "avatar_url": u.profile.avatar_url, "is_verified": u.integration.is_verified, "role": u.role or "user", "level": lvl})
     return res
 
 
@@ -714,12 +713,12 @@ def get_leaderboard(db: Session = Depends(get_db)):
     # Calculate XP for all users in one query
     sql = text("""
         SELECT u.username, p.display_name, p.avatar_url, i.is_verified, p.theme,
-               (COALESCE(SUM(s.xp_earned), 0) + i.bonus_xp) as total_xp
+               (COALESCE(SUM(s.xp_earned), 0) + i.bonus_xp) as total_xp, u.role
         FROM users u
         JOIN user_profiles p ON u.id = p.user_id
         JOIN user_integrations i ON u.id = i.user_id
         LEFT JOIN scrobbles s ON u.id = s.user_id
-        GROUP BY u.id, p.display_name, p.avatar_url, i.is_verified, p.theme, i.bonus_xp
+        GROUP BY u.id, p.display_name, p.avatar_url, i.is_verified, p.theme, i.bonus_xp, u.role
         ORDER BY total_xp DESC
         LIMIT 50
     """)
@@ -727,7 +726,7 @@ def get_leaderboard(db: Session = Depends(get_db)):
     rows = db.execute(sql).fetchall()
     res = []
     for r in rows:
-        uname, dname, avatar, verified, theme, txp = r
+        uname, dname, avatar, verified, theme, txp, urole = r
         lvl = (txp // 100) + 1
         res.append({
             "username": uname,
@@ -736,7 +735,7 @@ def get_leaderboard(db: Session = Depends(get_db)):
             "total_xp": txp,
             "level": lvl,
             "is_verified": verified,
-            "role": "developer" if uname in DEVELOPERS else "tester" if uname in TESTERS else "user",
+            "role": urole or "user",
             "theme": theme
         })
     return res
@@ -780,7 +779,7 @@ def search_users(q: str, db: Session = Depends(get_db)):
     res = []
     for u in users:
         lvl, rank, _, theme = get_user_level_info(u, db)
-        res.append({"username": u.username, "display_name": u.profile.display_name or u.username, "avatar_url": u.profile.avatar_url, "is_verified": u.integration.is_verified, "role": "developer" if u.username in DEVELOPERS else "tester" if u.username in TESTERS else "user", "level": lvl})
+        res.append({"username": u.username, "display_name": u.profile.display_name or u.username, "avatar_url": u.profile.avatar_url, "is_verified": u.integration.is_verified, "role": u.role or "user", "level": lvl})
     return res
 
 # Removed duplicate get_admin_stats endpoint

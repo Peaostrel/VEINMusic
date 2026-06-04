@@ -27,9 +27,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
         except:
             pass
 
-    if not api_key:
-        # Also check query params as last resort
-        api_key = request.query_params.get("api_key")
+
 
     if not api_key:
         raise HTTPException(status_code=401, detail="Not authenticated")

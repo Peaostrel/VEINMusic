@@ -96,28 +96,9 @@ def get_friends_history(username: str, db: Session = Depends(get_db)):
     return [format_history_item(s, t, counters=counters) for s, t in scrobbles]
 
 @router.get("/discovery/taste-twins")
-def get_taste_twins(username: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == username).first()
-    if not user: return []
-    
-    # Very basic taste twins implementation based on favorite artist or random users
-    twins = []
-    candidates = db.query(User).join(UserProfile).filter(User.id != user.id, UserProfile.is_private == False).limit(3).all()
-    for c in candidates:
-        common = []
-        if user.profile.favorite_artist and c.profile.favorite_artist and user.profile.favorite_artist.lower() == c.profile.favorite_artist.lower():
-            common.append(user.profile.favorite_artist)
-        if not common:
-            common.append("Разные вкусы")
-        
-        twins.append({
-            "username": c.username,
-            "display_name": c.profile.display_name or c.username,
-            "avatar_url": c.profile.avatar_url,
-            "match": 80 + (15 if len(common) > 0 and common[0] != "Разные вкусы" else 0),
-            "common_artists": common
-        })
-    return sorted(twins, key=lambda x: x["match"], reverse=True)
+def api_get_taste_twins(username: str, db: Session = Depends(get_db)):
+    from app.routers.extended import get_taste_twins
+    return get_taste_twins(username, db)
 
 @router.post("/scrobble/{scrobble_id}/like")
 def toggle_like(scrobble_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
