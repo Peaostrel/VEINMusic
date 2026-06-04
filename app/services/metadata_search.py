@@ -65,7 +65,7 @@ async def search_metadata(query: str, entity_type: str) -> tuple[str, str, str]:
                                     cover = cover or artist_result.get('image_url')
                                     if not title:
                                         raw_name = artist_result.get('name', '')
-                                        title = re.sub(r'\s*\([^)]*\)$', '', raw_name).strip()
+                                        title = re.sub(r'\([^)]*\)$', '', raw_name).strip()
                                     break
                     elif entity_type == 'album':
                         for section in g_data.get('response', {}).get('sections', []):
@@ -78,7 +78,7 @@ async def search_metadata(query: str, entity_type: str) -> tuple[str, str, str]:
                                         artist_name = album_result.get('artist', {}).get('name', '')
                                         album_name = album_result.get('name', '')
                                         title = f"{artist_name} — {album_name}"
-                                        title = re.sub(r'\s*\([^)]*\)$', '', title).strip()
+                                        title = re.sub(r'\([^)]*\)$', '', title).strip()
                                     break
                     else:
                         for section in g_data.get('response', {}).get('sections', []):
@@ -103,13 +103,13 @@ async def search_metadata(query: str, entity_type: str) -> tuple[str, str, str]:
             if lastfm_key:
                 try:
                     # Try to extract artist and name
-                    parts = re.split(r'\s*[-—]\s*', query.strip())
+                    parts = re.split(r'[ \t]*[-—][ \t]*', query.strip())
                     if len(parts) >= 2:
                         artist = parts[0]
                         item_name = parts[-1]
                         
                         if entity_type == 'album':
-                            l_url = f"http://ws.audioscrobbler.com/2.0/?method=album.getinfo&api_key={lastfm_key}&artist={urllib.parse.quote(artist)}&album={urllib.parse.quote(item_name)}&format=json"
+                            l_url = f"https://ws.audioscrobbler.com/2.0/?method=album.getinfo&api_key={lastfm_key}&artist={urllib.parse.quote(artist)}&album={urllib.parse.quote(item_name)}&format=json"
                             r_l = await client.get(l_url)
                             if r_l.status_code == 200:
                                 l_data = r_l.json().get('album', {})
@@ -122,7 +122,7 @@ async def search_metadata(query: str, entity_type: str) -> tuple[str, str, str]:
                                     ext_url = l_data.get('url')
                                     
                         elif entity_type == 'track':
-                            l_url = f"http://ws.audioscrobbler.com/2.0/?method=track.getinfo&api_key={lastfm_key}&artist={urllib.parse.quote(artist)}&track={urllib.parse.quote(item_name)}&format=json"
+                            l_url = f"https://ws.audioscrobbler.com/2.0/?method=track.getinfo&api_key={lastfm_key}&artist={urllib.parse.quote(artist)}&track={urllib.parse.quote(item_name)}&format=json"
                             r_l = await client.get(l_url)
                             if r_l.status_code == 200:
                                 l_data = r_l.json().get('track', {})

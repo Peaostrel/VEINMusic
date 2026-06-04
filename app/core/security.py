@@ -24,7 +24,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
         try:
             body = request.state.json_body if hasattr(request.state, "json_body") else {}
             api_key = body.get("api_key")
-        except:
+        except Exception:
             pass
 
 

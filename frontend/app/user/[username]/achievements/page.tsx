@@ -15,7 +15,7 @@ function renderDescriptionWithLinks(desc: string, meta: string | null, url: stri
     const linkUrl = (realUrl && realUrl.startsWith('http')) ? realUrl : `https://music.yandex.ru/search?text=${encodeURIComponent(fallbackMeta)}`;
 
     // 1. Сначала обрабатываем rule_meta (Высший приоритет)
-    const parts = fallbackMeta.split(/\s*[-—]\s*/);
+    const parts = fallbackMeta.split(/[ \t]*[-—][ \t]*/);
     
     parts.forEach((targetWord, idx) => {
         if (!targetWord) return;

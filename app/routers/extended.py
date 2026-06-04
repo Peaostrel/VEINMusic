@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from fastapi.responses import RedirectResponse, JSONResponse
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Annotated
 from fastapi import UploadFile, File
 from fastapi.responses import FileResponse
 
@@ -13,6 +13,7 @@ from sqlalchemy import text, func
 from datetime import datetime, timedelta, timezone
 import re
 import urllib.parse
+TRACK_PATH = "/track/"
 import httpx
 import time
 import uuid
@@ -31,7 +32,7 @@ import os
 # Constants removed in favor of User.role
 LASTFM_API_KEY = os.getenv("LASTFM_API_KEY")
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
-LASTFM_BASE_URL = "http://ws.audioscrobbler.com/2.0/"
+LASTFM_BASE_URL = "https://ws.audioscrobbler.com/2.0/"
 IMPORTING_USERS = set()
 CACHE = {}
 def get_from_cache(key: str, ttl: int = 300):
@@ -44,7 +45,7 @@ def get_from_cache(key: str, ttl: int = 300):
 def set_to_cache(key: str, data: any):
     CACHE[key] = {'data': data, 'ts': time.time()}
 
-def get_admin_user(current_user: User = Depends(get_current_user)):
+def get_admin_user(current_user: Annotated[User, Depends(get_current_user)]):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Доступ запрещен")
     return current_user
@@ -73,17 +74,17 @@ def check_auto_achievements(user, db: Session):
         elif ach.rule_type == "specific_track" and ach.rule_target:
             if ach.rule_target.startswith("http"):
                 if hasattr(ach, 'rule_meta') and ach.rule_meta:
-                    parts = re.split(r'\s*[-—]\s*', ach.rule_meta)
+                    parts = re.split(r'[ \t]*[-—][ \t]*', ach.rule_meta)
                     if len(parts) >= 2: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.artist.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%")) | (Track.title.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%"))).count()
                     else: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.title.ilike(f"%{ach.rule_meta}%")) | (Track.artist.ilike(f"%{ach.rule_meta}%"))).count()
                 else:
                     target_str = ach.rule_target.split('?')[0]
-                    if "yandex.ru" in target_str and "/track/" in target_str:
-                        track_id = target_str.split("/track/")[1].strip("/")
+                    if "yandex.ru" in target_str and TRACK_PATH in target_str:
+                        track_id = target_str.split(TRACK_PATH)[1].strip("/")
                         count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.track_url.like(f"%/track/{track_id}%")).count()
                     else: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.track_url.like(f"%{target_str}%")).count()
             else:
-                parts = re.split(r'\s*[-—]\s*', ach.rule_target)
+                parts = re.split(r'[ \t]*[-—][ \t]*', ach.rule_target)
                 if len(parts) >= 2: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.artist.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%")) | (Track.title.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%"))).count()
                 else: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.title.ilike(f"%{ach.rule_target}%")) | (Track.artist.ilike(f'%{ach.rule_target.split("||")[0] if "||" in ach.rule_target else ach.rule_target}%'))).count()
             if count >= ach.rule_value: granted = True
@@ -220,7 +221,7 @@ router = APIRouter(tags=["extended"])
 
 # --- /api/user/{username} ---
 @router.get("/api/user/{username}")
-def get_user_info(username: str, request: Request, db: Session = Depends(get_db)):
+def get_user_info(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404, "Юзер не найден")
     role = user.role or "user"
@@ -252,7 +253,7 @@ def get_user_info(username: str, request: Request, db: Session = Depends(get_db)
 
 # --- /api/taste-match/{viewer}/{profile} ---
 @router.get("/api/taste-match/{viewer}/{profile}")
-def get_taste_match(viewer: str, profile: str, db: Session = Depends(get_db)):
+def get_taste_match(viewer: str, profile: str, db: Annotated[Session, Depends(get_db)]):
     viewer_user = db.query(User).filter(User.username == viewer).first()
     profile_user = db.query(User).filter(User.username == profile).first()
     if not viewer_user or not profile_user or viewer == profile:
@@ -294,7 +295,7 @@ def get_taste_match(viewer: str, profile: str, db: Session = Depends(get_db)):
 
 # --- /api/notifications/{username} ---
 @router.get("/api/notifications/{username}")
-def get_notifications(username: str, db: Session = Depends(get_db)):
+def get_notifications(username: str, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
     if not user: return []
     new_achs = db.query(Achievement, UserAchievement).join(UserAchievement).filter(UserAchievement.user_id == user.id, UserAchievement.notified == False).all()
@@ -303,7 +304,7 @@ def get_notifications(username: str, db: Session = Depends(get_db)):
 
 # --- /api/achievements/all/{username} ---
 @router.get("/api/achievements/all/{username}")
-def get_all_achievements(username: str, db: Session = Depends(get_db)):
+def get_all_achievements(username: str, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404, "User not found")
     
@@ -329,7 +330,7 @@ def get_all_achievements(username: str, db: Session = Depends(get_db)):
             elif a.rule_type == "specific_track" and a.rule_target:
                 if a.rule_target.startswith("http"):
                     if hasattr(a, 'rule_meta') and a.rule_meta:
-                        parts = re.split(r'\s*[-—]\s*', a.rule_meta)
+                        parts = re.split(r'[ \t]*[-—][ \t]*', a.rule_meta)
                         if len(parts) < 2: parts = a.rule_meta.split()
                         
                         if len(parts) >= 2:
@@ -341,12 +342,12 @@ def get_all_achievements(username: str, db: Session = Depends(get_db)):
                         else: current_val = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.title.ilike(f"%{a.rule_meta}%")) | (Track.artist.ilike(f"%{a.rule_meta}%"))).count()
                     else:
                         target_str = a.rule_target.split('?')[0]
-                        if "yandex.ru" in target_str and "/track/" in target_str:
-                            track_id = target_str.split("/track/")[1].strip("/")
+                        if "yandex.ru" in target_str and TRACK_PATH in target_str:
+                            track_id = target_str.split(TRACK_PATH)[1].strip("/")
                             current_val = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.track_url.like(f"%/track/{track_id}%")).count()
                         else: current_val = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.track_url.like(f"%/track/{target_str}%")).count()
                 else:
-                    parts = re.split(r'\s*[-—]\s*', a.rule_target)
+                    parts = re.split(r'[ \t]*[-—][ \t]*', a.rule_target)
                     if len(parts) >= 2: current_val = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.artist.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%")) | (Track.title.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%"))).count()
                     else: current_val = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.title.ilike(f"%{a.rule_target}%")) | (Track.artist.ilike(f'%{a.rule_target.split("||")[0] if "||" in a.rule_target else a.rule_target}%'))).count()
                     
@@ -360,7 +361,7 @@ def get_all_achievements(username: str, db: Session = Depends(get_db)):
                 if "||" in a.rule_target: album_name = a.rule_target.split("||")[0]
                 
                 if album_name and not album_name.startswith("http"):
-                    parts = re.split(r'\s*[-—]\s*', album_name)
+                    parts = re.split(r'[ \t]*[-—][ \t]*', album_name)
                     if len(parts) >= 2:
                         current_val_text = db.query(func.count(func.distinct(Scrobble.track_id))).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.artist.ilike(f"%{parts[0].strip()}%"), Track.album.ilike(f"%{parts[-1].strip()}%")).scalar() or 0
                     else:
@@ -390,7 +391,7 @@ def get_all_achievements(username: str, db: Session = Depends(get_db)):
 
 # --- /api/recommendations ---
 @router.get("/api/recommendations")
-def get_recommendations(username: str, db: Session = Depends(get_db)):
+def get_recommendations(username: str, db: Annotated[Session, Depends(get_db)]):
     cache_key = f"recs_{username}"
     cached = get_from_cache(cache_key, ttl=1800) # 30 min cache
     if cached: return cached
@@ -421,7 +422,7 @@ def get_recommendations(username: str, db: Session = Depends(get_db)):
 
 # --- /api/stats/wrapped ---
 @router.get("/api/stats/wrapped")
-def get_wrapped_stats(username: str, db: Session = Depends(get_db)):
+def get_wrapped_stats(username: str, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404)
     last_month = datetime.utcnow() - timedelta(days=30)
@@ -438,7 +439,7 @@ def get_wrapped_stats(username: str, db: Session = Depends(get_db)):
 
 # --- /api/user/mood ---
 @router.get("/api/user/mood")
-def get_user_mood(username: str, db: Session = Depends(get_db)):
+def get_user_mood(username: str, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404)
     
@@ -459,7 +460,7 @@ def get_user_mood(username: str, db: Session = Depends(get_db)):
 
 # --- /api/search/taste ---
 @router.get("/api/search/taste")
-def search_by_taste(my_username: str, db: Session = Depends(get_db)):
+def search_by_taste(my_username: str, db: Annotated[Session, Depends(get_db)]):
     # Find people with highest taste match
     all_users = db.query(User).filter(User.username != my_username).limit(50).all()
     results = []
@@ -478,7 +479,7 @@ def search_by_taste(my_username: str, db: Session = Depends(get_db)):
 
 # --- /api/feed/global ---
 @router.get("/api/feed/global")
-def get_global_feed(db: Session = Depends(get_db)):
+def get_global_feed(db: Annotated[Session, Depends(get_db)]):
     # Latest scrobbles from public users
     scrobbles = db.query(Scrobble).join(User).filter(User.is_private == False).order_by(Scrobble.id.desc()).limit(20).all()
     return {"feed": [format_history_item(s, s.track) for s in scrobbles]}
@@ -486,7 +487,7 @@ def get_global_feed(db: Session = Depends(get_db)):
 
 # --- /api/detailed-stats/{username} ---
 @router.get("/api/detailed-stats/{username}")
-def get_detailed_stats(username: str, period: str = "all", db: Session = Depends(get_db)):
+def get_detailed_stats(username: str, db: Annotated[Session, Depends(get_db)], period: str = "all"):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404)
     
@@ -546,7 +547,7 @@ def get_detailed_stats(username: str, period: str = "all", db: Session = Depends
 
 # --- /api/stats/{username} ---
 @router.get("/api/stats/{username}")
-def get_stats(username: str, db: Session = Depends(get_db)):
+def get_stats(username: str, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404)
     streak = get_active_streak(user)
@@ -595,7 +596,7 @@ def get_stats(username: str, db: Session = Depends(get_db)):
 
 # --- /api/activity/{username} ---
 @router.get("/api/activity/{username}")
-def get_activity(username: str, db: Session = Depends(get_db)):
+def get_activity(username: str, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404)
     
@@ -615,7 +616,7 @@ def get_activity(username: str, db: Session = Depends(get_db)):
 
 # --- /api/current-track/{username} ---
 @router.get("/api/current-track/{username}")
-def get_current_track(username: str, db: Session = Depends(get_db)):
+def get_current_track(username: str, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
     if not user:
         return {"playing": False}
@@ -644,14 +645,14 @@ def get_current_track(username: str, db: Session = Depends(get_db)):
 
 # --- /api/scrobble/{scrobble_id}/comments ---
 @router.get("/api/scrobble/{scrobble_id}/comments")
-def get_comments(scrobble_id: int, db: Session = Depends(get_db)):
+def get_comments(scrobble_id: int, db: Annotated[Session, Depends(get_db)]):
     comments = db.query(ScrobbleComment, User.username, User.avatar_url).join(User).filter(ScrobbleComment.scrobble_id == scrobble_id).all()
     return [{"id": c.ScrobbleComment.id, "content": c.ScrobbleComment.content, "username": c.username, "avatar_url": c.profile.avatar_url, "created_at": c.ScrobbleComment.created_at} for c in comments]
 
 
 # --- /api/follow-stats/{viewer}/{profile} ---
 @router.get("/api/follow-stats/{viewer}/{profile}")
-def get_follow_stats(viewer: str, profile: str, db: Session = Depends(get_db)):
+def get_follow_stats(viewer: str, profile: str, db: Annotated[Session, Depends(get_db)]):
     target = db.query(User).filter(User.username == profile).first()
     if not target: raise HTTPException(404)
     followers_count = db.query(Follow).filter(Follow.following_id == target.id).count()
@@ -663,13 +664,13 @@ def get_follow_stats(viewer: str, profile: str, db: Session = Depends(get_db)):
     return {"followers": followers_count, "following": following_count, "is_following": is_following}
 
 @router.get("/api/follow-stats/{profile}")
-def get_follow_stats_fallback(profile: str, db: Session = Depends(get_db)):
+def get_follow_stats_fallback(profile: str, db: Annotated[Session, Depends(get_db)]):
     return get_follow_stats("null", profile, db)
 
 
 # --- /api/followers/{username} ---
 @router.get("/api/followers/{username}")
-def get_followers(username: str, request: Request, db: Session = Depends(get_db)):
+def get_followers(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
     target = db.query(User).filter(User.username == username).first()
     if not target: raise HTTPException(404)
     
@@ -689,7 +690,7 @@ def get_followers(username: str, request: Request, db: Session = Depends(get_db)
 
 # --- /api/following/{username} ---
 @router.get("/api/following/{username}")
-def get_following(username: str, request: Request, db: Session = Depends(get_db)):
+def get_following(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
     target = db.query(User).filter(User.username == username).first()
     if not target: raise HTTPException(404)
 
@@ -709,7 +710,7 @@ def get_following(username: str, request: Request, db: Session = Depends(get_db)
 
 # --- /api/leaderboard ---
 @router.get("/api/leaderboard")
-def get_leaderboard(db: Session = Depends(get_db)):
+def get_leaderboard(db: Annotated[Session, Depends(get_db)]):
     # Calculate XP for all users in one query
     sql = text("""
         SELECT u.username, p.display_name, p.avatar_url, i.is_verified, p.theme,
@@ -773,7 +774,7 @@ async def smart_redirect(source: str, type: str, q: str):
 
 # --- /api/search/users ---
 @router.get("/api/search/users")
-def search_users(q: str, db: Session = Depends(get_db)):
+def search_users(q: str, db: Annotated[Session, Depends(get_db)]):
     if not q or len(q) < 2: return []
     users = db.query(User).filter((User.username.ilike(f"%{q}%")) | (User.display_name.ilike(f"%{q}%"))).limit(10).all()
     res = []
@@ -787,7 +788,7 @@ def search_users(q: str, db: Session = Depends(get_db)):
 
 # --- /api/public-stats ---
 @router.get("/api/public-stats")
-def get_public_stats(db: Session = Depends(get_db)):
+def get_public_stats(db: Annotated[Session, Depends(get_db)]):
     total_users = db.query(User).count()
     total_scrobbles = db.query(Scrobble).join(Track).filter(Scrobble.listened_sec * 100 >= Track.duration * 85).count()
     total_tracks = db.query(Track).count()
@@ -801,7 +802,7 @@ def get_public_stats(db: Session = Depends(get_db)):
 
 # --- /api/import/lastfm ---
 @router.post("/api/import/lastfm")
-async def start_lastfm_import(data: LikeRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def start_lastfm_import(data: LikeRequest, background_tasks: BackgroundTasks, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
     
     if user.id in IMPORTING_USERS: raise HTTPException(429, "Импорт уже запущен")
@@ -815,7 +816,7 @@ async def start_lastfm_import(data: LikeRequest, background_tasks: BackgroundTas
 
 # --- /api/integrations/yandex ---
 @router.post("/api/integrations/yandex")
-def update_yandex_token(data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def update_yandex_token(data: dict, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
     
     user.integration.yandex_token = data.get("token")
@@ -825,7 +826,7 @@ def update_yandex_token(data: dict, db: Session = Depends(get_db), current_user:
 
 # --- /api/integrations/spotify/disconnect ---
 @router.post("/api/integrations/spotify/disconnect")
-def disconnect_spotify(data: LikeRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def disconnect_spotify(data: LikeRequest, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
     
     user.integration.spotify_access_token = None
@@ -836,7 +837,7 @@ def disconnect_spotify(data: LikeRequest, db: Session = Depends(get_db), current
 
 # --- /api/integrations/yandex/disconnect ---
 @router.post("/api/integrations/yandex/disconnect")
-def disconnect_yandex(data: LikeRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def disconnect_yandex(data: LikeRequest, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
     
     user.integration.yandex_token = None
@@ -846,7 +847,7 @@ def disconnect_yandex(data: LikeRequest, db: Session = Depends(get_db), current_
 
 # --- /api/integrations/lastfm/disconnect ---
 @router.post("/api/integrations/lastfm/disconnect")
-def disconnect_lastfm(data: LikeRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def disconnect_lastfm(data: LikeRequest, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
     
     user.integration.lastfm_username = None
@@ -856,7 +857,7 @@ def disconnect_lastfm(data: LikeRequest, db: Session = Depends(get_db), current_
 
 # --- /api/scrobble/{scrobble_id}/like ---
 @router.post("/api/scrobble/{scrobble_id}/like")
-def toggle_like(scrobble_id: int, data: LikeRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def toggle_like(scrobble_id: int, data: LikeRequest, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
     
     like = db.query(ScrobbleLike).filter_by(user_id=user.id, scrobble_id=scrobble_id).first()
@@ -870,7 +871,7 @@ def toggle_like(scrobble_id: int, data: LikeRequest, db: Session = Depends(get_d
 
 # --- /api/scrobble/{scrobble_id}/comment ---
 @router.post("/api/scrobble/{scrobble_id}/comment")
-def add_comment(scrobble_id: int, data: CommentRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def add_comment(scrobble_id: int, data: CommentRequest, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
     
     # Sanitize comment content to prevent XSS
@@ -882,7 +883,7 @@ def add_comment(scrobble_id: int, data: CommentRequest, db: Session = Depends(ge
 
 # --- /api/follow/{target_username} ---
 @router.post("/api/follow/{target_username}")
-def toggle_follow(target_username: str, data: FollowAction, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def toggle_follow(target_username: str, data: FollowAction, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     follower = current_user
     target = db.query(User).filter(User.username == target_username).first()
     if not follower or not target or follower.id == target.id: raise HTTPException(400)
@@ -897,7 +898,7 @@ def toggle_follow(target_username: str, data: FollowAction, db: Session = Depend
 
 # --- POST /api/admin/achievements ---
 @router.post("/api/admin/achievements")
-async def create_achievement(data: AchCreate, db: Session = Depends(get_db), admin: User = Depends(get_admin_user)):
+async def create_achievement(data: AchCreate, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     target_val = data.rule_target
     val = data.rule_value
     t_img = data.target_image
@@ -919,7 +920,7 @@ async def create_achievement(data: AchCreate, db: Session = Depends(get_db), adm
 
 # --- PUT /api/admin/achievements/{ach_id} ---
 @router.put("/api/admin/achievements/{ach_id}")
-async def update_achievement(ach_id: int, data: AchUpdate, db: Session = Depends(get_db), admin: User = Depends(get_admin_user)):
+async def update_achievement(ach_id: int, data: AchUpdate, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     ach = db.query(Achievement).filter(Achievement.id == ach_id).first()
     target_val = data.rule_target
     val = data.rule_value
@@ -942,7 +943,7 @@ async def update_achievement(ach_id: int, data: AchUpdate, db: Session = Depends
 
 # --- DELETE /api/admin/achievements/{ach_id} ---
 @router.delete("/api/admin/achievements/{ach_id}")
-def delete_achievement(ach_id: int, db: Session = Depends(get_db), admin: User = Depends(get_admin_user)):
+def delete_achievement(ach_id: int, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     db.query(UserAchievement).filter(UserAchievement.achievement_id == ach_id).delete()
     db.query(Achievement).filter(Achievement.id == ach_id).delete()
     db.commit()
@@ -951,7 +952,7 @@ def delete_achievement(ach_id: int, db: Session = Depends(get_db), admin: User =
 
 # --- DELETE /api/admin/tracks/{track_id} ---
 @router.delete("/api/admin/tracks/{track_id}")
-def delete_track(track_id: int, db: Session = Depends(get_db), admin: User = Depends(get_admin_user)):
+def delete_track(track_id: int, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     db.query(Scrobble).filter(Scrobble.track_id == track_id).delete()
     db.query(Track).filter(Track.id == track_id).delete()
     db.commit()
@@ -960,7 +961,7 @@ def delete_track(track_id: int, db: Session = Depends(get_db), admin: User = Dep
 
 # --- POST /api/admin/users/{target_username}/achievements ---
 @router.post("/api/admin/users/{target_username}/achievements")
-def assign_achievement(target_username: str, data: AchAssign, db: Session = Depends(get_db), admin: User = Depends(get_admin_user)):
+def assign_achievement(target_username: str, data: AchAssign, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     user = db.query(User).filter(User.username == target_username).first()
     if not db.query(UserAchievement).filter_by(user_id=user.id, achievement_id=data.achievement_id).first():
         ach = db.query(Achievement).filter_by(id=data.achievement_id).first()
@@ -972,7 +973,7 @@ def assign_achievement(target_username: str, data: AchAssign, db: Session = Depe
 
 # --- DELETE /api/admin/users/{target_username}/achievements/{achievement_id} ---
 @router.delete("/api/admin/users/{target_username}/achievements/{achievement_id}")
-def remove_achievement_from_user(target_username: str, achievement_id: int, db: Session = Depends(get_db), admin: User = Depends(get_admin_user)):
+def remove_achievement_from_user(target_username: str, achievement_id: int, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     target = db.query(User).filter(User.username == target_username).first()
     if not target: raise HTTPException(404, "Юзер не найден")
     ua = db.query(UserAchievement).filter_by(user_id=target.id, achievement_id=achievement_id).first()
@@ -986,7 +987,7 @@ def remove_achievement_from_user(target_username: str, achievement_id: int, db: 
 
 # --- POST /api/admin/users/{target_username}/level ---
 @router.post("/api/admin/users/{target_username}/level")
-def update_user_level(target_username: str, data: LevelUpdate, db: Session = Depends(get_db), admin: User = Depends(get_admin_user)):
+def update_user_level(target_username: str, data: LevelUpdate, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     target = db.query(User).filter(User.username == target_username).first()
     target.integration.bonus_xp = ((data.new_level - 1) * 100) - db.query(Scrobble).join(Track).filter(Scrobble.user_id == target.id, Scrobble.listened_sec * 100 >= Track.duration * 85).count()
     db.commit()
@@ -995,7 +996,7 @@ def update_user_level(target_username: str, data: LevelUpdate, db: Session = Dep
 
 # --- DELETE /api/admin/users/{target_username}/scrobbles ---
 @router.delete("/api/admin/users/{target_username}/scrobbles")
-def wipe_user_scrobbles(target_username: str, db: Session = Depends(get_db), admin: User = Depends(get_admin_user)):
+def wipe_user_scrobbles(target_username: str, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     target = db.query(User).filter(User.username == target_username).first()
     if not target: raise HTTPException(404)
     db.query(Scrobble).filter(Scrobble.user_id == target.id).delete()
@@ -1010,7 +1011,7 @@ def rate_limited(): return JSONResponse(status_code=429, content={"error": "Too 
 
 # --- POST /api/notifications/{username}/read ---
 @router.post("/api/notifications/{username}/read")
-def mark_notifications_read(username: str, data: MarkRead, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def mark_notifications_read(username: str, data: MarkRead, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     if current_user.username != username: raise HTTPException(403)
     user = db.query(User).filter(User.username == username).first()
     if not user: return {"status": "error"}
@@ -1021,7 +1022,7 @@ def mark_notifications_read(username: str, data: MarkRead, db: Session = Depends
 
 # --- POST /api/profile/achievements/toggle ---
 @router.post("/api/profile/achievements/toggle")
-def toggle_achievement(data: ToggleAch, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def toggle_achievement(data: ToggleAch, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
     
     ua = db.query(UserAchievement).filter_by(user_id=user.id, achievement_id=data.achievement_id).first()
@@ -1074,7 +1075,7 @@ async def get_track_duration(url: str) -> int:
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
         async with httpx.AsyncClient(headers=headers, timeout=5.0) as client:
-            if "music.yandex.ru" in url and "/track/" in url:
+            if "music.yandex.ru" in url and TRACK_PATH in url:
                 track_id = url.split('/track/')[1].split('/')[0].split('?')[0]
                 res = (await client.get(f"https://music.yandex.ru/handlers/track.jsx?track={track_id}")).json()
                 return int(res.get("track", {}).get("durationMs", 180000) / 1000)
@@ -1105,7 +1106,7 @@ async def get_track_genre(url: str, artist: str = None) -> str:
     try:
         async with httpx.AsyncClient(headers=headers, timeout=5.0) as client:
             if "music.yandex.ru" in url:
-                if "/track/" in url:
+                if TRACK_PATH in url:
                     track_id = url.split('/track/')[1].split('/')[0].split('?')[0]
                     res = (await client.get(f"https://music.yandex.ru/handlers/track.jsx?track={track_id}")).json()
                     albums = res.get("track", {}).get("albums", [])
@@ -1132,8 +1133,8 @@ async def process_scrobble(db: Session, user: User, title: str, artist: str, cov
         if cover_url and not track.cover_url: 
             track.cover_url = cover_url
             updated = True
-        if track_url and "/track/" in track_url:
-            if not track.track_url or "/track/" not in track.track_url:
+        if track_url and TRACK_PATH in track_url:
+            if not track.track_url or TRACK_PATH not in track.track_url:
                 track.track_url = track_url
                 updated = True
         

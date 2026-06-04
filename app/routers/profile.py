@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
+from typing import Annotated
 from datetime import datetime, timezone
 import json
 
@@ -17,8 +18,8 @@ def sanitize_text(text_val: str) -> str:
     text_val = re.sub(r'<[^>]*>', '', text_val)
     return text_val.replace('"', '&quot;').replace("'", '&#39;').replace('<', '&lt;').replace('>', '&gt;')
 
-@router.post("/update")
-async def update_profile(data: ProfileUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+@router.post("/update", responses={400: {"description": "Bad Request"}})
+async def update_profile(data: ProfileUpdate, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
     
     if data.theme is not None: user.profile.theme = data.theme
@@ -75,7 +76,7 @@ async def update_profile(data: ProfileUpdate, db: Session = Depends(get_db), cur
     return {"status": "ok"}
 
 @router.post("/privacy")
-def update_privacy(data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def update_privacy(data: dict, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     if "is_private" in data: current_user.profile.is_private = bool(data["is_private"])
     if "hidden_artists" in data: current_user.profile.hidden_artists = str(data["hidden_artists"])
     db.commit()

@@ -1,3 +1,4 @@
+from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone, timedelta
@@ -11,7 +12,7 @@ from app.services.scrobble_processor import process_scrobble, format_history_ite
 router = APIRouter(prefix="/api", tags=["scrobbling"])
 
 @router.post("/scrobble")
-async def add_scrobble(data: ScrobbleData, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def add_scrobble(data: ScrobbleData, background_tasks: BackgroundTasks, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     try:
         user = current_user
         
@@ -40,7 +41,7 @@ async def add_scrobble(data: ScrobbleData, background_tasks: BackgroundTasks, db
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 @router.get("/history/{username}")
-def get_history(username: str, db: Session = Depends(get_db)):
+def get_history(username: str, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404)
     scrobbles = db.query(Scrobble, Track).join(Track).filter(Scrobble.user_id == user.id).order_by(Scrobble.id.desc()).limit(10).all()
@@ -57,7 +58,7 @@ def get_history(username: str, db: Session = Depends(get_db)):
     return {"user": username, "history": [format_history_item(s, t, counters=counters) for s, t in scrobbles]}
 
 @router.get("/global-history")
-def get_global_history(db: Session = Depends(get_db)):
+def get_global_history(db: Annotated[Session, Depends(get_db)]):
     scrobbles = db.query(Scrobble, Track).join(Track).join(User, Scrobble.user_id == User.id).join(UserProfile, User.id == UserProfile.user_id).filter(UserProfile.is_private == False).order_by(Scrobble.id.desc()).limit(20).all()
     
     s_ids = [s.id for s, t in scrobbles]
@@ -72,7 +73,7 @@ def get_global_history(db: Session = Depends(get_db)):
     return [format_history_item(s, t, counters=counters) for s, t in scrobbles]
 
 @router.get("/friends-history/{username}")
-def get_friends_history(username: str, db: Session = Depends(get_db)):
+def get_friends_history(username: str, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404)
     
@@ -96,12 +97,12 @@ def get_friends_history(username: str, db: Session = Depends(get_db)):
     return [format_history_item(s, t, counters=counters) for s, t in scrobbles]
 
 @router.get("/discovery/taste-twins")
-def api_get_taste_twins(username: str, db: Session = Depends(get_db)):
+def api_get_taste_twins(username: str, db: Annotated[Session, Depends(get_db)]):
     from app.routers.extended import get_taste_twins
     return get_taste_twins(username, db)
 
 @router.post("/scrobble/{scrobble_id}/like")
-def toggle_like(scrobble_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def toggle_like(scrobble_id: int, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
     like = db.query(ScrobbleLike).filter_by(user_id=user.id, scrobble_id=scrobble_id).first()
     if like:
@@ -112,7 +113,7 @@ def toggle_like(scrobble_id: int, db: Session = Depends(get_db), current_user: U
         return {"status": "liked"}
 
 @router.post("/scrobble/{scrobble_id}/comment")
-def add_comment(scrobble_id: int, data: CommentRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def add_comment(scrobble_id: int, data: CommentRequest, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     from app.routers.profile import sanitize_text
     user = current_user
     clean_content = sanitize_text(data.content)
