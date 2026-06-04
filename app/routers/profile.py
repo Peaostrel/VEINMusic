@@ -18,46 +18,36 @@ def sanitize_text(text_val: str) -> str:
     text_val = re.sub(r'<[^>]*>', '', text_val)
     return text_val.replace('"', '&quot;').replace("'", '&#39;').replace('<', '&lt;').replace('>', '&gt;')
 
+async def _update_favorite(user_profile, field_value, field_name, entity_type):
+    if field_value is None:
+        return
+    if field_value.strip() == "":
+        setattr(user_profile, field_name, None)
+        setattr(user_profile, f"{field_name}_cover", None)
+        setattr(user_profile, f"{field_name}_url", None)
+    else:
+        title, cover, url = await search_metadata(field_value, entity_type)
+        setattr(user_profile, field_name, sanitize_text(title or field_value))
+        setattr(user_profile, f"{field_name}_cover", cover or getattr(user_profile, f"{field_name}_cover"))
+        setattr(user_profile, f"{field_name}_url", url or getattr(user_profile, f"{field_name}_url"))
+
 @router.post("/update", responses={400: {"description": "Bad Request"}})
 async def update_profile(data: ProfileUpdate, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
     
     if data.theme is not None: user.profile.theme = data.theme
     
-    if data.favorite_artist is not None:
-        if data.favorite_artist.strip() == "":
-            user.profile.favorite_artist = user.profile.favorite_artist_cover = user.profile.favorite_artist_url = None
-        else:
-            title, cover, url = await search_metadata(data.favorite_artist, 'artist')
-            user.profile.favorite_artist = sanitize_text(title or data.favorite_artist)
-            user.profile.favorite_artist_cover = cover or user.profile.favorite_artist_cover
-            user.profile.favorite_artist_url = url or user.profile.favorite_artist_url
-
-    if data.favorite_track is not None:
-        if data.favorite_track.strip() == "":
-            user.profile.favorite_track = user.profile.favorite_track_cover = user.profile.favorite_track_url = None
-        else:
-            title, cover, url = await search_metadata(data.favorite_track, 'track')
-            user.profile.favorite_track = sanitize_text(title or data.favorite_track)
-            user.profile.favorite_track_cover = cover or user.profile.favorite_track_cover
-            user.profile.favorite_track_url = url or user.profile.favorite_track_url
-
-    if data.favorite_album is not None:
-        if data.favorite_album.strip() == "":
-            user.profile.favorite_album = user.profile.favorite_album_cover = user.profile.favorite_album_url = None
-        else:
-            title, cover, url = await search_metadata(data.favorite_album, 'album')
-            user.profile.favorite_album = sanitize_text(title or data.favorite_album)
-            user.profile.favorite_album_cover = cover or user.profile.favorite_album_cover
-            user.profile.favorite_album_url = url or user.profile.favorite_album_url
+    await _update_favorite(user.profile, data.favorite_artist, 'favorite_artist', 'artist')
+    await _update_favorite(user.profile, data.favorite_track, 'favorite_track', 'track')
+    await _update_favorite(user.profile, data.favorite_album, 'favorite_album', 'album')
     
     if data.display_name is not None: user.profile.display_name = sanitize_text(data.display_name)
     if data.bio is not None: user.profile.bio = sanitize_text(data.bio)
     if data.avatar_url is not None:
-        if data.avatar_url and not (data.avatar_url.startswith("http:") or data.avatar_url.startswith("https:")): raise HTTPException(400, "Invalid URL")
+        if data.avatar_url and not data.avatar_url.startswith(("http:", "https:")): raise HTTPException(400, "Invalid URL")
         user.profile.avatar_url = data.avatar_url
     if data.cover_url is not None:
-        if data.cover_url and not (data.cover_url.startswith("http:") or data.cover_url.startswith("https:")): raise HTTPException(400, "Invalid URL")
+        if data.cover_url and not data.cover_url.startswith(("http:", "https:")): raise HTTPException(400, "Invalid URL")
         user.profile.cover_url = data.cover_url
     if data.location is not None: user.profile.location = sanitize_text(data.location)
     if data.favorite_genre is not None: user.profile.favorite_genre = sanitize_text(data.favorite_genre)
