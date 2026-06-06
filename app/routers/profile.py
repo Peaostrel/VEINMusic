@@ -40,36 +40,51 @@ def _validate_and_set_social(profile, social_links: Optional[str]):
         except json.JSONDecodeError:
             pass
 
+def _update_profile_fields(profile, data: ProfileUpdate):
+    string_fields = [
+        ('theme', False),
+        ('display_name', True),
+        ('bio', True),
+        ('location', True),
+        ('favorite_genre', True),
+        ('equipment', True),
+        ('favorite_artist_review', True),
+        ('favorite_track_review', True),
+        ('favorite_album_review', True),
+        ('avatar_frame', True)
+    ]
+    for field, sanitize in string_fields:
+        val = getattr(data, field)
+        if val is not None:
+            setattr(profile, field, sanitize_text(val) if sanitize else val)
+            
+    other_fields = [
+        'favorite_artist_rating',
+        'favorite_track_rating',
+        'favorite_album_rating',
+        'is_private'
+    ]
+    for field in other_fields:
+        val = getattr(data, field)
+        if val is not None:
+            setattr(profile, field, val)
+
 @router.post("/update", responses={400: {"description": "Bad Request"}})
 async def update_profile(data: ProfileUpdate, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
-    
-    if data.theme is not None: user.profile.theme = data.theme
     
     await _update_favorite(user.profile, data.favorite_artist, 'favorite_artist', 'artist')
     await _update_favorite(user.profile, data.favorite_track, 'favorite_track', 'track')
     await _update_favorite(user.profile, data.favorite_album, 'favorite_album', 'album')
     
-    if data.favorite_artist_review is not None: user.profile.favorite_artist_review = sanitize_text(data.favorite_artist_review)
-    if data.favorite_artist_rating is not None: user.profile.favorite_artist_rating = data.favorite_artist_rating
-    if data.favorite_track_review is not None: user.profile.favorite_track_review = sanitize_text(data.favorite_track_review)
-    if data.favorite_track_rating is not None: user.profile.favorite_track_rating = data.favorite_track_rating
-    if data.favorite_album_review is not None: user.profile.favorite_album_review = sanitize_text(data.favorite_album_review)
-    if data.favorite_album_rating is not None: user.profile.favorite_album_rating = data.favorite_album_rating
-    if data.avatar_frame is not None: user.profile.avatar_frame = sanitize_text(data.avatar_frame)
+    _update_profile_fields(user.profile, data)
     
-    if data.display_name is not None: user.profile.display_name = sanitize_text(data.display_name)
-    if data.bio is not None: user.profile.bio = sanitize_text(data.bio)
     if data.avatar_url is not None:
         _validate_url(data.avatar_url)
         user.profile.avatar_url = data.avatar_url
     if data.cover_url is not None:
         _validate_url(data.cover_url)
         user.profile.cover_url = data.cover_url
-    if data.location is not None: user.profile.location = sanitize_text(data.location)
-    if data.favorite_genre is not None: user.profile.favorite_genre = sanitize_text(data.favorite_genre)
-    if data.equipment is not None: user.profile.equipment = sanitize_text(data.equipment)
-    if data.is_private is not None: user.profile.is_private = data.is_private
     if data.hidden_artists is not None: user.profile.hidden_artists = sanitize_text(data.hidden_artists) or ""
     if data.lastfm_username is not None: user.integration.lastfm_username = sanitize_text(data.lastfm_username)
     

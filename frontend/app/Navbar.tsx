@@ -235,6 +235,7 @@ export default function Navbar() {
   };
 
   const avatar = userProfile?.avatar_url || (isValidUser(username) ? `https://api.dicebear.com/9.x/micah/svg?seed=${username}&backgroundColor=transparent` : '');
+  const frameClass = userProfile?.avatar_frame ? `avatar-frame-wrapper avatar-frame-${userProfile.avatar_frame}` : '';
 
 
   return (
@@ -304,7 +305,7 @@ export default function Navbar() {
             <Link href="/leaderboard" className="text-gray-400 hover:text-[var(--accent-text)] transition p-2 rounded-lg hover:bg-white/5"><span className="text-lg">🏆</span> <span className="hidden md:inline ml-1">Топ</span></Link>
             {isValidUser(username) ? (
               <div className="relative" ref={dropdownRef}>
-                  <div className={`${userProfile?.avatar_frame ? `avatar-frame-wrapper avatar-frame-${userProfile.avatar_frame}` : ''} transition-all duration-300 ml-2`}>
+                  <div className={`${frameClass} transition-all duration-300 ml-2`}>
                       <button onClick={() => setIsDropdownOpen(!isDropdownOpen)} className="w-10 h-10 rounded-full border-2 border-transparent hover:border-[var(--accent)] transition-all overflow-hidden bg-[#1a1a1a] shadow-md flex items-center justify-center shrink-0">
                            <img src={avatar} className="w-full h-full object-cover" alt="Avatar" />
                       </button>
@@ -312,7 +313,7 @@ export default function Navbar() {
                   {isDropdownOpen && (
                       <div className="absolute right-0 top-[calc(100%+12px)] w-[300px] bg-[#222222] border border-white/5 rounded-2xl shadow-[0_15px_40px_rgba(0,0,0,0.6)] overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
                           <div className="p-5 flex flex-col items-center border-b border-white/5 bg-[#1e1e1e]">
-                               <div className={`${userProfile?.avatar_frame ? `avatar-frame-wrapper avatar-frame-${userProfile.avatar_frame}` : ''} mb-3`}>
+                               <div className={`${frameClass} mb-3`}>
                                    <img src={avatar} className="w-16 h-16 rounded-full object-cover border border-white/10 bg-[#121212]" alt="Avatar" />
                                </div>
                               <div className="text-white font-bold text-lg flex items-center justify-center w-full truncate">

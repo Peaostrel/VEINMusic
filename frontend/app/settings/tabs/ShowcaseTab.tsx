@@ -6,7 +6,7 @@ interface StarRatingProps {
   onChange: (v: number) => void;
 }
 
-function StarRating({ value, onChange }: StarRatingProps) {
+function StarRating({ value, onChange }: Readonly<StarRatingProps>) {
   return (
     <div className="flex items-center gap-1">
       {[1, 2, 3, 4, 5].map((star) => (
@@ -36,7 +36,12 @@ function StarRating({ value, onChange }: StarRatingProps) {
   );
 }
 
-export default function ShowcaseTab({ data, updateData }: any) {
+interface ShowcaseTabProps {
+  data: any;
+  updateData: (k: string, v: any) => void;
+}
+
+export default function ShowcaseTab({ data, updateData }: Readonly<ShowcaseTabProps>) {
   return (
     <div className="p-6 md:p-8 space-y-6">
       <h2 className="text-xl font-bold mb-4 text-[var(--accent-text)]">Витрина профиля</h2>

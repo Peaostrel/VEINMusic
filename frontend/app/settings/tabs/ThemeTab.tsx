@@ -11,7 +11,13 @@ const FRAMES = [
   { id: 'god', name: 'Божество', req: 100, class: 'avatar-frame-god' }
 ];
 
-export default function ThemeTab({ data, updateData, level }: any) {
+interface ThemeTabProps {
+  data: any;
+  updateData: (k: string, v: any) => void;
+  level: number;
+}
+
+export default function ThemeTab({ data, updateData, level }: Readonly<ThemeTabProps>) {
   const isThemeCustom = data.theme && typeof data.theme === 'string' && data.theme.startsWith('#');
   
   return (
@@ -36,6 +42,13 @@ export default function ThemeTab({ data, updateData, level }: any) {
               backgroundStyle = 'linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #8b00ff)';
             } else if (opt.isCustom) {
               backgroundStyle = isThemeCustom ? data.theme : 'linear-gradient(45deg, #ef4444, #3b82f6)';
+            }
+
+            let statusIndicator = null;
+            if (isLocked) {
+              statusIndicator = '🔒';
+            } else if (isSelected) {
+              statusIndicator = '✅';
             }
 
             return (
@@ -67,7 +80,7 @@ export default function ThemeTab({ data, updateData, level }: any) {
                       <div className="text-xs text-gray-400">LVL {opt.req}</div>
                     </div>
                   </div>
-                  {isLocked ? '🔒' : isSelected ? '✅' : null}
+                  {statusIndicator}
                 </div>
                 
                 {isSelected && opt.isCustom && (
@@ -107,6 +120,17 @@ export default function ThemeTab({ data, updateData, level }: any) {
               cardClass = 'border-[var(--accent)] bg-[var(--accent)]/10 shadow-[0_0_15px_var(--accent-glow)]';
             }
 
+            const frameWrapperClass = frame.id 
+              ? `avatar-frame-wrapper ${frame.class}` 
+              : 'p-[5px] border-2 border-dashed border-gray-600 rounded-full';
+
+            let frameStatusIndicator = null;
+            if (isLocked) {
+              frameStatusIndicator = '🔒';
+            } else if (isSelected) {
+              frameStatusIndicator = '✅';
+            }
+
             return (
               <button
                 type="button"
@@ -120,7 +144,7 @@ export default function ThemeTab({ data, updateData, level }: any) {
                 className={`text-left w-full p-4 rounded-xl border-2 transition-all flex items-center justify-between cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50 ${cardClass}`}
               >
                 <div className="flex items-center gap-4">
-                  <div className={`${frame.id ? `avatar-frame-wrapper ${frame.class}` : 'p-[5px] border-2 border-dashed border-gray-600 rounded-full'} shrink-0`}>
+                  <div className={`${frameWrapperClass} shrink-0`}>
                     <div className="w-10 h-10 rounded-full bg-[#282828] flex items-center justify-center text-lg shadow-inner">
                       🎧
                     </div>
@@ -131,7 +155,7 @@ export default function ThemeTab({ data, updateData, level }: any) {
                   </div>
                 </div>
                 <div>
-                  {isLocked ? '🔒' : isSelected ? '✅' : null}
+                  {frameStatusIndicator}
                 </div>
               </button>
             );
