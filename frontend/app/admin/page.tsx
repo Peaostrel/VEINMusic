@@ -59,7 +59,7 @@ function getAchField<K extends keyof Achievement>(
     editingAch: Achievement | null,
     newAch: Omit<Achievement, 'id'>,
     field: K
-): Achievement[K] | (Omit<Achievement, 'id'>)[K] {
+): any {
     return editingAch ? editingAch[field] : (newAch as any)[field];
 }
 
@@ -86,12 +86,12 @@ interface AchFormProps {
     setNewAch: (a: Omit<Achievement, 'id'>) => void;
     emojiPickerOpen: boolean;
     setEmojiPickerOpen: (v: boolean) => void;
-    emojiRef: React.RefObject<HTMLDivElement>;
+    emojiRef: React.RefObject<HTMLDivElement | null>;
     onSave: () => void;
     onCreate: () => void;
 }
 
-function AchievementForm({ editingAch, newAch, setEditingAch, setNewAch, emojiPickerOpen, setEmojiPickerOpen, emojiRef, onSave, onCreate }: AchFormProps) {
+function AchievementForm({ editingAch, newAch, setEditingAch, setNewAch, emojiPickerOpen, setEmojiPickerOpen, emojiRef, onSave, onCreate }: Readonly<AchFormProps>) {
     const patch = (p: Partial<Achievement>) => patchAch(editingAch, newAch, setEditingAch, setNewAch, p);
     const val = <K extends keyof Achievement>(field: K) => getAchField(editingAch, newAch, field);
     const ruleType = val('rule_type') as string;
@@ -115,16 +115,14 @@ function AchievementForm({ editingAch, newAch, setEditingAch, setNewAch, emojiPi
 
             <div className="relative" ref={emojiRef}>
                 <label className="text-xs text-red-500/70 font-mono mb-1.5 block">Иконка (эмодзи)</label>
-                <div
-                    className="w-full bg-[#1a1010] border border-red-900/30 rounded-lg px-4 py-2.5 text-white cursor-pointer hover:border-red-500 transition shadow-inner flex items-center justify-between"
+                <button
+                    type="button"
+                    className="w-full bg-[#1a1010] border border-red-900/30 rounded-lg px-4 py-2.5 text-white cursor-pointer hover:border-red-500 transition shadow-inner flex items-center justify-between text-left font-normal"
                     onClick={() => setEmojiPickerOpen(!emojiPickerOpen)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setEmojiPickerOpen(!emojiPickerOpen); }}
                 >
                     <span className="text-xl leading-none">{val('icon') as string || 'Выбрать...'}</span>
                     <span className="text-xs text-gray-500">▼</span>
-                </div>
+                </button>
                 {emojiPickerOpen && (
                     <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-[#1a1010] border border-red-900/50 rounded-lg p-3 shadow-2xl z-50 grid grid-cols-8 gap-2 max-h-[200px] overflow-y-auto scrollbar-thin">
                         {EMOJI_LIST.map((emoji) => (

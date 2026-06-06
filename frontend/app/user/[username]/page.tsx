@@ -178,6 +178,23 @@ const COMMON_COUNTRIES: { [key: string]: string } = {
   'canada': 'CA',
   'australia': 'AU'
 };
+function getCountryCode(countryName: string, countries: any[]): string | null {
+  if (!countryName) return null;
+  const cleaned = countryName.trim().toLowerCase();
+  
+  // 1. Поиск по словарю популярных стран
+  if (COMMON_COUNTRIES[cleaned]) {
+    return COMMON_COUNTRIES[cleaned];
+  }
+  
+  // 2. Поиск по загруженному списку стран (если restcountries ответил)
+  const found = countries.find(c => c.name.toLowerCase() === cleaned);
+  if (found) {
+    return found.code;
+  }
+  
+  return null;
+}
 
 export default function Profile() {
   const username = useParams()?.username;
@@ -195,29 +212,19 @@ export default function Profile() {
   const [isLogged, setIsLogged] = useState(false);
   const [countries, setCountries] = useState<any[]>([]);
 
-  const getCountryCode = (countryName: string): string | null => {
-    if (!countryName) return null;
-    const cleaned = countryName.trim().toLowerCase();
-    
-    // 1. Поиск по словарю популярных стран
-    if (COMMON_COUNTRIES[cleaned]) {
-      return COMMON_COUNTRIES[cleaned];
-    }
-    
-    // 2. Поиск по загруженному списку стран (если restcountries ответил)
-    const found = countries.find(c => c.name.toLowerCase() === cleaned);
-    if (found) {
-      return found.code;
-    }
-    
-    return null;
-  };
   const [error, setError] = useState('');
   const [recs, setRecs] = useState<any[]>([]);
   const [wrapped, setWrapped] = useState<any>(null);
   const [mood, setMood] = useState<any>(null);
   const [accentColor, setAccentColor] = useState<string>('');
   const wsRef = useRef<WebSocket | null>(null);
+
+  const handleNewScrobble = (track: any) => {
+    setData((prev: any) => {
+      const newHistory = [track, ...prev.history.filter((h: any) => h.id !== track.id)].slice(0, 50);
+      return { ...prev, history: newHistory };
+    });
+  };
 
   useEffect(() => {
     fetch('https://restcountries.com/v3.1/all?fields=name,translations,cca2,flag')
@@ -320,10 +327,7 @@ export default function Profile() {
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
       if (msg.type === 'NEW_SCROBBLE') {
-        setData((prev: any) => {
-          const newHistory = [msg.track, ...prev.history.filter((h: any) => h.id !== msg.track.id)].slice(0, 50);
-          return { ...prev, history: newHistory };
-        });
+        handleNewScrobble(msg.track);
         checkNotifications();
       } else if (msg.type === 'SYNC_INVITE') {
         if (confirm(`Пользователь ${msg.from} хочет слушать музыку вместе! Перейти к нему?`)) {
@@ -417,7 +421,7 @@ export default function Profile() {
             try {
                 const err = await res.json();
                 errorMessage = err.detail || errorMessage;
-            } catch (parseErr) {
+            } catch {
                 errorMessage = `Ошибка сервера (${res.status})`;
             }
             alert(`Ошибка: ${errorMessage}`);
@@ -464,6 +468,13 @@ export default function Profile() {
     </div>
   );
 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+  const favoriteArtistQuery = u.favorite_artist ? `${u.favorite_artist} ` : '';
+  const favoriteAlbumSearchQuery = `${favoriteArtistQuery}${u.favorite_album || ''}`.trim();
+  const favoriteAlbumRedirectUrl = u.favorite_album_url && u.favorite_album_url !== '#'
+    ? u.favorite_album_url
+    : `${API_URL}/api/redirect?source=yandex&type=album&q=${encodeURIComponent(favoriteAlbumSearchQuery)}`;
+
   const displayedAchs = u.achievements?.filter((a: any) => a.is_displayed !== false) || [];
 
   return (
@@ -505,9 +516,9 @@ export default function Profile() {
       </div>
 
       {showWrapped && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" role="dialog" aria-modal="true">
-          <button className="absolute inset-0 w-full h-full cursor-default" aria-label="Закрыть" onClick={() => setShowWrapped(false)} />
-          <div className="bg-[#1a1a1a] rounded-2xl w-[400px] h-[600px] shadow-2xl overflow-hidden relative border border-white/10 p-6 flex flex-col justify-between z-10" onClick={e => e.stopPropagation()}>
+        <dialog open className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm border-0 bg-transparent outline-none w-full h-full">
+          <button type="button" className="absolute inset-0 w-full h-full cursor-default border-none bg-transparent outline-none" aria-label="Закрыть" onClick={() => setShowWrapped(false)} />
+          <div className="bg-[#1a1a1a] rounded-2xl w-[400px] h-[600px] shadow-2xl overflow-hidden relative border border-white/10 p-6 flex flex-col justify-between z-10">
             <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-[var(--accent)]/20 to-transparent opacity-50 z-0 pointer-events-none"></div>
             <div className="z-10 text-center relative">
               <div className={`w-24 h-24 mx-auto bg-[#333] rounded-full overflow-hidden border-4 border-[var(--accent)] shadow-[0_0_20px_var(--accent-glow)] mb-4`}>
@@ -518,7 +529,7 @@ export default function Profile() {
             </div>
             <div className="z-10 bg-[#121212]/80 p-4 rounded-xl border border-white/5 backdrop-blur-md">
               <h3 className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-3">Любимые артисты</h3>
-              {data.stats.top_artists?.slice(0, 3).map((a: any, i: number) => (
+              {data.stats.top_artists?.slice(0, 3).map((a: any) => (
                 <div key={a.artist} className="flex justify-between items-center mb-2 border-l-2 border-[var(--accent)] pl-2">
                   <span className="font-bold truncate text-sm text-white">{a.artist}</span>
                   <span className="text-xs text-gray-400 shrink-0">{a.plays} plays</span>
@@ -527,19 +538,19 @@ export default function Profile() {
             </div>
             <div className="z-10 text-center text-xs text-gray-500 mt-4">
               Сделай скриншот и закинь в сторис! <br />
-              <button onClick={() => setShowWrapped(false)} className="text-[var(--accent-text)] mt-2 hover:underline font-bold">Закрыть</button>
+              <button type="button" onClick={() => setShowWrapped(false)} className="text-[var(--accent-text)] mt-2 hover:underline font-bold border-none bg-transparent outline-none">Закрыть</button>
             </div>
           </div>
-        </div>
+        </dialog>
       )}
 
       {followModal.isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" role="dialog" aria-modal="true">
-          <button className="absolute inset-0 w-full h-full cursor-default" aria-label="Закрыть" onClick={() => setFollowModal({ isOpen: false, type: '', title: '', users: [], loading: false })} />
-          <div className="bg-[#1a1a1a] rounded-2xl w-[400px] max-h-[80vh] shadow-2xl overflow-hidden relative border border-white/10 p-0 flex flex-col" onClick={e => e.stopPropagation()}>
+        <dialog open className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm border-0 bg-transparent outline-none w-full h-full">
+          <button type="button" className="absolute inset-0 w-full h-full cursor-default border-none bg-transparent outline-none" aria-label="Закрыть" onClick={() => setFollowModal({ isOpen: false, type: '', title: '', users: [], loading: false })} />
+          <div className="bg-[#1a1a1a] rounded-2xl w-[400px] max-h-[80vh] shadow-2xl overflow-hidden relative border border-white/10 p-0 flex flex-col">
             <div className="p-4 border-b border-white/5 flex justify-between items-center bg-[#121212]">
               <h3 className="text-lg font-black text-[var(--accent-text)] uppercase tracking-wider">{followModal.title}</h3>
-              <button onClick={() => setFollowModal({ isOpen: false, type: '', title: '', users: [], loading: false })} className="text-gray-500 hover:text-white transition-colors text-xl font-black">✕</button>
+              <button type="button" onClick={() => setFollowModal({ isOpen: false, type: '', title: '', users: [], loading: false })} className="text-gray-500 hover:text-white transition-colors text-xl font-black border-none bg-transparent outline-none">✕</button>
             </div>
             <div className="overflow-y-auto p-2 custom-scrollbar flex-grow bg-[#121212]/50 backdrop-blur-sm">
               {followModal.loading ? (
@@ -548,24 +559,30 @@ export default function Profile() {
                 <div className="text-center text-gray-500 py-10 font-medium">Тут пока пусто.</div>
               ) : (
                 <ul className="space-y-1">
-                  {followModal.users.map((followerUser: any, idx: number) => (
-                    <li key={followerUser.username} onClick={() => { setFollowModal({ isOpen: false, type: '', title: '', users: [], loading: false }); router.push(`/user/${followerUser.username}`); }} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl cursor-pointer transition-colors group border border-transparent hover:border-white/5">
-                      <img src={followerUser.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${followerUser.username}&backgroundColor=transparent`} className="w-10 h-10 rounded-full bg-black object-cover shrink-0 border border-white/10" alt={followerUser.display_name} onError={(e) => { e.currentTarget.src = `https://api.dicebear.com/9.x/micah/svg?seed=${followerUser.username}&backgroundColor=transparent`; }} />
-                      <div className="truncate flex-grow">
-                        <div className="font-bold text-white text-sm truncate flex items-center gap-1 group-hover:text-[var(--accent-text)] transition-colors">
-                          {followerUser.display_name}
-                          <VerifiedBadge role={followerUser.role} isVerified={followerUser.is_verified} sizeClass="w-3.5 h-3.5" />
-                          <LvlBadge level={followerUser.level} />
+                  {followModal.users.map((followerUser: any) => (
+                    <li key={followerUser.username}>
+                      <button 
+                        type="button" 
+                        onClick={() => { setFollowModal({ isOpen: false, type: '', title: '', users: [], loading: false }); router.push(`/user/${followerUser.username}`); }} 
+                        className="w-full flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl cursor-pointer transition-colors group border border-transparent hover:border-white/5 text-left font-normal bg-transparent border-none outline-none block"
+                      >
+                        <img src={followerUser.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${followerUser.username}&backgroundColor=transparent`} className="w-10 h-10 rounded-full bg-black object-cover shrink-0 border border-white/10" alt={followerUser.display_name} onError={(e) => { e.currentTarget.src = `https://api.dicebear.com/9.x/micah/svg?seed=${followerUser.username}&backgroundColor=transparent`; }} />
+                        <div className="truncate flex-grow">
+                          <div className="font-bold text-white text-sm truncate flex items-center gap-1 group-hover:text-[var(--accent-text)] transition-colors">
+                            {followerUser.display_name}
+                            <VerifiedBadge role={followerUser.role} isVerified={followerUser.is_verified} sizeClass="w-3.5 h-3.5" />
+                            <LvlBadge level={followerUser.level} />
+                          </div>
+                          <div className="text-xs text-gray-500 truncate">@{followerUser.username}</div>
                         </div>
-                        <div className="text-xs text-gray-500 truncate">@{followerUser.username}</div>
-                      </div>
+                      </button>
                     </li>
                   ))}
                 </ul>
               )}
             </div>
           </div>
-        </div>
+        </dialog>
       )}
 
       <div className="flex flex-wrap justify-end gap-4 mb-4 pt-4">
@@ -772,7 +789,7 @@ export default function Profile() {
                 const parts = u.location.split(',').map((s: string) => s.trim());
                 const countryName = parts[0] || '';
                 const cityName = parts[1] || '';
-                const code = getCountryCode(countryName);
+                const code = getCountryCode(countryName, countries);
                 const flagUrl = code ? `https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/${code.toLowerCase()}.svg` : null;
                 
                 return (
@@ -845,7 +862,7 @@ export default function Profile() {
               )}
 
               {u.favorite_album && (
-                <a href={u.favorite_album_url && u.favorite_album_url !== '#' ? u.favorite_album_url : `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/redirect?source=yandex&type=album&q=${encodeURIComponent(((u.favorite_artist ? u.favorite_artist + ' ' : '') + u.favorite_album).trim())}`} target="_blank" rel="noreferrer" className="bg-[#121212]/80 p-3 pr-6 rounded-xl border border-white/5 hover:border-[var(--accent)] group transition-all shadow-md flex items-center gap-4 w-max max-w-full">
+                <a href={favoriteAlbumRedirectUrl} target="_blank" rel="noreferrer" className="bg-[#121212]/80 p-3 pr-6 rounded-xl border border-white/5 hover:border-[var(--accent)] group transition-all shadow-md flex items-center gap-4 w-max max-w-full">
                   {u.favorite_album_cover ? (
                     <img src={u.favorite_album_cover} className="w-14 h-14 rounded-md object-cover group-hover:scale-110 transition-transform duration-500 shadow-inner shrink-0" alt="Album" />
                   ) : (
@@ -870,8 +887,8 @@ export default function Profile() {
             <div className="bg-[#121212]/50 backdrop-blur-md p-6 rounded-2xl border border-[var(--accent)]/20">
               <h2 className="text-xl font-black mb-6 flex items-center gap-3 text-[var(--accent-text)]"><span className="text-2xl">✨</span> Рекомендации</h2>
               <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-                {recs.map((r, i) => (
-                  <div key={i} className="min-w-[150px] bg-white/5 p-3 rounded-xl border border-white/5 hover:border-[var(--accent)] transition-all group">
+                {recs.map((r) => (
+                  <div key={r.artist} className="min-w-[150px] bg-white/5 p-3 rounded-xl border border-white/5 hover:border-[var(--accent)] transition-all group">
                     {r.cover_url ? (
                       <img src={r.cover_url} className="w-full aspect-square rounded-lg object-cover mb-3 group-hover:scale-105 transition-transform" alt="Artist" />
                     ) : (
@@ -892,73 +909,7 @@ export default function Profile() {
                 {data.history.map((item: any, idx: number) => {
                   const isLatest = idx === 0;
                   const isNowPlaying = isLatest && (item.is_playing || (new Date().getTime() - new Date(item.updated_at + 'Z').getTime() < 15 * 60 * 1000));
-
-                  return (
-                    <li key={item.id} className={`p-3 rounded-xl flex justify-between items-center transition-all duration-300 group relative ${isLatest ? 'bg-gradient-to-r from-white/10 to-transparent border-l-4 border-[var(--accent)] shadow-md' : 'bg-white/5 hover:bg-white/10 border border-transparent hover:border-white/5'}`}>
-                      <div className="flex items-center gap-4 pr-2 w-full min-w-0">
-                        <div className="w-12 h-12 rounded bg-black shrink-0 overflow-hidden shadow z-10 pointer-events-auto relative">
-                          {item.cover_url ? (
-                            <img src={item.cover_url} className="w-full h-full object-cover" alt={item.title} />
-                          ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-xl text-yellow-500/80 shadow-inner">🎵</div>
-                          )}
-                        </div>
-                        <div className="flex flex-col justify-center flex-grow min-w-[0] overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                          <div className="flex items-center gap-1.5 mb-0.5 w-max">
-                            <div className="shrink-0">{getPlatformIcon(item.source)}</div>
-                            <a href={getTrackUrl(item)} target="_blank" rel="noreferrer" className={`font-bold text-lg whitespace-nowrap hover:underline hover:text-[var(--accent-text)] transition-colors pointer-events-auto pr-4 ${isLatest ? 'text-[var(--accent-text)]' : 'text-white'}`}>
-                              {item.title}
-                            </a>
-                          </div>
-
-                          <div className="text-gray-300 text-xs whitespace-nowrap pointer-events-auto relative z-10 w-max pr-4">
-                            {item.artist.split(',').map((a: string, i: number, arr: string[]) => (
-                              <span key={i}>
-                                <a href={getArtistUrl(a.trim(), item.source)} target="_blank" rel="noreferrer" className="hover:text-[var(--accent-text)] hover:underline cursor-pointer transition-colors relative z-10 font-medium">
-                                  {a.trim()}
-                                </a>
-                                {i < arr.length - 1 ? ', ' : ''}
-                              </span>
-                            ))}
-                          </div>
-
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
-                        {isNowPlaying ? (
-                          <div className="flex items-center gap-2 bg-[#121212]/80 px-3 py-1.5 rounded-md border border-white/5 shadow-md">
-                            <div className="flex items-center gap-1.5">
-                              <span className={`text-[10px] font-black uppercase tracking-widest ${item.is_playing ? 'text-[var(--accent-text)]' : 'text-gray-500'}`}>
-                                {item.is_playing ? 'Сейчас' : 'Пауза'}
-                              </span>
-                              <LiveTimer listenedSec={item.listened_sec} isPlaying={item.is_playing} updatedAt={item.updated_at} />
-                            </div>
-                            <div className="flex items-end gap-[2px] h-3 w-3 ml-1">
-                              <div className={`w-[3px] bg-[var(--accent)] h-full rounded-t-sm ${item.is_playing ? 'animate-[bounce_1s_infinite]' : 'opacity-40'}`}></div>
-                              <div className={`w-[3px] bg-[var(--accent)] h-2/3 rounded-t-sm ${item.is_playing ? 'animate-[bounce_1s_infinite_0.2s]' : 'opacity-40'}`}></div>
-                              <div className={`w-[3px] bg-[var(--accent)] h-4/5 rounded-t-sm ${item.is_playing ? 'animate-[bounce_1s_infinite_0.4s]' : 'opacity-40'}`}></div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-end gap-1">
-                            <span className="bg-black/50 text-[10px] px-2 py-1 rounded text-gray-300 border border-white/5 font-mono">
-                              {new Date(item.time + 'Z').toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                            {item.is_imported ? (
-                              <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider bg-white/5 px-1.5 py-0.5 rounded border border-white/5 shadow-inner">
-                                Импортировано
-                              </span>
-                            ) : (item.listened_sec || 0) > 0 && (
-                              <span className="text-[9px] text-gray-400 font-medium uppercase tracking-wider">
-                                Прослушано: {Math.floor(item.listened_sec / 60).toString().padStart(2, '0')}:{(item.listened_sec % 60).toString().padStart(2, '0')}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </li>
-                  );
+                  return <HistoryItem key={item.id} item={item} isLatest={isLatest} isNowPlaying={isNowPlaying} />;
                 })}
               </ul>
             )}
@@ -1055,5 +1006,82 @@ export default function Profile() {
         </div>
       </div>
     </div>
+  );
+}
+
+function HistoryItem({ 
+  item, 
+  isLatest, 
+  isNowPlaying 
+}: { 
+  item: any; 
+  isLatest: boolean; 
+  isNowPlaying: boolean; 
+}) {
+  return (
+    <li className={`p-3 rounded-xl flex justify-between items-center transition-all duration-300 group relative ${isLatest ? 'bg-gradient-to-r from-white/10 to-transparent border-l-4 border-[var(--accent)] shadow-md' : 'bg-white/5 hover:bg-white/10 border border-transparent hover:border-white/5'}`}>
+      <div className="flex items-center gap-4 pr-2 w-full min-w-0">
+        <div className="w-12 h-12 rounded bg-black shrink-0 overflow-hidden shadow z-10 pointer-events-auto relative">
+          {item.cover_url ? (
+            <img src={item.cover_url} className="w-full h-full object-cover" alt={item.title} />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-xl text-yellow-500/80 shadow-inner">🎵</div>
+          )}
+        </div>
+        <div className="flex flex-col justify-center flex-grow min-w-[0] overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <div className="flex items-center gap-1.5 mb-0.5 w-max">
+            <div className="shrink-0">{getPlatformIcon(item.source)}</div>
+            <a href={getTrackUrl(item)} target="_blank" rel="noreferrer" className={`font-bold text-lg whitespace-nowrap hover:underline hover:text-[var(--accent-text)] transition-colors pointer-events-auto pr-4 ${isLatest ? 'text-[var(--accent-text)]' : 'text-white'}`}>
+              {item.title}
+            </a>
+          </div>
+
+          <div className="text-gray-300 text-xs whitespace-nowrap pointer-events-auto relative z-10 w-max pr-4">
+            {item.artist.split(',').map((a: string, i: number, arr: string[]) => (
+              <span key={i}>
+                <a href={getArtistUrl(a.trim(), item.source)} target="_blank" rel="noreferrer" className="hover:text-[var(--accent-text)] hover:underline cursor-pointer transition-colors relative z-10 font-medium">
+                  {a.trim()}
+                </a>
+                {i < arr.length - 1 ? ', ' : ''}
+              </span>
+            ))}
+          </div>
+
+        </div>
+      </div>
+
+      <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
+        {isNowPlaying ? (
+          <div className="flex items-center gap-2 bg-[#121212]/80 px-3 py-1.5 rounded-md border border-white/5 shadow-md">
+            <div className="flex items-center gap-1.5">
+              <span className={`text-[10px] font-black uppercase tracking-widest ${item.is_playing ? 'text-[var(--accent-text)]' : 'text-gray-500'}`}>
+                {item.is_playing ? 'Сейчас' : 'Пауза'}
+              </span>
+              <LiveTimer listenedSec={item.listened_sec} isPlaying={item.is_playing} updatedAt={item.updated_at} />
+            </div>
+            <div className="flex items-end gap-[2px] h-3 w-3 ml-1">
+              <div className={`w-[3px] bg-[var(--accent)] h-full rounded-t-sm ${item.is_playing ? 'animate-[bounce_1s_infinite]' : 'opacity-40'}`}></div>
+              <div className={`w-[3px] bg-[var(--accent)] h-2/3 rounded-t-sm ${item.is_playing ? 'animate-[bounce_1s_infinite_0.2s]' : 'opacity-40'}`}></div>
+              <div className={`w-[3px] bg-[var(--accent)] h-4/5 rounded-t-sm ${item.is_playing ? 'animate-[bounce_1s_infinite_0.4s]' : 'opacity-40'}`}></div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-end gap-1">
+            <span className="bg-black/50 text-[10px] px-2 py-1 rounded text-gray-300 border border-white/5 font-mono">
+              {new Date(item.time + 'Z').toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+            {item.is_imported ? (
+              <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider bg-white/5 px-1.5 py-0.5 rounded border border-white/5 shadow-inner">
+                Импортировано
+              </span>
+            ) : (item.listened_sec || 0) > 0 && (
+              <span className="text-[9px] text-gray-400 font-medium uppercase tracking-wider">
+                Прослушано: {Math.floor(item.listened_sec / 60).toString().padStart(2, '0')}:{(item.listened_sec % 60).toString().padStart(2, '0')}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    </li>
   );
 }

@@ -10,39 +10,18 @@ export default function Auth() {
   const [step, setStep] = useState('form'); 
   const [apiKey, setApiKey] = useState('');
   const [loading, setLoading] = useState(false);
-  const [_hasExtension, setHasExtension] = useState(false);
-  const _router = useRouter();
-
   useEffect(() => {
     const storedUser = localStorage.getItem('username');
     if (storedUser) {
       setUsername(storedUser);
       setStep('success');
-      // Load api_key for already-logged-in user
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
       fetch(`${API_URL}/api/user/${storedUser}`, { credentials: 'include' })
         .then(r => r.json())
         .then(d => { if (d.api_key) setApiKey(d.api_key); })
-        .catch(() => {});
+        .catch(console.error);
     }
   }, []);
-
-  // 2. Мониторим расширение
-  useEffect(() => {
-    if (step === 'success') {
-      const checkExt = () => {
-        if (document.documentElement.dataset.veinExtension === 'installed') {
-          setHasExtension(true);
-        } else {
-          setHasExtension(false);
-        }
-      };
-      checkExt();
-      const interval = setInterval(checkExt, 1000);
-      return () => clearInterval(interval);
-    }
-  }, [step]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -138,8 +117,9 @@ export default function Auth() {
                 className="w-full bg-[var(--accent)] text-[#121212] font-black py-4 rounded-xl hover:scale-[1.02] transition-transform shadow-[0_0_15px_var(--accent-glow)] disabled:opacity-50 disabled:hover:scale-100 mt-4 text-lg"
               >
                 {(() => {
-                  const submitLabel = loading ? 'ПОДОЖДИ...' : isLogin ? 'ВОЙТИ' : 'СОЗДАТЬ АККАУНТ';
-                  return submitLabel;
+                  if (loading) return 'ПОДОЖДИ...';
+                  if (isLogin) return 'ВОЙТИ';
+                  return 'СОЗДАТЬ АККАУНТ';
                 })()}
               </button>
             </form>

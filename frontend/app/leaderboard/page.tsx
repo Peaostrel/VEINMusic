@@ -36,73 +36,76 @@ export default function Leaderboard() {
           <div className="text-center text-gray-500 py-10 font-bold">Никто еще не слушал музыку. Будь первым!</div>
         ) : (
           <ul className="space-y-3">
-            {users.map((u, idx) => {
-              const isTop3 = idx < 3;
-              let rankCrown: string;
-              if (idx === 0) rankCrown = '👑';
-              else if (idx === 1) rankCrown = '🥈';
-              else if (idx === 2) rankCrown = '🥉';
-              else rankCrown = `#${idx + 1}`;
-
-              const isHighLevel = u.level >= 50;
-              const isRainbow = u.theme === 'rainbow';
-              
-              let glowColor = 'transparent';
-              if (isHighLevel && !isRainbow) {
-                  glowColor = u.theme?.startsWith('#') ? u.theme : ((THEMES as any)[u.theme]?.main || '#ffcc00');
-              }
-
-              let rankClass = 'text-gray-500';
-              if (idx === 0) rankClass = 'text-3xl drop-shadow-[0_0_10px_#ffcc00]';
-              else if (idx === 1) rankClass = 'text-2xl drop-shadow-[0_0_10px_#ccc]';
-              else if (idx === 2) rankClass = 'text-xl drop-shadow-[0_0_10px_#cd7f32]';
-
-              return (
-                <li key={u.username} 
-                    className={`relative p-4 rounded-2xl flex items-center justify-between transition-all duration-300 group
-                    ${isTop3 ? 'bg-white/10 border-white/20' : 'bg-white/5 border-transparent'} border
-                    hover:scale-[1.02] hover:bg-white/10
-                    ${isRainbow && isHighLevel ? 'theme-rainbow' : ''}`}
-                    style={isHighLevel && !isRainbow ? { boxShadow: `0 0 15px ${glowColor}30`, borderColor: `${glowColor}50` } : {}}
-                >
-                  <div className="flex items-center gap-4 w-full min-w-0 pr-4">
-                    <div className={`font-black w-8 text-center shrink-0 ${rankClass}`}>
-                        {rankCrown}
-                    </div>
-                    
-                    <div className="relative shrink-0">
-                        <img 
-                            src={u.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${u.username}&backgroundColor=transparent`} 
-                            className={`rounded-full object-cover bg-black shadow-md border-2 transition-transform duration-300 group-hover:rotate-6
-                            ${isTop3 ? 'w-14 h-14' : 'w-10 h-10'}
-                            ${isHighLevel && !isRainbow ? '' : 'border-transparent'}`}
-                            style={isHighLevel && !isRainbow ? { borderColor: glowColor } : {}}
-                            onError={(e) => { e.currentTarget.src = `https://api.dicebear.com/9.x/micah/svg?seed=${u.username}&backgroundColor=transparent`; }}
-                            alt="avatar" 
-                        />
-                    </div>
-                    
-                    <div className="truncate">
-                        <Link href={`/user/${u.username}`} className="font-black text-white text-lg hover:text-[var(--accent-text)] transition-colors truncate flex items-center">
-                            {u.display_name || u.username}
-                            <VerifiedBadge role={u.role} isVerified={u.is_verified} sizeClass="w-5 h-5" />
-                            <LvlBadge level={u.level} />
-                        </Link>
-                        <div className="text-gray-400 text-xs font-medium mt-0.5 truncate">@{u.username}</div>
-                    </div>
-                  </div>
-
-                  <div className="shrink-0 flex flex-col items-end">
-                      <div className="bg-[#1a1a1a] text-[var(--accent-text)] font-black px-3 py-1.5 rounded-lg border border-white/5 shadow-inner">
-                          {u.total_xp.toLocaleString('ru-RU')} XP
-                      </div>
-                  </div>
-                </li>
-              );
-            })}
+            {users.map((u, idx) => (
+              <LeaderboardItem key={u.username} u={u} idx={idx} />
+            ))}
           </ul>
         )}
       </div>
     </div>
+  );
+}
+
+function LeaderboardItem({ u, idx }: { u: any, idx: number }) {
+  const isTop3 = idx < 3;
+  let rankCrown: string;
+  if (idx === 0) rankCrown = '👑';
+  else if (idx === 1) rankCrown = '🥈';
+  else if (idx === 2) rankCrown = '🥉';
+  else rankCrown = `#${idx + 1}`;
+
+  const isHighLevel = u.level >= 50;
+  const isRainbow = u.theme === 'rainbow';
+  
+  let glowColor = 'transparent';
+  if (isHighLevel && !isRainbow) {
+      glowColor = u.theme?.startsWith('#') ? u.theme : ((THEMES as any)[u.theme]?.main || '#ffcc00');
+  }
+
+  let rankClass = 'text-gray-500';
+  if (idx === 0) rankClass = 'text-3xl drop-shadow-[0_0_10px_#ffcc00]';
+  else if (idx === 1) rankClass = 'text-2xl drop-shadow-[0_0_10px_#ccc]';
+  else if (idx === 2) rankClass = 'text-xl drop-shadow-[0_0_10px_#cd7f32]';
+
+  return (
+    <li className={`relative p-4 rounded-2xl flex items-center justify-between transition-all duration-300 group
+        ${isTop3 ? 'bg-white/10 border-white/20' : 'bg-white/5 border-transparent'} border
+        hover:scale-[1.02] hover:bg-white/10
+        ${isRainbow && isHighLevel ? 'theme-rainbow' : ''}`}
+        style={isHighLevel && !isRainbow ? { boxShadow: `0 0 15px ${glowColor}30`, borderColor: `${glowColor}50` } : {}}
+    >
+      <div className="flex items-center gap-4 w-full min-w-0 pr-4">
+        <div className={`font-black w-8 text-center shrink-0 ${rankClass}`}>
+            {rankCrown}
+        </div>
+        
+        <div className="relative shrink-0">
+            <img 
+                src={u.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${u.username}&backgroundColor=transparent`} 
+                className={`rounded-full object-cover bg-black shadow-md border-2 transition-transform duration-300 group-hover:rotate-6
+                ${isTop3 ? 'w-14 h-14' : 'w-10 h-10'}
+                ${isHighLevel && !isRainbow ? '' : 'border-transparent'}`}
+                style={isHighLevel && !isRainbow ? { borderColor: glowColor } : {}}
+                onError={(e) => { e.currentTarget.src = `https://api.dicebear.com/9.x/micah/svg?seed=${u.username}&backgroundColor=transparent`; }}
+                alt="avatar" 
+            />
+        </div>
+        
+        <div className="truncate">
+            <Link href={`/user/${u.username}`} className="font-black text-white text-lg hover:text-[var(--accent-text)] transition-colors truncate flex items-center">
+                {u.display_name || u.username}
+                <VerifiedBadge role={u.role} isVerified={u.is_verified} sizeClass="w-5 h-5" />
+                <LvlBadge level={u.level} />
+            </Link>
+            <div className="text-gray-400 text-xs font-medium mt-0.5 truncate">@{u.username}</div>
+        </div>
+      </div>
+
+      <div className="shrink-0 flex flex-col items-end">
+          <div className="bg-[#1a1a1a] text-[var(--accent-text)] font-black px-3 py-1.5 rounded-lg border border-white/5 shadow-inner">
+              {u.total_xp.toLocaleString('ru-RU')} XP
+          </div>
+      </div>
+    </li>
   );
 }

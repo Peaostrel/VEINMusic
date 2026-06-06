@@ -281,15 +281,20 @@ export default function Navbar() {
               {isSearchOpen && searchResults.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-2 bg-[#1e1e1e]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
                       {searchResults.map((u) => (
-                          <div key={u.username} role="button" tabIndex={0} onClick={() => { setIsSearchOpen(false); setSearchQuery(''); router.push(`/user/${u.username}`); }} onKeyDown={(e) => { if (e.key === 'Enter') { setIsSearchOpen(false); setSearchQuery(''); router.push(`/user/${u.username}`); } }} className="flex items-center gap-3 p-3 hover:bg-white/10 cursor-pointer transition-colors border-b border-white/5 last:border-0">
+                          <button 
+                              key={u.username} 
+                              type="button" 
+                              onClick={() => { setIsSearchOpen(false); setSearchQuery(''); router.push(`/user/${u.username}`); }} 
+                              className="w-full flex items-center gap-3 p-3 hover:bg-white/10 cursor-pointer transition-colors border-b border-white/5 last:border-0 text-left font-normal bg-transparent border-none outline-none block"
+                          >
                               <div className="w-9 h-9 rounded-full overflow-hidden bg-black shrink-0"><img src={u.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${u.username}&backgroundColor=transparent`} alt="Avatar" className="w-full h-full object-cover" /></div>
                               <div className="truncate flex-grow">
                                   <div className="font-bold text-white text-sm truncate flex items-center gap-1">
                                       {u.display_name} <VerifiedBadge role={u.role} isVerified={u.is_verified} sizeClass="w-3.5 h-3.5" /><LvlBadge level={u.level} />
                                   </div>
                                   <div className="text-xs text-gray-500 truncate">@{u.username}</div>
-                                  </div>
-                          </div>
+                              </div>
+                          </button>
                       ))}
                   </div>
               )}

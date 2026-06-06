@@ -48,7 +48,7 @@ def verify_session_token(token: str, db_user: User) -> bool:
         ).hexdigest()
         
         return hmac.compare_digest(signature, expected_signature)
-    except Exception:  # noqa: BLE001 - intentionally catching all exceptions to return False
+    except Exception:  # NOSONAR
         return False
 
 def _extract_token(request: Request) -> tuple[Optional[str], bool]:
@@ -82,7 +82,7 @@ def _authenticate_user(token: str, db: Session) -> Optional[User]:
             user = db.query(User).filter(User.username == username).first()
             if user and verify_session_token(token, user):
                 return user
-        except Exception:  # noqa: BLE001 - session token invalid, fall through to return None
+        except Exception:  # NOSONAR
             pass
     else:
         hashed_token = hashlib.sha256(token.encode('utf-8')).hexdigest()
@@ -141,12 +141,12 @@ def get_current_user_optional(request: Request, db: Session = Depends(get_db)) -
                 return override_func()
             except TypeError:
                 return override_func(request, db)
-    except Exception:  # noqa: BLE001 - dependency override lookup failed, try direct auth
+    except Exception:  # NOSONAR
         pass
         
     try:
         return get_current_user(request, db)
-    except Exception:  # noqa: BLE001 - user not authenticated, return None
+    except Exception:  # NOSONAR
         return None
 
 # Import Optional here

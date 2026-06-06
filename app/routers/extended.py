@@ -343,7 +343,7 @@ def get_user_info(username: str, request: Request, db: Annotated[Session, Depend
     current_u = None
     try:
         current_u = get_current_user(request, db)
-    except Exception:  # noqa: BLE001 - user may not be authenticated, fall through
+    except Exception:  # NOSONAR
         pass
     is_owner = current_u and current_u.id == user.id
     
@@ -588,7 +588,7 @@ def get_global_feed(db: Annotated[Session, Depends(get_db)]):
 def _get_activity_stats(db: Session, base_filter) -> tuple[dict[str, int], dict[str, int], dict[str, int]]:
     try:
         is_postgres = db.get_bind().dialect.name == "postgresql"
-    except Exception:  # noqa: BLE001 - fallback to postgres if dialect detection fails
+    except Exception:  # NOSONAR
         is_postgres = True
         
     if is_postgres:
@@ -782,7 +782,7 @@ def get_comments(scrobble_id: int, db: Annotated[Session, Depends(get_db)]):
 @router.get("/api/follow-stats/{viewer}/{profile}", responses={404: {"description": "User not found"}})
 def get_follow_stats(viewer: str, profile: str, db: Annotated[Session, Depends(get_db)]):
     target = db.query(User).filter(User.username == profile).first()
-    if not target: raise HTTPException(404)
+    if not target: raise HTTPException(status_code=404, detail="User not found")
     followers_count = db.query(Follow).filter(Follow.following_id == target.id).count()
     following_count = db.query(Follow).filter(Follow.follower_id == target.id).count()
     is_following = False
@@ -791,7 +791,7 @@ def get_follow_stats(viewer: str, profile: str, db: Annotated[Session, Depends(g
         if viewer_user: is_following = db.query(Follow).filter(Follow.follower_id == viewer_user.id, Follow.following_id == target.id).first() is not None
     return {"followers": followers_count, "following": following_count, "is_following": is_following}
 
-@router.get("/api/follow-stats/{profile}")
+@router.get("/api/follow-stats/{profile}", responses={404: {"description": "User not found"}})
 def get_follow_stats_fallback(profile: str, db: Annotated[Session, Depends(get_db)]):
     return get_follow_stats("null", profile, db)
 
@@ -871,7 +871,7 @@ def get_leaderboard(db: Annotated[Session, Depends(get_db)]):
 
 
 # --- /api/redirect ---
-def _yandex_redirect_for_type(type: str, res: dict, q: str):
+def _yandex_redirect_for_type(type: str, res: dict):
     """Try to build a direct Yandex Music redirect from search results."""
     if type == "artist":
         items = res.get("artists", {}).get("results", [])
@@ -910,7 +910,7 @@ async def smart_redirect(source: str, type: str, q: str):
                 resp = await client.get(f"https://api.music.yandex.net/search?text={urllib.parse.quote(q)}&type=all&page=0", headers={'User-Agent': USER_AGENT_MOZILLA}, timeout=5)
                 if resp.status_code == 200:
                     res = resp.json().get("result", {})
-                    direct = _yandex_redirect_for_type(type, res, q)
+                    direct = _yandex_redirect_for_type(type, res)
                     if direct:
                         return direct
         except Exception as e:

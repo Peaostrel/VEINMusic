@@ -16,8 +16,9 @@ script.onload = function() {
 (document.head || document.documentElement).appendChild(script);
 
 // Слушаем сообщения от page_world.js и передаем их в ядро расширения
-window.addEventListener('message', (event) => {
-    if (event.source !== window || event.data?.type !== 'VEIN_SCROBBLE') return;
+globalThis.addEventListener('message', (event) => {
+    if (event.origin !== location.origin) return;
+    if (event.source !== globalThis || event.data?.type !== 'VEIN_SCROBBLE') return;
     
     chrome.runtime.sendMessage({ 
         type: 'SCROBBLE', 

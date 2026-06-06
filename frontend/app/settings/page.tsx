@@ -78,6 +78,15 @@ function filterCityName(n: string, cityQuery: string): boolean {
     return res.includes(q) || q.includes(res);
 }
 
+function processCities(d: any[], query: string): string[] {
+    const sorted = [...d].toSorted((a,b) => (b.importance || 0) - (a.importance || 0));
+    return Array.from(new Set(
+        sorted
+            .map((item: any) => extractCityName(item))
+            .filter((n: string) => filterCityName(n, query))
+    )).slice(0, 10);
+}
+
 function SettingsContent() {
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -130,13 +139,7 @@ function SettingsContent() {
           .then(d => { 
               if (!active) return;
               if (Array.isArray(d)) {
-                  const sorted = [...d].toSorted((a,b) => (b.importance || 0) - (a.importance || 0));
-                  const names = Array.from(new Set(
-                      sorted
-                          .map((item: any) => extractCityName(item))
-                          .filter((n: string) => filterCityName(n, data.city))
-                  ));
-                  setCities(names.slice(0, 10) as string[]);
+                  setCities(processCities(d, data.city));
               }
           })
           .catch(() => { if (active) setCities([]); });
@@ -224,7 +227,7 @@ function SettingsContent() {
           setTimeout(() => setStatus(''), 2000);
         } else setStatus('❌ Ошибка на сервере');
       }
-    } catch (e: any) { setStatus('❌ Ошибка сети'); }
+    } catch (e: any) { console.error(e); setStatus('❌ Ошибка сети'); }
     setCropImageSrc(null);
   };
   
@@ -377,7 +380,7 @@ function SettingsContent() {
       {cropImageSrc && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-4">
           <div className="relative w-full max-w-4xl h-[50vh] md:h-[70vh] bg-[#121212] rounded-xl overflow-hidden shadow-2xl border border-white/10">
-            <Cropper image={cropImageSrc} crop={crop} zoom={zoom} aspect={cropFieldTarget === 'coverUrl' ? 3 / 1 : 1 / 1} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={(_: any, cp: any) => setCroppedAreaPixels(cp)} />
+            <Cropper image={cropImageSrc} crop={crop} zoom={zoom} aspect={cropFieldTarget === 'coverUrl' ? 3 : 1} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={(_: any, cp: any) => setCroppedAreaPixels(cp)} />
           </div>
           <div className="flex gap-4 mt-6">
             <button type="button" onClick={() => setCropImageSrc(null)} className="px-6 py-3 rounded-lg font-bold text-white bg-white/10 hover:bg-white/20 transition-all border border-white/10">Отмена</button>

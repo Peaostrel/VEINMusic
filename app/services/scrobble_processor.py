@@ -158,7 +158,7 @@ def _handle_streak(db: Session, user: User):
             user.integration.last_streak_date = today_str
             db.commit()
 
-def _determine_is_new(db: Session, user: User, track: Track, last_scrobble, now, l_played_at, l_updated_at, progress_sec: int, is_playing: bool) -> tuple[bool, str | None]:
+def _determine_is_new(db: Session, track: Track, last_scrobble, now, l_played_at, l_updated_at, progress_sec: int) -> tuple[bool, str | None]:
     """Determine if a new scrobble should be created. Returns (is_new, early_return_status)."""
     if not last_scrobble or last_scrobble.track_id != track.id:
         if last_scrobble and last_scrobble.is_playing and (now - l_updated_at).total_seconds() < 1.0:
@@ -210,7 +210,7 @@ async def process_scrobble(db: Session, user: User, title: str, artist: str, cov
         l_played_at = None
         l_updated_at = None
 
-    is_new, early_return = _determine_is_new(db, user, track, last_scrobble, now, l_played_at, l_updated_at, progress_sec, is_playing)
+    is_new, early_return = _determine_is_new(db, track, last_scrobble, now, l_played_at, l_updated_at, progress_sec)
     if early_return:
         return early_return
 

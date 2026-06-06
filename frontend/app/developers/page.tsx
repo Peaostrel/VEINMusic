@@ -14,7 +14,7 @@ SyntaxHighlighter.registerLanguage('bash', bash);
 // CodeBlock component moved outside parent to avoid re-creation on each render
 interface CodeBlockProps { code: string; language: string; label: string; colorClass?: string; id: string; onCopy: (text: string, id: string) => void; copied: string; }
 
-function CodeBlock({ code, language, label, colorClass, id, onCopy, copied }: CodeBlockProps) {
+function CodeBlock({ code, language, label, colorClass, id, onCopy, copied }: Readonly<CodeBlockProps>) {
   return (
     <div className="mb-8 group/block">
       <div className="flex items-center justify-between bg-[#1e252b] px-4 py-2.5 rounded-t-xl border border-white/5 border-b-0">

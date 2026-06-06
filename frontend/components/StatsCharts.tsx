@@ -1,11 +1,29 @@
 'use client';
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, CartesianGrid } from 'recharts';
+
+const PLATFORM_NAMES: Record<string, string> = {
+  spotify: 'Spotify',
+  yandex: 'Яндекс',
+  vk: 'VK',
+  youtube_music: 'YouTube',
+  soundcloud: 'SoundCloud',
+  apple_music: 'Apple',
+};
+
+const PLATFORM_COLORS: Record<string, string> = {
+  spotify: '#1DB954',
+  yandex: '#ffcc00',
+  vk: '#0077FF',
+  youtube_music: '#FF0000',
+  soundcloud: '#FF5500',
+  apple_music: '#FA243C',
+};
 
 export const PlatformDistribution = ({ data }: { data: any }) => {
     const chartData = Object.entries(data).map(([name, value]) => ({
-        name: name === 'spotify' ? 'Spotify' : name === 'yandex' ? 'Яндекс' : name === 'vk' ? 'VK' : name === 'youtube_music' ? 'YouTube' : name === 'soundcloud' ? 'SoundCloud' : name === 'apple_music' ? 'Apple' : name,
+        name: PLATFORM_NAMES[name] || name,
         value: Number(value),
-        color: name === 'spotify' ? '#1DB954' : name === 'yandex' ? '#ffcc00' : name === 'vk' ? '#0077FF' : name === 'youtube_music' ? '#FF0000' : name === 'soundcloud' ? '#FF5500' : name === 'apple_music' ? '#FA243C' : '#888888'
+        color: PLATFORM_COLORS[name] || '#888888'
     })).sort((a, b) => b.value - a.value);
 
     return (
@@ -21,8 +39,8 @@ export const PlatformDistribution = ({ data }: { data: any }) => {
                         paddingAngle={5}
                         dataKey="value"
                     >
-                        {chartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
+                        {chartData.map((entry) => (
+                            <Cell key={entry.name} fill={entry.color} />
                         ))}
                     </Pie>
                     <Tooltip 
@@ -52,7 +70,7 @@ export const GenreCloud = ({ data }: { data: any }) => {
                 const opacity = Math.max(0.4, (g.value / maxVal));
                 return (
                     <span 
-                        key={i} 
+                        key={g.name} 
                         className="font-black transition-all hover:scale-110 hover:text-[var(--accent)] cursor-default"
                         style={{ fontSize, opacity, color: i === 0 ? 'var(--accent)' : 'inherit' }}
                     >

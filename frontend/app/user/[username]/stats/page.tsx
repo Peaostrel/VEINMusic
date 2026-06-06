@@ -47,7 +47,7 @@ const getAlbumUrl = (album: string, artist: string, source: string) => {
 };
 
 const getTrackUrl = (t: any) => {
-    if (t.source === 'yandex' && (!t.track_url || !t.track_url.includes('/track/'))) {
+    if (t.source === 'yandex' && !t.track_url?.includes('/track/')) {
         return `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/redirect?source=yandex&type=track&q=${encodeURIComponent(t.artist + ' ' + (t.title || ''))}`;
     }
     return t.track_url || '#';
@@ -55,7 +55,6 @@ const getTrackUrl = (t: any) => {
 
 export default function DetailedStats() {
     const username = useParams()?.username;
-    const router = useRouter();
     const [stats, setStats] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [period, setPeriod] = useState('30d');
@@ -105,12 +104,17 @@ export default function DetailedStats() {
     const topSource = Object.keys(sourceCounts).sort((a,b) => sourceCounts[b] - sourceCounts[a])[0] || 'yandex';
     const sourceNames: any = { spotify: 'Spotify', yandex: 'Яндекс Музыка', vk: 'ВКонтакте', youtube_music: 'YouTube Music', soundcloud: 'SoundCloud', apple_music: 'Apple Music', lastfm: 'Last.fm' };
     
-    const daysDivider = period === '7d' ? 7 : period === '30d' ? 30 : Math.max(Object.keys(activity_graph || {}).length, 1);
+    let daysDivider = 1;
+    if (period === '7d') {
+        daysDivider = 7;
+    } else if (period === '30d') {
+        daysDivider = 30;
+    } else {
+        daysDivider = Math.max(Object.keys(activity_graph || {}).length, 1);
+    }
     const avgPerDay = Math.round(total_scrobbles / daysDivider);
 
     const diversity = total_scrobbles > 0 ? Math.round((unique_tracks / total_scrobbles) * 100) : 0;
-    const maxHourCount = Math.max(...(Object.values(hours_activity || {'00':0}) as number[]));
-    const maxDayCount = Math.max(...(Object.values(days_activity || {'Пн':0}) as number[]));
 
     return (
         <div className="max-w-5xl mx-auto px-4 pt-24 pb-20 overflow-x-hidden">

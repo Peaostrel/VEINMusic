@@ -4,7 +4,13 @@ import { useParams, useRouter } from 'next/navigation';
 
 
 function escapeRegExp(str: string) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return str.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+}
+
+function getRarityStyle(rarity: number): string {
+    if (rarity < 10) return 'bg-orange-500/10 text-orange-400 border-orange-500/20';
+    if (rarity < 30) return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
+    return 'bg-white/5 text-gray-400 border-white/5';
 }
 
 function renderDescriptionWithLinks(desc: string, meta: string | null, url: string | null, name: string) {
@@ -202,11 +208,7 @@ export default function AchievementsPage() {
                                     </div>
                                     
                                     <div className="flex flex-wrap items-center gap-3">
-                                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider border ${
-                                            a.rarity < 10 ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
-                                            a.rarity < 30 ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
-                                            'bg-white/5 text-gray-400 border-white/5'
-                                        }`}>
+                                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider border ${getRarityStyle(a.rarity)}`}>
                                             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
                                                 <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
                                             </svg>

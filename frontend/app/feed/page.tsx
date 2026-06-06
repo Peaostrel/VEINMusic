@@ -35,8 +35,13 @@ export default function GlobalFeed() {
             </p>
 
             <div className="space-y-4">
-                {feed.map((s, i) => (
-                    <div key={s.username} role="button" tabIndex={0} className="bg-[#121212]/50 backdrop-blur-md p-4 rounded-xl border border-white/5 flex items-center gap-4 hover:border-[var(--accent)] transition-all group cursor-pointer" onClick={() => router.push(`/user/${s.username}`)} onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/user/${s.username}`); }}>
+                {feed.map((s) => (
+                    <button 
+                        key={s.id} 
+                        type="button" 
+                        className="w-full bg-[#121212]/50 backdrop-blur-md p-4 rounded-xl border border-white/5 flex items-center gap-4 hover:border-[var(--accent)] transition-all group cursor-pointer text-left font-normal bg-transparent border-none outline-none block" 
+                        onClick={() => router.push(`/user/${s.username}`)}
+                    >
                         <div className="relative shrink-0">
                             {s.cover_url ? (
                                 <img src={s.cover_url} className="w-14 h-14 rounded-lg object-cover shadow-lg group-hover:scale-105 transition-transform" alt="Cover" />
@@ -60,7 +65,7 @@ export default function GlobalFeed() {
                                  <div className="bg-emerald-500/10 px-3 py-1 rounded-full text-[10px] font-black text-emerald-500 uppercase tracking-widest animate-pulse border border-emerald-500/20">Listening Now</div>
                              )}
                         </div>
-                    </div>
+                    </button>
                 ))}
             </div>
         </div>
