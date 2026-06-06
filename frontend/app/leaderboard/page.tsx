@@ -94,7 +94,6 @@ function getLeaderboardItemStyles(u: any, idx: number) {
 }
 
 function LeaderboardItem({ u, idx }: Readonly<{ u: any; idx: number }>) {
-  const isTop3 = idx < 3;
   const rankCrown = RANK_CROWNS[idx] || `#${idx + 1}`;
   const rankClass = RANK_CLASSES[idx] || 'text-gray-500';
 
