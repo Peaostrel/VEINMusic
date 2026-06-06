@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getRankInfo } from '../../../Navbar';
+
 
 function escapeRegExp(str: string) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -11,8 +11,8 @@ function renderDescriptionWithLinks(desc: string, meta: string | null, url: stri
     let nodes: any[] = [desc];
 
     const fallbackMeta = (!meta || meta === 'None') ? name : meta;
-    const realUrl = url && url.includes('||') ? url.split('||')[1] : url;
-    const linkUrl = (realUrl && realUrl.startsWith('http')) ? realUrl : `https://music.yandex.ru/search?text=${encodeURIComponent(fallbackMeta)}`;
+    const rawUrl = url?.includes('||') ? url.split('||')[1] : url;
+    const linkUrl = rawUrl?.startsWith('http') ? rawUrl : `https://music.yandex.ru/search?text=${encodeURIComponent(fallbackMeta)}`;
 
     // 1. Сначала обрабатываем rule_meta (Высший приоритет)
     const parts = fallbackMeta.split(/[ \t]*[-—][ \t]*/);
@@ -105,7 +105,7 @@ export default function AchievementsPage() {
 
     if (loading) return <div className="min-h-screen text-[var(--accent)] flex items-center justify-center font-bold text-2xl animate-pulse">Загрузка достижений...</div>;
     
-    if (error || !data || !data.user) return (
+    if (error || !data?.user) return (
         <div className="min-h-screen text-red-500 flex flex-col items-center justify-center font-bold text-2xl gap-4">
             <div>Ошибка загрузки или Пользователь не найден</div>
             <button onClick={() => router.push('/')} className="px-5 py-2.5 bg-white/10 text-white rounded-xl text-sm font-black hover:bg-white/20 transition-colors">На главную</button>

@@ -38,7 +38,12 @@ export default function Leaderboard() {
           <ul className="space-y-3">
             {users.map((u, idx) => {
               const isTop3 = idx < 3;
-              const rankCrown = idx === 0 ? '👑' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
+              let rankCrown: string;
+              if (idx === 0) rankCrown = '👑';
+              else if (idx === 1) rankCrown = '🥈';
+              else if (idx === 2) rankCrown = '🥉';
+              else rankCrown = `#${idx + 1}`;
+
               const isHighLevel = u.level >= 50;
               const isRainbow = u.theme === 'rainbow';
               
@@ -46,6 +51,11 @@ export default function Leaderboard() {
               if (isHighLevel && !isRainbow) {
                   glowColor = u.theme?.startsWith('#') ? u.theme : ((THEMES as any)[u.theme]?.main || '#ffcc00');
               }
+
+              let rankClass = 'text-gray-500';
+              if (idx === 0) rankClass = 'text-3xl drop-shadow-[0_0_10px_#ffcc00]';
+              else if (idx === 1) rankClass = 'text-2xl drop-shadow-[0_0_10px_#ccc]';
+              else if (idx === 2) rankClass = 'text-xl drop-shadow-[0_0_10px_#cd7f32]';
 
               return (
                 <li key={u.username} 
@@ -56,7 +66,7 @@ export default function Leaderboard() {
                     style={isHighLevel && !isRainbow ? { boxShadow: `0 0 15px ${glowColor}30`, borderColor: `${glowColor}50` } : {}}
                 >
                   <div className="flex items-center gap-4 w-full min-w-0 pr-4">
-                    <div className={`font-black w-8 text-center shrink-0 ${idx === 0 ? 'text-3xl drop-shadow-[0_0_10px_#ffcc00]' : idx === 1 ? 'text-2xl drop-shadow-[0_0_10px_#ccc]' : idx === 2 ? 'text-xl drop-shadow-[0_0_10px_#cd7f32]' : 'text-gray-500'}`}>
+                    <div className={`font-black w-8 text-center shrink-0 ${rankClass}`}>
                         {rankCrown}
                     </div>
                     

@@ -55,7 +55,11 @@ export default function ThemeTab({ data, updateData, level }: any) {
                                     <div className="text-xs text-gray-400">LVL {opt.req}</div>
                                 </div>
                             </div>
-                            {isLocked ? '🔒' : isSelected ? '✅' : null}
+                        {(() => {
+                            if (isLocked) return '🔒';
+                            if (isSelected) return '✅';
+                            return null;
+                        })()}
                         </div>
                         
                         {isSelected && opt.isCustom && (

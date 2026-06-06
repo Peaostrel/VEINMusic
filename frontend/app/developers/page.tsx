@@ -11,6 +11,46 @@ SyntaxHighlighter.registerLanguage('python', python);
 SyntaxHighlighter.registerLanguage('json', json);
 SyntaxHighlighter.registerLanguage('bash', bash);
 
+// CodeBlock component moved outside parent to avoid re-creation on each render
+interface CodeBlockProps { code: string; language: string; label: string; colorClass?: string; id: string; onCopy: (text: string, id: string) => void; copied: string; }
+
+function CodeBlock({ code, language, label, colorClass, id, onCopy, copied }: CodeBlockProps) {
+  return (
+    <div className="mb-8 group/block">
+      <div className="flex items-center justify-between bg-[#1e252b] px-4 py-2.5 rounded-t-xl border border-white/5 border-b-0">
+        <span className={`text-xs font-bold ${colorClass || 'text-gray-400'}`}>{label}</span>
+        <button
+          onClick={() => onCopy(code, id)}
+          className="text-xs text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
+        >
+          {copied === id ? '✅ Скопировано' : (
+            <>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+              Копировать
+            </>
+          )}
+        </button>
+      </div>
+      <div className="relative overflow-hidden rounded-b-xl border border-white/5 shadow-2xl">
+        <SyntaxHighlighter
+          language={language}
+          style={atomOneDark}
+          customStyle={{
+            margin: 0,
+            padding: '20px',
+            fontSize: '14px',
+            lineHeight: '1.6',
+            backgroundColor: '#161b22',
+            fontFamily: 'JetBrains Mono, Menlo, Monaco, Courier New, monospace'
+          }}
+        >
+          {code}
+        </SyntaxHighlighter>
+      </div>
+    </div>
+  );
+}
+
 export default function Developers() {
   const [copied, setCopied] = useState('');
 
@@ -48,8 +88,8 @@ payload = {
 response = requests.post(url, json=payload)
 print(response.json())`;
 
-  const curlExample = `curl -X POST https://api.music.vein.guru/api/scrobble \\
--H "Content-Type: application/json" \\
+  const curlExample = String.raw`curl -X POST https://api.music.vein.guru/api/scrobble \
+-H "Content-Type: application/json" \
 -d '{
   "api_key": "твой_секретный_ключ",
   "title": "Всё забрать",
@@ -69,40 +109,6 @@ print(f"Пользователь: {data['display_name']}")
 print(f"Ранг: {data['role']}")
 print(f"Стрик: {data['streak']} дней")`;
 
-  const CodeBlock = ({ code, language, label, colorClass, id }: { code: string; language: string; label: string; colorClass?: string; id: string }) => (
-    <div className="mb-8 group/block">
-      <div className="flex items-center justify-between bg-[#1e252b] px-4 py-2.5 rounded-t-xl border border-white/5 border-b-0">
-        <span className={`text-xs font-bold ${colorClass || 'text-gray-400'}`}>{label}</span>
-        <button
-          onClick={() => copyToClipboard(code, id)}
-          className="text-xs text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
-        >
-          {copied === id ? '✅ Скопировано' : (
-            <>
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-              Копировать
-            </>
-          )}
-        </button>
-      </div>
-      <div className="relative overflow-hidden rounded-b-xl border border-white/5 shadow-2xl">
-        <SyntaxHighlighter
-          language={language}
-          style={atomOneDark}
-          customStyle={{
-            margin: 0,
-            padding: '20px',
-            fontSize: '14px',
-            lineHeight: '1.6',
-            backgroundColor: '#161b22',
-            fontFamily: 'JetBrains Mono, Menlo, Monaco, Courier New, monospace'
-          }}
-        >
-          {code}
-        </SyntaxHighlighter>
-      </div>
-    </div>
-  );
 
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-8 pt-24 min-h-screen text-white pb-32">
@@ -197,6 +203,8 @@ print(f"Стрик: {data['streak']} дней")`;
             language="json"
             code={jsonExample}
             colorClass="text-yellow-400"
+            onCopy={copyToClipboard}
+            copied={copied}
           />
 
           <CodeBlock
@@ -205,6 +213,8 @@ print(f"Стрик: {data['streak']} дней")`;
             language="python"
             code={pythonExample}
             colorClass="text-blue-400"
+            onCopy={copyToClipboard}
+            copied={copied}
           />
 
           <CodeBlock
@@ -213,6 +223,8 @@ print(f"Стрик: {data['streak']} дней")`;
             language="python"
             code={getUserExample}
             colorClass="text-blue-400"
+            onCopy={copyToClipboard}
+            copied={copied}
           />
 
           <CodeBlock
@@ -221,6 +233,8 @@ print(f"Стрик: {data['streak']} дней")`;
             language="bash"
             code={curlExample}
             colorClass="text-gray-400"
+            onCopy={copyToClipboard}
+            copied={copied}
           />
         </section>
 

@@ -6,7 +6,7 @@
  * премиальные карточки локации/жанров/аппаратуры.
  */
 "use client";
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getRankInfo, getNextRankInfo, LvlBadge, VerifiedBadge } from '../../Navbar';
 
@@ -20,7 +20,7 @@ const LiveTimer = ({ listenedSec, isPlaying, updatedAt }: any) => {
     const updateTime = new Date(updatedAt + 'Z').getTime();
     const interval = setInterval(() => {
       const diff = Math.floor((Date.now() - updateTime) / 1000);
-      setElapsed(listenedSec + (diff > 0 ? diff : 0));
+      setElapsed(listenedSec + Math.max(0, diff));
     }, 1000);
 
     return () => clearInterval(interval);
@@ -266,8 +266,8 @@ export default function Profile() {
         setRecs(rRes);
         setWrapped(wRes);
         setMood(mRes);
-        if (!uRes) setError('User not found');
-        else setError('');
+        if (uRes) setError('');
+        else setError('User not found');
       } catch (err) {
         console.error("Ошибка загрузки профиля:", err);
         setError('Ошибка подключения к серверу');
@@ -306,7 +306,7 @@ export default function Profile() {
             });
           }
         }
-      } catch (e) { }
+      } catch (e) { console.error(e); }
     };
 
     fetchAllData();
@@ -342,12 +342,12 @@ export default function Profile() {
 
   useEffect(() => {
     if (data.user?.theme) {
-      (window as any).__ACTIVE_PROFILE_THEME__ = data.user.theme;
-      window.dispatchEvent(new Event('theme_update'));
+      (globalThis as any).__ACTIVE_PROFILE_THEME__ = data.user.theme;
+      globalThis.dispatchEvent(new Event('theme_update'));
     }
     return () => {
-      delete (window as any).__ACTIVE_PROFILE_THEME__;
-      window.dispatchEvent(new Event('theme_update'));
+      delete (globalThis as any).__ACTIVE_PROFILE_THEME__;
+      globalThis.dispatchEvent(new Event('theme_update'));
     };
   }, [data.user?.theme]);
 
@@ -384,7 +384,7 @@ export default function Profile() {
           ...prev, followStats: { ...prev.followStats, is_following: result.status === 'followed', followers: prev.followStats.followers + (result.status === 'followed' ? 1 : -1) }
         }));
       }
-    } catch (err) { }
+    } catch (err) { console.error(err); }
   };
 
   const openFollowModal = async (type: string) => {
@@ -453,7 +453,7 @@ export default function Profile() {
   const nextRank = getNextRankInfo(currentLevel);
 
   let socialLinks = [];
-  try { socialLinks = JSON.parse(u.social_links || "[]"); } catch (e) { }
+  try { socialLinks = JSON.parse(u.social_links || "[]"); } catch (e) { console.error(e); }
 
   if (u.is_private) return (
     <div className="min-h-screen flex flex-col items-center justify-center pt-24 px-4 text-center">
@@ -487,7 +487,7 @@ export default function Profile() {
           <div key={t.id} className="bg-[#121212]/95 backdrop-blur-md border border-[var(--accent)]/50 p-4 rounded-xl shadow-[0_0_30px_var(--accent-glow)] flex items-center gap-4 w-80 pointer-events-auto relative overflow-hidden transition-all duration-300">
             <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-[var(--accent)] to-[var(--accent-hover)]"></div>
             <div className="w-14 h-14 bg-black rounded-lg flex items-center justify-center text-3xl shrink-0 overflow-hidden border border-white/10 shadow-inner">
-              {t.image ? <img src={t.image} className="w-full h-full object-cover" /> : t.icon}
+              {t.image ? <img src={t.image} className="w-full h-full object-cover" alt={t.name} /> : t.icon}
             </div>
             <div className="flex-grow">
               <div className="text-[10px] text-[var(--accent-text)] font-bold uppercase tracking-widest mb-1 flex items-center gap-1">
@@ -505,12 +505,13 @@ export default function Profile() {
       </div>
 
       {showWrapped && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setShowWrapped(false)}>
-          <div className="bg-[#1a1a1a] rounded-2xl w-[400px] h-[600px] shadow-2xl overflow-hidden relative border border-white/10 p-6 flex flex-col justify-between" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <button className="absolute inset-0 w-full h-full cursor-default" aria-label="Закрыть" onClick={() => setShowWrapped(false)} />
+          <div className="bg-[#1a1a1a] rounded-2xl w-[400px] h-[600px] shadow-2xl overflow-hidden relative border border-white/10 p-6 flex flex-col justify-between z-10" onClick={e => e.stopPropagation()}>
             <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-[var(--accent)]/20 to-transparent opacity-50 z-0 pointer-events-none"></div>
             <div className="z-10 text-center relative">
               <div className={`w-24 h-24 mx-auto bg-[#333] rounded-full overflow-hidden border-4 border-[var(--accent)] shadow-[0_0_20px_var(--accent-glow)] mb-4`}>
-                <img src={u.avatar_url || fallbackAvatar} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = fallbackAvatar; }} />
+                <img src={u.avatar_url || fallbackAvatar} className="w-full h-full object-cover" alt={u.display_name} onError={(e) => { e.currentTarget.src = fallbackAvatar; }} />
               </div>
               <h2 className="text-3xl font-black text-white flex items-center justify-center">{u.display_name} <VerifiedBadge role={u.role} isVerified={u.is_verified} /></h2>
               <p className="text-[var(--accent-text)] font-bold mt-1">@VEIN Music</p>
@@ -518,7 +519,7 @@ export default function Profile() {
             <div className="z-10 bg-[#121212]/80 p-4 rounded-xl border border-white/5 backdrop-blur-md">
               <h3 className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-3">Любимые артисты</h3>
               {data.stats.top_artists?.slice(0, 3).map((a: any, i: number) => (
-                <div key={i} className="flex justify-between items-center mb-2 border-l-2 border-[var(--accent)] pl-2">
+                <div key={a.artist} className="flex justify-between items-center mb-2 border-l-2 border-[var(--accent)] pl-2">
                   <span className="font-bold truncate text-sm text-white">{a.artist}</span>
                   <span className="text-xs text-gray-400 shrink-0">{a.plays} plays</span>
                 </div>
@@ -533,7 +534,8 @@ export default function Profile() {
       )}
 
       {followModal.isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setFollowModal({ isOpen: false, type: '', title: '', users: [], loading: false })}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <button className="absolute inset-0 w-full h-full cursor-default" aria-label="Закрыть" onClick={() => setFollowModal({ isOpen: false, type: '', title: '', users: [], loading: false })} />
           <div className="bg-[#1a1a1a] rounded-2xl w-[400px] max-h-[80vh] shadow-2xl overflow-hidden relative border border-white/10 p-0 flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="p-4 border-b border-white/5 flex justify-between items-center bg-[#121212]">
               <h3 className="text-lg font-black text-[var(--accent-text)] uppercase tracking-wider">{followModal.title}</h3>
@@ -547,8 +549,8 @@ export default function Profile() {
               ) : (
                 <ul className="space-y-1">
                   {followModal.users.map((followerUser: any, idx: number) => (
-                    <li key={idx} onClick={() => { setFollowModal({ isOpen: false, type: '', title: '', users: [], loading: false }); router.push(`/user/${followerUser.username}`); }} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl cursor-pointer transition-colors group border border-transparent hover:border-white/5">
-                      <img src={followerUser.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${followerUser.username}&backgroundColor=transparent`} className="w-10 h-10 rounded-full bg-black object-cover shrink-0 border border-white/10" onError={(e) => { e.currentTarget.src = `https://api.dicebear.com/9.x/micah/svg?seed=${followerUser.username}&backgroundColor=transparent`; }} />
+                    <li key={followerUser.username} onClick={() => { setFollowModal({ isOpen: false, type: '', title: '', users: [], loading: false }); router.push(`/user/${followerUser.username}`); }} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl cursor-pointer transition-colors group border border-transparent hover:border-white/5">
+                      <img src={followerUser.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${followerUser.username}&backgroundColor=transparent`} className="w-10 h-10 rounded-full bg-black object-cover shrink-0 border border-white/10" alt={followerUser.display_name} onError={(e) => { e.currentTarget.src = `https://api.dicebear.com/9.x/micah/svg?seed=${followerUser.username}&backgroundColor=transparent`; }} />
                       <div className="truncate flex-grow">
                         <div className="font-bold text-white text-sm truncate flex items-center gap-1 group-hover:text-[var(--accent-text)] transition-colors">
                           {followerUser.display_name}
