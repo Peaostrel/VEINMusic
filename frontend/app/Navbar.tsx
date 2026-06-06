@@ -13,9 +13,8 @@ export const THEMES = {
 };
 
 const isValidUser = (u: unknown) => {
-    if (!u) return false;
-    if (typeof u === 'object') return false;
-    const s = String(u).trim().toLowerCase();
+    if (typeof u !== 'string') return false;
+    const s = u.trim().toLowerCase();
     return s !== '' && s !== 'null' && s !== 'undefined' && s !== 'false' && s !== '[]' && s !== '{}';
 };
 
