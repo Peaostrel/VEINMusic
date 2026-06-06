@@ -47,10 +47,41 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
+import redis
+import json
+
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+redis_client = None
+try:
+    redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True, socket_connect_timeout=2)
+    redis_client.ping()
+except Exception as e:
+    import logging
+    logging.warning(f"Redis is not available, falling back to in-memory cache: {e}")
+    redis_client = None
+
 CACHE = {}
 MAX_CACHE_SIZE = 500
 
 def get_from_cache(key: str, ttl: int = 300):
+    global redis_client
+    if redis_client:
+        try:
+            val = redis_client.get(key)
+            if val is not None:
+                entry = json.loads(val)
+                if time.time() - entry.get('ts', 0) < ttl:
+                    return entry.get('data')
+                else:
+                    try:
+                        redis_client.delete(key)
+                    except Exception:
+                        pass
+            return None
+        except Exception as e:
+            import logging
+            logging.warning(f"Redis error in get_from_cache: {e}. Falling back to in-memory.")
+    
     if key in CACHE:
         entry = CACHE[key]
         if time.time() - entry['ts'] < ttl:
@@ -60,7 +91,17 @@ def get_from_cache(key: str, ttl: int = 300):
     return None
 
 def set_to_cache(key: str, data: any):
+    global redis_client
     now = time.time()
+    entry = {'data': data, 'ts': now}
+    if redis_client:
+        try:
+            redis_client.set(key, json.dumps(entry), ex=3600)
+            return
+        except Exception as e:
+            import logging
+            logging.warning(f"Redis error in set_to_cache: {e}. Falling back to in-memory.")
+            
     if len(CACHE) >= MAX_CACHE_SIZE:
         expired_keys = [k for k, v in CACHE.items() if now - v['ts'] >= 300]
         for k in expired_keys:
@@ -68,7 +109,7 @@ def set_to_cache(key: str, data: any):
         if len(CACHE) >= MAX_CACHE_SIZE:
             oldest_key = min(CACHE.keys(), key=lambda k: CACHE[k]['ts'])
             del CACHE[oldest_key]
-    CACHE[key] = {'data': data, 'ts': now}
+    CACHE[key] = entry
 
 def get_active_streak(user: User):
     if not user.integration.last_streak_date: return 0
