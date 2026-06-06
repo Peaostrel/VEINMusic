@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 import re
 import urllib.parse
 TRACK_PATH = "/track/"
+ALBUM_PATH = "/album/"
 YANDEX_MUSIC_DOMAIN = "music.yandex.ru"
 import httpx
 import time
@@ -490,6 +491,37 @@ def get_global_feed(db: Annotated[Session, Depends(get_db)]):
     return {"feed": [format_history_item(s, s.track) for s in scrobbles]}
 
 
+def _get_activity_stats(db: Session, base_filter) -> tuple[dict[str, int], dict[str, int], dict[str, int]]:
+    try:
+        is_postgres = db.get_bind().dialect.name == "postgresql"
+    except Exception:
+        is_postgres = True
+        
+    if is_postgres:
+        hours_raw = db.query(func.to_char(Scrobble.played_at, 'HH24'), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.to_char(Scrobble.played_at, 'HH24')).all()
+        days_raw = db.query(func.to_char(Scrobble.played_at, 'ID'), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.to_char(Scrobble.played_at, 'ID')).all()
+        graph_raw = db.query(func.to_char(Scrobble.played_at, 'YYYY-MM-DD'), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.to_char(Scrobble.played_at, 'YYYY-MM-DD')).all()
+        day_names = {'1': 'Пн', '2': 'Вт', '3': 'Ср', '4': 'Чт', '5': 'Пт', '6': 'Сб', '7': 'Вс'}
+    else:
+        hours_raw = db.query(func.strftime('%H', Scrobble.played_at), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.strftime('%H', Scrobble.played_at)).all()
+        days_raw = db.query(func.strftime('%w', Scrobble.played_at), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.strftime('%w', Scrobble.played_at)).all()
+        graph_raw = db.query(func.strftime('%Y-%m-%d', Scrobble.played_at), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.strftime('%Y-%m-%d', Scrobble.played_at)).all()
+        day_names = {'1': 'Пн', '2': 'Вт', '3': 'Ср', '4': 'Чт', '5': 'Пт', '6': 'Сб', '0': 'Вс'}
+        
+    hours_activity = {f"{i:02d}": 0 for i in range(24)}
+    for h, count in hours_raw:
+        if h is not None:
+            hours_activity[h] = count
+
+    days_activity = dict.fromkeys(['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'], 0)
+    for d, count in days_raw:
+        if d in day_names:
+            days_activity[day_names[d]] = count
+
+    activity_graph = {date: count for date, count in graph_raw if date is not None}
+    return hours_activity, days_activity, activity_graph
+
+
 # --- /api/detailed-stats/{username} ---
 @router.get("/api/detailed-stats/{username}")
 def get_detailed_stats(username: str, db: Annotated[Session, Depends(get_db)], period: str = "all"):
@@ -528,35 +560,8 @@ def get_detailed_stats(username: str, db: Annotated[Session, Depends(get_db)], p
     genres = db.query(Track.genre, func.count(Scrobble.id)).join(Scrobble).filter(*base_filter, Track.genre != None).group_by(Track.genre).all()
     sources = db.query(Scrobble.source, func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(Scrobble.source).all()
     
-    # 6. Activity (Simplified for performance)
-    # Note: Complex timezone grouping is better in Python if row count is low, but here we estimate
-    try:
-        is_postgres = db.get_bind().dialect.name == "postgresql"
-    except Exception:
-        is_postgres = True
-        
-    if is_postgres:
-        hours_raw = db.query(func.to_char(Scrobble.played_at, 'HH24'), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.to_char(Scrobble.played_at, 'HH24')).all()
-        days_raw = db.query(func.to_char(Scrobble.played_at, 'ID'), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.to_char(Scrobble.played_at, 'ID')).all()
-        graph_raw = db.query(func.to_char(Scrobble.played_at, 'YYYY-MM-DD'), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.to_char(Scrobble.played_at, 'YYYY-MM-DD')).all()
-        day_names = {'1': 'Пн', '2': 'Вт', '3': 'Ср', '4': 'Чт', '5': 'Пт', '6': 'Сб', '7': 'Вс'}
-    else:
-        hours_raw = db.query(func.strftime('%H', Scrobble.played_at), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.strftime('%H', Scrobble.played_at)).all()
-        days_raw = db.query(func.strftime('%w', Scrobble.played_at), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.strftime('%w', Scrobble.played_at)).all()
-        graph_raw = db.query(func.strftime('%Y-%m-%d', Scrobble.played_at), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.strftime('%Y-%m-%d', Scrobble.played_at)).all()
-        day_names = {'1': 'Пн', '2': 'Вт', '3': 'Ср', '4': 'Чт', '5': 'Пт', '6': 'Сб', '0': 'Вс'}
-        
-    hours_activity = {f"{i:02d}": 0 for i in range(24)}
-    for h, count in hours_raw:
-        if h is not None:
-            hours_activity[h] = count
-
-    days_activity = {name: 0 for name in ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']}
-    for d, count in days_raw:
-        if d in day_names:
-            days_activity[day_names[d]] = count
-
-    activity_graph = {date: count for date, count in graph_raw if date is not None}
+    # 6. Activity
+    hours_activity, days_activity, activity_graph = _get_activity_stats(db, base_filter)
 
     return {
         "user": {"username": user.username, "display_name": user.profile.display_name or user.username, "avatar_url": user.profile.avatar_url},
@@ -1117,11 +1122,11 @@ async def get_album_track_count(url: str) -> int:
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
         async with httpx.AsyncClient(headers=headers, timeout=5.0) as client:
-            if YANDEX_MUSIC_DOMAIN in url and "/album/" in url:
-                album_id = url.split('/album/')[1].split('/')[0].split('?')[0]
+            if YANDEX_MUSIC_DOMAIN in url and ALBUM_PATH in url:
+                album_id = url.split(ALBUM_PATH)[1].split('/')[0].split('?')[0]
                 res = (await client.get(f"https://{YANDEX_MUSIC_DOMAIN}/handlers/album.jsx?album={album_id}")).json()
                 return res.get("trackCount", 0)
-            elif "spotify.com" in url and "/album/" in url:
+            elif "spotify.com" in url and ALBUM_PATH in url:
                 resp = await client.get(url)
                 match = re.search(r'music:song_count["\']\s+content=["\'](\d+)["\']', resp.text, re.IGNORECASE)
                 if match: return int(match.group(1))

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from typing import Annotated
+from typing import Annotated, Optional
 from datetime import datetime, timezone
 import json
 
@@ -31,6 +31,18 @@ async def _update_favorite(user_profile, field_value, field_name, entity_type):
         setattr(user_profile, f"{field_name}_cover", cover or getattr(user_profile, f"{field_name}_cover"))
         setattr(user_profile, f"{field_name}_url", url or getattr(user_profile, f"{field_name}_url"))
 
+def _validate_url(url: Optional[str]):
+    if url and not url.startswith(("http:", "https:")):
+        raise HTTPException(400, "Invalid URL")
+
+def _validate_and_set_social(profile, social_links: Optional[str]):
+    if social_links is not None:
+        try:
+            json.loads(social_links)
+            profile.social_links = social_links
+        except json.JSONDecodeError:
+            pass
+
 @router.post("/update", responses={400: {"description": "Bad Request"}})
 async def update_profile(data: ProfileUpdate, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
@@ -44,10 +56,10 @@ async def update_profile(data: ProfileUpdate, db: Annotated[Session, Depends(get
     if data.display_name is not None: user.profile.display_name = sanitize_text(data.display_name)
     if data.bio is not None: user.profile.bio = sanitize_text(data.bio)
     if data.avatar_url is not None:
-        if data.avatar_url and not data.avatar_url.startswith(("http:", "https:")): raise HTTPException(400, "Invalid URL")
+        _validate_url(data.avatar_url)
         user.profile.avatar_url = data.avatar_url
     if data.cover_url is not None:
-        if data.cover_url and not data.cover_url.startswith(("http:", "https:")): raise HTTPException(400, "Invalid URL")
+        _validate_url(data.cover_url)
         user.profile.cover_url = data.cover_url
     if data.location is not None: user.profile.location = sanitize_text(data.location)
     if data.favorite_genre is not None: user.profile.favorite_genre = sanitize_text(data.favorite_genre)
@@ -56,12 +68,7 @@ async def update_profile(data: ProfileUpdate, db: Annotated[Session, Depends(get
     if data.hidden_artists is not None: user.profile.hidden_artists = sanitize_text(data.hidden_artists) or ""
     if data.lastfm_username is not None: user.integration.lastfm_username = sanitize_text(data.lastfm_username)
     
-    if data.social_links is not None:
-        try:
-            json.loads(data.social_links)
-            user.profile.social_links = data.social_links
-        except json.JSONDecodeError:
-            pass
+    _validate_and_set_social(user.profile, data.social_links)
         
     db.commit()
     return {"status": "ok"}

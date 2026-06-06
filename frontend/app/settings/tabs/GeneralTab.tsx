@@ -42,7 +42,7 @@ export default function GeneralTab({
                   <input value={data.city} onChange={e=>updateData('city', e.target.value)} onFocus={() => setIsCityInputFocused(true)} onBlur={() => setTimeout(() => setIsCityInputFocused(false), 200)} placeholder="Введите название..." className="w-full p-3 rounded bg-[#282828]/50 border border-white/10 focus:border-[var(--accent)] text-white focus:outline-none" />
                   {isCityInputFocused && cities.length > 0 && (
                       <div className="absolute top-full left-0 right-0 bg-[#121212] border border-[var(--accent)]/50 rounded-lg mt-1 z-[100] max-h-60 overflow-y-auto shadow-2xl">
-                          {cities.map((c: any) => <div key={c} onClick={() => { updateData('city', c); setIsCityInputFocused(false); }} className="p-4 hover:bg-[var(--accent)] hover:text-[var(--text-on-accent)] cursor-pointer text-sm border-b border-white/5 last:border-none transition-all">{c}</div>)}
+                          {cities.map((c: any) => <button type="button" key={c} onClick={() => { updateData('city', c); setIsCityInputFocused(false); }} className="w-full text-left p-4 hover:bg-[var(--accent)] hover:text-[var(--text-on-accent)] cursor-pointer text-sm border-b border-white/5 last:border-none transition-all">{c}</button>)}
                       </div>
                   )}
               </div>
@@ -51,7 +51,7 @@ export default function GeneralTab({
       <div><label className="block text-sm font-bold text-gray-300 mb-2">О себе</label><textarea value={data.bio} onChange={e=>updateData('bio', e.target.value)} rows={3} className="w-full p-3 rounded bg-[#282828]/50 border border-white/10 focus:border-[var(--accent)] text-white focus:outline-none resize-none transition-colors"></textarea></div>
 
       <div className="pt-6 border-t border-white/5 space-y-4">
-        <label className="block text-sm font-bold text-gray-300">Социальные сети</label>
+        <span className="block text-sm font-bold text-gray-300">Социальные сети</span>
         
         {socialLinks && socialLinks.length > 0 ? (
           <div className="space-y-3">

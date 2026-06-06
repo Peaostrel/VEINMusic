@@ -748,12 +748,20 @@ export default function Profile() {
 
           {socialLinks.length > 0 && (
             <div className="flex flex-wrap justify-center md:justify-start gap-3 mb-6">
-              {socialLinks.map((link: any) => (
-                <a key={link.id} href={link.network.toLowerCase() === 'telegram' ? `https://t.me/${link.username}` : `https://${link.network}.com/${link.username}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 bg-[#121212]/50 hover:bg-[var(--accent)] hover:text-[var(--text-on-accent)] text-white px-4 py-2 rounded-lg text-sm transition-all border border-white/5 hover:border-transparent backdrop-blur-sm shadow-md group">
-                  {SocialIcons[link.network as keyof typeof SocialIcons]}
-                  <span className="font-bold">{link.network.toLowerCase() === 'vk' ? 'VK' : link.network.toLowerCase() === 'github' ? 'GitHub' : link.network.charAt(0).toUpperCase() + link.network.slice(1)}</span>
-                </a>
-              ))}
+              {socialLinks.map((link: any) => {
+                const getNetworkLabel = (net: string) => {
+                  const lower = net.toLowerCase();
+                  if (lower === 'vk') return 'VK';
+                  if (lower === 'github') return 'GitHub';
+                  return net.charAt(0).toUpperCase() + net.slice(1);
+                };
+                return (
+                  <a key={link.id} href={link.network.toLowerCase() === 'telegram' ? `https://t.me/${link.username}` : `https://${link.network}.com/${link.username}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 bg-[#121212]/50 hover:bg-[var(--accent)] hover:text-[var(--text-on-accent)] text-white px-4 py-2 rounded-lg text-sm transition-all border border-white/5 hover:border-transparent backdrop-blur-sm shadow-md group">
+                    {SocialIcons[link.network as keyof typeof SocialIcons]}
+                    <span className="font-bold">{getNetworkLabel(link.network)}</span>
+                  </a>
+                );
+              })}
             </div>
           )}
 

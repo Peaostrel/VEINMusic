@@ -258,7 +258,7 @@ function SettingsContent() {
       });
       if (!res.ok) throw new Error('Ошибка при сохранении');
       localStorage.setItem('site_theme', data.theme);
-      window.dispatchEvent(new Event('theme_update'));
+      globalThis.dispatchEvent(new Event('theme_update'));
       setStatus('✅ Успешно!'); 
       setTimeout(() => setStatus(''), 2000);
     } catch (err: any) { setStatus('❌ ' + err.message); }

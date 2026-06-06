@@ -44,7 +44,7 @@ export default function GlobalFeed() {
                                 <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-lg text-yellow-500/80 shadow-lg group-hover:scale-105 transition-transform">🎵</div>
                             )}
                             <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full border-2 border-[#121212] overflow-hidden bg-black">
-                                <img src={s.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${s.username}&backgroundColor=transparent`} className="w-full h-full object-cover bg-[#282828]" onError={e => e.currentTarget.src = `https://api.dicebear.com/9.x/micah/svg?seed=${s.username}&backgroundColor=transparent`} />
+                                <img src={s.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${s.username}&backgroundColor=transparent`} className="w-full h-full object-cover bg-[#282828]" onError={e => e.currentTarget.src = `https://api.dicebear.com/9.x/micah/svg?seed=${s.username}&backgroundColor=transparent`} alt={`${s.username}'s avatar`} />
                             </div>
                         </div>
                         <div className="flex-grow min-w-0">

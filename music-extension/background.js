@@ -6,7 +6,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             
             // Read api_key from cookie directly
             chrome.cookies.get({ url: API_BASE, name: "api_key" }, (cookie) => {
-                if (!cookie || !cookie.value) {
+                if (!cookie?.value) {
                     console.log('[VEIN] Отмена: нет ключей, ожидание авторизации.');
                     return;
                 }

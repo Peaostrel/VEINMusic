@@ -196,7 +196,7 @@ export default function Navbar() {
                 // Only apply DB theme on first load — don't override theme the user has already chosen this session
                 if (data.theme && !localStorage.getItem('site_theme')) { 
                     localStorage.setItem('site_theme', data.theme); 
-                    window.dispatchEvent(new Event('theme_update')); 
+                    globalThis.dispatchEvent(new Event('theme_update')); 
                 }
         }).catch(() => {});
       }
@@ -229,8 +229,8 @@ export default function Navbar() {
       }
       localStorage.removeItem('username');
       localStorage.setItem('site_theme', 'classic'); setUsername(null); setUserProfile(null);
-      delete (window as any).__ACTIVE_PROFILE_THEME__; window.dispatchEvent(new Event('theme_update'));
-      setIsDropdownOpen(false); window.location.href = '/auth'; 
+      delete (globalThis as any).__ACTIVE_PROFILE_THEME__; globalThis.dispatchEvent(new Event('theme_update'));
+      setIsDropdownOpen(false); globalThis.location.href = '/auth'; 
   };
 
   const avatar = userProfile?.avatar_url || (isValidUser(username) ? `https://api.dicebear.com/9.x/micah/svg?seed=${username}&backgroundColor=transparent` : '');
@@ -247,7 +247,7 @@ export default function Navbar() {
           <Link href="/" className="flex items-center gap-3 group shrink-0">
             <div className="w-10 h-10 bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] rounded-xl flex items-center justify-center text-[var(--text-on-accent)] font-black text-2xl group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shadow-[0_0_15px_var(--accent-glow)]">V</div>
             <span className="font-black text-2xl tracking-tight hidden lg:block" style={{color: 'white'}}>
-                VEIN
+                VEIN{" "}
                 <span style={{color: 'var(--accent)', filter: 'drop-shadow(0 0 10px var(--accent-glow-strong))'}}>Music</span>
             </span>
           </Link>
