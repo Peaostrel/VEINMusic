@@ -21,7 +21,7 @@ function renderDescriptionWithLinks(desc: string, meta: string | null, url: stri
     const linkUrl = rawUrl?.startsWith('http') ? rawUrl : `https://music.yandex.ru/search?text=${encodeURIComponent(fallbackMeta)}`;
 
     // 1. Сначала обрабатываем rule_meta (Высший приоритет)
-    const parts = fallbackMeta.split(/[ \t]*[-—][ \t]*/);
+    const parts = fallbackMeta.split(/[-—]/).map(s => s.trim());
     
     parts.forEach((targetWord, idx) => {
         if (!targetWord) return;
@@ -61,7 +61,6 @@ function renderDescriptionWithLinks(desc: string, meta: string | null, url: stri
     });
 
     // 2. Затем обрабатываем Markdown [Текст](Ссылка) на оставшихся текстовых нодах
-    const mdRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
     const finalNodes: any[] = [];
 
     nodes.forEach((node, nodeIdx) => {
@@ -71,18 +70,44 @@ function renderDescriptionWithLinks(desc: string, meta: string | null, url: stri
         }
 
         let lastIndex = 0;
-        let match;
-        while ((match = mdRegex.exec(node)) !== null) {
-            if (match.index > lastIndex) {
-                finalNodes.push(node.substring(lastIndex, match.index));
+        while (true) {
+            const startBracket = node.indexOf('[', lastIndex);
+            if (startBracket === -1) break;
+
+            const endBracket = node.indexOf(']', startBracket);
+            if (endBracket === -1) break;
+
+            // Проверяем, идет ли сразу после ']' символ '('
+            if (endBracket + 1 >= node.length || node[endBracket + 1] !== '(') {
+                if (startBracket > lastIndex) {
+                    finalNodes.push(node.substring(lastIndex, startBracket + 1));
+                } else {
+                    finalNodes.push('[');
+                }
+                lastIndex = startBracket + 1;
+                continue;
             }
+
+            const endParenthesis = node.indexOf(')', endBracket + 2);
+            if (endParenthesis === -1) break;
+
+            // Нашли ссылку!
+            if (startBracket > lastIndex) {
+                finalNodes.push(node.substring(lastIndex, startBracket));
+            }
+
+            const linkText = node.substring(startBracket + 1, endBracket);
+            const linkUrl = node.substring(endBracket + 2, endParenthesis);
+
             finalNodes.push(
-                <a key={`md-${nodeIdx}-${match.index}`} href={match[2]} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline font-bold">
-                    {match[1]}
+                <a key={`md-${nodeIdx}-${startBracket}`} href={linkUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline font-bold">
+                    {linkText}
                 </a>
             );
-            lastIndex = mdRegex.lastIndex;
+
+            lastIndex = endParenthesis + 1;
         }
+
         if (lastIndex < node.length) {
             finalNodes.push(node.substring(lastIndex));
         }
