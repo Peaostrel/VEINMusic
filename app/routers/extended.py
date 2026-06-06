@@ -537,10 +537,26 @@ def get_detailed_stats(username: str, db: Annotated[Session, Depends(get_db)], p
         
     if is_postgres:
         hours_raw = db.query(func.to_char(Scrobble.played_at, 'HH24'), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.to_char(Scrobble.played_at, 'HH24')).all()
+        days_raw = db.query(func.to_char(Scrobble.played_at, 'ID'), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.to_char(Scrobble.played_at, 'ID')).all()
+        graph_raw = db.query(func.to_char(Scrobble.played_at, 'YYYY-MM-DD'), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.to_char(Scrobble.played_at, 'YYYY-MM-DD')).all()
+        day_names = {'1': 'Пн', '2': 'Вт', '3': 'Ср', '4': 'Чт', '5': 'Пт', '6': 'Сб', '7': 'Вс'}
     else:
         hours_raw = db.query(func.strftime('%H', Scrobble.played_at), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.strftime('%H', Scrobble.played_at)).all()
+        days_raw = db.query(func.strftime('%w', Scrobble.played_at), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.strftime('%w', Scrobble.played_at)).all()
+        graph_raw = db.query(func.strftime('%Y-%m-%d', Scrobble.played_at), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.strftime('%Y-%m-%d', Scrobble.played_at)).all()
+        day_names = {'1': 'Пн', '2': 'Вт', '3': 'Ср', '4': 'Чт', '5': 'Пт', '6': 'Сб', '0': 'Вс'}
+        
     hours_activity = {f"{i:02d}": 0 for i in range(24)}
-    for h, count in hours_raw: hours_activity[h] = count
+    for h, count in hours_raw:
+        if h is not None:
+            hours_activity[h] = count
+
+    days_activity = {name: 0 for name in ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']}
+    for d, count in days_raw:
+        if d in day_names:
+            days_activity[day_names[d]] = count
+
+    activity_graph = {date: count for date, count in graph_raw if date is not None}
 
     return {
         "user": {"username": user.username, "display_name": user.profile.display_name or user.username, "avatar_url": user.profile.avatar_url},
@@ -553,9 +569,9 @@ def get_detailed_stats(username: str, db: Annotated[Session, Depends(get_db)], p
         "top_albums": [{"album": r[0], "artist": r[1], "cover_url": r[2], "plays": r[3], "source": r[4]} for r in top_albums_raw],
         "genre_counts": dict(genres),
         "source_counts": dict(sources),
-        "activity_graph": {}, # Full graph is expensive, usually handled by a separate simpler endpoint
+        "activity_graph": activity_graph,
         "hours_activity": hours_activity,
-        "days_activity": {}
+        "days_activity": days_activity
     }
 
 # --- /api/stats/{username} ---
