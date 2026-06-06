@@ -41,3 +41,97 @@ body {
   0%, 100% { height: 4px; }
   50% { height: 12px; }
 }
+
+/* Avatar Frames Styling */
+.avatar-frame-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  padding: 3px;
+  overflow: hidden;
+  background: transparent;
+  z-index: 1;
+  box-sizing: border-box;
+}
+
+.avatar-frame-wrapper::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  border-radius: 50%;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+/* 1. Meloman Frame (Level 5+) - Cyan Pulse */
+.avatar-frame-meloman {
+  box-shadow: 0 0 10px rgba(0, 242, 254, 0.4);
+  border: 2px solid #00f2fe;
+  animation: meloman-pulse 2s infinite alternate;
+}
+@keyframes meloman-pulse {
+  0% { box-shadow: 0 0 5px rgba(0, 242, 254, 0.3); }
+  100% { box-shadow: 0 0 15px rgba(0, 242, 254, 0.7); }
+}
+
+/* 2. Audiophile Frame (Level 15+) - Purple Aura */
+.avatar-frame-audiophile {
+  border: 2px solid #b92b27;
+  box-shadow: 0 0 12px rgba(185, 43, 39, 0.5);
+  animation: audiophile-glow 3s infinite alternate;
+}
+@keyframes audiophile-glow {
+  0% {
+    border-color: #b92b27;
+    box-shadow: 0 0 8px rgba(185, 43, 39, 0.4);
+  }
+  100% {
+    border-color: #1565c0;
+    box-shadow: 0 0 20px rgba(21, 101, 192, 0.8);
+  }
+}
+
+/* 3. Maniac Frame (Level 30+) - Spinning Lava */
+.avatar-frame-maniac::before {
+  opacity: 1;
+  background: conic-gradient(#ff4e50, #f9d423, #ff4e50);
+  animation: spin 3s linear infinite;
+}
+
+/* 4. Legend Frame (Level 50+) - Gold Spin & Shine */
+.avatar-frame-legend::before {
+  opacity: 1;
+  background: conic-gradient(#bf953f, #fcf6ba, #b38728, #fbf5b7, #bf953f);
+  animation: spin 6s linear infinite;
+}
+.avatar-frame-legend {
+  box-shadow: 0 0 15px rgba(251, 245, 183, 0.4);
+}
+
+/* 5. God Frame (Level 100+) - Cosmic Rainbow Wave */
+.avatar-frame-god::before {
+  opacity: 1;
+  background: conic-gradient(#ff007f, #7f00ff, #00f2fe, #00ff7f, #ff007f);
+  animation: spin 2.5s linear infinite;
+}
+.avatar-frame-god {
+  box-shadow: 0 0 25px rgba(127, 0, 255, 0.6);
+  animation: god-hue 6s linear infinite;
+}
+
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes god-hue {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}

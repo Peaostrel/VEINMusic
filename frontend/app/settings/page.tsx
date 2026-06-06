@@ -97,7 +97,10 @@ function SettingsContent() {
 
   const [data, setData] = useState({
       displayName: '', bio: '', avatarUrl: '', coverUrl: '', location: '', favoriteGenre: '', equipment: '',
-      favArtist: '', favTrackArtist: '', favTrackName: '', favAlbumArtist: '', favAlbumName: '', theme: 'classic',
+      favArtist: '', favArtistReview: '', favArtistRating: 0,
+      favTrackArtist: '', favTrackName: '', favTrackReview: '', favTrackRating: 0,
+      favAlbumArtist: '', favAlbumName: '', favAlbumReview: '', favAlbumRating: 0,
+      avatarFrame: '', theme: 'classic',
       country: '', city: '', isPrivate: false, hiddenArtists: '', yandexToken: '', lastfmUsername: ''
   });
 
@@ -187,8 +190,15 @@ function SettingsContent() {
             avatarUrl: u.avatar_url || '', coverUrl: u.cover_url || '', location: loc, 
             country: locParts[0] || '', city: locParts[1] || '', favoriteGenre: u.favorite_genre || '', equipment: u.equipment || '',
             favArtist: u.favorite_artist || '',
+            favArtistReview: u.favorite_artist_review || '',
+            favArtistRating: u.favorite_artist_rating || 0,
             favTrackArtist: favTrackArtist, favTrackName: favTrackName, 
+            favTrackReview: u.favorite_track_review || '',
+            favTrackRating: u.favorite_track_rating || 0,
             favAlbumArtist: favAlbumArtist, favAlbumName: favAlbumName, 
+            favAlbumReview: u.favorite_album_review || '',
+            favAlbumRating: u.favorite_album_rating || 0,
+            avatarFrame: u.avatar_frame || '',
             theme: u.theme || 'classic', isPrivate: u.is_private || false, hiddenArtists: u.hidden_artists || '',
             yandexToken: u.yandex_token || '', lastfmUsername: u.lastfm_username || ''
         });
@@ -283,8 +293,15 @@ function SettingsContent() {
           location: data.country && data.city ? `${data.country}, ${data.city}` : data.country || data.city || '', 
           favorite_genre: data.favoriteGenre, equipment: data.equipment, theme: data.theme,
           favorite_artist: data.favArtist,
+          favorite_artist_review: data.favArtistReview,
+          favorite_artist_rating: data.favArtistRating,
           favorite_track: (data.favTrackArtist && data.favTrackName) ? `${data.favTrackArtist} — ${data.favTrackName}` : '', 
+          favorite_track_review: data.favTrackReview,
+          favorite_track_rating: data.favTrackRating,
           favorite_album: (data.favAlbumArtist && data.favAlbumName) ? `${data.favAlbumArtist} — ${data.favAlbumName}` : '',
+          favorite_album_review: data.favAlbumReview,
+          favorite_album_rating: data.favAlbumRating,
+          avatar_frame: data.avatarFrame,
           is_private: data.isPrivate,
           hidden_artists: data.hiddenArtists, lastfm_username: data.lastfmUsername,
           social_links: JSON.stringify(socialLinks.filter(l => l.username.trim() !== ''))

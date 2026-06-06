@@ -354,13 +354,20 @@ def get_user_info(username: str, request: Request, db: Annotated[Session, Depend
         }
 
     ach_data = db.query(Achievement, UserAchievement).join(UserAchievement, Achievement.id == UserAchievement.achievement_id).filter(UserAchievement.user_id == user.id).all()
+    lvl, rnk, _, _ = get_user_level_info(user, db)
     return {
         "username": user.username, "display_name": user.profile.display_name or user.username, "bio": user.profile.bio or "Этот пользователь пока ничего о себе не рассказал.",
         "avatar_url": user.profile.avatar_url, "cover_url": user.profile.cover_url, "location": user.profile.location, "favorite_genre": user.profile.favorite_genre, "equipment": user.profile.equipment,
         "social_links": user.profile.social_links or "[]", "theme": user.profile.theme or "classic", "is_verified": user.integration.is_verified,
         "favorite_artist": user.profile.favorite_artist, "favorite_artist_url": user.profile.favorite_artist_url, "favorite_artist_cover": user.profile.favorite_artist_cover,
+        "favorite_artist_review": user.profile.favorite_artist_review, "favorite_artist_rating": user.profile.favorite_artist_rating,
         "favorite_track": user.profile.favorite_track, "favorite_track_url": user.profile.favorite_track_url, "favorite_track_cover": user.profile.favorite_track_cover, 
+        "favorite_track_review": user.profile.favorite_track_review, "favorite_track_rating": user.profile.favorite_track_rating,
         "favorite_album": user.profile.favorite_album, "favorite_album_url": user.profile.favorite_album_url, "favorite_album_cover": user.profile.favorite_album_cover,
+        "favorite_album_review": user.profile.favorite_album_review, "favorite_album_rating": user.profile.favorite_album_rating,
+        "avatar_frame": user.profile.avatar_frame,
+        "level": lvl,
+        "rank": rnk,
         "spotify_linked": bool(user.integration.spotify_refresh_token), "yandex_linked": bool(user.integration.yandex_token),
         "lastfm_username": user.integration.lastfm_username, "last_sync": user.integration.last_sync, "role": role,
         "achievements": [{"id": a.id, "name": a.name, "description": a.description, "icon": a.icon, "target_image": a.target_image, "reward_xp": a.reward_xp, "is_displayed": ua.is_displayed, "earned_at": ua.earned_at} for a, ua in ach_data],

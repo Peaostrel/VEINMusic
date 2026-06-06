@@ -50,6 +50,14 @@ async def update_profile(data: ProfileUpdate, db: Annotated[Session, Depends(get
     await _update_favorite(user.profile, data.favorite_track, 'favorite_track', 'track')
     await _update_favorite(user.profile, data.favorite_album, 'favorite_album', 'album')
     
+    if data.favorite_artist_review is not None: user.profile.favorite_artist_review = sanitize_text(data.favorite_artist_review)
+    if data.favorite_artist_rating is not None: user.profile.favorite_artist_rating = data.favorite_artist_rating
+    if data.favorite_track_review is not None: user.profile.favorite_track_review = sanitize_text(data.favorite_track_review)
+    if data.favorite_track_rating is not None: user.profile.favorite_track_rating = data.favorite_track_rating
+    if data.favorite_album_review is not None: user.profile.favorite_album_review = sanitize_text(data.favorite_album_review)
+    if data.favorite_album_rating is not None: user.profile.favorite_album_rating = data.favorite_album_rating
+    if data.avatar_frame is not None: user.profile.avatar_frame = sanitize_text(data.avatar_frame)
+    
     if data.display_name is not None: user.profile.display_name = sanitize_text(data.display_name)
     if data.bio is not None: user.profile.bio = sanitize_text(data.bio)
     if data.avatar_url is not None:

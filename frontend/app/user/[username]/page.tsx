@@ -1249,48 +1249,120 @@ function ProfileStatsSection({
       </div>
 
       {(u.favorite_artist || u.favorite_track || u.favorite_album) && (
-        <div className="flex flex-wrap justify-center md:justify-start gap-4 mt-4">
-          {u.favorite_artist && (
-            <a href={u.favorite_artist_url && u.favorite_artist_url !== '#' ? u.favorite_artist_url : getArtistUrl(u.favorite_artist, 'yandex')} target="_blank" rel="noreferrer" className="bg-[#121212]/80 p-3 pr-6 rounded-xl border border-white/5 hover:border-[var(--accent)] group transition-all shadow-md flex items-center gap-4 w-max max-w-full">
-              {u.favorite_artist_cover ? (
-                <img src={u.favorite_artist_cover} className="w-14 h-14 rounded-full object-cover group-hover:scale-110 transition-transform duration-500 shadow-inner shrink-0" alt="Artist" />
-              ) : (
-                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-xl text-yellow-500 group-hover:scale-110 transition-transform duration-500 shadow-inner shrink-0">🎤</div>
-              )}
-              <div className="text-left flex flex-col justify-center">
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Любимый артист</p>
-                <p className="font-black text-white group-hover:text-[var(--accent-text)] text-sm transition-colors whitespace-nowrap pr-4">{u.favorite_artist}</p>
+        <div className="mt-8 pt-6 border-t border-white/5 text-left">
+          <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Музыкальная витрина</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {u.favorite_artist && (
+              <div className="bg-white/5 backdrop-blur-md p-5 rounded-2xl border border-white/10 hover:border-[var(--accent)]/40 transition-all duration-500 shadow-xl flex flex-col justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  {u.favorite_artist_cover ? (
+                    <img src={u.favorite_artist_cover} className="w-20 h-20 rounded-full object-cover shadow-lg shrink-0" alt="Artist" />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-3xl text-yellow-500 shadow-inner shrink-0">🎤</div>
+                  )}
+                  <div className="flex-grow min-w-0">
+                    <span className="inline-block text-[9px] font-black uppercase tracking-wider text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded-full border border-cyan-400/20 mb-1.5">Артист</span>
+                    <a href={u.favorite_artist_url && u.favorite_artist_url !== '#' ? u.favorite_artist_url : getArtistUrl(u.favorite_artist, 'yandex')} target="_blank" rel="noreferrer" className="block font-black text-white hover:text-[var(--accent-text)] text-base leading-tight truncate">
+                      {u.favorite_artist}
+                    </a>
+                    {u.favorite_artist_rating > 0 && (
+                      <div className="flex items-center gap-0.5 mt-2" title={`Оценка: ${u.favorite_artist_rating}/5`}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <span
+                            key={star}
+                            className={`text-sm ${
+                              star <= u.favorite_artist_rating ? 'text-yellow-400 drop-shadow-[0_0_3px_rgba(250,204,21,0.4)]' : 'text-gray-700'
+                            }`}
+                          >
+                            ★
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {u.favorite_artist_review && (
+                  <p className="text-xs text-gray-300 italic bg-black/40 p-3 rounded-xl border-l-2 border-cyan-400 leading-relaxed max-h-32 overflow-y-auto pr-2">
+                    &ldquo;{u.favorite_artist_review}&rdquo;
+                  </p>
+                )}
               </div>
-            </a>
-          )}
+            )}
 
-          {u.favorite_track && (
-            <a href={u.favorite_track_url && u.favorite_track_url !== '#' ? u.favorite_track_url : getTrackUrl({ artist: u.favorite_artist || '', title: u.favorite_track, source: 'yandex' })} target="_blank" rel="noreferrer" className="bg-[#121212]/80 p-3 pr-6 rounded-xl border border-white/5 hover:border-[var(--accent)] group transition-all shadow-md flex items-center gap-4 w-max max-w-full">
-              {u.favorite_track_cover ? (
-                <img src={u.favorite_track_cover} className="w-14 h-14 rounded object-cover group-hover:scale-110 transition-transform duration-500 shadow-inner shrink-0" alt="Track" />
-              ) : (
-                <div className="w-14 h-14 rounded bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-xl text-yellow-500 group-hover:scale-110 transition-transform duration-500 shadow-inner shrink-0">🎵</div>
-              )}
-              <div className="text-left flex flex-col justify-center">
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Любимый трек</p>
-                <p className="font-black text-white group-hover:text-[var(--accent-text)] text-sm transition-colors whitespace-nowrap pr-4">{u.favorite_track}</p>
+            {u.favorite_track && (
+              <div className="bg-white/5 backdrop-blur-md p-5 rounded-2xl border border-white/10 hover:border-[var(--accent)]/40 transition-all duration-500 shadow-xl flex flex-col justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  {u.favorite_track_cover ? (
+                    <img src={u.favorite_track_cover} className="w-20 h-20 rounded-xl object-cover shadow-lg shrink-0" alt="Track" />
+                  ) : (
+                    <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-3xl text-yellow-500 shadow-inner shrink-0">🎵</div>
+                  )}
+                  <div className="flex-grow min-w-0">
+                    <span className="inline-block text-[9px] font-black uppercase tracking-wider text-purple-400 bg-purple-400/10 px-2 py-0.5 rounded-full border border-purple-400/20 mb-1.5">Трек</span>
+                    <a href={u.favorite_track_url && u.favorite_track_url !== '#' ? u.favorite_track_url : getTrackUrl({ artist: u.favorite_artist || '', title: u.favorite_track, source: 'yandex' })} target="_blank" rel="noreferrer" className="block font-black text-white hover:text-[var(--accent-text)] text-base leading-tight truncate">
+                      {u.favorite_track}
+                    </a>
+                    {u.favorite_track_rating > 0 && (
+                      <div className="flex items-center gap-0.5 mt-2" title={`Оценка: ${u.favorite_track_rating}/5`}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <span
+                            key={star}
+                            className={`text-sm ${
+                              star <= u.favorite_track_rating ? 'text-yellow-400 drop-shadow-[0_0_3px_rgba(250,204,21,0.4)]' : 'text-gray-700'
+                            }`}
+                          >
+                            ★
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {u.favorite_track_review && (
+                  <p className="text-xs text-gray-300 italic bg-black/40 p-3 rounded-xl border-l-2 border-purple-400 leading-relaxed max-h-32 overflow-y-auto pr-2">
+                    &ldquo;{u.favorite_track_review}&rdquo;
+                  </p>
+                )}
               </div>
-            </a>
-          )}
+            )}
 
-          {u.favorite_album && (
-            <a href={favoriteAlbumRedirectUrl} target="_blank" rel="noreferrer" className="bg-[#121212]/80 p-3 pr-6 rounded-xl border border-white/5 hover:border-[var(--accent)] group transition-all shadow-md flex items-center gap-4 w-max max-w-full">
-              {u.favorite_album_cover ? (
-                <img src={u.favorite_album_cover} className="w-14 h-14 rounded-md object-cover group-hover:scale-110 transition-transform duration-500 shadow-inner shrink-0" alt="Album" />
-              ) : (
-                <div className="w-14 h-14 rounded-md bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-xl text-yellow-500 group-hover:scale-110 transition-transform duration-500 shadow-inner shrink-0">💿</div>
-              )}
-              <div className="text-left flex flex-col justify-center">
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Любимый альбом</p>
-                <p className="font-black text-white group-hover:text-[var(--accent-text)] text-sm transition-colors whitespace-nowrap pr-4">{u.favorite_album}</p>
+            {u.favorite_album && (
+              <div className="bg-white/5 backdrop-blur-md p-5 rounded-2xl border border-white/10 hover:border-[var(--accent)]/40 transition-all duration-500 shadow-xl flex flex-col justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  {u.favorite_album_cover ? (
+                    <img src={u.favorite_album_cover} className="w-20 h-20 rounded-xl object-cover shadow-lg shrink-0" alt="Album" />
+                  ) : (
+                    <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-3xl text-yellow-500 shadow-inner shrink-0">💿</div>
+                  )}
+                  <div className="flex-grow min-w-0">
+                    <span className="inline-block text-[9px] font-black uppercase tracking-wider text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20 mb-1.5">Альбом</span>
+                    <a href={favoriteAlbumRedirectUrl} target="_blank" rel="noreferrer" className="block font-black text-white hover:text-[var(--accent-text)] text-base leading-tight truncate">
+                      {u.favorite_album}
+                    </a>
+                    {u.favorite_album_rating > 0 && (
+                      <div className="flex items-center gap-0.5 mt-2" title={`Оценка: ${u.favorite_album_rating}/5`}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <span
+                            key={star}
+                            className={`text-sm ${
+                              star <= u.favorite_album_rating ? 'text-yellow-400 drop-shadow-[0_0_3px_rgba(250,204,21,0.4)]' : 'text-gray-700'
+                            }`}
+                          >
+                            ★
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {u.favorite_album_review && (
+                  <p className="text-xs text-gray-300 italic bg-black/40 p-3 rounded-xl border-l-2 border-amber-400 leading-relaxed max-h-32 overflow-y-auto pr-2">
+                    &ldquo;{u.favorite_album_review}&rdquo;
+                  </p>
+                )}
               </div>
-            </a>
-          )}
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -32,10 +32,17 @@ class ProfileUpdate(BaseModel):
     theme: Optional[str] = None
     favorite_artist: Optional[str] = None
     favorite_artist_url: Optional[str] = None
+    favorite_artist_review: Optional[str] = None
+    favorite_artist_rating: Optional[int] = None
     favorite_track: Optional[str] = None
     favorite_track_url: Optional[str] = None
+    favorite_track_review: Optional[str] = None
+    favorite_track_rating: Optional[int] = None
     favorite_album: Optional[str] = None
     favorite_album_url: Optional[str] = None
+    favorite_album_review: Optional[str] = None
+    favorite_album_rating: Optional[int] = None
+    avatar_frame: Optional[str] = None
     is_private: Optional[bool] = False
     hidden_artists: Optional[str] = ""
     lastfm_username: Optional[str] = None

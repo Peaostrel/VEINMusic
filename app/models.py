@@ -38,6 +38,8 @@ class UserProfile(Base):
     favorite_artist = Column(String, nullable=True)
     favorite_artist_url = Column(String, nullable=True)
     favorite_artist_cover = Column(String, nullable=True)
+    favorite_artist_review = Column(String, nullable=True)
+    favorite_artist_rating = Column(Integer, nullable=True)
     
     favorite_track = Column(String, nullable=True)
     favorite_track_url = Column(String, nullable=True)
@@ -50,6 +52,8 @@ class UserProfile(Base):
     favorite_album_cover = Column(String, nullable=True)
     favorite_album_review = Column(String, nullable=True)
     favorite_album_rating = Column(Integer, nullable=True)
+    
+    avatar_frame = Column(String, default="")
     
     user = relationship("User", back_populates="profile")
 
