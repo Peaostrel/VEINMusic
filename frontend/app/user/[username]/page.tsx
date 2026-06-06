@@ -917,7 +917,7 @@ async function fetchAndShowNotifications(
       const existingIds = new Set(newToasts.map((t: any) => t.ach_id));
       for (const ach of unread) {
         if (!existingIds.has(ach.ua_id)) {
-          const toastId = `${ach.ua_id}-${Date.now()}-${Math.random()}`;
+          const toastId = `${ach.ua_id}-${Date.now()}-${newToasts.length}`;
           newToasts.push({
             id: toastId,
             ach_id: ach.ua_id,

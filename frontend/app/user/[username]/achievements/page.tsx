@@ -25,8 +25,7 @@ function renderDescriptionWithLinks(desc: string, meta: string | null, url: stri
     
     parts.forEach((targetWord, idx) => {
         if (!targetWord) return;
-        const escapedWord = escapeRegExp(targetWord);
-        const regex = new RegExp(`(${escapedWord})`, 'gi');
+        const lowerTarget = targetWord.toLowerCase();
         
         const newNodes: any[] = [];
         nodes.forEach((node, nodeIdx) => {
@@ -34,28 +33,35 @@ function renderDescriptionWithLinks(desc: string, meta: string | null, url: stri
                 newNodes.push(node);
                 return;
             }
-            const subParts = node.split(regex);
-            if (subParts.length === 1) {
+            const lowerNode = node.toLowerCase();
+            let lastIdx = 0;
+            let idxOf = lowerNode.indexOf(lowerTarget, lastIdx);
+            if (idxOf === -1) {
                 newNodes.push(node);
                 return;
             }
-            subParts.forEach((sp, i) => {
-                if (i % 2 === 1) {
-                    newNodes.push(
-                        <a key={`meta-${idx}-${nodeIdx}-${i}`} href={linkUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline font-bold">
-                            {sp}
-                        </a>
-                    );
-                } else if (sp) {
-                    newNodes.push(sp);
+            while (idxOf !== -1) {
+                if (idxOf > lastIdx) {
+                    newNodes.push(node.substring(lastIdx, idxOf));
                 }
-            });
+                const matchedWord = node.substring(idxOf, idxOf + targetWord.length);
+                newNodes.push(
+                    <a key={`meta-${idx}-${nodeIdx}-${idxOf}`} href={linkUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline font-bold">
+                        {matchedWord}
+                    </a>
+                );
+                lastIdx = idxOf + targetWord.length;
+                idxOf = lowerNode.indexOf(lowerTarget, lastIdx);
+            }
+            if (lastIdx < node.length) {
+                newNodes.push(node.substring(lastIdx));
+            }
         });
         nodes = newNodes;
     });
 
     // 2. Затем обрабатываем Markdown [Текст](Ссылка) на оставшихся текстовых нодах
-    const mdRegex = /\[(.*?)\]\((.*?)\)/g;
+    const mdRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
     const finalNodes: any[] = [];
 
     nodes.forEach((node, nodeIdx) => {

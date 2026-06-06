@@ -42,7 +42,7 @@ function getArtworkCover(metadata, source) {
     if (!metadata?.artwork?.length) return '';
     const coverRaw = metadata.artwork.at(-1).src;
     if (source === 'yandex' || source === 'vk') {
-        return coverRaw.replace(/\d+x\d+/, '400x400');
+        return coverRaw.replace(/\d{1,4}x\d{1,4}/, '400x400');
     }
     if (source === 'youtube_music') {
         return coverRaw.includes('=') ? coverRaw.split('=')[0] + '=w500-h500' : coverRaw;
@@ -78,7 +78,7 @@ function getVkMetadata() {
     if (vkCoverEl) {
         const bg = globalThis.getComputedStyle(vkCoverEl).backgroundImage;
         if (bg && bg !== 'none') {
-            trackCover = bg.replace(/^url\(["']?/, '').replace(/["']?\)$/, '').replace(/\d+x\d+/, '400x400');
+            trackCover = bg.replace(/^url\(["']?/, '').replace(/["']?\)$/, '').replace(/\d{1,4}x\d{1,4}/, '400x400');
         }
     }
 
