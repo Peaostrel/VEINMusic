@@ -102,16 +102,15 @@ def _check_csrf(request: Request, from_cookie: bool):
         raise HTTPException(status_code=403, detail="CSRF verification failed: missing Origin/Referer")
         
     origin_allowed = False
-    if origin:
-        if origin in allowed_origins:
-            origin_allowed = True
-    elif referer:
+    if origin and origin in allowed_origins:
+        origin_allowed = True
+    elif not origin and referer:
         from urllib.parse import urlparse
         ref_parsed = urlparse(referer)
         ref_origin = f"{ref_parsed.scheme}://{ref_parsed.netloc}"
         if ref_origin in allowed_origins:
             origin_allowed = True
-            
+
     if not origin_allowed:
         raise HTTPException(status_code=403, detail="CSRF verification failed: origin not allowed")
 

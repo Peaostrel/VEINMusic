@@ -86,7 +86,7 @@ def spotify_login(current_user: Annotated[User, Depends(get_current_user)], resp
     )
     return RedirectResponse(f"https://accounts.spotify.com/authorize?client_id={SPOTIFY_CLIENT_ID}&response_type=code&redirect_uri={SPOTIFY_REDIRECT_URI}&scope={scopes}&state={state}")
 
-@router.get("/spotify/callback")
+@router.get("/spotify/callback", responses={400: {"description": "Invalid state parameter"}})
 async def spotify_callback(code: str, state: str, request: Request, response: Response, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     cookie_state = request.cookies.get("spotify_auth_state")
     if not cookie_state or not secrets.compare_digest(state, cookie_state):

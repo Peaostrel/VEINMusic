@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
     yield
     
     # Cancel background tasks on shutdown
-    for t in list(background_tasks):
+    for t in set(background_tasks):
         t.cancel()
 
 # Setup Rate Limiting

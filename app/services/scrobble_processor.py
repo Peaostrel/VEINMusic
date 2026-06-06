@@ -82,35 +82,41 @@ def format_history_item(scrobble, track, db: Session = None, counters: dict = No
         data["comments_count"] = db.query(ScrobbleComment).filter_by(scrobble_id=scrobble.id).count()
     return data
 
+def _update_existing_track(db: Session, track: Track, cover_url: str, track_url: str, duration: int, album: str) -> None:
+    """Update mutable fields on an existing track and commit if anything changed."""
+    updated = False
+    if cover_url and not track.cover_url:
+        track.cover_url = cover_url
+        updated = True
+    if track_url and TRACK_PATH in track_url:
+        if not track.track_url or TRACK_PATH not in track.track_url:
+            track.track_url = track_url
+            updated = True
+    if album and not track.album:
+        track.album = album
+        updated = True
+    if duration and duration > 0:
+        needs_update = track.duration == 0 or track.duration == 180 or abs(track.duration - duration) > 5
+        if needs_update:
+            track.duration = duration
+            updated = True
+    if updated:
+        db.commit()
+
+
 async def _get_or_create_track(db: Session, title: str, artist: str, cover_url: str, track_url: str, duration: int, album: str) -> Track:
     track = db.query(Track).filter(
         func.lower(Track.title) == func.lower(title),
         func.lower(Track.artist) == func.lower(artist)
     ).first()
-    
+
     if not track:
         track = Track(title=title, artist=artist, cover_url=cover_url, track_url=track_url, duration=duration or 0, album=album)
         db.add(track)
         db.commit()
         db.refresh(track)
     else:
-        updated = False
-        if cover_url and not track.cover_url: 
-            track.cover_url = cover_url
-            updated = True
-        if track_url and TRACK_PATH in track_url:
-            if not track.track_url or TRACK_PATH not in track.track_url:
-                track.track_url = track_url
-                updated = True
-        if album and not track.album:
-            track.album = album
-            updated = True
-        if duration and duration > 0:
-            if track.duration == 0 or track.duration == 180 or abs(track.duration - duration) > 5:
-                track.duration = duration
-                updated = True
-        if updated: 
-            db.commit()
+        _update_existing_track(db, track, cover_url, track_url, duration, album)
 
     if track.duration == 0 and track.track_url:
         track.duration = await get_track_duration(track.track_url)
@@ -119,7 +125,7 @@ async def _get_or_create_track(db: Session, title: str, artist: str, cover_url: 
     if not track.genre and track.track_url:
         track.genre = await get_track_genre(track.track_url)
         db.commit()
-        
+
     return track
 
 def _check_favorite(track: Track, user: User) -> bool:

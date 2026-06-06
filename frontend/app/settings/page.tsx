@@ -244,6 +244,7 @@ function SettingsContent() {
         setStatus('❌ Ошибка при генерации');
       }
     } catch (e) {
+      console.error('API key generation failed:', e);
       setStatus('❌ Ошибка сети');
     }
   };

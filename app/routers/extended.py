@@ -110,23 +110,56 @@ def _check_night_scrobbles(user, ach, db: Session) -> bool:
     night_count = sum(1 for (dt,) in valid_times if (dt + timedelta(hours=offset)).strftime('%H') in ['00', '01', '02', '03', '04', '05'])
     return night_count >= ach.rule_value
 
+def _scrobble_count_for_parts(db, user_id, parts):
+    if len(parts) >= 2:
+        return db.query(Scrobble).join(Track).filter(
+            Scrobble.user_id == user_id,
+            Scrobble.listened_sec * 100 >= Track.duration * 85,
+            (Track.artist.ilike(f"%{parts[0]}%") & Track.title.ilike(f"%{parts[-1]}%"))
+            | (Track.title.ilike(f"%{parts[0]}%") & Track.title.ilike(f"%{parts[-1]}%"))
+        ).count()
+    return db.query(Scrobble).join(Track).filter(
+        Scrobble.user_id == user_id,
+        Scrobble.listened_sec * 100 >= Track.duration * 85,
+        (Track.title.ilike(f"%{parts[0]}%")) | (Track.artist.ilike(f"%{parts[0]}%"))
+    ).count()
+
+
+def _count_by_url(db, user_id, target_str):
+    if "yandex.ru" in target_str and TRACK_PATH in target_str:
+        track_id = target_str.split(TRACK_PATH)[1].strip("/")
+        return db.query(Scrobble).join(Track).filter(
+            Scrobble.user_id == user_id,
+            Scrobble.listened_sec * 100 >= Track.duration * 85,
+            Track.track_url.like(f"%/track/{track_id}%")
+        ).count()
+    return db.query(Scrobble).join(Track).filter(
+        Scrobble.user_id == user_id,
+        Scrobble.listened_sec * 100 >= Track.duration * 85,
+        Track.track_url.like(f"%{target_str}%")
+    ).count()
+
+
 def _check_specific_track(user, ach, db: Session) -> bool:
-    if not ach.rule_target: return False
+    if not ach.rule_target:
+        return False
     if ach.rule_target.startswith("http"):
         if hasattr(ach, 'rule_meta') and ach.rule_meta:
             parts = [p.strip() for p in ach.rule_meta.replace('—', '-').split('-')]
-            if len(parts) >= 2: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.artist.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%")) | (Track.title.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%"))).count()
-            else: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.title.ilike(f"%{ach.rule_meta}%")) | (Track.artist.ilike(f"%{ach.rule_meta}%"))).count()
+            count = _scrobble_count_for_parts(db, user.id, parts)
         else:
-            target_str = ach.rule_target.split('?')[0]
-            if "yandex.ru" in target_str and TRACK_PATH in target_str:
-                track_id = target_str.split(TRACK_PATH)[1].strip("/")
-                count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.track_url.like(f"%/track/{track_id}%")).count()
-            else: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.track_url.like(f"%{target_str}%")).count()
+            count = _count_by_url(db, user.id, ach.rule_target.split('?')[0])
     else:
         parts = [p.strip() for p in ach.rule_target.replace('—', '-').split('-')]
-        if len(parts) >= 2: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.artist.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%")) | (Track.title.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%"))).count()
-        else: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.title.ilike(f"%{ach.rule_target}%")) | (Track.artist.ilike(f'%{ach.rule_target.split("||")[0] if "||" in ach.rule_target else ach.rule_target}%'))).count()
+        target0 = ach.rule_target.split("||")[0] if "||" in ach.rule_target else ach.rule_target
+        if len(parts) >= 2:
+            count = _scrobble_count_for_parts(db, user.id, parts)
+        else:
+            count = db.query(Scrobble).join(Track).filter(
+                Scrobble.user_id == user.id,
+                Scrobble.listened_sec * 100 >= Track.duration * 85,
+                (Track.title.ilike(f"%{ach.rule_target}%")) | (Track.artist.ilike(f'%{target0}%'))
+            ).count()
     return count >= ach.rule_value
 
 def _check_specific_album(user, ach, db: Session) -> bool:
@@ -279,7 +312,7 @@ router = APIRouter(tags=["extended"])
 
 
 # --- /api/user/mood ---
-@router.get("/api/user/mood")
+@router.get("/api/user/mood", responses={404: {"description": "User not found"}})
 def get_user_mood(username: str, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404)
@@ -300,7 +333,7 @@ def get_user_mood(username: str, db: Annotated[Session, Depends(get_db)]):
 
 
 # --- /api/user/{username} ---
-@router.get("/api/user/{username}")
+@router.get("/api/user/{username}", responses={404: {"description": "User not found"}})
 def get_user_info(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404, USER_NOT_FOUND)
@@ -388,7 +421,7 @@ def get_notifications(username: str, db: Annotated[Session, Depends(get_db)]):
 
 
 # --- /api/achievements/all/{username} ---
-@router.get("/api/achievements/all/{username}")
+@router.get("/api/achievements/all/{username}", responses={404: {"description": "User not found"}})
 def get_all_achievements(username: str, db: Annotated[Session, Depends(get_db)]): # NOSONAR
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404, "User not found")
@@ -1067,7 +1100,7 @@ def assign_achievement(target_username: str, data: AchAssign, db: Annotated[Sess
 
 
 # --- DELETE /api/admin/users/{target_username}/achievements/{achievement_id} ---
-@router.delete("/api/admin/users/{target_username}/achievements/{achievement_id}")
+@router.delete("/api/admin/users/{target_username}/achievements/{achievement_id}", responses={404: {"description": "User not found"}})
 def remove_achievement_from_user(target_username: str, achievement_id: int, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     target = db.query(User).filter(User.username == target_username).first()
     if not target: raise HTTPException(404, USER_NOT_FOUND)
@@ -1081,7 +1114,7 @@ def remove_achievement_from_user(target_username: str, achievement_id: int, db: 
 
 
 # --- POST /api/admin/users/{target_username}/level ---
-@router.post("/api/admin/users/{target_username}/level")
+@router.post("/api/admin/users/{target_username}/level", responses={404: {"description": "User not found"}, 400: {"description": "Invalid level"}})
 def update_user_level(target_username: str, data: LevelUpdate, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     target = db.query(User).filter(User.username == target_username).first()
     if not target: raise HTTPException(404, USER_NOT_FOUND)
@@ -1138,7 +1171,7 @@ def _save_file_sync(file_path: str, content: bytes):
 
 # --- POST /api/upload ---
 @router.post("/api/upload")
-async def upload_file(current_user: Annotated[User, Depends(get_current_user)], file: UploadFile = File(...)):
+async def upload_file(current_user: Annotated[User, Depends(get_current_user)], file: Annotated[UploadFile, File()]):
     import anyio
     # Security: Validate file type
     allowed_types = ["image/jpeg", "image/png", "image/webp", "image/gif"]
@@ -1165,7 +1198,7 @@ async def upload_file(current_user: Annotated[User, Depends(get_current_user)], 
 
 
 # --- GET /uploads/{filename} ---
-@router.get("/uploads/{filename}")
+@router.get("/uploads/{filename}", responses={400: {"description": "Invalid path"}, 404: {"description": "File not found"}})
 async def get_upload(filename: str, current_user: Annotated[User, Depends(get_current_user)]):
     clean_filename = os.path.basename(filename)
     file_path = os.path.join(UPLOADS_DIR, clean_filename)

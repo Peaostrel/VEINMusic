@@ -5,7 +5,7 @@ Revises:
 Create Date: 2026-06-03 22:27:07.890489
 
 """
-from typing import Sequence, Union
+from typing import Sequence
 
 from alembic import op
 import sqlalchemy as sa
@@ -13,9 +13,11 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '9a3f99ad184d'
-down_revision: Union[str, Sequence[str], None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+USERS_ID = 'users.id'
 
 
 def upgrade() -> None:
@@ -67,8 +69,8 @@ def upgrade() -> None:
     sa.Column('follower_id', sa.Integer(), nullable=True),
     sa.Column('following_id', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['follower_id'], ['users.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['following_id'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['follower_id'], [USERS_ID], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['following_id'], [USERS_ID], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_follows_id'), 'follows', ['id'], unique=False)
@@ -84,7 +86,7 @@ def upgrade() -> None:
     sa.Column('xp_earned', sa.Integer(), nullable=True),
     sa.Column('is_imported', sa.Boolean(), nullable=True),
     sa.ForeignKeyConstraint(['track_id'], ['tracks.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_id'], [USERS_ID], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_scrobbles_id'), 'scrobbles', ['id'], unique=False)
@@ -98,7 +100,7 @@ def upgrade() -> None:
     sa.Column('is_displayed', sa.Boolean(), nullable=True),
     sa.Column('notified', sa.Boolean(), nullable=True),
     sa.ForeignKeyConstraint(['achievement_id'], ['achievements.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_id'], [USERS_ID], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_user_achievements_id'), 'user_achievements', ['id'], unique=False)
@@ -113,7 +115,7 @@ def upgrade() -> None:
     sa.Column('spotify_access_token', sa.String(), nullable=True),
     sa.Column('spotify_refresh_token', sa.String(), nullable=True),
     sa.Column('last_sync', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_id'], [USERS_ID], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('user_id')
     )
     op.create_table('user_profiles',
@@ -142,7 +144,7 @@ def upgrade() -> None:
     sa.Column('favorite_album_cover', sa.String(), nullable=True),
     sa.Column('favorite_album_review', sa.String(), nullable=True),
     sa.Column('favorite_album_rating', sa.Integer(), nullable=True),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_id'], [USERS_ID], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('user_id')
     )
     op.create_table('scrobble_comments',
@@ -152,7 +154,7 @@ def upgrade() -> None:
     sa.Column('content', sa.String(), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['scrobble_id'], ['scrobbles.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_id'], [USERS_ID], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_scrobble_comments_id'), 'scrobble_comments', ['id'], unique=False)
@@ -162,7 +164,7 @@ def upgrade() -> None:
     sa.Column('scrobble_id', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['scrobble_id'], ['scrobbles.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_id'], [USERS_ID], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_scrobble_likes_id'), 'scrobble_likes', ['id'], unique=False)

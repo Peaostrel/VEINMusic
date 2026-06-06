@@ -100,7 +100,7 @@ export default function IntegrationsTab({
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
                         <div className="flex items-center gap-2 bg-black/30 p-2 rounded-lg border border-white/5">
                             <code className="text-[var(--accent-text)] px-3 font-mono text-sm">
-                                {generatedApiKey ? generatedApiKey : "••••••••••••••••••••••••••••••••"}
+                                {generatedApiKey ?? "••••••••••••••••••••••••••••••••"}
                             </code>
                             {generatedApiKey && (
                                 <button type="button" onClick={handleCopyKey} className="bg-white/5 border border-white/10 text-white hover:text-[var(--accent-text)] px-3 py-1.5 rounded font-bold text-xs">

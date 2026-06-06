@@ -54,7 +54,7 @@ async def add_scrobble(data: ScrobbleData, background_tasks: BackgroundTasks, db
             logging.error(f"Scrobble error: {e}")
             raise HTTPException(status_code=500, detail="Internal Server Error")
 
-@router.get("/history/{username}")
+@router.get("/history/{username}", responses={403: {"description": "Private profile"}, 404: {"description": "User not found"}})
 def get_history(username: str, request: Request, db: Annotated[Session, Depends(get_db)], current_user: Annotated[Optional[User], Depends(get_current_user_optional)] = None):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404)
@@ -93,7 +93,7 @@ def get_global_history(db: Annotated[Session, Depends(get_db)]):
     
     return [format_history_item(s, t, counters=counters) for s, t in scrobbles]
 
-@router.get("/friends-history/{username}")
+@router.get("/friends-history/{username}", responses={403: {"description": "Access denied"}, 404: {"description": "User not found"}})
 def get_friends_history(username: str, request: Request, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404)
@@ -126,7 +126,7 @@ def api_get_taste_twins(username: str, db: Annotated[Session, Depends(get_db)]):
     from app.routers.extended import get_taste_twins
     return get_taste_twins(username, db)
 
-@router.post("/scrobble/{scrobble_id}/like")
+@router.post("/scrobble/{scrobble_id}/like", responses={404: {"description": "Scrobble not found"}})
 def toggle_like(scrobble_id: int, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
     # Verify scrobble exists
@@ -142,7 +142,7 @@ def toggle_like(scrobble_id: int, db: Annotated[Session, Depends(get_db)], curre
         db.add(ScrobbleLike(user_id=user.id, scrobble_id=scrobble_id)); db.commit()
         return {"status": "liked"}
 
-@router.post("/scrobble/{scrobble_id}/comment")
+@router.post("/scrobble/{scrobble_id}/comment", responses={404: {"description": "Scrobble not found"}})
 def add_comment(scrobble_id: int, data: CommentRequest, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     from app.utils import sanitize_text
     user = current_user
