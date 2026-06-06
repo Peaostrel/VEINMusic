@@ -158,13 +158,51 @@ def _handle_streak(db: Session, user: User):
             user.integration.last_streak_date = today_str
             db.commit()
 
+def _determine_is_new(db: Session, user: User, track: Track, last_scrobble, now, l_played_at, l_updated_at, progress_sec: int, is_playing: bool) -> tuple[bool, str | None]:
+    """Determine if a new scrobble should be created. Returns (is_new, early_return_status)."""
+    if not last_scrobble or last_scrobble.track_id != track.id:
+        if last_scrobble and last_scrobble.is_playing and (now - l_updated_at).total_seconds() < 1.0:
+            return False, "ignored_spam_protection"
+
+        # Support skipping tracks quickly by deleting bare-listened tracks
+        if last_scrobble and (now - l_played_at).total_seconds() < 15 and last_scrobble.listened_sec < 10:
+            db.delete(last_scrobble)
+            db.commit()
+
+        return True, None
+    elif progress_sec < 5 and (last_scrobble.listened_sec or 0) > 30:
+        return True, None
+
+    return False, None
+
+
+def _update_scrobble_progress(db: Session, user: User, track: Track, last_scrobble, now, l_updated_at, is_playing: bool) -> None:
+    """Update listened_sec, xp, and streak on an existing scrobble."""
+    time_elapsed = (now - l_updated_at).total_seconds()
+    old_listened = last_scrobble.listened_sec or 0
+
+    # Use 35s limit to handle player update intervals
+    if last_scrobble.is_playing and is_playing and 0 < time_elapsed < 35:
+        last_scrobble.listened_sec = old_listened + int(round(time_elapsed))
+
+    last_scrobble.is_playing = is_playing
+    last_scrobble.updated_at = now
+    db.commit()
+
+    threshold = (track.duration if track.duration > 0 else 180) * 0.85
+    if last_scrobble.listened_sec >= threshold and old_listened < threshold:
+        is_fav = _check_favorite(track, user)
+        last_scrobble.xp_earned = 2 if is_fav else 1
+        db.commit()
+        _handle_streak(db, user)
+
+
 async def process_scrobble(db: Session, user: User, title: str, artist: str, cover_url: str, track_url: str, source: str, progress_sec: int, is_playing: bool, duration: int, album: str = None):
     track = await _get_or_create_track(db, title, artist, cover_url, track_url, duration, album)
-    
+
     now = datetime.now(timezone.utc)
     last_scrobble = db.query(Scrobble).filter(Scrobble.user_id == user.id).order_by(Scrobble.id.desc()).first()
-    
-    is_new = False
+
     if last_scrobble:
         l_played_at = last_scrobble.played_at.replace(tzinfo=timezone.utc) if last_scrobble.played_at.tzinfo is None else last_scrobble.played_at
         l_updated_at = last_scrobble.updated_at.replace(tzinfo=timezone.utc) if last_scrobble.updated_at.tzinfo is None else last_scrobble.updated_at
@@ -172,19 +210,10 @@ async def process_scrobble(db: Session, user: User, title: str, artist: str, cov
         l_played_at = None
         l_updated_at = None
 
-    if not last_scrobble or last_scrobble.track_id != track.id:
-        if last_scrobble and last_scrobble.is_playing and (now - l_updated_at).total_seconds() < 1.0:
-            return "ignored_spam_protection"
-            
-        # Support skipping tracks quickly by deleting bare-listened tracks
-        if last_scrobble and (now - l_played_at).total_seconds() < 15 and last_scrobble.listened_sec < 10:
-            db.delete(last_scrobble)
-            db.commit()
-            
-        is_new = True
-    elif progress_sec < 5 and (last_scrobble.listened_sec or 0) > 30: 
-        is_new = True
-            
+    is_new, early_return = _determine_is_new(db, user, track, last_scrobble, now, l_played_at, l_updated_at, progress_sec, is_playing)
+    if early_return:
+        return early_return
+
     if is_new:
         new_s = Scrobble(user_id=user.id, track_id=track.id, source=source, played_at=now, listened_sec=0, is_playing=is_playing, updated_at=now)
         db.add(new_s)
@@ -194,22 +223,6 @@ async def process_scrobble(db: Session, user: User, title: str, artist: str, cov
             "track": format_history_item(new_s, track)
         })
     else:
-        time_elapsed = (now - l_updated_at).total_seconds()
-        old_listened = last_scrobble.listened_sec or 0
-        
-        # Use 35s limit to handle player update intervals
-        if last_scrobble.is_playing and is_playing and 0 < time_elapsed < 35:
-            last_scrobble.listened_sec = old_listened + int(round(time_elapsed))
-            
-        last_scrobble.is_playing = is_playing
-        last_scrobble.updated_at = now
-        db.commit()
-        
-        threshold = (track.duration if track.duration > 0 else 180) * 0.85
-        if last_scrobble.listened_sec >= threshold and old_listened < threshold:
-            is_fav = _check_favorite(track, user)
-            last_scrobble.xp_earned = 2 if is_fav else 1
-            db.commit()
-            _handle_streak(db, user)
-            
+        _update_scrobble_progress(db, user, track, last_scrobble, now, l_updated_at, is_playing)
+
     return "ok"

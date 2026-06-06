@@ -28,10 +28,18 @@ interface Achievement {
     reward_xp: number;
 }
 
+interface Track {
+    id: number;
+    title: string;
+    artist: string;
+    cover_url?: string;
+    track_url?: string;
+}
+
 interface Stats {
     users: User[];
     achievements: Achievement[];
-    tracks: any[];
+    tracks: Track[];
     total_users?: number;
     total_scrobbles?: number;
     total_tracks?: number;
@@ -46,23 +54,174 @@ const EMOJI_LIST = [
   '♣️', '♥️', '♦️', '🃏', '🎴', '🀄', '🕐', '🌙', '🌞', '🌈'
 ];
 
+// ─── Helper: get current ach field value ────────────────────────────────────
+function getAchField<K extends keyof Achievement>(
+    editingAch: Achievement | null,
+    newAch: Omit<Achievement, 'id'>,
+    field: K
+): Achievement[K] | (Omit<Achievement, 'id'>)[K] {
+    return editingAch ? editingAch[field] : (newAch as any)[field];
+}
+
+// ─── Helper: patch editingAch or newAch ──────────────────────────────────────
+function patchAch(
+    editingAch: Achievement | null,
+    newAch: Omit<Achievement, 'id'>,
+    setEditingAch: (a: Achievement | null) => void,
+    setNewAch: (a: Omit<Achievement, 'id'>) => void,
+    patch: Partial<Achievement>
+) {
+    if (editingAch) {
+        setEditingAch({ ...editingAch, ...patch });
+    } else {
+        setNewAch({ ...newAch, ...patch });
+    }
+}
+
+// ─── AchievementForm sub-component ───────────────────────────────────────────
+interface AchFormProps {
+    editingAch: Achievement | null;
+    newAch: Omit<Achievement, 'id'>;
+    setEditingAch: (a: Achievement | null) => void;
+    setNewAch: (a: Omit<Achievement, 'id'>) => void;
+    emojiPickerOpen: boolean;
+    setEmojiPickerOpen: (v: boolean) => void;
+    emojiRef: React.RefObject<HTMLDivElement>;
+    onSave: () => void;
+    onCreate: () => void;
+}
+
+function AchievementForm({ editingAch, newAch, setEditingAch, setNewAch, emojiPickerOpen, setEmojiPickerOpen, emojiRef, onSave, onCreate }: AchFormProps) {
+    const patch = (p: Partial<Achievement>) => patchAch(editingAch, newAch, setEditingAch, setNewAch, p);
+    const val = <K extends keyof Achievement>(field: K) => getAchField(editingAch, newAch, field);
+    const ruleType = val('rule_type') as string;
+    const isSpecific = ['specific_track', 'specific_album', 'specific_artist'].includes(ruleType);
+    const isTrackOrAlbum = ['specific_track', 'specific_album'].includes(ruleType);
+
+    return (
+        <div className="space-y-5 relative z-10">
+            <div>
+                <label htmlFor="ach-name" className="text-xs text-red-500/70 font-mono mb-1.5 block">Название</label>
+                <input id="ach-name" type="text" value={val('name') as string}
+                    onChange={e => patch({ name: e.target.value })}
+                    className="w-full bg-[#1a1010] border border-red-900/30 rounded-lg px-4 py-2.5 text-white outline-none focus:border-red-500 transition shadow-inner" />
+            </div>
+            <div>
+                <label htmlFor="ach-description" className="text-xs text-red-500/70 font-mono mb-1.5 block">Описание</label>
+                <input id="ach-description" type="text" value={val('description') as string}
+                    onChange={e => patch({ description: e.target.value })}
+                    className="w-full bg-[#1a1010] border border-red-900/30 rounded-lg px-4 py-2.5 text-white outline-none focus:border-red-500 transition shadow-inner" />
+            </div>
+
+            <div className="relative" ref={emojiRef}>
+                <label className="text-xs text-red-500/70 font-mono mb-1.5 block">Иконка (эмодзи)</label>
+                <div
+                    className="w-full bg-[#1a1010] border border-red-900/30 rounded-lg px-4 py-2.5 text-white cursor-pointer hover:border-red-500 transition shadow-inner flex items-center justify-between"
+                    onClick={() => setEmojiPickerOpen(!emojiPickerOpen)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setEmojiPickerOpen(!emojiPickerOpen); }}
+                >
+                    <span className="text-xl leading-none">{val('icon') as string || 'Выбрать...'}</span>
+                    <span className="text-xs text-gray-500">▼</span>
+                </div>
+                {emojiPickerOpen && (
+                    <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-[#1a1010] border border-red-900/50 rounded-lg p-3 shadow-2xl z-50 grid grid-cols-8 gap-2 max-h-[200px] overflow-y-auto scrollbar-thin">
+                        {EMOJI_LIST.map((emoji) => (
+                            <button key={emoji} onClick={() => { patch({ icon: emoji }); setEmojiPickerOpen(false); }} className="text-2xl hover:bg-white/10 rounded p-1 transition">{emoji}</button>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            <div className="pt-5 border-t border-red-900/30">
+                <label htmlFor="ach-rule-type" className="text-xs text-red-500/70 font-mono mb-1.5 block">Тип правила (Авто-выдача)</label>
+                <select id="ach-rule-type" value={ruleType}
+                    onChange={e => patch({ rule_type: e.target.value })}
+                    className="w-full bg-[#1a1010] border border-red-900/30 rounded-lg px-4 py-2.5 text-white outline-none focus:border-red-500 transition shadow-inner mb-5">
+                    <option value="manual">Ручная выдача (админом)</option>
+                    <option value="total_scrobbles">Всего скробблов &gt;= X</option>
+                    <option value="night_scrobbles">Ночных скробблов &gt;= X</option>
+                    <option value="specific_track">Определенный трек (X раз)</option>
+                    <option value="specific_album">Определенный альбом (X треков с него)</option>
+                    <option value="specific_artist">Определенный артист (X раз)</option>
+                </select>
+
+                {ruleType !== 'manual' && (
+                    <div className="space-y-4">
+                        <div>
+                            <label htmlFor="ach-rule-value" className="text-xs text-red-500/70 font-mono mb-1.5 block">Значение (X)</label>
+                            <input id="ach-rule-value" type="number" value={val('rule_value') as number}
+                                onChange={e => patch({ rule_value: Number.parseInt(e.target.value) || 0 })}
+                                className="w-full bg-[#1a1010] border border-red-900/30 rounded-lg px-4 py-2.5 text-white outline-none focus:border-red-500 transition shadow-inner" placeholder="100" />
+                        </div>
+                        {isSpecific && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 w-full">
+                                <div>
+                                    <label htmlFor="ach-rule-target" className="text-xs text-red-500/70 font-mono mb-1.5 block">Ссылка (URL трека/альбома)</label>
+                                    <input id="ach-rule-target" type="text" value={val('rule_target') as string}
+                                        onChange={e => patch({ rule_target: e.target.value })}
+                                        className="w-full bg-[#1a1010] border border-red-900/30 rounded-lg px-4 py-2.5 text-white outline-none focus:border-red-500 transition shadow-inner" placeholder="https://music.yandex." />
+                                </div>
+                                <div>
+                                    <label htmlFor="ach-rule-meta" className="text-xs text-red-500/70 font-mono mb-1.5 block">Слово в описании (для ссылки)</label>
+                                    <input id="ach-rule-meta" type="text" value={val('rule_meta') as string}
+                                        onChange={e => patch({ rule_meta: e.target.value })}
+                                        className="w-full bg-[#1a1010] border border-red-900/30 rounded-lg px-4 py-2.5 text-white outline-none focus:border-red-500 transition shadow-inner" placeholder="Например: Джизус" />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                <div className="space-y-4 mt-4">
+                    {isTrackOrAlbum && (
+                        <div>
+                            <label htmlFor="ach-target-image" className="text-xs text-red-500/70 font-mono mb-1.5 block">URL картинки (сгенерируется само)</label>
+                            <input id="ach-target-image" type="text" value={val('target_image') as string}
+                                onChange={e => patch({ target_image: e.target.value })}
+                                className="w-full bg-[#1a1010] border border-red-900/30 rounded-lg px-4 py-2.5 text-white outline-none focus:border-red-500 transition shadow-inner" placeholder="Оставьте пустым" />
+                        </div>
+                    )}
+                    <div>
+                        <label htmlFor="ach-reward-xp" className="text-xs text-red-500/70 font-mono mb-1.5 block">Награда (XP)</label>
+                        <input id="ach-reward-xp" type="number" value={val('reward_xp') as number}
+                            onChange={e => patch({ reward_xp: Number.parseInt(e.target.value) || 0 })}
+                            className="w-full bg-[#1a1010] border border-red-900/30 rounded-lg px-4 py-2.5 text-white outline-none focus:border-red-500 transition shadow-inner" placeholder="Например: 50" />
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+                {editingAch ? (
+                    <>
+                        <button onClick={onSave} className="flex-1 bg-gradient-to-r from-red-600 to-red-500 text-white font-black tracking-wide py-3 rounded-lg shadow-[0_0_15px_rgba(239,68,68,0.3)] hover:scale-[1.02] transition-transform">СОХРАНИТЬ</button>
+                        <button onClick={() => setEditingAch(null)} className="flex-1 bg-white/5 border border-white/10 text-white font-bold py-3 rounded-lg hover:bg-white/10 transition">Отмена</button>
+                    </>
+                ) : (
+                    <button onClick={onCreate} className="w-full bg-gradient-to-r from-red-600 to-red-500 text-white font-black tracking-wide py-3 rounded-lg shadow-[0_0_15px_rgba(239,68,68,0.3)] hover:scale-[1.02] transition-transform">СОЗДАТЬ АЧИВКУ</button>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export default function AdminPanel() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('users'); 
   
-  const [newAch, setNewAch] = useState({ name: '', description: '', icon: '', rule_type: 'manual', rule_value: 0, rule_target: '', rule_meta: '', target_image: '', reward_xp: 0 });
+  const emptyAch: Omit<Achievement, 'id'> = { name: '', description: '', icon: '', rule_type: 'manual', rule_value: 0, rule_target: '', rule_meta: '', target_image: '', reward_xp: 0 };
+  const [newAch, setNewAch] = useState<Omit<Achievement, 'id'>>(emptyAch);
   const [editingAch, setEditingAch] = useState<Achievement | null>(null);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<any | null>(null);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
   const emojiRef = useRef<HTMLDivElement>(null);
   
   const router = useRouter();
 
   const loadData = () => {
-    
-
     fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/stats`, { credentials: 'include',  cache: 'no-store' })
       .then(async (res) => {
         if (!res.ok) {
@@ -93,20 +252,20 @@ export default function AdminPanel() {
   // --- УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ ---
   const handleSaveUserEdit = async () => {
       try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${editingUser.username}`, { credentials: 'include', 
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${editingUser!.username}`, { credentials: 'include', 
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
-                  display_name: editingUser.display_name,
-                  bio: editingUser.bio,
-                  avatar_url: editingUser.avatar_url
+                  display_name: editingUser!.display_name,
+                  bio: editingUser!.bio,
+                  avatar_url: editingUser!.avatar_url
               })
           });
           if(res.ok) {
               setEditingUser(null);
               loadData();
-          } else alert(await res.text());
-      } catch(e) { alert("Ошибка сети"); }
+          } else { alert(await res.text()); }
+      } catch(e) { console.error(e); alert("Ошибка сети"); }
   };
 
   const handleWipeScrobbles = async (username: string) => {
@@ -116,31 +275,31 @@ export default function AdminPanel() {
           if(res.ok) {
               alert("История очищена!");
               loadData();
-          } else alert(await res.text());
-      } catch(e) { alert("Ошибка сети"); }
+          } else { alert(await res.text()); }
+      } catch(e) { console.error(e); alert("Ошибка сети"); }
   };
 
   const handleDeleteUser = async (username: string) => {
       if(!confirm(`Точно удалить пользователя ${username} навсегда?`)) return;
       try {
           const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${username}`, { credentials: 'include',  method: 'DELETE' });
-          if(res.ok) loadData();
-          else alert(await res.text());
-      } catch(e) { alert("Ошибка сети"); }
+          if(res.ok) { loadData(); }
+          else { alert(await res.text()); }
+      } catch(e) { console.error(e); alert("Ошибка сети"); }
   };
 
   const handleEditLevel = async (username: string, currentLevel: number) => {
       const newLvl = prompt(`Новый уровень для ${username}:`, String(currentLevel));
-      if(!newLvl || isNaN(Number.parseInt(newLvl)) || Number.parseInt(newLvl) < 1) return;
+      if(!newLvl || Number.isNaN(Number.parseInt(newLvl)) || Number.parseInt(newLvl) < 1) return;
       try {
           const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${username}/level`, { credentials: 'include', 
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ new_level: Number.parseInt(newLvl) })
           });
-          if(res.ok) loadData();
-          else alert(await res.text());
-      } catch(e) { alert("Ошибка сети"); }
+          if(res.ok) { loadData(); }
+          else { alert(await res.text()); }
+      } catch(e) { console.error(e); alert("Ошибка сети"); }
   };
 
   const handleToggleVerify = async (username: string, currentStatus: boolean) => {
@@ -150,19 +309,19 @@ export default function AdminPanel() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ is_verified: !currentStatus })
           });
-          if (res.ok) loadData(); 
+          if (res.ok) { loadData(); }
           else {
               const err = await res.json();
               alert(err.detail || 'Ошибка при обновлении статуса');
           }
-      } catch(e) { alert("Ошибка сети"); }
+      } catch(e) { console.error(e); alert("Ошибка сети"); }
   };
 
   // --- УПРАВЛЕНИЕ АЧИВКАМИ ---
   const handleGiveAch = async (username: string) => {
       const achs = stats?.achievements.map((a: Achievement) => `${a.id} - ${a.name}`).join('\n');
       const achId = prompt(`ID ачивки для ${username}:\n\n${achs}`);
-      if(!achId || isNaN(Number(achId))) return;
+      if(!achId || Number.isNaN(Number(achId))) return;
       try {
           const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${username}/achievements`, { credentials: 'include', 
               method: 'POST',
@@ -172,8 +331,8 @@ export default function AdminPanel() {
           if(res.ok) {
               alert("Ачивка выдана!");
               loadData();
-          } else alert(await res.text());
-      } catch(e) { alert("Ошибка сети"); }
+          } else { alert(await res.text()); }
+      } catch(e) { console.error(e); alert("Ошибка сети"); }
   };
 
   const handleCreateAch = async () => {
@@ -184,10 +343,10 @@ export default function AdminPanel() {
               body: JSON.stringify({ ...newAch, rule_value: Number.parseInt(String(newAch.rule_value)) || 0, reward_xp: Number.parseInt(String(newAch.reward_xp)) || 0 })
           });
           if(res.ok) {
-              setNewAch({ name: '', description: '', icon: '', rule_type: 'manual', rule_value: 0, rule_target: '', rule_meta: '', target_image: '', reward_xp: 0 });
+              setNewAch(emptyAch);
               loadData();
-          } else alert(await res.text());
-      } catch(e) { alert("Ошибка сети"); }
+          } else { alert(await res.text()); }
+      } catch(e) { console.error(e); alert("Ошибка сети"); }
   };
 
   const handleUpdateAch = async () => {
@@ -201,17 +360,17 @@ export default function AdminPanel() {
           if(res.ok) {
               setEditingAch(null);
               loadData();
-          } else alert(await res.text());
-      } catch(e) { alert("Ошибка сети"); }
+          } else { alert(await res.text()); }
+      } catch(e) { console.error(e); alert("Ошибка сети"); }
   };
 
   const handleDeleteAch = async (id: number) => {
       if(!confirm("Удалить ачивку? Она пропадет у всех юзеров.")) return;
       try {
           const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/achievements/${id}`, { credentials: 'include',  method: 'DELETE' });
-          if(res.ok) loadData();
-          else alert(await res.text());
-      } catch(e) { alert("Ошибка сети"); }
+          if(res.ok) { loadData(); }
+          else { alert(await res.text()); }
+      } catch(e) { console.error(e); alert("Ошибка сети"); }
   };
 
   const startEditAch = (a: Achievement) => {
@@ -220,7 +379,7 @@ export default function AdminPanel() {
           rule_type: a.rule_type, rule_value: a.rule_value, rule_target: a.rule_target || '', 
           rule_meta: a.rule_meta || '', target_image: a.target_image || '', reward_xp: a.reward_xp || 0
       });
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      globalThis.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // --- УПРАВЛЕНИЕ ТРЕКАМИ ---
@@ -228,9 +387,9 @@ export default function AdminPanel() {
       if(!confirm(`Точно удалить этот трек из глобальной БД? Все скробблы с ним будут УНИЧТОЖЕНЫ!`)) return;
       try {
           const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/tracks/${id}`, { credentials: 'include',  method: 'DELETE' });
-          if(res.ok) loadData();
-          else alert(await res.text());
-      } catch(e) { alert("Ошибка сети"); }
+          if(res.ok) { loadData(); }
+          else { alert(await res.text()); }
+      } catch(e) { console.error(e); alert("Ошибка сети"); }
   };
 
   if (loading) return <div className="min-h-screen text-red-500 flex items-center justify-center font-bold text-xl">Подключение к ядру...</div>;
@@ -255,16 +414,16 @@ export default function AdminPanel() {
                   </div>
                   <div className="space-y-4 mb-6">
                       <div>
-                          <label className="text-xs text-red-500/70 font-mono mb-1 block">Никнейм (Отображаемое имя)</label>
-                          <input type="text" value={editingUser.display_name} onChange={e=>setEditingUser({...editingUser, display_name: e.target.value})} className="w-full bg-[#1a1010] border border-red-900/30 rounded px-3 py-2 text-white outline-none focus:border-red-500" />
+                          <label htmlFor="edit-display-name" className="text-xs text-red-500/70 font-mono mb-1 block">Никнейм (Отображаемое имя)</label>
+                          <input id="edit-display-name" type="text" value={editingUser.display_name} onChange={e=>setEditingUser({...editingUser, display_name: e.target.value})} className="w-full bg-[#1a1010] border border-red-900/30 rounded px-3 py-2 text-white outline-none focus:border-red-500" />
                       </div>
                       <div>
-                          <label className="text-xs text-red-500/70 font-mono mb-1 block">Аватар (URL)</label>
-                          <input type="text" value={editingUser.avatar_url || ''} onChange={e=>setEditingUser({...editingUser, avatar_url: e.target.value})} className="w-full bg-[#1a1010] border border-red-900/30 rounded px-3 py-2 text-white outline-none focus:border-red-500" />
+                          <label htmlFor="edit-avatar-url" className="text-xs text-red-500/70 font-mono mb-1 block">Аватар (URL)</label>
+                          <input id="edit-avatar-url" type="text" value={editingUser.avatar_url || ''} onChange={e=>setEditingUser({...editingUser, avatar_url: e.target.value})} className="w-full bg-[#1a1010] border border-red-900/30 rounded px-3 py-2 text-white outline-none focus:border-red-500" />
                       </div>
                       <div>
-                          <label className="text-xs text-red-500/70 font-mono mb-1 block">Описание (Bio)</label>
-                          <textarea rows={3} value={editingUser.bio || ''} onChange={e=>setEditingUser({...editingUser, bio: e.target.value})} className="w-full bg-[#1a1010] border border-red-900/30 rounded px-3 py-2 text-white outline-none focus:border-red-500 resize-none"></textarea>
+                          <label htmlFor="edit-bio" className="text-xs text-red-500/70 font-mono mb-1 block">Описание (Bio)</label>
+                          <textarea id="edit-bio" rows={3} value={editingUser.bio || ''} onChange={e=>setEditingUser({...editingUser, bio: e.target.value})} className="w-full bg-[#1a1010] border border-red-900/30 rounded px-3 py-2 text-white outline-none focus:border-red-500 resize-none"></textarea>
                       </div>
                   </div>
                   <div className="flex gap-3">
@@ -317,10 +476,10 @@ export default function AdminPanel() {
                       </tr>
                   </thead>
                   <tbody className="max-h-[600px] overflow-y-auto custom-scrollbar">
-                      {stats.users.map((u, i) => {
+                      {stats.users.map((u) => {
                           const level = Math.floor((u.total_xp ?? 0) / 100) + 1;
                           return (
-                              <tr key={i} className="border-b border-red-900/10 hover:bg-red-950/20 transition-colors">
+                              <tr key={u.username} className="border-b border-red-900/10 hover:bg-red-950/20 transition-colors">
                                   <td className="p-4">
                                       <div className="font-bold flex items-center gap-2">
                                           <img src={u.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${u.username}&backgroundColor=transparent`} className="w-8 h-8 rounded bg-black border border-red-900/50" alt="Ava" />
@@ -393,88 +552,17 @@ export default function AdminPanel() {
               <div className="bg-[#120a0a] border border-red-900/30 rounded-2xl p-6 shadow-xl relative overflow-hidden">
                   <h3 className="font-bold mb-6 text-lg">{editingAch ? 'Редактировать ачивки' : 'Создать новую'}</h3>
                   
-                  <div className="space-y-5 relative z-10">
-                      <div>
-                          <label className="text-xs text-red-500/70 font-mono mb-1.5 block">Название</label>
-                          <input type="text" value={editingAch ? editingAch.name : newAch.name} onChange={e => editingAch ? setEditingAch({...editingAch, name: e.target.value}) : setNewAch({...newAch, name: e.target.value})} className="w-full bg-[#1a1010] border border-red-900/30 rounded-lg px-4 py-2.5 text-white outline-none focus:border-red-500 transition shadow-inner" />
-                      </div>
-                      <div>
-                          <label className="text-xs text-red-500/70 font-mono mb-1.5 block">Описание</label>
-                          <input type="text" value={editingAch ? editingAch.description : newAch.description} onChange={e => editingAch ? setEditingAch({...editingAch, description: e.target.value}) : setNewAch({...newAch, description: e.target.value})} className="w-full bg-[#1a1010] border border-red-900/30 rounded-lg px-4 py-2.5 text-white outline-none focus:border-red-500 transition shadow-inner" />
-                      </div>
-                      
-                      <div className="relative" ref={emojiRef}>
-                          <label className="text-xs text-red-500/70 font-mono mb-1.5 block">Иконка (эмодзи)</label>
-                          <div className="w-full bg-[#1a1010] border border-red-900/30 rounded-lg px-4 py-2.5 text-white cursor-pointer hover:border-red-500 transition shadow-inner flex items-center justify-between" onClick={() => setEmojiPickerOpen(!emojiPickerOpen)}>
-                              <span className="text-xl leading-none">{editingAch ? editingAch.icon : newAch.icon || 'Выбрать...'}</span>
-                              <span className="text-xs text-gray-500">▼</span>
-                          </div>
-                          {emojiPickerOpen && (
-                              <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-[#1a1010] border border-red-900/50 rounded-lg p-3 shadow-2xl z-50 grid grid-cols-8 gap-2 max-h-[200px] overflow-y-auto scrollbar-thin">
-                                  {EMOJI_LIST.map((emoji, idx) => (
-                                      <button key={idx} onClick={() => { if (editingAch) setEditingAch({...editingAch, icon: emoji}); else setNewAch({...newAch, icon: emoji}); setEmojiPickerOpen(false); }} className="text-2xl hover:bg-white/10 rounded p-1 transition">{emoji}</button>
-                                  ))}
-                              </div>
-                          )}
-                      </div>
-                      
-                      <div className="pt-5 border-t border-red-900/30">
-                          <label className="text-xs text-red-500/70 font-mono mb-1.5 block">Тип правила (Авто-выдача)</label>
-                          <select value={editingAch ? editingAch.rule_type : newAch.rule_type} onChange={e => editingAch ? setEditingAch({...editingAch, rule_type: e.target.value}) : setNewAch({...newAch, rule_type: e.target.value})} className="w-full bg-[#1a1010] border border-red-900/30 rounded-lg px-4 py-2.5 text-white outline-none focus:border-red-500 transition shadow-inner mb-5">
-                              <option value="manual">Ручная выдача (админом)</option>
-                              <option value="total_scrobbles">Всего скробблов &gt;= X</option>
-                              <option value="night_scrobbles">Ночных скробблов &gt;= X</option>
-                              <option value="specific_track">Определенный трек (X раз)</option>
-                              <option value="specific_album">Определенный альбом (X треков с него)</option>
-                              <option value="specific_artist">Определенный артист (X раз)</option>
-                          </select>
-
-                          {(editingAch ? editingAch.rule_type : newAch.rule_type) !== 'manual' && (
-                              <div className="space-y-4">
-                                  <div>
-                                      <label className="text-xs text-red-500/70 font-mono mb-1.5 block">Значение (X)</label>
-                                      <input type="number" value={editingAch ? editingAch.rule_value : newAch.rule_value} onChange={e => editingAch ? setEditingAch({...editingAch, rule_value: parseInt(e.target.value) || 0}) : setNewAch({...newAch, rule_value: parseInt(e.target.value) || 0})} className="w-full bg-[#1a1010] border border-red-900/30 rounded-lg px-4 py-2.5 text-white outline-none focus:border-red-500 transition shadow-inner" placeholder="100" />
-                                  </div>
-                                  {['specific_track', 'specific_album', 'specific_artist'].includes(editingAch ? editingAch.rule_type : newAch.rule_type) && (
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 w-full">
-                                          <div>
-                                              <label className="text-xs text-red-500/70 font-mono mb-1.5 block">Ссылка (URL трека/альбома)</label>
-                                              <input type="text" value={editingAch ? editingAch.rule_target : newAch.rule_target} onChange={e => editingAch ? setEditingAch({...editingAch, rule_target: e.target.value}) : setNewAch({...newAch, rule_target: e.target.value})} className="w-full bg-[#1a1010] border border-red-900/30 rounded-lg px-4 py-2.5 text-white outline-none focus:border-red-500 transition shadow-inner" placeholder="https://music.yandex." />
-                                          </div>
-                                          <div>
-                                              <label className="text-xs text-red-500/70 font-mono mb-1.5 block">Слово в описании (для ссылки)</label>
-                                              <input type="text" value={editingAch ? editingAch.rule_meta : newAch.rule_meta} onChange={e => editingAch ? setEditingAch({...editingAch, rule_meta: e.target.value}) : setNewAch({...newAch, rule_meta: e.target.value})} className="w-full bg-[#1a1010] border border-red-900/30 rounded-lg px-4 py-2.5 text-white outline-none focus:border-red-500 transition shadow-inner" placeholder="Например: Джизус" />
-                                          </div>
-                                      </div>
-                                  )}
-                              </div>
-                          )}
-
-                          <div className="space-y-4 mt-4">
-                              {['specific_track', 'specific_album'].includes(editingAch ? editingAch.rule_type : newAch.rule_type) && (
-                                  <div>
-                                      <label className="text-xs text-red-500/70 font-mono mb-1.5 block">URL картинки (сгенерируется само)</label>
-                                      <input type="text" value={editingAch ? editingAch.target_image : newAch.target_image} onChange={e => editingAch ? setEditingAch({...editingAch, target_image: e.target.value}) : setNewAch({...newAch, target_image: e.target.value})} className="w-full bg-[#1a1010] border border-red-900/30 rounded-lg px-4 py-2.5 text-white outline-none focus:border-red-500 transition shadow-inner" placeholder="Оставьте пустым" />
-                                  </div>
-                              )}
-                              <div>
-                                  <label className="text-xs text-red-500/70 font-mono mb-1.5 block">Награда (XP)</label>
-                                  <input type="number" value={editingAch ? editingAch.reward_xp : newAch.reward_xp} onChange={e => editingAch ? setEditingAch({...editingAch, reward_xp: parseInt(e.target.value) || 0}) : setNewAch({...newAch, reward_xp: parseInt(e.target.value) || 0})} className="w-full bg-[#1a1010] border border-red-900/30 rounded-lg px-4 py-2.5 text-white outline-none focus:border-red-500 transition shadow-inner" placeholder="Например: 50" />
-                              </div>
-                          </div>
-                      </div>
-
-                      <div className="flex gap-3 mt-6">
-                          {editingAch ? (
-                              <>
-                                  <button onClick={handleUpdateAch} className="flex-1 bg-gradient-to-r from-red-600 to-red-500 text-white font-black tracking-wide py-3 rounded-lg shadow-[0_0_15px_rgba(239,68,68,0.3)] hover:scale-[1.02] transition-transform">СОХРАНИТЬ</button>
-                                  <button onClick={() => setEditingAch(null)} className="flex-1 bg-white/5 border border-white/10 text-white font-bold py-3 rounded-lg hover:bg-white/10 transition">Отмена</button>
-                              </>
-                          ) : (
-                              <button onClick={handleCreateAch} className="w-full bg-gradient-to-r from-red-600 to-red-500 text-white font-black tracking-wide py-3 rounded-lg shadow-[0_0_15px_rgba(239,68,68,0.3)] hover:scale-[1.02] transition-transform">СОЗДАТЬ АЧИВКУ</button>
-                          )}
-                      </div>
-                  </div>
+                  <AchievementForm
+                      editingAch={editingAch}
+                      newAch={newAch}
+                      setEditingAch={setEditingAch}
+                      setNewAch={setNewAch}
+                      emojiPickerOpen={emojiPickerOpen}
+                      setEmojiPickerOpen={setEmojiPickerOpen}
+                      emojiRef={emojiRef}
+                      onSave={handleUpdateAch}
+                      onCreate={handleCreateAch}
+                  />
               </div>
 
               <div className="bg-[#120a0a] border border-red-900/30 rounded-2xl p-6 shadow-xl h-full">

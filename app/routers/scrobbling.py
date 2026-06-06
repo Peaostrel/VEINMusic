@@ -20,7 +20,7 @@ def get_user_lock(user_id: int):
         USER_SCROBBLE_LOCKS[user_id] = asyncio.Lock()
     return USER_SCROBBLE_LOCKS[user_id]
 
-@router.post("/scrobble")
+@router.post("/scrobble", responses={500: {"description": "Internal server error"}})
 async def add_scrobble(data: ScrobbleData, background_tasks: BackgroundTasks, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
     lock = get_user_lock(user.id)
@@ -49,9 +49,9 @@ async def add_scrobble(data: ScrobbleData, background_tasks: BackgroundTasks, db
             background_tasks.add_task(run_check_achievements_bg, user.id)
             
             return {"status": res}
-        except Exception as e:
+        except Exception:
             import logging
-            logging.error(f"Scrobble error: {e}")
+            logging.exception("Scrobble error")
             raise HTTPException(status_code=500, detail="Internal Server Error")
 
 @router.get("/history/{username}", responses={403: {"description": "Private profile"}, 404: {"description": "User not found"}})

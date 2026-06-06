@@ -237,7 +237,7 @@ def get_taste_match_internal(viewer, profile, db):
         WHERE s.user_id = :u2 AND s.listened_sec * 100 >= t.duration * 85
     """)
     common_rows = db.execute(sql, {"u1": viewer_user.id, "u2": profile_user.id}).fetchall()
-    common_artists = list(set([a.strip() for row in common_rows for a in row[0].split(',')]))
+    common_artists = list({a.strip() for row in common_rows for a in row[0].split(',')})
     sql_total = text("""
         SELECT COUNT(DISTINCT t.artist) 
         FROM scrobbles s JOIN tracks t ON s.track_id = t.id 
@@ -508,7 +508,7 @@ def get_all_achievements(username: str, db: Annotated[Session, Depends(get_db)])
 
 
 # --- /api/recommendations ---
-@router.get("/api/recommendations")
+@router.get("/api/recommendations", responses={404: {"description": "User not found"}})
 def get_recommendations(username: str, db: Annotated[Session, Depends(get_db)]):
     cache_key = f"recs_{username}"
     cached = get_from_cache(cache_key, ttl=1800) # 30 min cache
@@ -539,7 +539,7 @@ def get_recommendations(username: str, db: Annotated[Session, Depends(get_db)]):
 
 
 # --- /api/stats/wrapped ---
-@router.get("/api/stats/wrapped")
+@router.get("/api/stats/wrapped", responses={404: {"description": "User not found"}})
 def get_wrapped_stats(username: str, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404)
@@ -617,7 +617,7 @@ def _get_activity_stats(db: Session, base_filter) -> tuple[dict[str, int], dict[
 
 
 # --- /api/detailed-stats/{username} ---
-@router.get("/api/detailed-stats/{username}")
+@router.get("/api/detailed-stats/{username}", responses={404: {"description": "User not found"}})
 def get_detailed_stats(username: str, db: Annotated[Session, Depends(get_db)], period: str = "all"):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404)
@@ -674,7 +674,7 @@ def get_detailed_stats(username: str, db: Annotated[Session, Depends(get_db)], p
     }
 
 # --- /api/stats/{username} ---
-@router.get("/api/stats/{username}")
+@router.get("/api/stats/{username}", responses={404: {"description": "User not found"}})
 def get_stats(username: str, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404)
@@ -723,7 +723,7 @@ def get_stats(username: str, db: Annotated[Session, Depends(get_db)]):
 
 
 # --- /api/activity/{username} ---
-@router.get("/api/activity/{username}")
+@router.get("/api/activity/{username}", responses={404: {"description": "User not found"}})
 def get_activity(username: str, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404)
@@ -779,7 +779,7 @@ def get_comments(scrobble_id: int, db: Annotated[Session, Depends(get_db)]):
 
 
 # --- /api/follow-stats/{viewer}/{profile} ---
-@router.get("/api/follow-stats/{viewer}/{profile}")
+@router.get("/api/follow-stats/{viewer}/{profile}", responses={404: {"description": "User not found"}})
 def get_follow_stats(viewer: str, profile: str, db: Annotated[Session, Depends(get_db)]):
     target = db.query(User).filter(User.username == profile).first()
     if not target: raise HTTPException(404)
@@ -797,7 +797,7 @@ def get_follow_stats_fallback(profile: str, db: Annotated[Session, Depends(get_d
 
 
 # --- /api/followers/{username} ---
-@router.get("/api/followers/{username}")
+@router.get("/api/followers/{username}", responses={404: {"description": "User not found"}})
 def get_followers(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
     target = db.query(User).filter(User.username == username).first()
     if not target: raise HTTPException(404)
@@ -811,13 +811,13 @@ def get_followers(username: str, request: Request, db: Annotated[Session, Depend
     followers = db.query(User).join(Follow, Follow.follower_id == User.id).filter(Follow.following_id == target.id).all()
     res = []
     for u in followers:
-        lvl, rank, _, theme = get_user_level_info(u, db)
+        lvl, _rank, _, _theme = get_user_level_info(u, db)
         res.append({"username": u.username, "display_name": u.profile.display_name or u.username, "avatar_url": u.profile.avatar_url, "is_verified": u.integration.is_verified, "role": u.role or "user", "level": lvl})
     return res
 
 
 # --- /api/following/{username} ---
-@router.get("/api/following/{username}")
+@router.get("/api/following/{username}", responses={404: {"description": "User not found"}})
 def get_following(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
     target = db.query(User).filter(User.username == username).first()
     if not target: raise HTTPException(404)
@@ -831,7 +831,7 @@ def get_following(username: str, request: Request, db: Annotated[Session, Depend
     following = db.query(User).join(Follow, Follow.following_id == User.id).filter(Follow.follower_id == target.id).all()
     res = []
     for u in following:
-        lvl, rank, _, theme = get_user_level_info(u, db)
+        lvl, _rank, _, _theme = get_user_level_info(u, db)
         res.append({"username": u.username, "display_name": u.profile.display_name or u.username, "avatar_url": u.profile.avatar_url, "is_verified": u.integration.is_verified, "role": u.role or "user", "level": lvl})
     return res
 
@@ -871,6 +871,37 @@ def get_leaderboard(db: Annotated[Session, Depends(get_db)]):
 
 
 # --- /api/redirect ---
+def _yandex_redirect_for_type(type: str, res: dict, q: str):
+    """Try to build a direct Yandex Music redirect from search results."""
+    if type == "artist":
+        items = res.get("artists", {}).get("results", [])
+        if items:
+            return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}/artist/{items[0]['id']}")
+    elif type == "album":
+        items = res.get("albums", {}).get("results", [])
+        if items:
+            return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}/album/{items[0]['id']}")
+    elif type == "track":
+        items = res.get("tracks", {}).get("results", [])
+        if items:
+            alb_list = items[0].get("albums", [])
+            alb_id = alb_list[0].get("id") if alb_list else None
+            if alb_id:
+                return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}/album/{alb_id}/track/{items[0]['id']}")
+    return None
+
+
+def _yandex_fallback_redirect(type: str, q: str):
+    """Return a fallback search redirect for Yandex Music."""
+    if type == "artist":
+        return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}/search?text={urllib.parse.quote(q)}&type=artists")
+    if type == "album":
+        return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}/search?text={urllib.parse.quote(q)}&type=albums")
+    if type == "track":
+        return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}/search?text={urllib.parse.quote(q)}&type=tracks")
+    return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}")
+
+
 @router.get("/api/redirect")
 async def smart_redirect(source: str, type: str, q: str):
     if source == "yandex":
@@ -879,24 +910,13 @@ async def smart_redirect(source: str, type: str, q: str):
                 resp = await client.get(f"https://api.music.yandex.net/search?text={urllib.parse.quote(q)}&type=all&page=0", headers={'User-Agent': USER_AGENT_MOZILLA}, timeout=5)
                 if resp.status_code == 200:
                     res = resp.json().get("result", {})
-                    if type == "artist":
-                        items = res.get("artists", {}).get("results", [])
-                        if items: return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}/artist/{items[0]['id']}")
-                    elif type == "album":
-                        items = res.get("albums", {}).get("results", [])
-                        if items: return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}/album/{items[0]['id']}")
-                    elif type == "track":
-                        items = res.get("tracks", {}).get("results", [])
-                        if items:
-                            alb_list = items[0].get("albums", [])
-                            alb_id = alb_list[0].get("id") if alb_list else None
-                            if alb_id: return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}/album/{alb_id}/track/{items[0]['id']}")
+                    direct = _yandex_redirect_for_type(type, res, q)
+                    if direct:
+                        return direct
         except Exception as e:
             print(f"Redirect error: {e}")
-        if type == "artist": return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}/search?text={urllib.parse.quote(q)}&type=artists")
-        if type == "album": return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}/search?text={urllib.parse.quote(q)}&type=albums")
-        if type == "track": return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}/search?text={urllib.parse.quote(q)}&type=tracks")
-        
+        return _yandex_fallback_redirect(type, q)
+
     return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}")
 
 
@@ -907,7 +927,7 @@ def search_users(q: str, db: Annotated[Session, Depends(get_db)]):
     users = db.query(User).join(UserProfile).filter((User.username.ilike(f"%{q}%")) | (UserProfile.display_name.ilike(f"%{q}%"))).limit(10).all()
     res = []
     for u in users:
-        lvl, rank, _, theme = get_user_level_info(u, db)
+        lvl, _rank, _, _theme = get_user_level_info(u, db)
         res.append({"username": u.username, "display_name": u.profile.display_name or u.username, "avatar_url": u.profile.avatar_url, "is_verified": u.integration.is_verified, "role": u.role or "user", "level": lvl})
     return res
 
@@ -929,7 +949,7 @@ def get_public_stats(db: Annotated[Session, Depends(get_db)]):
 
 
 # --- /api/import/lastfm ---
-@router.post("/api/import/lastfm")
+@router.post("/api/import/lastfm", responses={429: {"description": "Import already running"}, 400: {"description": "Last.fm username not set"}, 500: {"description": "API key not configured"}})
 async def start_lastfm_import(data: LikeRequest, background_tasks: BackgroundTasks, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
     
@@ -1010,7 +1030,7 @@ def add_comment(scrobble_id: int, data: CommentRequest, db: Annotated[Session, D
 
 
 # --- /api/follow/{target_username} ---
-@router.post("/api/follow/{target_username}")
+@router.post("/api/follow/{target_username}", responses={400: {"description": "Bad request"}})
 def toggle_follow(target_username: str, data: FollowAction, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     follower = current_user
     target = db.query(User).filter(User.username == target_username).first()
@@ -1127,7 +1147,7 @@ def update_user_level(target_username: str, data: LevelUpdate, db: Annotated[Ses
 
 
 # --- DELETE /api/admin/users/{target_username}/scrobbles ---
-@router.delete("/api/admin/users/{target_username}/scrobbles")
+@router.delete("/api/admin/users/{target_username}/scrobbles", responses={404: {"description": "User not found"}})
 def wipe_user_scrobbles(target_username: str, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     target = db.query(User).filter(User.username == target_username).first()
     if not target: raise HTTPException(404)
@@ -1142,7 +1162,7 @@ def rate_limited(): return JSONResponse(status_code=429, content={"error": "Too 
 
 
 # --- POST /api/notifications/{username}/read ---
-@router.post("/api/notifications/{username}/read")
+@router.post("/api/notifications/{username}/read", responses={403: {"description": "Forbidden"}})
 def mark_notifications_read(username: str, data: MarkRead, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     if current_user.username != username: raise HTTPException(403)
     user = db.query(User).filter(User.username == username).first()
@@ -1153,7 +1173,7 @@ def mark_notifications_read(username: str, data: MarkRead, db: Annotated[Session
 
 
 # --- POST /api/profile/achievements/toggle ---
-@router.post("/api/profile/achievements/toggle")
+@router.post("/api/profile/achievements/toggle", responses={404: {"description": "Achievement not found"}})
 def toggle_achievement(data: ToggleAch, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
     
@@ -1170,7 +1190,7 @@ def _save_file_sync(file_path: str, content: bytes):
 
 
 # --- POST /api/upload ---
-@router.post("/api/upload")
+@router.post("/api/upload", responses={400: {"description": "Invalid file type or file too large"}})
 async def upload_file(current_user: Annotated[User, Depends(get_current_user)], file: Annotated[UploadFile, File()]):
     import anyio
     # Security: Validate file type
@@ -1232,80 +1252,100 @@ async def get_album_track_count(url: str) -> int:
 
 
 
+def _validate_import_user(db, user_id: int):
+    """Validate that user exists and has required Last.fm settings. Returns (user, error_msg)."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return None, f"Import Error: User {user_id} not found"
+    if not user.integration.lastfm_username:
+        return None, f"Import Error: Last.fm username not set for user {user.username}"
+    if not LASTFM_API_KEY:
+        return None, "Import Error: LASTFM_API_KEY is missing in .env"
+    return user, None
+
+
+def _get_or_create_import_track(db, title: str, artist: str, cover: str, album: str) -> Track:
+    """Find or create a track during Last.fm import."""
+    track = db.query(Track).filter(Track.title == title, Track.artist == artist).first()
+    if not track:
+        track = Track(title=title, artist=artist, cover_url=cover, album=album, duration=180)
+        db.add(track)
+        db.commit()
+        db.refresh(track)
+    return track
+
+
+async def _import_lastfm_page(db, client, user, page: int):
+    """Fetch and import a single page of Last.fm history. Returns (tracks_imported, total_pages) or None on error."""
+    params = {
+        "method": "user.getrecenttracks",
+        "user": user.integration.lastfm_username,
+        "api_key": LASTFM_API_KEY,
+        "format": "json",
+        "limit": 200,
+        "page": page
+    }
+    resp = await client.get(LASTFM_BASE_URL, params=params)
+    if resp.status_code != 200:
+        print(f"Last.fm API Error: {resp.status_code} - {resp.text}")
+        return None, None
+    res = resp.json()
+    if "error" in res:
+        print(f"Last.fm API Logic Error: {res.get('message')}")
+        return None, None
+
+    tracks = res.get("recenttracks", {}).get("track", [])
+    total_pages = int(res.get("recenttracks", {}).get("@attr", {}).get("totalPages", 1))
+    print(f"Importing page {page}/{total_pages} for user {user.username}, found {len(tracks)} tracks")
+
+    imported_count = 0
+    for t in tracks:
+        if t.get("@attr", {}).get("nowplaying") == "true":
+            continue
+        title = t.get("name")
+        artist = t.get("artist", {}).get(TEXT_KEY)
+        album = t.get("album", {}).get(TEXT_KEY)
+        cover = t.get("image", [{}, {}, {}, {TEXT_KEY: ""}])[3].get(TEXT_KEY)
+        uts = int(t.get("date", {}).get("uts", 0))
+        dt = datetime.fromtimestamp(uts, tz=timezone.utc)
+
+        existing = db.query(Scrobble).filter(Scrobble.user_id == user.id, Scrobble.played_at == dt).first()
+        if existing:
+            continue
+
+        track = _get_or_create_import_track(db, title, artist, cover, album)
+        duration = track.duration or 180
+        scrobble = Scrobble(user_id=user.id, track_id=track.id, source="lastfm", played_at=dt, listened_sec=duration, is_playing=False, updated_at=dt, xp_earned=1, is_imported=True)
+        db.add(scrobble)
+        imported_count += 1
+
+    db.commit()
+    return imported_count, total_pages
+
+
 async def import_lastfm_history(user_id: int, db_session_factory):
     db = db_session_factory()
     imported_count = 0
     try:
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            print(f"Import Error: User {user_id} not found")
+        user, error = _validate_import_user(db, user_id)
+        if error:
+            print(error)
             return
-        if not user.integration.lastfm_username:
-            print(f"Import Error: Last.fm username not set for user {user.username}")
-            return
-        if not LASTFM_API_KEY:
-            print(f"Import Error: LASTFM_API_KEY is missing in .env")
-            return
-        
+
         async with httpx.AsyncClient() as client:
             page = 1
             total_pages = 1
-            while page <= total_pages and page <= 5: # Limit to 5 pages (1000 tracks) for now
-                params = {
-                    "method": "user.getrecenttracks",
-                    "user": user.integration.lastfm_username,
-                    "api_key": LASTFM_API_KEY,
-                    "format": "json",
-                    "limit": 200,
-                    "page": page
-                }
-                resp = await client.get(LASTFM_BASE_URL, params=params)
-                if resp.status_code != 200:
-                    print(f"Last.fm API Error: {resp.status_code} - {resp.text}")
+            while page <= total_pages and page <= 5:  # Limit to 5 pages (1000 tracks) for now
+                page_count, total_pages = await _import_lastfm_page(db, client, user, page)
+                if page_count is None:
                     break
-                res = resp.json()
-                if "error" in res:
-                    print(f"Last.fm API Logic Error: {res.get('message')}")
-                    break
-                tracks = res.get("recenttracks", {}).get("track", [])
-                total_pages = int(res.get("recenttracks", {}).get("@attr", {}).get("totalPages", 1))
-                print(f"Importing page {page}/{total_pages} for user {user.username}, found {len(tracks)} tracks")
-                
-                for t in tracks:
-                    if t.get("@attr", {}).get("nowplaying") == "true": continue
-                    
-                    title = t.get("name")
-                    artist = t.get("artist", {}).get(TEXT_KEY)
-                    album = t.get("album", {}).get(TEXT_KEY)
-                    cover = t.get("image", [{}, {}, {}, {TEXT_KEY: ""}])[3].get(TEXT_KEY)
-                    uts = int(t.get("date", {}).get("uts", 0))
-                    dt = datetime.fromtimestamp(uts, tz=timezone.utc)
-                    
-                    # Check if already exists
-                    existing = db.query(Scrobble).filter(Scrobble.user_id == user.id, Scrobble.played_at == dt).first()
-                    if existing: continue
-                    
-                    track = db.query(Track).filter(Track.title == title, Track.artist == artist).first()
-                    if not track:
-                        track = Track(title=title, artist=artist, cover_url=cover, album=album, duration=180)
-                        db.add(track)
-                        db.commit()
-                        db.refresh(track)
-                    
-                    # Try to get duration if track exists, else 180s
-                    duration = track.duration or 180
-                    
-                    scrobble = Scrobble(user_id=user.id, track_id=track.id, source="lastfm", played_at=dt, listened_sec=duration, is_playing=False, updated_at=dt, xp_earned=1, is_imported=True)
-                    db.add(scrobble)
-                    imported_count += 1
-                
-                db.commit()
+                imported_count += page_count
                 page += 1
-        
+
         print(f"Import Finished: Imported {imported_count} scrobbles for user {user.username}")
         # Notify user via WebSocket if connected
         await manager.broadcast_to_user(user.username, {"type": "IMPORT_FINISHED", "message": f"✅ Импорт завершен! Добавлено {imported_count} треков."})
-        
+
     except Exception as e:
         print(f"Last.fm Import Logic Error: {e}")
     finally:

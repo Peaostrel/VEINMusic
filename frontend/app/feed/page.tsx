@@ -14,7 +14,7 @@ export default function GlobalFeed() {
                 const data = await res.json();
                 setFeed(data || []);
             }
-        } catch (e) {} finally {
+        } catch (e) { console.error(e); } finally {
             setLoading(false);
         }
     };
@@ -36,7 +36,7 @@ export default function GlobalFeed() {
 
             <div className="space-y-4">
                 {feed.map((s, i) => (
-                    <div key={i} className="bg-[#121212]/50 backdrop-blur-md p-4 rounded-xl border border-white/5 flex items-center gap-4 hover:border-[var(--accent)] transition-all group cursor-pointer" onClick={() => router.push(`/user/${s.username}`)}>
+                    <div key={s.username} role="button" tabIndex={0} className="bg-[#121212]/50 backdrop-blur-md p-4 rounded-xl border border-white/5 flex items-center gap-4 hover:border-[var(--accent)] transition-all group cursor-pointer" onClick={() => router.push(`/user/${s.username}`)} onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/user/${s.username}`); }}>
                         <div className="relative shrink-0">
                             {s.cover_url ? (
                                 <img src={s.cover_url} className="w-14 h-14 rounded-lg object-cover shadow-lg group-hover:scale-105 transition-transform" alt="Cover" />

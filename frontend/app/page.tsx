@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, MessageCircle, Users, ExternalLink } from 'lucide-react';
+import { Heart, MessageCircle, Users } from 'lucide-react';
 
 const getPlatformIcon = (source: string) => {
     switch (source) {
@@ -141,31 +141,35 @@ export default function Home() {
 
         <div className="flex flex-col lg:flex-row gap-8">
           <div className="flex-grow">
-            {loading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 opacity-50">
-                {[1,2,3,4,5,6].map(i => <div key={i} className="h-32 bg-[#1e1e1e] rounded-2xl animate-pulse"></div>)}
-              </div>
-            ) : activeFeed === 'friends' && friendsHistory.length === 0 ? (
-              <div className="bg-[#1e1e1e]/50 backdrop-blur-md border border-white/5 p-10 rounded-2xl text-center text-gray-500 font-bold">
-                Тут пусто. Подпишись на кого-нибудь, чтобы видеть их треки здесь!
-              </div>
-            ) : currentFeed.length === 0 ? (
-              <div className="bg-[#1e1e1e]/50 backdrop-blur-md border border-white/5 p-10 rounded-2xl text-center text-gray-500 font-bold">
-                Пока тихо... Врубай музыку!
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <AnimatePresence mode="popLayout">
-                    {currentFeed.map((item, idx) => (
-                    <motion.div 
-                        layout
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        key={item.id || idx} 
-                        className="bg-[#1a1a1a]/80 backdrop-blur-sm border border-white/5 p-4 rounded-2xl flex flex-col gap-4 hover:bg-[#1f1f1f] hover:border-[var(--accent)]/30 hover:-translate-y-1 hover:shadow-[0_10px_25px_-5px_var(--accent-glow-strong)] transition-all duration-300 group cursor-pointer relative overflow-hidden" 
-                        onClick={() => window.location.href = `/user/${item.username}`}
-                    >
+            {(() => {
+              if (loading) return (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 opacity-50">
+                  {[1,2,3,4,5,6].map(i => <div key={i} className="h-32 bg-[#1e1e1e] rounded-2xl animate-pulse"></div>)}
+                </div>
+              );
+              if (activeFeed === 'friends' && friendsHistory.length === 0) return (
+                <div className="bg-[#1e1e1e]/50 backdrop-blur-md border border-white/5 p-10 rounded-2xl text-center text-gray-500 font-bold">
+                  Тут пусто. Подпишись на кого-нибудь, чтобы видеть их треки здесь!
+                </div>
+              );
+              if (currentFeed.length === 0) return (
+                <div className="bg-[#1e1e1e]/50 backdrop-blur-md border border-white/5 p-10 rounded-2xl text-center text-gray-500 font-bold">
+                  Пока тихо... Врубай музыку!
+                </div>
+              );
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <AnimatePresence mode="popLayout">
+                      {currentFeed.map((item, idx) => (
+                      <motion.div 
+                          layout
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          key={item.id || idx} 
+                          className="bg-[#1a1a1a]/80 backdrop-blur-sm border border-white/5 p-4 rounded-2xl flex flex-col gap-4 hover:bg-[#1f1f1f] hover:border-[var(--accent)]/30 hover:-translate-y-1 hover:shadow-[0_10px_25px_-5px_var(--accent-glow-strong)] transition-all duration-300 group cursor-pointer relative overflow-hidden" 
+                          onClick={() => { globalThis.location.href = `/user/${item.username}`; }}
+                      >
                         <div className="flex items-center gap-4">
                             <div className="w-16 h-16 bg-black rounded-xl overflow-hidden shrink-0 shadow-lg relative">
                                 {item.cover_url ? (
@@ -216,11 +220,12 @@ export default function Home() {
                                 {item.comments_count || 0}
                             </button>
                         </div>
-                    </motion.div>
-                    ))}
-                </AnimatePresence>
-              </div>
-            )}
+                      </motion.div>
+                      ))}
+                  </AnimatePresence>
+                </div>
+              );
+            })()}
           </div>
 
           <div className="w-full lg:w-80 shrink-0 space-y-6">

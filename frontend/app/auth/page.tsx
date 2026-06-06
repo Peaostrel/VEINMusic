@@ -10,8 +10,8 @@ export default function Auth() {
   const [step, setStep] = useState('form'); 
   const [apiKey, setApiKey] = useState('');
   const [loading, setLoading] = useState(false);
-  const [hasExtension, setHasExtension] = useState(false);
-  const router = useRouter();
+  const [_hasExtension, setHasExtension] = useState(false);
+  const _router = useRouter();
 
   useEffect(() => {
     const storedUser = localStorage.getItem('username');
@@ -31,7 +31,7 @@ export default function Auth() {
   useEffect(() => {
     if (step === 'success') {
       const checkExt = () => {
-        if (document.documentElement.getAttribute('data-vein-extension') === 'installed') {
+        if (document.documentElement.dataset.veinExtension === 'installed') {
           setHasExtension(true);
         } else {
           setHasExtension(false);
@@ -68,14 +68,14 @@ export default function Auth() {
       }
 
       localStorage.setItem('username', data.username);
-      window.dispatchEvent(new Event('themeChanged'));
+      globalThis.dispatchEvent(new Event('themeChanged'));
 
       // Fetch api_key from user profile (returned only to the owner via cookie)
       try {
         const profileRes = await fetch(`${API_URL}/api/user/${data.username}`, { credentials: 'include' });
         const profileData = await profileRes.json();
         if (profileData.api_key) setApiKey(profileData.api_key);
-      } catch {}
+      } catch (error) { console.error(error); }
 
       setStep('success');
       
@@ -101,8 +101,9 @@ export default function Auth() {
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Логин</label>
+                <label htmlFor="auth-username" className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Логин</label>
                 <input 
+                  id="auth-username"
                   type="text" 
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
@@ -113,8 +114,9 @@ export default function Auth() {
               </div>
               
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Пароль</label>
+                <label htmlFor="auth-password" className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Пароль</label>
                 <input 
+                  id="auth-password"
                   type="password" 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -135,7 +137,10 @@ export default function Auth() {
                 disabled={loading}
                 className="w-full bg-[var(--accent)] text-[#121212] font-black py-4 rounded-xl hover:scale-[1.02] transition-transform shadow-[0_0_15px_var(--accent-glow)] disabled:opacity-50 disabled:hover:scale-100 mt-4 text-lg"
               >
-                {loading ? 'ПОДОЖДИ...' : (isLogin ? 'ВОЙТИ' : 'СОЗДАТЬ АККАУНТ')}
+                {(() => {
+                  const submitLabel = loading ? 'ПОДОЖДИ...' : isLogin ? 'ВОЙТИ' : 'СОЗДАТЬ АККАУНТ';
+                  return submitLabel;
+                })()}
               </button>
             </form>
 
@@ -164,7 +169,7 @@ export default function Auth() {
 
             <div className="space-y-3">
               <button 
-                onClick={() => window.location.href = `/user/${username}`}
+                onClick={() => { globalThis.location.href = `/user/${username}`; }}
                 className="w-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] text-[#121212] font-black py-4 rounded-xl transition-all text-lg shadow-[0_0_20px_var(--accent-glow)] hover:scale-[1.02]"
               >
                 ВОЙТИ В СИСТЕМУ

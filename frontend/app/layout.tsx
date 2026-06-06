@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }: { readonly children: React.ReactNode }) {
   return (
     <html lang="ru" suppressHydrationWarning>
       <body suppressHydrationWarning className="min-h-screen flex flex-col relative bg-[#0a0a0a] text-white font-sans overflow-x-hidden">

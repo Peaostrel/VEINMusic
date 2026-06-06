@@ -59,6 +59,37 @@ def _parse_generic_html(html_text: str) -> tuple[Optional[str], Optional[str]]:
         if t_tag: title = t_tag.group(1).strip()
     return title, img
 
+async def _parse_yandex_meta(client, url: str) -> tuple[Optional[str], Optional[str]]:
+    """Parse title and image from Yandex Music URL using their internal API."""
+    try:
+        if "/artist/" in url:
+            artist_id = url.split('/artist/')[1].split('/')[0].split('?')[0]
+            res = (await client.get(f"https://music.yandex.ru/handlers/artist.jsx?artist={artist_id}")).json()
+            return _parse_yandex_artist(res)
+        elif "/album/" in url and "/track/" not in url:
+            album_id = url.split('/album/')[1].split('/')[0].split('?')[0]
+            res = (await client.get(f"https://music.yandex.ru/handlers/album.jsx?album={album_id}")).json()
+            return _parse_yandex_album(res)
+        elif "/track/" in url:
+            track_id = url.split('/track/')[1].split('/')[0].split('?')[0]
+            res = (await client.get(f"https://music.yandex.ru/handlers/track.jsx?track={track_id}")).json()
+            return _parse_yandex_track(res)
+    except Exception as e:
+        print(f"Yandex OG parsing error: {e}")
+    return None, None
+
+
+async def _parse_generic_meta(client, url: str) -> tuple[Optional[str], Optional[str]]:
+    """Fetch the page and extract OG meta tags from HTML."""
+    try:
+        resp = await client.get(url)
+        if resp.status_code == 200:
+            return _parse_generic_html(resp.text)
+    except Exception as e:
+        print(f"Generic OG parsing error: {e}")
+    return None, None
+
+
 async def parse_og_meta(url: str):
     if not url: return None, None
     if not url.startswith("http"): url = HTTPS_PREFIX + url
@@ -70,40 +101,21 @@ async def parse_og_meta(url: str):
 
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
     title, img = None, None
-    
+
     async with httpx.AsyncClient(headers=headers, timeout=5.0, follow_redirects=True) as client:
         if "music.yandex.ru" in url:
-            try:
-                if "/artist/" in url:
-                    artist_id = url.split('/artist/')[1].split('/')[0].split('?')[0]
-                    res = (await client.get(f"https://music.yandex.ru/handlers/artist.jsx?artist={artist_id}")).json()
-                    title, img = _parse_yandex_artist(res)
-                elif "/album/" in url and "/track/" not in url:
-                    album_id = url.split('/album/')[1].split('/')[0].split('?')[0]
-                    res = (await client.get(f"https://music.yandex.ru/handlers/album.jsx?album={album_id}")).json()
-                    title, img = _parse_yandex_album(res)
-                elif "/track/" in url:
-                    track_id = url.split('/track/')[1].split('/')[0].split('?')[0]
-                    res = (await client.get(f"https://music.yandex.ru/handlers/track.jsx?track={track_id}")).json()
-                    title, img = _parse_yandex_track(res)
-            except Exception as e:
-                print(f"Yandex OG parsing error: {e}")
-        
+            title, img = await _parse_yandex_meta(client, url)
+
         if not title or not img:
-            try:
-                resp = await client.get(url)
-                if resp.status_code == 200:
-                    t_gen, i_gen = _parse_generic_html(resp.text)
-                    title = title or t_gen
-                    img = img or i_gen
-            except Exception as e:
-                print(f"Generic OG parsing error: {e}")
-                
+            t_gen, i_gen = await _parse_generic_meta(client, url)
+            title = title or t_gen
+            img = img or i_gen
+
     # Filter generic titles
     if title:
         banned = ["Яндекс Музыка", "собираем музыку для вас", "Spotify – Web Player", "Spotify - Web Player"]
         if any(b in title for b in banned):
             title = None
-            img = None # Also clear image if it's generic
+            img = None  # Also clear image if it's generic
 
     return title, img

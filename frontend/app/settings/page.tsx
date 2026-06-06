@@ -63,6 +63,21 @@ const LOCAL_COUNTRIES = [
   { name: 'Австралия', code: 'AU', flag: '🇦🇺' }
 ];
 
+// Helper: extract city name from nominatim address item
+function extractCityName(item: any): string {
+    const addr = item.address || {};
+    const name = addr.city || addr.town || addr.village || item.name || '';
+    return name.split(',')[0].replace(/(сельсовет|городское поселение|муниципальное образование|район|станция|платформа|парк)/gi, '').trim();
+}
+
+// Helper: filter city names by query
+function filterCityName(n: string, cityQuery: string): boolean {
+    if (!n || n.length < 2) return false;
+    const q = cityQuery.toLowerCase();
+    const res = n.toLowerCase();
+    return res.includes(q) || q.includes(res);
+}
+
 function SettingsContent() {
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -80,7 +95,6 @@ function SettingsContent() {
   const [countries, setCountries] = useState<{name: string, code: string, flag: string}[]>(LOCAL_COUNTRIES);
   const [cities, setCities] = useState<string[]>([]);
   const [countryCode, setCountryCode] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
   const [isCityInputFocused, setIsCityInputFocused] = useState(false);
 
   useEffect(() => {
@@ -109,36 +123,28 @@ function SettingsContent() {
     if (!countryCode || data.city.length < 2) { setCities([]); return; }
     let active = true; 
     setCities([]);
-    setIsSearching(true);
     const delay = setTimeout(() => {
         const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(data.city)}&format=json&accept-language=ru&addressdetails=1&countrycodes=${countryCode.toLowerCase()}&limit=20`;
         fetch(url)
           .then(r => r.json())
           .then(d => { 
               if (!active) return;
-              setIsSearching(false);
               if (Array.isArray(d)) {
-                  const sorted = d.sort((a,b) => (b.importance || 0) - (a.importance || 0));
-                  const names = Array.from(new Set(sorted.map((item: any) => {
-                      const addr = item.address || {};
-                      const name = addr.city || addr.town || addr.village || item.name || '';
-                      return name.split(',')[0].replace(/(сельсовет|городское поселение|муниципальное образование|район|станция|платформа|парк)/gi, '').trim();
-                  }).filter(n => {
-                      if (!n || n.length < 2) return false;
-                      const q = data.city.toLowerCase();
-                      const res = n.toLowerCase();
-                      return res.includes(q) || q.includes(res);
-                  })));
+                  const sorted = [...d].toSorted((a,b) => (b.importance || 0) - (a.importance || 0));
+                  const names = Array.from(new Set(
+                      sorted
+                          .map((item: any) => extractCityName(item))
+                          .filter((n: string) => filterCityName(n, data.city))
+                  ));
                   setCities(names.slice(0, 10) as string[]);
               }
           })
-          .catch(() => { if (active) setIsSearching(false); });
+          .catch(() => { if (active) setCities([]); });
     }, 500);
     return () => { active = false; clearTimeout(delay); };
   }, [data.city, countryCode]);
 
   const [socialLinks, setSocialLinks] = useState<any[]>([]);
-  const [userAchievements, setUserAchievements] = useState<any[]>([]); 
   const [userProfile, setUserProfile] = useState<any>(null);
   const [level, setLevel] = useState(1);
   const [status, setStatus] = useState('');
@@ -166,7 +172,6 @@ function SettingsContent() {
         const s = await statsRes.json();
         setUserProfile(u);
         setLevel(Math.floor((s.total_xp || s.total_scrobbles || 0) / 100) + 1);
-        setUserAchievements(u.achievements || []);
         const loc = u.location || '';
         const locParts = loc.split(',').map((s: string) => s.trim());
 
@@ -184,7 +189,7 @@ function SettingsContent() {
             theme: u.theme || 'classic', isPrivate: u.is_private || false, hiddenArtists: u.hidden_artists || '',
             yandexToken: u.yandex_token || '', lastfmUsername: u.lastfm_username || ''
         });
-        try { setSocialLinks(JSON.parse(u.social_links || "[]")); } catch(e) {}
+        try { setSocialLinks(JSON.parse(u.social_links || "[]")); } catch(e) { console.error(e); }
         setLoading(false);
       }).catch(() => setLoading(false));
   }, [router, searchParams]);
@@ -196,7 +201,7 @@ function SettingsContent() {
     if (!file) return;
     const reader = new FileReader();
     reader.addEventListener('load', () => {
-      setCropImageSrc(reader.result?.toString() || null);
+      setCropImageSrc((reader.result as string) ?? null);
       setCropFieldTarget(field);
     });
     reader.readAsDataURL(file);
@@ -299,7 +304,7 @@ function SettingsContent() {
         });
         if (res.ok) { setStatus('✅ Токен Яндекса сохранен!'); setUserProfile({...userProfile, yandex_linked: true}); }
         else setStatus('❌ Ошибка сохранения');
-    } catch (e) { setStatus('❌ Ошибка сети'); }
+    } catch (e) { console.error(e); setStatus('❌ Ошибка сети'); }
   };
 
   const handleDisconnect = async (service: string) => {
@@ -316,7 +321,7 @@ function SettingsContent() {
             if (service === 'yandex') { setUserProfile({ ...userProfile, yandex_linked: false }); updateData('yandexToken', ''); }
             if (service === 'lastfm') updateData('lastfmUsername', '');
         }
-    } catch (e) { setStatus('❌ Ошибка сети'); }
+    } catch (e) { console.error(e); setStatus('❌ Ошибка сети'); }
   };
 
   const startLastfmImport = async () => {
@@ -346,13 +351,23 @@ function SettingsContent() {
                 const errData = await res.json();
                 errorMessage = errData.detail || errorMessage;
             } catch (e) {
+                console.error(e);
                 errorMessage = `Ошибка сервера (${res.status})`;
             }
             setStatus(`❌ Ошибка: ${errorMessage}`);
         }
     } catch (e) { 
+        console.error(e);
         setStatus('❌ Ошибка сети'); 
     }
+  };
+
+  const tabLabel = (tab: string) => {
+    if (tab === 'general') return 'Общие данные';
+    if (tab === 'showcase') return 'Витрина профиля';
+    if (tab === 'theme') return 'Оформление';
+    if (tab === 'privacy') return 'Приватность';
+    return 'Интеграции';
   };
 
   if (loading) return <div className="min-h-screen text-[var(--accent-text)] flex items-center justify-center font-bold text-xl">Загрузка...</div>;
@@ -375,7 +390,7 @@ function SettingsContent() {
               <a href="/feed" className="text-sm font-bold text-gray-400 hover:text-white mb-4 block px-4">← Глобальная лента</a>
               {['general', 'showcase', 'theme', 'privacy', 'integrations'].map(tab => (
                   <button key={tab} onClick={() => setActiveTab(tab)} className={`text-left px-4 py-3 rounded-lg font-bold transition-all ${activeTab === tab ? 'bg-[var(--accent)] text-[var(--text-on-accent)]' : 'text-gray-400 hover:bg-[#1e1e1e]'}`}>
-                      {tab === 'general' ? 'Общие данные' : tab === 'showcase' ? 'Витрина профиля' : tab === 'theme' ? 'Оформление' : tab === 'privacy' ? 'Приватность' : 'Интеграции'}
+                      {tabLabel(tab)}
                   </button>
               ))}
           </aside>

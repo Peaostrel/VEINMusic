@@ -51,7 +51,6 @@ export const getNextRankInfo = (level: number) => {
 };
 
 export const LvlBadge = ({ level }: { level: number }) => {
-    const rank = getRankInfo(level || 1);
     return (
         <span className={`ml-2 inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border border-[var(--accent)] text-[var(--accent)] bg-[#121212] shadow-[0_0_5px_var(--accent-glow)] shrink-0`}>
             LVL {level || 1}
@@ -82,9 +81,9 @@ export default function Navbar() {
       hex = hex.replace('#', '');
       if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
       return {
-          r: parseInt(hex.substring(0, 2), 16) || 0,
-          g: parseInt(hex.substring(2, 4), 16) || 0,
-          b: parseInt(hex.substring(4, 6), 16) || 0
+          r: Number.parseInt(hex.substring(0, 2), 16) || 0,
+          g: Number.parseInt(hex.substring(2, 4), 16) || 0,
+          b: Number.parseInt(hex.substring(4, 6), 16) || 0
       };
   };
 
@@ -94,7 +93,7 @@ export default function Navbar() {
       let r = 0, g = 0, b = 0;
       const isRainbow = themeKey === 'rainbow';
       if (!isRainbow) {
-          if (themeKey && themeKey.startsWith('#')) {
+          if (themeKey?.startsWith('#')) {
               const vals = hexToRgbVals(themeKey);
               r = vals.r; g = vals.g; b = vals.b;
           } else {
@@ -117,7 +116,7 @@ export default function Navbar() {
           root.style.setProperty('--accent-glow', 'rgba(255, 0, 68, 0.3)');
           root.style.setProperty('--accent-glow-strong', 'rgba(255, 0, 68, 0.6)');
       } 
-      else if (themeKey && themeKey.startsWith('#')) {
+      else if (themeKey?.startsWith('#')) {
           root.classList.remove('theme-rainbow');
           root.style.setProperty('--accent', themeKey);
           root.style.setProperty('--accent-hover', themeKey);
@@ -137,23 +136,25 @@ export default function Navbar() {
 
   useEffect(() => {
       const handleThemeUpdate = () => {
-          let t = 'classic';
-          if (window.location.pathname.toLowerCase().includes('/auth')) { t = 'classic'; }
-          else if (window.location.pathname.toLowerCase().startsWith('/user/') && (window as any).__ACTIVE_PROFILE_THEME__) { t = (window as any).__ACTIVE_PROFILE_THEME__; } 
-          else { 
+          let t: string;
+          if (globalThis.location.pathname.toLowerCase().includes('/auth')) {
+              t = 'classic';
+          } else if (globalThis.location.pathname.toLowerCase().startsWith('/user/') && (globalThis as any).__ACTIVE_PROFILE_THEME__) {
+              t = (globalThis as any).__ACTIVE_PROFILE_THEME__;
+          } else {
               const storedUser = localStorage.getItem('username');
               if (isValidUser(storedUser)) {
-                  t = localStorage.getItem('site_theme') || 'classic'; 
+                  t = localStorage.getItem('site_theme') || 'classic';
               } else {
-                  t = 'classic'; 
+                  t = 'classic';
               }
           }
           setCurrentTheme(t);
           applyTheme(t);
       };
       handleThemeUpdate();
-      window.addEventListener('theme_update', handleThemeUpdate);
-      return () => window.removeEventListener('theme_update', handleThemeUpdate);
+      globalThis.addEventListener('theme_update', handleThemeUpdate);
+      return () => globalThis.removeEventListener('theme_update', handleThemeUpdate);
   }, [pathname]);
 
   useEffect(() => {
@@ -255,8 +256,8 @@ export default function Navbar() {
               <div className="relative">
                   <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">🔍</span>
                   {/* Dummy inputs to trick Firefox/Chrome autofill */}
-                  <input type="text" style={{display: 'none'}} aria-hidden="true" />
-                  <input type="password" style={{display: 'none'}} aria-hidden="true" />
+                  <input type="text" style={{display: 'none'}} tabIndex={-1} />
+                  <input type="password" style={{display: 'none'}} tabIndex={-1} />
                   
                   <input 
                       type="search" 
@@ -280,7 +281,7 @@ export default function Navbar() {
               {isSearchOpen && searchResults.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-2 bg-[#1e1e1e]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
                       {searchResults.map((u) => (
-                          <div key={u.username} onClick={() => { setIsSearchOpen(false); setSearchQuery(''); router.push(`/user/${u.username}`); }} className="flex items-center gap-3 p-3 hover:bg-white/10 cursor-pointer transition-colors border-b border-white/5 last:border-0">
+                          <div key={u.username} role="button" tabIndex={0} onClick={() => { setIsSearchOpen(false); setSearchQuery(''); router.push(`/user/${u.username}`); }} onKeyDown={(e) => { if (e.key === 'Enter') { setIsSearchOpen(false); setSearchQuery(''); router.push(`/user/${u.username}`); } }} className="flex items-center gap-3 p-3 hover:bg-white/10 cursor-pointer transition-colors border-b border-white/5 last:border-0">
                               <div className="w-9 h-9 rounded-full overflow-hidden bg-black shrink-0"><img src={u.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${u.username}&backgroundColor=transparent`} alt="Avatar" className="w-full h-full object-cover" /></div>
                               <div className="truncate flex-grow">
                                   <div className="font-bold text-white text-sm truncate flex items-center gap-1">

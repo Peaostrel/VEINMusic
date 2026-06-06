@@ -19,7 +19,7 @@ export default function IntegrationsTab({
                 </div>
                 <div className="flex gap-2">
                     {userProfile?.spotify_linked && <button type="button" onClick={() => handleDisconnect('spotify')} className="bg-red-900/20 text-red-400 border border-red-900/30 font-bold px-4 py-2 rounded-xl text-sm">Отключить</button>}
-                    <button type="button" onClick={() => window.location.href = `${API_URL}/auth/spotify/login`} className="bg-[#1DB954] text-black font-black px-6 py-2 rounded-xl text-sm hover:scale-105 transition-all">🔗 {userProfile?.spotify_linked ? 'Обновить' : 'Привязать'}</button>
+                    <button type="button" onClick={() => { globalThis.location.href = `${API_URL}/auth/spotify/login`; }} className="bg-[#1DB954] text-black font-black px-6 py-2 rounded-xl text-sm hover:scale-105 transition-all">🔗 {userProfile?.spotify_linked ? 'Обновить' : 'Привязать'}</button>
                 </div>
             </div>
             {userProfile?.last_sync && userProfile?.spotify_linked && <div className="text-[10px] text-gray-500 uppercase flex items-center gap-2 mt-2"><span className="w-1.5 h-1.5 rounded-full bg-[#1DB954] animate-pulse"></span>Последняя синхронизация: {new Date(userProfile.last_sync).toLocaleString()}</div>}
@@ -27,8 +27,8 @@ export default function IntegrationsTab({
 
         {/* Yandex */}
         <div className="bg-[#121212]/50 p-6 rounded-xl border border-white/5 flex flex-col gap-4 relative overflow-hidden shadow-md">
-            <input type="text" style={{display: 'none'}} aria-hidden="true" />
-            <input type="password" style={{display: 'none'}} aria-hidden="true" />
+            <input type="text" tabIndex={-1} style={{display: 'none'}} />
+            <input type="password" tabIndex={-1} style={{display: 'none'}} />
             
             <div className="absolute top-0 left-0 w-1 h-full bg-[#ffcc00]"></div>
             <div className="flex items-center justify-between gap-4">
