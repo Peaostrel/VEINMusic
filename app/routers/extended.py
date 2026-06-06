@@ -343,7 +343,7 @@ def get_user_info(username: str, request: Request, db: Annotated[Session, Depend
     current_u = None
     try:
         current_u = get_current_user(request, db)
-    except Exception:
+    except Exception:  # noqa: BLE001 - user may not be authenticated, fall through
         pass
     is_owner = current_u and current_u.id == user.id
     
@@ -588,7 +588,7 @@ def get_global_feed(db: Annotated[Session, Depends(get_db)]):
 def _get_activity_stats(db: Session, base_filter) -> tuple[dict[str, int], dict[str, int], dict[str, int]]:
     try:
         is_postgres = db.get_bind().dialect.name == "postgresql"
-    except Exception:
+    except Exception:  # noqa: BLE001 - fallback to postgres if dialect detection fails
         is_postgres = True
         
     if is_postgres:
