@@ -634,7 +634,7 @@ export default function Profile() {
             <div className="absolute top-0 rounded-full w-32 h-32 md:w-40 md:h-40 bg-[var(--accent)] shadow-[0_0_40px_var(--accent-glow)] blur-lg animate-pulse opacity-40"></div>
 
             <div className={`relative w-32 h-32 md:w-40 md:h-40 bg-[#1e1e1e] rounded-full overflow-hidden border-[6px] border-[#121212] shadow-[0_8px_30px_rgba(0,0,0,0.6)] transition-all duration-500 z-10 group-hover:border-[#1a1a1a]`}>
-              <img src={u.avatar_url || fallbackAvatar} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" onError={e => e.currentTarget.src = fallbackAvatar} />
+              <img src={u.avatar_url || fallbackAvatar} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt={u.display_name} onError={e => e.currentTarget.src = fallbackAvatar} />
             </div>
             {/* Лэвел Бейдж */}
             <div className={`relative -mt-4 bg-[#121212] border-2 border-[var(--accent)] text-gray-200 px-4 py-1.5 rounded-full text-[11px] md:text-xs font-black shadow-xl whitespace-nowrap flex items-center gap-2 z-20`}>
@@ -685,7 +685,7 @@ export default function Profile() {
                     {a.rule_target && a.rule_target.startsWith('http') ? (
                       <a href={a.rule_target} target="_blank" rel="noreferrer" className="flex items-center gap-3 group/link">
                         {a.target_image && (
-                          <img src={a.target_image} className="w-10 h-10 rounded object-cover shadow-md shrink-0 border border-white/5 group-hover/link:border-[var(--accent)] transition-colors" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                          <img src={a.target_image} className="w-10 h-10 rounded object-cover shadow-md shrink-0 border border-white/5 group-hover/link:border-[var(--accent)] transition-colors" alt={a.name} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                         )}
                         <div className="flex flex-col text-left">
                           <span className="text-sm font-bold text-white group-hover/link:text-[var(--accent-text)] transition-colors leading-tight mb-0.5">{a.name}</span>
@@ -696,7 +696,7 @@ export default function Profile() {
                     ) : (
                       <div className="flex items-center gap-3">
                         {a.target_image && (
-                          <img src={a.target_image} className="w-10 h-10 rounded object-cover shadow-md shrink-0 border border-white/5" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                          <img src={a.target_image} className="w-10 h-10 rounded object-cover shadow-md shrink-0 border border-white/5" alt={a.name} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                         )}
                         <div className="flex flex-col text-left">
                           <span className="text-sm font-bold text-white leading-tight mb-0.5">{a.name}</span>
@@ -894,11 +894,11 @@ export default function Profile() {
                   const isNowPlaying = isLatest && (item.is_playing || (new Date().getTime() - new Date(item.updated_at + 'Z').getTime() < 15 * 60 * 1000));
 
                   return (
-                    <li key={idx} className={`p-3 rounded-xl flex justify-between items-center transition-all duration-300 group relative ${isLatest ? 'bg-gradient-to-r from-white/10 to-transparent border-l-4 border-[var(--accent)] shadow-md' : 'bg-white/5 hover:bg-white/10 border border-transparent hover:border-white/5'}`}>
+                    <li key={item.id} className={`p-3 rounded-xl flex justify-between items-center transition-all duration-300 group relative ${isLatest ? 'bg-gradient-to-r from-white/10 to-transparent border-l-4 border-[var(--accent)] shadow-md' : 'bg-white/5 hover:bg-white/10 border border-transparent hover:border-white/5'}`}>
                       <div className="flex items-center gap-4 pr-2 w-full min-w-0">
                         <div className="w-12 h-12 rounded bg-black shrink-0 overflow-hidden shadow z-10 pointer-events-auto relative">
                           {item.cover_url ? (
-                            <img src={item.cover_url} className="w-full h-full object-cover" alt="Cover" />
+                            <img src={item.cover_url} className="w-full h-full object-cover" alt={item.title} />
                           ) : (
                             <div className="w-full h-full bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-xl text-yellow-500/80 shadow-inner">🎵</div>
                           )}
@@ -991,10 +991,10 @@ export default function Profile() {
             <h2 className="text-xl font-black mb-4 flex items-center gap-2 text-[var(--accent-text)]"><span className="text-xl animate-fire">🔥</span> Топ треков</h2>
             <ul className="space-y-3">
               {data.stats.top_tracks?.map((item: any, idx: number) => (
-                <li key={idx} className={`p-2 rounded-xl flex gap-3 items-start transition-all border group relative ${item.is_playing ? 'bg-[var(--accent)]/10 border-[var(--accent)] shadow-[0_0_15px_var(--accent-glow)]' : 'bg-white/5 border-transparent hover:bg-white/10 hover:border-white/5'}`}>
+                <li key={item.title + item.artist} className={`p-2 rounded-xl flex gap-3 items-start transition-all border group relative ${item.is_playing ? 'bg-[var(--accent)]/10 border-[var(--accent)] shadow-[0_0_15px_var(--accent-glow)]' : 'bg-white/5 border-transparent hover:bg-white/10 hover:border-white/5'}`}>
                   <div className="relative w-10 h-10 rounded bg-[#1a1a1a] shrink-0 overflow-hidden shadow-sm mt-0.5">
                     {item.cover_url ? (
-                      <img src={item.cover_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="Cover" />
+                      <img src={item.cover_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt={item.title} />
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-sm text-yellow-500/80 shadow-inner">🎵</div>
                     )}
