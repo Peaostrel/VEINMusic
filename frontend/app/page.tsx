@@ -11,7 +11,7 @@ const getPlatformIcon = (source: string) => {
         case 'youtube_music':
             return <img src="https://img.icons8.com/?size=100&id=V1cbDThDpbRc&format=png&color=FF0000" alt="YouTube Music" className="w-4 h-4 shrink-0 object-contain drop-shadow-[0_0_5px_rgba(255,0,0,0.5)]" />;
         case 'vk':
-            return <svg viewBox="6 6 12 12" fill="#0077FF" className="w-4 h-4 shrink-0 drop-shadow-[0_0_5px_rgba(0,119,255,0.5)]"><path d="M15.5 17c-5.5 0-8.6-3.8-8.7-10h2.7c.1 4.5 2.1 6.4 3.7 6.8V7h2.5v3.9c1.5-.2 3.1-1.9 3.6-3.9h2.5c-.4 2.5-2.2 4.2-3.5 5 1.3.6 3.4 2 4.2 5h-2.8c-.6-2-2.2-3.5-4.2-3.7V17h-2z" /></svg>;
+            return <svg viewBox="5.5 3 18 18" fill="#0077FF" className="w-4 h-4 shrink-0 drop-shadow-[0_0_5px_rgba(0,119,255,0.5)]"><path d="M15.5 17c-5.5 0-8.6-3.8-8.7-10h2.7c.1 4.5 2.1 6.4 3.7 6.8V7h2.5v3.9c1.5-.2 3.1-1.9 3.6-3.9h2.5c-.4 2.5-2.2 4.2-3.5 5 1.3.6 3.4 2 4.2 5h-2.8c-.6-2-2.2-3.5-4.2-3.7V17h-2z" /></svg>;
         case 'soundcloud':
             return <img src="https://img.icons8.com/?size=100&id=13669&format=png&color=FF5500" alt="SoundCloud" className="w-4 h-4 shrink-0 object-contain drop-shadow-[0_0_5px_rgba(255,85,0,0.5)]" />;
         case 'apple_music':
