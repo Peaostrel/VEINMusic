@@ -13,6 +13,56 @@ function getRarityStyle(rarity: number): string {
     return 'bg-white/5 text-gray-400 border-white/5';
 }
 
+function parseMarkdownForNode(node: any, nodeIdx: number) {
+    if (typeof node !== 'string') {
+        return [node];
+    }
+    const finalNodes: any[] = [];
+    let lastIndex = 0;
+    while (true) {
+        const startBracket = node.indexOf('[', lastIndex);
+        if (startBracket === -1) break;
+
+        const endBracket = node.indexOf(']', startBracket);
+        if (endBracket === -1) break;
+
+        // Проверяем, идет ли сразу после ']' символ '('
+        if (endBracket + 1 >= node.length || node[endBracket + 1] !== '(') {
+            if (startBracket > lastIndex) {
+                finalNodes.push(node.substring(lastIndex, startBracket + 1));
+            } else {
+                finalNodes.push('[');
+            }
+            lastIndex = startBracket + 1;
+            continue;
+        }
+
+        const endParenthesis = node.indexOf(')', endBracket + 2);
+        if (endParenthesis === -1) break;
+
+        // Нашли ссылку!
+        if (startBracket > lastIndex) {
+            finalNodes.push(node.substring(lastIndex, startBracket));
+        }
+
+        const linkText = node.substring(startBracket + 1, endBracket);
+        const linkUrl = node.substring(endBracket + 2, endParenthesis);
+
+        finalNodes.push(
+            <a key={`md-${nodeIdx}-${startBracket}`} href={linkUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline font-bold">
+                {linkText}
+            </a>
+        );
+
+        lastIndex = endParenthesis + 1;
+    }
+
+    if (lastIndex < node.length) {
+        finalNodes.push(node.substring(lastIndex));
+    }
+    return finalNodes;
+}
+
 function renderDescriptionWithLinks(desc: string, meta: string | null, url: string | null, name: string) {
     let nodes: any[] = [desc];
 
@@ -64,53 +114,7 @@ function renderDescriptionWithLinks(desc: string, meta: string | null, url: stri
     const finalNodes: any[] = [];
 
     nodes.forEach((node, nodeIdx) => {
-        if (typeof node !== 'string') {
-            finalNodes.push(node);
-            return;
-        }
-
-        let lastIndex = 0;
-        while (true) {
-            const startBracket = node.indexOf('[', lastIndex);
-            if (startBracket === -1) break;
-
-            const endBracket = node.indexOf(']', startBracket);
-            if (endBracket === -1) break;
-
-            // Проверяем, идет ли сразу после ']' символ '('
-            if (endBracket + 1 >= node.length || node[endBracket + 1] !== '(') {
-                if (startBracket > lastIndex) {
-                    finalNodes.push(node.substring(lastIndex, startBracket + 1));
-                } else {
-                    finalNodes.push('[');
-                }
-                lastIndex = startBracket + 1;
-                continue;
-            }
-
-            const endParenthesis = node.indexOf(')', endBracket + 2);
-            if (endParenthesis === -1) break;
-
-            // Нашли ссылку!
-            if (startBracket > lastIndex) {
-                finalNodes.push(node.substring(lastIndex, startBracket));
-            }
-
-            const linkText = node.substring(startBracket + 1, endBracket);
-            const linkUrl = node.substring(endBracket + 2, endParenthesis);
-
-            finalNodes.push(
-                <a key={`md-${nodeIdx}-${startBracket}`} href={linkUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline font-bold">
-                    {linkText}
-                </a>
-            );
-
-            lastIndex = endParenthesis + 1;
-        }
-
-        if (lastIndex < node.length) {
-            finalNodes.push(node.substring(lastIndex));
-        }
+        finalNodes.push(...parseMarkdownForNode(node, nodeIdx));
     });
 
     return finalNodes;
