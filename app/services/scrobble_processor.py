@@ -2,16 +2,19 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime, timezone, timedelta
 import httpx
+from typing import Optional
 
 from app.models import User, Track, Scrobble, ScrobbleLike, ScrobbleComment
 from app.core.websockets import manager
+
+TRACK_PATH = "/track/"
 
 async def get_track_duration(url: str) -> int:
     if not url or not url.startswith("http"): return 180 
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
         async with httpx.AsyncClient(headers=headers, timeout=5.0) as client:
-            if "music.yandex.ru" in url and "/track/" in url:
+            if "music.yandex.ru" in url and TRACK_PATH in url:
                 track_id = url.split('/track/')[1].split('/')[0].split('?')[0]
                 res = (await client.get(f"https://music.yandex.ru/handlers/track.jsx?track={track_id}")).json()
                 return int(res.get("track", {}).get("durationMs", 180000) / 1000)
@@ -19,13 +22,13 @@ async def get_track_duration(url: str) -> int:
         print(f"Duration fetch error: {e}")
     return 180
 
-async def get_track_genre(url: str, artist: str = None) -> str:
+async def get_track_genre(url: str) -> Optional[str]:
     if not url or not url.startswith("http"): return None
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
         async with httpx.AsyncClient(headers=headers, timeout=5.0) as client:
             if "music.yandex.ru" in url:
-                if "/track/" in url:
+                if TRACK_PATH in url:
                     track_id = url.split('/track/')[1].split('/')[0].split('?')[0]
                     res = (await client.get(f"https://music.yandex.ru/handlers/track.jsx?track={track_id}")).json()
                     albums = res.get("track", {}).get("albums", [])
@@ -79,8 +82,7 @@ def format_history_item(scrobble, track, db: Session = None, counters: dict = No
         data["comments_count"] = db.query(ScrobbleComment).filter_by(scrobble_id=scrobble.id).count()
     return data
 
-async def process_scrobble(db: Session, user: User, title: str, artist: str, cover_url: str, track_url: str, source: str, progress_sec: int, is_playing: bool, duration: int, album: str = None):
-    # Case-insensitive track deduplication query
+async def _get_or_create_track(db: Session, title: str, artist: str, cover_url: str, track_url: str, duration: int, album: str) -> Track:
     track = db.query(Track).filter(
         func.lower(Track.title) == func.lower(title),
         func.lower(Track.artist) == func.lower(artist)
@@ -96,8 +98,8 @@ async def process_scrobble(db: Session, user: User, title: str, artist: str, cov
         if cover_url and not track.cover_url: 
             track.cover_url = cover_url
             updated = True
-        if track_url and "/track/" in track_url:
-            if not track.track_url or "/track/" not in track.track_url:
+        if track_url and TRACK_PATH in track_url:
+            if not track.track_url or TRACK_PATH not in track.track_url:
                 track.track_url = track_url
                 updated = True
         if album and not track.album:
@@ -118,6 +120,41 @@ async def process_scrobble(db: Session, user: User, title: str, artist: str, cov
         track.genre = await get_track_genre(track.track_url)
         db.commit()
         
+    return track
+
+def _check_favorite(track: Track, user: User) -> bool:
+    fav_art = user.profile.favorite_artist.lower() if (user.profile and user.profile.favorite_artist) else ""
+    fav_trk = user.profile.favorite_track.lower() if (user.profile and user.profile.favorite_track) else ""
+    fav_alb = user.profile.favorite_album.lower() if (user.profile and user.profile.favorite_album) else ""
+    
+    t_artist = track.artist.lower()
+    t_title = track.title.lower()
+    t_album = track.album.lower() if track.album else ""
+    
+    if fav_art and fav_art in t_artist: return True
+    if fav_trk and (fav_trk in t_title or fav_trk in f"{t_artist} {t_title}"): return True
+    if fav_alb and t_album and fav_alb in t_album: return True
+    return False
+
+def _handle_streak(db: Session, user: User):
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    scrobbles_today = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.played_at >= today_start, Scrobble.listened_sec * 100 >= Track.duration * 85).count()
+    if scrobbles_today >= 5:
+        today_str = today_start.strftime("%Y-%m-%d")
+        yesterday_str = (today_start - timedelta(days=1)).strftime("%Y-%m-%d")
+        
+        last_streak_date = user.integration.last_streak_date
+        if last_streak_date != today_str:
+            if last_streak_date == yesterday_str: 
+                user.integration.current_streak = (user.integration.current_streak or 0) + 1
+            else: 
+                user.integration.current_streak = 1
+            user.integration.last_streak_date = today_str
+            db.commit()
+
+async def process_scrobble(db: Session, user: User, title: str, artist: str, cover_url: str, track_url: str, source: str, progress_sec: int, is_playing: bool, duration: int, album: str = None):
+    track = await _get_or_create_track(db, title, artist, cover_url, track_url, duration, album)
+    
     now = datetime.now(timezone.utc)
     last_scrobble = db.query(Scrobble).filter(Scrobble.user_id == user.id).order_by(Scrobble.id.desc()).first()
     
@@ -164,34 +201,9 @@ async def process_scrobble(db: Session, user: User, title: str, artist: str, cov
         
         threshold = (track.duration if track.duration > 0 else 180) * 0.85
         if last_scrobble.listened_sec >= threshold and old_listened < threshold:
-            is_fav = False
-            fav_art = user.profile.favorite_artist.lower() if user.profile.favorite_artist else ""
-            fav_trk = user.profile.favorite_track.lower() if user.profile.favorite_track else ""
-            fav_alb = user.profile.favorite_album.lower() if user.profile.favorite_album else ""
-            
-            t_artist = track.artist.lower()
-            t_title = track.title.lower()
-            t_album = track.album.lower() if track.album else ""
-            
-            if fav_art and fav_art in t_artist: is_fav = True
-            if fav_trk and (fav_trk in t_title or fav_trk in f"{t_artist} {t_title}"): is_fav = True
-            if fav_alb and t_album and fav_alb in t_album: is_fav = True
-            
+            is_fav = _check_favorite(track, user)
             last_scrobble.xp_earned = 2 if is_fav else 1
             db.commit()
-            
-            today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-            scrobbles_today = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.played_at >= today_start, Scrobble.listened_sec * 100 >= Track.duration * 85).count()
-            if scrobbles_today >= 5:
-                today_str = today_start.strftime("%Y-%m-%d")
-                yesterday_str = (today_start - timedelta(days=1)).strftime("%Y-%m-%d")
-                
-                # Retrieve last streak date securely
-                last_streak_date = user.integration.last_streak_date
-                if last_streak_date != today_str:
-                    if last_streak_date == yesterday_str: user.integration.current_streak = (user.integration.current_streak or 0) + 1
-                    else: user.integration.current_streak = 1
-                    user.integration.last_streak_date = today_str
-                    db.commit()
+            _handle_streak(db, user)
             
     return "ok"

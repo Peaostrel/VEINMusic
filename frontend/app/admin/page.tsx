@@ -131,12 +131,12 @@ export default function AdminPanel() {
 
   const handleEditLevel = async (username: string, currentLevel: number) => {
       const newLvl = prompt(`Новый уровень для ${username}:`, String(currentLevel));
-      if(!newLvl || isNaN(parseInt(newLvl)) || parseInt(newLvl) < 1) return;
+      if(!newLvl || isNaN(Number.parseInt(newLvl)) || Number.parseInt(newLvl) < 1) return;
       try {
           const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${username}/level`, { credentials: 'include', 
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ new_level: parseInt(newLvl) })
+              body: JSON.stringify({ new_level: Number.parseInt(newLvl) })
           });
           if(res.ok) loadData();
           else alert(await res.text());
@@ -167,7 +167,7 @@ export default function AdminPanel() {
           const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${username}/achievements`, { credentials: 'include', 
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ achievement_id: parseInt(achId) })
+              body: JSON.stringify({ achievement_id: Number.parseInt(achId) })
           });
           if(res.ok) {
               alert("Ачивка выдана!");
@@ -181,7 +181,7 @@ export default function AdminPanel() {
           const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/achievements`, { credentials: 'include', 
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ...newAch, rule_value: parseInt(String(newAch.rule_value)) || 0, reward_xp: parseInt(String(newAch.reward_xp)) || 0 })
+              body: JSON.stringify({ ...newAch, rule_value: Number.parseInt(String(newAch.rule_value)) || 0, reward_xp: Number.parseInt(String(newAch.reward_xp)) || 0 })
           });
           if(res.ok) {
               setNewAch({ name: '', description: '', icon: '', rule_type: 'manual', rule_value: 0, rule_target: '', rule_meta: '', target_image: '', reward_xp: 0 });
@@ -196,7 +196,7 @@ export default function AdminPanel() {
           const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/admin/achievements/${editingAch.id}`, { credentials: 'include', 
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ...editingAch, rule_value: parseInt(String(editingAch.rule_value)) || 0, reward_xp: parseInt(String(editingAch.reward_xp)) || 0 })
+              body: JSON.stringify({ ...editingAch, rule_value: Number.parseInt(String(editingAch.rule_value)) || 0, reward_xp: Number.parseInt(String(editingAch.reward_xp)) || 0 })
           });
           if(res.ok) {
               setEditingAch(null);

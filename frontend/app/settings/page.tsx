@@ -8,7 +8,7 @@ import { useState, useEffect, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 const Cropper = dynamic(() => import('react-easy-crop'), { ssr: false }) as any;
-import { getCroppedImg, fixImageUrl, THEMES } from './utils';
+import { getCroppedImg, fixImageUrl } from './utils';
 
 // Import Tabs
 import GeneralTab from './tabs/GeneralTab';
@@ -16,6 +16,17 @@ import ShowcaseTab from './tabs/ShowcaseTab';
 import ThemeTab from './tabs/ThemeTab';
 import PrivacyTab from './tabs/PrivacyTab';
 import IntegrationsTab from './tabs/IntegrationsTab';
+
+const parseSplit = (val: string) => {
+    if (!val) return ['', ''];
+    const parts = val.split('—').map(s => s.trim());
+    if (parts.length < 2) {
+        const parts2 = val.split('-').map(s => s.trim());
+        if (parts2.length >= 2) return [parts2[0], parts2.slice(1).join('-')];
+        return ['', val];
+    }
+    return [parts[0], parts.slice(1).join('—')];
+};
 
 const LOCAL_COUNTRIES = [
   { name: 'Россия', code: 'RU', flag: '🇷🇺' },
@@ -158,16 +169,7 @@ function SettingsContent() {
         setUserAchievements(u.achievements || []);
         const loc = u.location || '';
         const locParts = loc.split(',').map((s: string) => s.trim());
-        const parseSplit = (val: string) => {
-            if (!val) return ['', ''];
-            const parts = val.split('—').map(s => s.trim());
-            if (parts.length < 2) {
-                const parts2 = val.split('-').map(s => s.trim());
-                if (parts2.length >= 2) return [parts2[0], parts2.slice(1).join('-')];
-                return ['', val];
-            }
-            return [parts[0], parts.slice(1).join('—')];
-        };
+
         const [favTrackArtist, favTrackName] = parseSplit(u.favorite_track);
         const [favAlbumArtist, favAlbumName] = parseSplit(u.favorite_album);
 

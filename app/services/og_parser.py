@@ -3,8 +3,11 @@ import re
 import httpx
 import ipaddress
 import socket
+from typing import Optional
 
-async def is_safe_url(url: str) -> bool:
+HTTPS_PREFIX = "https://"
+
+def is_safe_url(url: str) -> bool:
     try:
         parsed_url = urllib.parse.urlparse(url)
         hostname = parsed_url.hostname
@@ -15,8 +18,6 @@ async def is_safe_url(url: str) -> bool:
             return False
             
         # Resolve IP to check for private/loopback ranges
-        # socket.getaddrinfo returns a list of tuples: (family, type, proto, canonname, sockaddr)
-        # sockaddr for IPv4 is (address, port) and for IPv6 is (address, port, flow info, scope id)
         addr_info = socket.getaddrinfo(hostname, None)
         for info in addr_info:
             ip_str = info[4][0]
@@ -27,12 +28,43 @@ async def is_safe_url(url: str) -> bool:
     except Exception:
         return False
 
+def _parse_yandex_artist(res: dict) -> tuple[Optional[str], Optional[str]]:
+    title = res.get("artist", {}).get("name")
+    uri = res.get("artist", {}).get("cover", {}).get("uri")
+    img = HTTPS_PREFIX + uri.replace("%%", "400x400") if uri else None
+    return title, img
+
+def _parse_yandex_album(res: dict) -> tuple[Optional[str], Optional[str]]:
+    title = res.get("title")
+    uri = res.get("coverUri")
+    img = HTTPS_PREFIX + uri.replace("%%", "400x400") if uri else None
+    return title, img
+
+def _parse_yandex_track(res: dict) -> tuple[Optional[str], Optional[str]]:
+    t_data = res.get("track", {})
+    title = f"{t_data.get('artists', [{}])[0].get('name')} — {t_data.get('title')}" if t_data.get('artists') else t_data.get('title')
+    uri = t_data.get("coverUri") or res.get("coverUri")
+    img = HTTPS_PREFIX + uri.replace("%%", "400x400") if uri else None
+    return title, img
+
+def _parse_generic_html(html_text: str) -> tuple[Optional[str], Optional[str]]:
+    title, img = None, None
+    t_m = re.search(r'<meta\s+(?:property|name)=["\']og:title["\']\s+content=["\']([^"\']+)["\']', html_text, re.IGNORECASE)
+    i_m = re.search(r'<meta\s+(?:property|name)=["\']og:image["\']\s+content=["\']([^"\']+)["\']', html_text, re.IGNORECASE)
+    if t_m: title = t_m.group(1).split(' | ')[0]
+    if i_m: img = i_m.group(1).replace('200x200', '400x400').replace('%%', '400x400')
+    
+    if not title:
+        t_tag = re.search(r'<title>(.*?)</title>', html_text, re.IGNORECASE | re.DOTALL)
+        if t_tag: title = t_tag.group(1).strip()
+    return title, img
+
 async def parse_og_meta(url: str):
     if not url: return None, None
-    if not url.startswith("http"): url = "https://" + url
+    if not url.startswith("http"): url = HTTPS_PREFIX + url
     
-    # SSRF Protection using strict IP resolution
-    if not await is_safe_url(url):
+    # SSRF Protection using strict IP resolution (synchronous call is safe and fast)
+    if not is_safe_url(url):
         print(f"Blocked SSRF attempt for URL: {url}")
         return None, None
 
@@ -45,22 +77,15 @@ async def parse_og_meta(url: str):
                 if "/artist/" in url:
                     artist_id = url.split('/artist/')[1].split('/')[0].split('?')[0]
                     res = (await client.get(f"https://music.yandex.ru/handlers/artist.jsx?artist={artist_id}")).json()
-                    title = res.get("artist", {}).get("name")
-                    uri = res.get("artist", {}).get("cover", {}).get("uri")
-                    img = "https://" + uri.replace("%%", "400x400") if uri else None
+                    title, img = _parse_yandex_artist(res)
                 elif "/album/" in url and "/track/" not in url:
                     album_id = url.split('/album/')[1].split('/')[0].split('?')[0]
                     res = (await client.get(f"https://music.yandex.ru/handlers/album.jsx?album={album_id}")).json()
-                    title = res.get("title")
-                    uri = res.get("coverUri")
-                    img = "https://" + uri.replace("%%", "400x400") if uri else None
+                    title, img = _parse_yandex_album(res)
                 elif "/track/" in url:
                     track_id = url.split('/track/')[1].split('/')[0].split('?')[0]
                     res = (await client.get(f"https://music.yandex.ru/handlers/track.jsx?track={track_id}")).json()
-                    t_data = res.get("track", {})
-                    title = f"{t_data.get('artists', [{}])[0].get('name')} — {t_data.get('title')}" if t_data.get('artists') else t_data.get('title')
-                    uri = t_data.get("coverUri") or res.get("coverUri")
-                    img = "https://" + uri.replace("%%", "400x400") if uri else None
+                    title, img = _parse_yandex_track(res)
             except Exception as e:
                 print(f"Yandex OG parsing error: {e}")
         
@@ -68,14 +93,9 @@ async def parse_og_meta(url: str):
             try:
                 resp = await client.get(url)
                 if resp.status_code == 200:
-                    t_m = re.search(r'<meta\s+(?:property|name)=["\']og:title["\']\s+content=["\']([^"\']+)["\']', resp.text, re.IGNORECASE)
-                    i_m = re.search(r'<meta\s+(?:property|name)=["\']og:image["\']\s+content=["\']([^"\']+)["\']', resp.text, re.IGNORECASE)
-                    if not title and t_m: title = t_m.group(1).split(' | ')[0]
-                    if not img and i_m: img = i_m.group(1).replace('200x200', '400x400').replace('%%', '400x400')
-                    
-                    if not title:
-                        t_tag = re.search(r'<title>(.*?)</title>', resp.text, re.IGNORECASE | re.DOTALL)
-                        if t_tag: title = t_tag.group(1).strip()
+                    t_gen, i_gen = _parse_generic_html(resp.text)
+                    title = title or t_gen
+                    img = img or i_gen
             except Exception as e:
                 print(f"Generic OG parsing error: {e}")
                 
@@ -87,4 +107,3 @@ async def parse_og_meta(url: str):
             img = None # Also clear image if it's generic
 
     return title, img
-

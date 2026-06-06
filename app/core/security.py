@@ -51,76 +51,82 @@ def verify_session_token(token: str, db_user: User) -> bool:
     except Exception:
         return False
 
-def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
+def _extract_token(request: Request) -> tuple[Optional[str], bool]:
     # 1. Try to get token from cookies
     token = request.cookies.get("api_key")
-    from_cookie = True
-    
-    # 2. Fallback for extension or other Bearer auth header
-    if not token:
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            token = auth_header.split(" ")[1]
-            from_cookie = False
-            
-    # 3. Fallback to POST/PUT/DELETE JSON body if needed
-    if not token and request.method in ["POST", "PUT", "DELETE"]:
+    if token:
+        return token, True
+        
+    # 2. Fallback for Bearer auth header
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        return auth_header.split(" ")[1], False
+        
+    # 3. Fallback to body
+    if request.method in ["POST", "PUT", "DELETE"]:
         try:
             body = request.state.json_body if hasattr(request.state, "json_body") else {}
             if isinstance(body, dict):
-                token = body.get("api_key")
-                from_cookie = False
+                val = body.get("api_key")
+                if val:
+                    return val, False
         except AttributeError:
             pass
+            
+    return None, False
 
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    user = None
-    
-    # Handle signed session token (contains username and colons)
+def _authenticate_user(token: str, db: Session) -> Optional[User]:
     if ":" in token:
         try:
             username = token.split(":")[0]
             user = db.query(User).filter(User.username == username).first()
-            if not user or not verify_session_token(token, user):
-                user = None
+            if user and verify_session_token(token, user):
+                return user
         except Exception:
-            user = None
+            pass
     else:
-        # Handle raw API key (query by SHA-256 hash to prevent timing attacks and plaintext exposure)
         hashed_token = hashlib.sha256(token.encode('utf-8')).hexdigest()
-        user = db.query(User).filter(User.api_key == hashed_token).first()
+        return db.query(User).filter(User.api_key == hashed_token).first()
+    return None
 
+def _check_csrf(request: Request, from_cookie: bool):
+    if not from_cookie or request.method not in ["POST", "PUT", "DELETE"]:
+        return
+        
+    origin = request.headers.get("Origin")
+    referer = request.headers.get("Referer")
+    
+    from app.main import allowed_origins
+    
+    if not origin and not referer:
+        raise HTTPException(status_code=403, detail="CSRF verification failed: missing Origin/Referer")
+        
+    origin_allowed = False
+    if origin:
+        if origin in allowed_origins:
+            origin_allowed = True
+    elif referer:
+        from urllib.parse import urlparse
+        ref_parsed = urlparse(referer)
+        ref_origin = f"{ref_parsed.scheme}://{ref_parsed.netloc}"
+        if ref_origin in allowed_origins:
+            origin_allowed = True
+            
+    if not origin_allowed:
+        raise HTTPException(status_code=403, detail="CSRF verification failed: origin not allowed")
+
+def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
+    token, from_cookie = _extract_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+        
+    user = _authenticate_user(token, db)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid API Key or Session")
         
-    # CSRF check on mutating requests authenticated via cookie
-    if from_cookie and request.method in ["POST", "PUT", "DELETE"]:
-        origin = request.headers.get("Origin")
-        referer = request.headers.get("Referer")
-        
-        # Imports allowed_origins to avoid circular import issues
-        from app.main import allowed_origins
-        
-        if not origin and not referer:
-            raise HTTPException(status_code=403, detail="CSRF verification failed: missing Origin/Referer")
-            
-        origin_allowed = False
-        if origin:
-            if origin in allowed_origins:
-                origin_allowed = True
-        elif referer:
-            from urllib.parse import urlparse
-            ref_parsed = urlparse(referer)
-            ref_origin = f"{ref_parsed.scheme}://{ref_parsed.netloc}"
-            if ref_origin in allowed_origins:
-                origin_allowed = True
-                
-        if not origin_allowed:
-            raise HTTPException(status_code=403, detail="CSRF verification failed: origin not allowed")
-            
+    _check_csrf(request, from_cookie)
     return user
+
 
 def get_admin_user(current_user: Annotated[User, Depends(get_current_user)]):
     if current_user.role != "admin":

@@ -16,6 +16,12 @@ import urllib.parse
 TRACK_PATH = "/track/"
 ALBUM_PATH = "/album/"
 YANDEX_MUSIC_DOMAIN = "music.yandex.ru"
+USER_NOT_FOUND = "Юзер не найден"
+ORDER_PLAYS_DESC = "plays DESC"
+SCDN_CO = "scdn.co"
+YANDEX_AVATARS = "avatars.yandex.net"
+TEXT_KEY = "#text"
+USER_AGENT_MOZILLA = "Mozilla/5.0"
 import httpx
 import time
 import uuid
@@ -66,8 +72,8 @@ def set_to_cache(key: str, data: any):
 
 def get_active_streak(user: User):
     if not user.integration.last_streak_date: return 0
-    today_str = datetime.utcnow().strftime("%Y-%m-%d")
-    yesterday_str = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    yesterday_str = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
     if user.integration.last_streak_date in [today_str, yesterday_str]:
         return user.integration.current_streak or 0
     return 0
@@ -75,63 +81,86 @@ def get_active_streak(user: User):
 def get_user_timezone_offset(location: str) -> int:
     if not location: return 3
     loc = location.lower()
-    if "москва" in loc or "moscow" in loc or "санкт" in loc or "питер" in loc or "россия" in loc or "russia" in loc: return 3
-    if "калининград" in loc: return 2
-    if "самара" in loc: return 4
-    if "екатеринбург" in loc: return 5
-    if "омск" in loc: return 6
-    if "новосибирск" in loc or "красноярск" in loc: return 7
-    if "иркутск" in loc: return 8
-    if "якутск" in loc: return 9
-    if "владивосток" in loc: return 10
-    if "магадан" in loc: return 11
-    if "камчатка" in loc or "анадырь" in loc: return 12
-    if "лондон" in loc or "london" in loc or "uk" in loc: return 0
-    if "германия" in loc or "germany" in loc or "берлин" in loc or "paris" in loc or "франция" in loc: return 1
+    mappings = {
+        ("москва", "moscow", "санкт", "питер", "россия", "russia"): 3,
+        ("калининград",): 2,
+        ("самара",): 4,
+        ("екатеринбург",): 5,
+        ("омск",): 6,
+        ("новосибирск", "красноярск"): 7,
+        ("иркутск",): 8,
+        ("якутск",): 9,
+        ("владивосток",): 10,
+        ("магадан",): 11,
+        ("камчатка", "анадырь"): 12,
+        ("лондон", "london", "uk"): 0,
+        ("германия", "germany", "берлин", "paris", "франция"): 1
+    }
+    for keys, offset in mappings.items():
+        if any(k in loc for k in keys):
+            return offset
     return 3
+
+def _check_total_scrobbles(user, ach, db: Session) -> bool:
+    return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85).count() >= ach.rule_value
+
+def _check_night_scrobbles(user, ach, db: Session) -> bool:
+    valid_times = db.query(Scrobble.played_at).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85).all()
+    offset = get_user_timezone_offset(user.profile.location if user.profile else None)
+    night_count = sum(1 for (dt,) in valid_times if (dt + timedelta(hours=offset)).strftime('%H') in ['00', '01', '02', '03', '04', '05'])
+    return night_count >= ach.rule_value
+
+def _check_specific_track(user, ach, db: Session) -> bool:
+    if not ach.rule_target: return False
+    if ach.rule_target.startswith("http"):
+        if hasattr(ach, 'rule_meta') and ach.rule_meta:
+            parts = [p.strip() for p in ach.rule_meta.replace('—', '-').split('-')]
+            if len(parts) >= 2: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.artist.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%")) | (Track.title.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%"))).count()
+            else: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.title.ilike(f"%{ach.rule_meta}%")) | (Track.artist.ilike(f"%{ach.rule_meta}%"))).count()
+        else:
+            target_str = ach.rule_target.split('?')[0]
+            if "yandex.ru" in target_str and TRACK_PATH in target_str:
+                track_id = target_str.split(TRACK_PATH)[1].strip("/")
+                count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.track_url.like(f"%/track/{track_id}%")).count()
+            else: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.track_url.like(f"%{target_str}%")).count()
+    else:
+        parts = [p.strip() for p in ach.rule_target.replace('—', '-').split('-')]
+        if len(parts) >= 2: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.artist.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%")) | (Track.title.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%"))).count()
+        else: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.title.ilike(f"%{ach.rule_target}%")) | (Track.artist.ilike(f'%{ach.rule_target.split("||")[0] if "||" in ach.rule_target else ach.rule_target}%'))).count()
+    return count >= ach.rule_value
+
+def _check_specific_album(user, ach, db: Session) -> bool:
+    if not ach.rule_target: return False
+    if ach.target_image and (YANDEX_AVATARS in ach.target_image or SCDN_CO in ach.target_image):
+        count = db.query(func.count(func.distinct(Scrobble.track_id))).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.cover_url == ach.target_image).scalar() or 0
+    else:
+        clean_target = ach.rule_target.split('?')[0]
+        count = db.query(func.count(func.distinct(Scrobble.track_id))).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.track_url.like(f"%{clean_target}%")).scalar() or 0
+    return count >= ach.rule_value
+
+def _check_specific_artist(user, ach, db: Session) -> bool:
+    if not ach.rule_target: return False
+    target = ach.rule_target.split("||")[0] if "||" in ach.rule_target else ach.rule_target
+    count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.artist.ilike(f'%{target}%')).count()
+    return count >= ach.rule_value
 
 def check_auto_achievements(user, db: Session):
     auto_achs = db.query(Achievement).filter(Achievement.rule_type != "manual").all()
     if not auto_achs: return
     user_ach_ids = {ua.achievement_id for ua in db.query(UserAchievement).filter_by(user_id=user.id).all()}
+    
+    checkers = {
+        "total_scrobbles": _check_total_scrobbles,
+        "night_scrobbles": _check_night_scrobbles,
+        "specific_track": _check_specific_track,
+        "specific_album": _check_specific_album,
+        "specific_artist": _check_specific_artist
+    }
+    
     for ach in auto_achs:
         if ach.id in user_ach_ids: continue 
-        granted = False
-        if ach.rule_type == "total_scrobbles":
-            if db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85).count() >= ach.rule_value: granted = True
-        elif ach.rule_type == "night_scrobbles":
-            valid_times = db.query(Scrobble.played_at).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85).all()
-            offset = get_user_timezone_offset(user.profile.location if user.profile else None)
-            night_count = sum(1 for (dt,) in valid_times if (dt + timedelta(hours=offset)).strftime('%H') in ['00', '01', '02', '03', '04', '05'])
-            if night_count >= ach.rule_value: granted = True
-        elif ach.rule_type == "specific_track" and ach.rule_target:
-            if ach.rule_target.startswith("http"):
-                if hasattr(ach, 'rule_meta') and ach.rule_meta:
-                    parts = [p.strip() for p in ach.rule_meta.replace('—', '-').split('-')]
-                    if len(parts) >= 2: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.artist.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%")) | (Track.title.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%"))).count()
-                    else: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.title.ilike(f"%{ach.rule_meta}%")) | (Track.artist.ilike(f"%{ach.rule_meta}%"))).count()
-                else:
-                    target_str = ach.rule_target.split('?')[0]
-                    if "yandex.ru" in target_str and TRACK_PATH in target_str:
-                        track_id = target_str.split(TRACK_PATH)[1].strip("/")
-                        count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.track_url.like(f"%/track/{track_id}%")).count()
-                    else: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.track_url.like(f"%{target_str}%")).count()
-            else:
-                parts = [p.strip() for p in ach.rule_target.replace('—', '-').split('-')]
-                if len(parts) >= 2: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.artist.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%")) | (Track.title.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%"))).count()
-                else: count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.title.ilike(f"%{ach.rule_target}%")) | (Track.artist.ilike(f'%{ach.rule_target.split("||")[0] if "||" in ach.rule_target else ach.rule_target}%'))).count()
-            if count >= ach.rule_value: granted = True
-        elif ach.rule_type == "specific_album" and ach.rule_target:
-            if ach.target_image and ("avatars.yandex.net" in ach.target_image or "scdn.co" in ach.target_image):
-                count = db.query(func.count(func.distinct(Scrobble.track_id))).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.cover_url == ach.target_image).scalar() or 0
-            else:
-                clean_target = ach.rule_target.split('?')[0]
-                count = db.query(func.count(func.distinct(Scrobble.track_id))).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.track_url.like(f"%{clean_target}%")).scalar() or 0
-            if count >= ach.rule_value: granted = True
-        elif ach.rule_type == "specific_artist" and ach.rule_target:
-            count = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.artist.ilike(f'%{ach.rule_target.split("||")[0] if "||" in ach.rule_target else ach.rule_target}%')).count()
-            if count >= ach.rule_value: granted = True
-        if granted:
+        checker = checkers.get(ach.rule_type)
+        if checker and checker(user, ach, db):
             db.add(UserAchievement(user_id=user.id, achievement_id=ach.id))
             user.integration.bonus_xp = (user.integration.bonus_xp or 0) + (ach.reward_xp or 0)
             db.commit()
@@ -274,7 +303,7 @@ def get_user_mood(username: str, db: Annotated[Session, Depends(get_db)]):
 @router.get("/api/user/{username}")
 def get_user_info(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
-    if not user: raise HTTPException(404, "Юзер не найден")
+    if not user: raise HTTPException(404, USER_NOT_FOUND)
     role = user.role or "user"
 
     # Privacy check for profile data using get_current_user securely
@@ -481,7 +510,7 @@ def get_recommendations(username: str, db: Annotated[Session, Depends(get_db)]):
 def get_wrapped_stats(username: str, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404)
-    last_month = datetime.utcnow() - timedelta(days=30)
+    last_month = datetime.now(timezone.utc) - timedelta(days=30)
     base_filter = [Scrobble.user_id == user.id, Scrobble.played_at >= last_month, Scrobble.listened_sec * 100 >= Track.duration * 85]
     top_artist = db.query(Track.artist, func.count(Scrobble.id)).join(Scrobble).filter(*base_filter).group_by(Track.artist).order_by(text('count_1 DESC')).first()
     total_min = db.query(func.sum(Scrobble.listened_sec)).join(Track).filter(*base_filter).scalar() or 0
@@ -562,9 +591,9 @@ def get_detailed_stats(username: str, db: Annotated[Session, Depends(get_db)], p
     
     base_filter = [Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85]
     if period == "7d":
-        base_filter.append(Scrobble.played_at >= datetime.utcnow() - timedelta(days=7))
+        base_filter.append(Scrobble.played_at >= datetime.now(timezone.utc) - timedelta(days=7))
     elif period == "30d":
-        base_filter.append(Scrobble.played_at >= datetime.utcnow() - timedelta(days=30))
+        base_filter.append(Scrobble.played_at >= datetime.now(timezone.utc) - timedelta(days=30))
         
     # 1. General Stats
     total_scrobbles = db.query(func.count(Scrobble.id)).join(Track).filter(*base_filter).scalar() or 0
@@ -575,18 +604,18 @@ def get_detailed_stats(username: str, db: Annotated[Session, Depends(get_db)], p
     # 2. Top Artists
     top_artists_raw = db.query(Track.artist, func.count(Scrobble.id).label('plays'), func.max(Scrobble.source).label('source'))\
         .join(Scrobble).filter(*base_filter).group_by(Track.artist)\
-        .order_by(text('plays DESC')).limit(10).all()
+        .order_by(text(ORDER_PLAYS_DESC)).limit(10).all()
     
     # 3. Top Tracks
     top_tracks_raw = db.query(Track.title, Track.artist, Track.cover_url, Track.track_url, func.count(Scrobble.id).label('plays'), func.max(Scrobble.source).label('source'))\
         .join(Scrobble).filter(*base_filter).group_by(Track.id, Track.title, Track.artist, Track.cover_url, Track.track_url)\
-        .order_by(text('plays DESC')).limit(10).all()
+        .order_by(text(ORDER_PLAYS_DESC)).limit(10).all()
         
     # 4. Top Albums
     top_albums_raw = db.query(Track.album, Track.artist, Track.cover_url, func.count(Scrobble.id).label('plays'), func.max(Scrobble.source).label('source'))\
         .join(Scrobble).filter(*base_filter, Track.album != None)\
         .group_by(Track.album, Track.artist, Track.cover_url)\
-        .order_by(text('plays DESC')).limit(10).all()
+        .order_by(text(ORDER_PLAYS_DESC)).limit(10).all()
 
     # 5. Genre & Source counts
     genres = db.query(Track.genre, func.count(Scrobble.id)).join(Scrobble).filter(*base_filter, Track.genre != None).group_by(Track.genre).all()
@@ -693,7 +722,7 @@ def get_current_track(username: str, db: Annotated[Session, Depends(get_db)]):
         return {"playing": False}
         
     s, t = last_scrobble
-    is_active = s.is_playing and (datetime.utcnow() - (s.updated_at or s.played_at)).total_seconds() < 900
+    is_active = s.is_playing and (datetime.now(timezone.utc) - (s.updated_at or s.played_at)).total_seconds() < 900
     
     if is_active:
         lvl, rank, _, _ = get_user_level_info(user, db)
@@ -814,7 +843,7 @@ async def smart_redirect(source: str, type: str, q: str):
     if source == "yandex":
         try:
             async with httpx.AsyncClient() as client:
-                resp = await client.get(f"https://api.music.yandex.net/search?text={urllib.parse.quote(q)}&type=all&page=0", headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
+                resp = await client.get(f"https://api.music.yandex.net/search?text={urllib.parse.quote(q)}&type=all&page=0", headers={'User-Agent': USER_AGENT_MOZILLA}, timeout=5)
                 if resp.status_code == 200:
                     res = resp.json().get("result", {})
                     if type == "artist":
@@ -860,7 +889,7 @@ def get_public_stats(db: Annotated[Session, Depends(get_db)]):
     total_tracks = db.query(Track).count()
     
     # Считаем онлайн за последние 5 минут
-    five_mins_ago = datetime.utcnow() - timedelta(minutes=5)
+    five_mins_ago = datetime.now(timezone.utc) - timedelta(minutes=5)
     online_count = db.query(func.count(func.distinct(Scrobble.user_id))).filter(Scrobble.updated_at >= five_mins_ago).scalar() or 0
     
     return {"total_users": total_users, "total_scrobbles": total_scrobbles, "total_tracks": total_tracks, "online": online_count}
@@ -970,7 +999,7 @@ async def create_achievement(data: AchCreate, db: Annotated[Session, Depends(get
     t_img = data.target_image
     meta_text = data.rule_meta
     if data.rule_type in ["specific_track", "specific_album", "specific_artist"] and target_val and target_val.startswith("http"):
-        if "avatars.yandex.net" not in target_val and "scdn.co" not in target_val:
+        if YANDEX_AVATARS not in target_val and SCDN_CO not in target_val:
             title, img = await parse_og_meta(target_val)
             if img: t_img = img
             if title and data.rule_type in ["specific_track", "specific_artist"] and not meta_text: meta_text = title
@@ -993,7 +1022,7 @@ async def update_achievement(ach_id: int, data: AchUpdate, db: Annotated[Session
     t_img = data.target_image
     meta_text = data.rule_meta
     if data.rule_type in ["specific_track", "specific_album", "specific_artist"] and target_val and target_val.startswith("http"):
-        if "avatars.yandex.net" not in target_val and "scdn.co" not in target_val:
+        if YANDEX_AVATARS not in target_val and SCDN_CO not in target_val:
             title, img = await parse_og_meta(target_val)
             if img: t_img = img
             if title and data.rule_type in ["specific_track", "specific_artist"] and not meta_text: meta_text = title
@@ -1041,7 +1070,7 @@ def assign_achievement(target_username: str, data: AchAssign, db: Annotated[Sess
 @router.delete("/api/admin/users/{target_username}/achievements/{achievement_id}")
 def remove_achievement_from_user(target_username: str, achievement_id: int, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     target = db.query(User).filter(User.username == target_username).first()
-    if not target: raise HTTPException(404, "Юзер не найден")
+    if not target: raise HTTPException(404, USER_NOT_FOUND)
     ua = db.query(UserAchievement).filter_by(user_id=target.id, achievement_id=achievement_id).first()
     if ua:
         ach = db.query(Achievement).filter_by(id=achievement_id).first()
@@ -1055,7 +1084,7 @@ def remove_achievement_from_user(target_username: str, achievement_id: int, db: 
 @router.post("/api/admin/users/{target_username}/level")
 def update_user_level(target_username: str, data: LevelUpdate, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     target = db.query(User).filter(User.username == target_username).first()
-    if not target: raise HTTPException(404, "Юзер не найден")
+    if not target: raise HTTPException(404, USER_NOT_FOUND)
     if data.new_level <= 0 or data.new_level > 10000:
         raise HTTPException(status_code=400, detail="Уровень должен быть от 1 до 10000")
     count_scrobbles = db.query(Scrobble).join(Track).filter(Scrobble.user_id == target.id, Scrobble.listened_sec * 100 >= Track.duration * 85).count()
@@ -1102,9 +1131,15 @@ def toggle_achievement(data: ToggleAch, db: Annotated[Session, Depends(get_db)],
     return {"status": "ok", "is_displayed": ua.is_displayed}
 
 
+def _save_file_sync(file_path: str, content: bytes):
+    with open(file_path, "wb") as buffer:
+        buffer.write(content)
+
+
 # --- POST /api/upload ---
 @router.post("/api/upload")
 async def upload_file(current_user: Annotated[User, Depends(get_current_user)], file: UploadFile = File(...)):
+    import anyio
     # Security: Validate file type
     allowed_types = ["image/jpeg", "image/png", "image/webp", "image/gif"]
     if file.content_type not in allowed_types:
@@ -1116,14 +1151,16 @@ async def upload_file(current_user: Annotated[User, Depends(get_current_user)], 
     if len(content) > MAX_SIZE:
         raise HTTPException(400, "Файл слишком большой (макс. 5МБ)")
     
-    ext = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
-    if ext.lower() not in ["jpg", "jpeg", "png", "webp", "gif"]:
-        ext = "jpg"
-        
+    mime_to_ext = {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+        "image/gif": "gif"
+    }
+    ext = mime_to_ext.get(file.content_type, "jpg")
     filename = f"{uuid.uuid4().hex}.{ext}"
     file_path = os.path.join(UPLOADS_DIR, filename)
-    with open(file_path, "wb") as buffer:
-        buffer.write(content)
+    await anyio.to_thread.run_sync(_save_file_sync, file_path, content)
     return {"url": f"{API_BASE_URL}/uploads/{filename}"}
 
 
@@ -1141,25 +1178,11 @@ async def get_upload(filename: str, current_user: Annotated[User, Depends(get_cu
         return FileResponse(file_path)
     raise HTTPException(status_code=404, detail="Файл не найден")
 
-def get_password_hash(password: str) -> str: return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-def verify_password(plain_password: str, hashed_password: str) -> bool: return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
-async def get_track_duration(url: str) -> int:
-    if not url or not url.startswith("http"): return 180 
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    try:
-        async with httpx.AsyncClient(headers=headers, timeout=5.0) as client:
-            if YANDEX_MUSIC_DOMAIN in url and TRACK_PATH in url:
-                track_id = url.split('/track/')[1].split('/')[0].split('?')[0]
-                res = (await client.get(f"https://{YANDEX_MUSIC_DOMAIN}/handlers/track.jsx?track={track_id}")).json()
-                return int(res.get("track", {}).get("durationMs", 180000) / 1000)
-    except Exception as e:
-        print(f"Duration fetch error: {e}")
-    return 180
 
 async def get_album_track_count(url: str) -> int:
     if not url or not url.startswith("http"): return 0
-    headers = {'User-Agent': 'Mozilla/5.0'}
+    headers = {'User-Agent': USER_AGENT_MOZILLA}
     try:
         async with httpx.AsyncClient(headers=headers, timeout=5.0) as client:
             if YANDEX_MUSIC_DOMAIN in url and ALBUM_PATH in url:
@@ -1174,133 +1197,7 @@ async def get_album_track_count(url: str) -> int:
         print(f"Album track count error: {e}")
     return 0
 
-async def get_track_genre(url: str, artist: str = None) -> str:
-    if not url or not url.startswith("http"): return None
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    try:
-        async with httpx.AsyncClient(headers=headers, timeout=5.0) as client:
-            if YANDEX_MUSIC_DOMAIN in url:
-                if TRACK_PATH in url:
-                    track_id = url.split('/track/')[1].split('/')[0].split('?')[0]
-                    res = (await client.get(f"https://{YANDEX_MUSIC_DOMAIN}/handlers/track.jsx?track={track_id}")).json()
-                    albums = res.get("track", {}).get("albums", [])
-                    if albums: return albums[0].get("genre")
-                elif "/album/" in url:
-                    album_id = url.split('/album/')[1].split('/')[0].split('?')[0]
-                    res = (await client.get(f"https://{YANDEX_MUSIC_DOMAIN}/handlers/album.jsx?album={album_id}")).json()
-                    return res.get("genre")
-    except Exception as e:
-        print(f"Genre fetch error: {e}")
-    return None
 
-async def process_scrobble(db: Session, user: User, title: str, artist: str, cover_url: str, track_url: str, source: str, progress_sec: int, is_playing: bool, duration: int, album: str = None):
-    # Removed synchronous file logging containing blocking IO
-        
-    track = db.query(Track).filter(Track.title == title, Track.artist == artist).first()
-    if not track:
-        track = Track(title=title, artist=artist, cover_url=cover_url, track_url=track_url, duration=duration or 0, album=album)
-        db.add(track)
-        db.commit()
-        db.refresh(track)
-    else:
-        updated = False
-        if cover_url and not track.cover_url: 
-            track.cover_url = cover_url
-            updated = True
-        if track_url and TRACK_PATH in track_url:
-            if not track.track_url or TRACK_PATH not in track.track_url:
-                track.track_url = track_url
-                updated = True
-        
-        if album and not track.album:
-            track.album = album
-            updated = True
-                
-        if duration and duration > 0:
-            if track.duration == 0 or track.duration == 180 or abs(track.duration - duration) > 5:
-                track.duration = duration
-                updated = True
-
-        if updated: 
-            db.commit()
-
-    if track.duration == 0 and track.track_url:
-        track.duration = await get_track_duration(track.track_url)
-        db.commit()
-
-    if not track.genre and track.track_url:
-        track.genre = await get_track_genre(track.track_url)
-        db.commit()
-        
-    now = datetime.utcnow()
-    last_scrobble = db.query(Scrobble).filter(Scrobble.user_id == user.id).order_by(Scrobble.id.desc()).first()
-    
-    is_new = False
-    if not last_scrobble or last_scrobble.track_id != track.id:
-        if last_scrobble and last_scrobble.is_playing and (now - last_scrobble.updated_at).total_seconds() < 1.0:
-            return "ignored_spam_protection"
-        is_new = True
-    elif progress_sec < 5 and (last_scrobble.listened_sec or 0) > 30: 
-        is_new = True
-            
-    if is_new:
-        new_s = Scrobble(user_id=user.id, track_id=track.id, source=source, played_at=now, listened_sec=0, is_playing=is_playing, updated_at=now)
-        db.add(new_s)
-        db.commit()
-        # Мгновенно уведомляем фронтенд о начале нового трека
-        await manager.broadcast_to_user(user.username, {
-            "type": "NEW_SCROBBLE",
-            "track": format_history_item(new_s, track)
-        })
-    else:
-        time_elapsed = (now - last_scrobble.updated_at).total_seconds()
-        old_listened = last_scrobble.listened_sec or 0
-        
-        if last_scrobble.is_playing and is_playing and 0 < time_elapsed < 35:
-            last_scrobble.listened_sec = old_listened + int(round(time_elapsed))
-            
-        last_scrobble.is_playing = is_playing
-        last_scrobble.updated_at = now
-        db.commit()
-        
-        threshold = (track.duration if track.duration > 0 else 180) * 0.85
-        if last_scrobble.listened_sec >= threshold and old_listened < threshold:
-            is_fav = False
-            fav_art = user.profile.favorite_artist.lower() if user.profile.favorite_artist else ""
-            fav_trk = user.profile.favorite_track.lower() if user.profile.favorite_track else ""
-            fav_alb = user.profile.favorite_album.lower() if user.profile.favorite_album else ""
-            
-            t_artist = track.artist.lower()
-            t_title = track.title.lower()
-            t_album = track.album.lower() if track.album else ""
-            
-            if fav_art and fav_art in t_artist: is_fav = True
-            if fav_trk and (fav_trk in t_title or fav_trk in f"{t_artist} {t_title}"): is_fav = True
-            if fav_alb and t_album and fav_alb in t_album: is_fav = True
-            
-            last_scrobble.xp_earned = 2 if is_fav else 1
-            db.commit()
-            
-            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-            scrobbles_today = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.played_at >= today_start, Scrobble.listened_sec * 100 >= Track.duration * 85).count()
-            if scrobbles_today >= 5:
-                today_str = today_start.strftime("%Y-%m-%d")
-                yesterday_str = (today_start - timedelta(days=1)).strftime("%Y-%m-%d")
-                if user.integration.last_streak_date != today_str:
-                    if user.integration.last_streak_date == yesterday_str: user.integration.current_streak = (user.integration.current_streak or 0) + 1
-                    else: user.integration.current_streak = 1
-                    user.integration.last_streak_date = today_str
-                    db.commit()
-            
-            # Removed check_auto_achievements from hot path for performance
-            
-            # Broadcast update via WebSockets
-            # Redundant broadcast removed here (handled by the block at the start of new scrobbles)
-            # but we keep it for threshold updates specifically if needed.
-            # Actually, let's keep only one broadcast per major state change.
-            pass
-            
-    return "ok"
 
 async def import_lastfm_history(user_id: int, db_session_factory):
     db = db_session_factory()
@@ -1345,9 +1242,9 @@ async def import_lastfm_history(user_id: int, db_session_factory):
                     if t.get("@attr", {}).get("nowplaying") == "true": continue
                     
                     title = t.get("name")
-                    artist = t.get("artist", {}).get("#text")
-                    album = t.get("album", {}).get("#text")
-                    cover = t.get("image", [{}, {}, {}, {"#text": ""}])[3].get("#text")
+                    artist = t.get("artist", {}).get(TEXT_KEY)
+                    album = t.get("album", {}).get(TEXT_KEY)
+                    cover = t.get("image", [{}, {}, {}, {TEXT_KEY: ""}])[3].get(TEXT_KEY)
                     uts = int(t.get("date", {}).get("uts", 0))
                     dt = datetime.fromtimestamp(uts, tz=timezone.utc)
                     

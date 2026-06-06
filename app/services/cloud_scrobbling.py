@@ -60,6 +60,41 @@ async def sync_spotify_status(user: User, db: Session, process_func):
         except Exception as e:
             print(f"Spotify sync error: {e}")
 
+def _parse_yandex_now_playing(data: dict):
+    result = data.get("result")
+    if not isinstance(result, dict):
+        return None
+    np = result.get("nowPlaying")
+    if not isinstance(np, dict):
+        return None
+    track_data = np.get("track")
+    if not isinstance(track_data, dict):
+        return None
+        
+    title = track_data.get("title")
+    artist = ", ".join([a["name"] for a in track_data.get("artists", []) if isinstance(a, dict) and "name" in a])
+    cover_uri = track_data.get("coverUri")
+    cover = "https://" + cover_uri.replace("%%", "400x400") if cover_uri else None
+    track_id = track_data.get("id")
+    track_url = f"https://music.yandex.ru/track/{track_id}"
+    duration = int(track_data.get("durationMs", 0) / 1000)
+    progress = int(np.get("progressMs", 0) / 1000)
+    
+    albums = track_data.get("albums")
+    album = None
+    if isinstance(albums, list) and len(albums) > 0 and isinstance(albums[0], dict):
+        album = albums[0].get("title")
+        
+    return {
+        "title": title,
+        "artist": artist,
+        "cover": cover,
+        "track_url": track_url,
+        "duration": duration,
+        "progress": progress,
+        "album": album
+    }
+
 async def sync_yandex_status(user: User, db: Session, process_func):
     async with httpx.AsyncClient() as client:
         try:
@@ -79,64 +114,50 @@ async def sync_yandex_status(user: User, db: Session, process_func):
                     print(f"Yandex JSON parse error for user {user.username}: {je}")
                     return
                 
-                result = data.get("result")
-                if not result or not isinstance(result, dict):
-                    return
-                np = result.get("nowPlaying")
-                if not np or not isinstance(np, dict):
-                    return
-                track_data = np.get("track")
-                if not track_data or not isinstance(track_data, dict):
-                    return
-                    
-                title = track_data.get("title")
-                artist = ", ".join([a["name"] for a in track_data.get("artists", []) if isinstance(a, dict) and "name" in a])
-                cover_uri = track_data.get("coverUri")
-                cover = "https://" + cover_uri.replace("%%", "400x400") if cover_uri else None
-                track_id = track_data.get("id")
-                track_url = f"https://music.yandex.ru/track/{track_id}"
-                duration = int(track_data.get("durationMs", 0) / 1000)
-                progress = int(np.get("progressMs", 0) / 1000)
-                album = track_data.get("albums", [{}])[0].get("title") if (track_data.get("albums") and isinstance(track_data.get("albums"), list) and len(track_data.get("albums")) > 0) else None
-                
-                await process_func(db, user, title, artist, cover, track_url, "yandex", progress, True, duration, album)
+                info = _parse_yandex_now_playing(data)
+                if info:
+                    await process_func(
+                        db, user, info["title"], info["artist"], info["cover"],
+                        info["track_url"], "yandex", info["progress"], True,
+                        info["duration"], info["album"]
+                    )
         except Exception as e:
             print(f"Yandex sync error for user {user.username}: {e}")
+
+async def poll_user(user_id: int, process_func):
+    import random
+    # Add jitter inside the task itself so all tasks run concurrently
+    await asyncio.sleep(random.uniform(0.1, 2.0))
+    local_db = SessionLocal()
+    try:
+        u = local_db.query(User).filter(User.id == user_id).first()
+        if not u: return
+        
+        if u.integration.spotify_refresh_token:
+            await sync_spotify_status(u, local_db, process_func)
+        
+        if u.integration.yandex_token:
+            await sync_yandex_status(u, local_db, process_func)
+        
+        u.integration.last_sync = datetime.now(timezone.utc)
+        local_db.commit()
+    except Exception as e:
+        print(f"Error polling user {user_id}: {e}")
+    finally:
+        local_db.close()
 
 async def poll_external_services(process_func):
     """
     Основной цикл облачного скробблинга.
     """
-    import random
     while True:
         db = SessionLocal()
         try:
             from app.models import UserIntegration
             users = db.query(User).join(UserIntegration).filter((UserIntegration.spotify_refresh_token != None) | (UserIntegration.yandex_token != None)).all()
             
-            async def poll_user(user_id):
-                # Add jitter inside the task itself so all tasks run concurrently
-                await asyncio.sleep(random.uniform(0.1, 2.0))
-                local_db = SessionLocal()
-                try:
-                    u = local_db.query(User).filter(User.id == user_id).first()
-                    if not u: return
-                    
-                    if u.integration.spotify_refresh_token:
-                        await sync_spotify_status(u, local_db, process_func)
-                    
-                    if u.integration.yandex_token:
-                        await sync_yandex_status(u, local_db, process_func)
-                    
-                    u.integration.last_sync = datetime.now(timezone.utc)
-                    local_db.commit()
-                except Exception as e:
-                    print(f"Error polling user {user_id}: {e}")
-                finally:
-                    local_db.close()
-
             if users:
-                tasks = [poll_user(u.id) for u in users]
+                tasks = [poll_user(u.id, process_func) for u in users]
                 await asyncio.gather(*tasks)
                 
         except Exception as e:
