@@ -19,7 +19,7 @@ const isValidUser = (u: any) => {
 };
 
 export const VerifiedBadge = ({ role, isVerified, sizeClass = "w-5 h-5" }: { role?: string; isVerified?: boolean; sizeClass?: string }) => {
-  if (role === 'developer') return (
+  if (role === 'developer' || role === 'admin') return (
       <div className="inline-flex items-center justify-center ml-1" title="Разработчик VEIN">
           <svg viewBox="0 0 24 24" className={`${sizeClass} drop-shadow-[0_0_8px_var(--accent-glow-strong)] shrink-0`}><path fill="#1a1a1a" stroke="var(--accent)" strokeWidth="1.2" d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.21-1.71-3.998-3.918-3.998-.47 0-.92.084-1.336.25C14.818 2.415 13.51 1.5 12 1.5s-2.816.917-3.337 2.25c-.416-.165-.866-.25-1.336-.25-2.21 0-3.918 1.79-3.918 4 0 .495.084.965.238 1.4-1.273.65-2.148 2.02-2.148 3.6 0 1.46.74 2.746 1.846 3.45-.05.22-.077.447-.077.68 0 2.21 1.71 3.998 3.918 3.998.47 0 .92-.084 1.336-.25C8.49 21.585 9.796 22.5 11.25 22.5c1.455 0 2.76-.915 3.338-2.25.416.166.866.25 1.336.25 2.21 0 3.918-1.79 3.918-4 0-.233-.026-.46-.077-.68 1.106-.704 1.846-1.99 1.846-3.45z"></path><path fill="var(--accent)" d="M10.25 16.5l-3.5-3.5 1.414-1.414 2.086 2.086 5.586-5.586 1.414 1.414-7 7z"></path></svg>
       </div>
@@ -316,7 +316,7 @@ export default function Navbar() {
                               <Link href={`/user/${username}/stats`} onClick={() => setIsDropdownOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-300 hover:text-white hover:bg-white/5 transition-colors"><span className="text-lg opacity-80">📊</span><span className="font-medium">Статистика</span></Link>
                               <Link href={`/user/${username}/achievements`} onClick={() => setIsDropdownOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-300 hover:text-white hover:bg-white/5 transition-colors"><span className="text-lg opacity-80">🏆</span><span className="font-medium">Достижения</span></Link>
                               <Link href="/settings" onClick={() => setIsDropdownOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-300 hover:text-white hover:bg-white/5 transition-colors"><span className="text-lg opacity-80">⚙️</span><span className="font-medium">Настройки</span></Link>
-                              {userProfile?.role === 'developer' && (
+                              {(userProfile?.role === 'developer' || userProfile?.role === 'admin') && (
                                   <Link href="/admin" onClick={() => setIsDropdownOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors border border-transparent border-t-white/5">
                                       <span className="text-lg opacity-80">🛡️</span>
                                       <span className="font-medium">Админка</span>
