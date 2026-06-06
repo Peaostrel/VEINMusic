@@ -1,4 +1,4 @@
-if (globalThis !== globalThis.top) {
+if (self != top) {
     throw new Error("VEIN: Остановка клона во фрейме.");
 }
 

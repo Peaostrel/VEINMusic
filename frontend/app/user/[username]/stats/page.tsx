@@ -1,9 +1,9 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { PlatformDistribution, GenreCloud, ActivityBarChart } from '@/components/StatsCharts';
-import { PieChart, ListMusic, Clock, CalendarDays, Share2, Award } from 'lucide-react';
+import { PieChart, Clock, CalendarDays, Award } from 'lucide-react';
 
 const getPlatformIcon = (source: string) => {
     switch (source) {
@@ -51,6 +51,12 @@ const getTrackUrl = (t: any) => {
         return `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/redirect?source=yandex&type=track&q=${encodeURIComponent(t.artist + ' ' + (t.title || ''))}`;
     }
     return t.track_url || '#';
+};
+
+const PERIOD_LABELS: Record<string, string> = {
+  '7d': '7 Дней',
+  '30d': '30 Дней',
+  'all': 'Всё время',
 };
 
 export default function DetailedStats() {
@@ -141,7 +147,7 @@ export default function DetailedStats() {
                             className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${period === p ? 'bg-[var(--accent)] shadow-[0_0_15px_var(--accent-glow)]' : 'text-gray-400 hover:text-white'}`}
                             style={period === p ? {color: 'var(--text-on-accent)'} : undefined}
                         >
-                            {p === '7d' ? '7 Дней' : p === '30d' ? '30 Дней' : 'Всё время'}
+                            {PERIOD_LABELS[p] || 'Всё время'}
                         </button>
                     ))}
                 </div>
@@ -235,7 +241,7 @@ export default function DetailedStats() {
                         {top_tracks.length === 0 ? <p className="text-gray-500">Нет данных</p> : top_tracks.map((t: any, i: number) => {
                             const width = (t.plays / top_tracks[0].plays) * 100;
                             return (
-                                <div key={i} className="relative group">
+                                <div key={`${t.title}-${t.artist}-${t.source}`} className="relative group">
                                     <div className="flex items-start gap-3 relative z-10 p-2 border border-transparent hover:border-white/5 rounded-xl transition-colors">
                                         <span className="text-gray-500 font-bold w-4 text-right shrink-0 mt-2">{i + 1}</span>
                                         {t.cover_url ? (
@@ -252,7 +258,7 @@ export default function DetailedStats() {
                                             </div>
                                             <div className="text-xs text-gray-400 pointer-events-auto break-words pl-[22px]">
                                                 {t.artist.split(',').map((a: string, idx: number, arr: string[]) => (
-                                                    <span key={idx}>
+                                                    <span key={a.trim()}>
                                                         <a href={getArtistUrl(a.trim(), t.source)} target="_blank" rel="noreferrer" className="hover:text-[var(--accent-text)] hover:underline transition-colors font-medium">
                                                             {a.trim()}
                                                         </a>
@@ -276,7 +282,7 @@ export default function DetailedStats() {
                         {top_artists.length === 0 ? <p className="text-gray-500">Нет данных</p> : top_artists.map((a: any, i: number) => {
                             const width = (a.plays / top_artists[0].plays) * 100;
                             return (
-                                <div key={i} className="relative group">
+                                <div key={`${a.name}-${a.source}`} className="relative group">
                                     <div className="flex items-start gap-3 relative z-10 p-2 py-3 border border-transparent hover:border-white/5 rounded-xl transition-colors">
                                         <span className="text-gray-500 font-bold w-4 text-right shrink-0 mt-0.5">{i + 1}</span>
                                         <div className="flex-grow min-w-0 pointer-events-auto">
@@ -302,7 +308,7 @@ export default function DetailedStats() {
                         {top_albums.length === 0 ? <p className="text-gray-500">Нет данных</p> : top_albums.map((album: any, i: number) => {
                             const width = (album.plays / top_albums[0].plays) * 100;
                             return (
-                                <div key={i} className="relative group">
+                                <div key={`${album.album || album.title || album.name}-${album.artist}-${album.source}`} className="relative group">
                                     <div className="flex items-start gap-3 relative z-10 p-2 py-3 border border-transparent hover:border-white/5 rounded-xl transition-colors">
                                         <span className="text-gray-500 font-bold w-4 text-right shrink-0 mt-0.5">{i + 1}</span>
                                         {album.cover_url && (
@@ -318,7 +324,7 @@ export default function DetailedStats() {
                                             {album.artist && (
                                                 <div className="text-xs text-gray-400 pointer-events-auto break-words pl-[22px]">
                                                     {album.artist.split(',').map((a: string, idx: number, arr: string[]) => (
-                                                        <span key={idx}>
+                                                        <span key={a.trim()}>
                                                             <a href={getArtistUrl(a.trim(), album.source)} target="_blank" rel="noreferrer" className="hover:text-[var(--accent-text)] hover:underline transition-colors font-medium">
                                                                 {a.trim()}
                                                             </a>

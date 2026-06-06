@@ -82,9 +82,7 @@ export default function About() {
       {/* FEATURES Section */}
       <div id="features" className="w-full mb-24 relative z-10">
         <h2 className="text-3xl font-black text-center text-white mb-12 flex items-center justify-center gap-2">
-          <span className="w-8 h-1 bg-[var(--accent)] rounded-full"></span>
-          Возможности
-          <span className="w-8 h-1 bg-[var(--accent)] rounded-full"></span>
+          <span className="w-8 h-1 bg-[var(--accent)] rounded-full"></span>{' '}Возможности{' '}<span className="w-8 h-1 bg-[var(--accent)] rounded-full"></span>
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

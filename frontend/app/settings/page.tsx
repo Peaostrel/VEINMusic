@@ -399,40 +399,7 @@ function SettingsContent() {
           </aside>
 
           <main className="flex-grow bg-[#1e1e1e]/60 backdrop-blur-md rounded-xl border border-white/5 shadow-lg relative overflow-hidden mb-20">
-              {activeTab !== 'integrations' ? (
-              <form onSubmit={handleSubmit}>
-                  {activeTab === 'general' && (
-                      <GeneralTab 
-                          data={data} updateData={updateData} 
-                          countries={countries} cities={cities} 
-                          isCityInputFocused={isCityInputFocused} setIsCityInputFocused={setIsCityInputFocused} 
-                          onSelectFile={onSelectFile} 
-                          username={userProfile?.username || ""}
-                          socialLinks={socialLinks}
-                          addSocialLink={addSocialLink}
-                          updateSocialLink={updateSocialLink}
-                          removeSocialLink={removeSocialLink}
-                      />
-                  )}
-
-                  {activeTab === 'showcase' && (
-                      <ShowcaseTab data={data} updateData={updateData} />
-                  )}
-
-                  {activeTab === 'theme' && (
-                      <ThemeTab data={data} updateData={updateData} level={level} />
-                  )}
-
-                  {activeTab === 'privacy' && (
-                      <PrivacyTab data={data} updateData={updateData} />
-                  )}
-
-                  <div className="p-6 bg-black/20 flex justify-between items-center border-t border-white/5">
-                      <span className="text-[var(--accent-text)] font-bold">{status}</span>
-                      <button type="submit" className="bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] text-[var(--text-on-accent)] font-black px-8 py-3 rounded-lg hover:scale-105 transition-all">Сохранить всё</button>
-                  </div>
-              </form>
-              ) : (
+              {activeTab === 'integrations' ? (
                   <IntegrationsTab 
                       data={data} updateData={updateData} userProfile={userProfile} 
                       handleDisconnect={handleDisconnect} saveYandexToken={saveYandexToken} 
@@ -440,8 +407,40 @@ function SettingsContent() {
                       generatedApiKey={generatedApiKey} handleGenerateApiKey={handleGenerateApiKey}
                       handleCopyKey={handleCopyKey} copied={copied} API_URL={process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"} 
                   />
-              )}
-          </main>
+              ) : (
+                  <form onSubmit={handleSubmit}>
+                      {activeTab === 'general' && (
+                          <GeneralTab 
+                              data={data} updateData={updateData} 
+                              countries={countries} cities={cities} 
+                              isCityInputFocused={isCityInputFocused} setIsCityInputFocused={setIsCityInputFocused} 
+                              onSelectFile={onSelectFile} 
+                              username={userProfile?.username || ""}
+                              socialLinks={socialLinks}
+                              addSocialLink={addSocialLink}
+                              updateSocialLink={updateSocialLink}
+                              removeSocialLink={removeSocialLink}
+                          />
+                      )}
+
+                      {activeTab === 'showcase' && (
+                          <ShowcaseTab data={data} updateData={updateData} />
+                      )}
+
+                      {activeTab === 'theme' && (
+                          <ThemeTab data={data} updateData={updateData} level={level} />
+                      )}
+
+                      {activeTab === 'privacy' && (
+                          <PrivacyTab data={data} updateData={updateData} />
+                      )}
+
+                      <div className="p-6 bg-black/20 flex justify-between items-center border-t border-white/5">
+                          <span className="text-[var(--accent-text)] font-bold">{status}</span>
+                          <button type="submit" className="bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] text-[var(--text-on-accent)] font-black px-8 py-3 rounded-lg hover:scale-105 transition-all">Сохранить всё</button>
+                      </div>
+                  </form>
+              )}</main>
       </div>
     </>
   );

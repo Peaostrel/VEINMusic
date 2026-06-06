@@ -114,8 +114,9 @@ function AchievementForm({ editingAch, newAch, setEditingAch, setNewAch, emojiPi
             </div>
 
             <div className="relative" ref={emojiRef}>
-                <label className="text-xs text-red-500/70 font-mono mb-1.5 block">Иконка (эмодзи)</label>
+                <span className="text-xs text-red-500/70 font-mono mb-1.5 block">Иконка (эмодзи)</span>
                 <button
+                    id="ach-icon"
                     type="button"
                     className="w-full bg-[#1a1010] border border-red-900/30 rounded-lg px-4 py-2.5 text-white cursor-pointer hover:border-red-500 transition shadow-inner flex items-center justify-between text-left font-normal"
                     onClick={() => setEmojiPickerOpen(!emojiPickerOpen)}
@@ -241,7 +242,7 @@ export default function AdminPanel() {
   useEffect(() => {
     loadData();
     const handleClickOutside = (event: MouseEvent) => {
-        if (emojiRef.current && !emojiRef.current.contains(event.target as Node)) setEmojiPickerOpen(false);
+        if (emojiRef.current && event.target instanceof Node && !emojiRef.current.contains(event.target)) setEmojiPickerOpen(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);

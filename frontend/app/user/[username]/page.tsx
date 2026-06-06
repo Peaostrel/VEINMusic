@@ -207,16 +207,23 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [showWrapped, setShowWrapped] = useState(false);
   const [toasts, setToasts] = useState<any[]>([]);
+  
+  const removeToast = (toastId: string) => {
+    setToasts((prev: any[]) => prev.filter((toast: any) => toast.id !== toastId));
+  };
+
   const [followModal, setFollowModal] = useState<any>({ isOpen: false, type: '', title: '', users: [], loading: false });
   const [isMyProfile, setIsMyProfile] = useState(false);
   const [isLogged, setIsLogged] = useState(false);
-  const [countries, setCountries] = useState<any[]>([]);
+
+  const countries = useCountries();
+  useProfileTheme(data.user?.theme);
+  const accentColor = useAccentColor(data.history[0]?.cover_url);
 
   const [error, setError] = useState('');
   const [recs, setRecs] = useState<any[]>([]);
   const [wrapped, setWrapped] = useState<any>(null);
   const [mood, setMood] = useState<any>(null);
-  const [accentColor, setAccentColor] = useState<string>('');
   const wsRef = useRef<WebSocket | null>(null);
 
   const handleNewScrobble = (track: any) => {
@@ -225,22 +232,6 @@ export default function Profile() {
       return { ...prev, history: newHistory };
     });
   };
-
-  useEffect(() => {
-    fetch('https://restcountries.com/v3.1/all?fields=name,translations,cca2,flag')
-      .then(r => r.json())
-      .then(d => { 
-          if (Array.isArray(d)) {
-              const list = d.map((c: any) => ({
-                  name: c.translations?.rus?.common || c.name.common,
-                  code: c.cca2,
-                  flag: c.flag
-              }));
-              setCountries(list);
-          }
-      })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     setIsMyProfile(localStorage.getItem('username') === username);
@@ -292,14 +283,15 @@ export default function Profile() {
           if (unread.length > 0) {
             setToasts((prev: any[]) => {
               const newToasts = [...prev];
+              const existingIds = new Set(newToasts.map((t: any) => t.ach_id));
               unread.forEach((ach: any) => {
-                if (!newToasts.some((t: any) => t.ach_id === ach.ua_id)) {
+                if (!existingIds.has(ach.ua_id)) {
                   const toastId = ach.ua_id + '-' + Date.now() + '-' + Math.random();
                   newToasts.push({
                     id: toastId, ach_id: ach.ua_id, name: ach.name, icon: ach.icon, xp: ach.reward_xp, image: ach.target_image
                   });
                   setTimeout(() => {
-                    setToasts((current: any[]) => current.filter((t: any) => t.id !== toastId));
+                    removeToast(toastId);
                   }, 6000);
                 }
               });
@@ -344,35 +336,7 @@ export default function Profile() {
     };
   }, [username, isMyProfile]);
 
-  useEffect(() => {
-    if (data.user?.theme) {
-      (globalThis as any).__ACTIVE_PROFILE_THEME__ = data.user.theme;
-      globalThis.dispatchEvent(new Event('theme_update'));
-    }
-    return () => {
-      delete (globalThis as any).__ACTIVE_PROFILE_THEME__;
-      globalThis.dispatchEvent(new Event('theme_update'));
-    };
-  }, [data.user?.theme]);
 
-  // Dynamic Theme from Cover Art
-  useEffect(() => {
-    const cover = data.history[0]?.cover_url;
-    if (!cover) return;
-
-    const img = new Image();
-    img.crossOrigin = "Anonymous";
-    img.src = cover;
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      canvas.width = 1; canvas.height = 1;
-      ctx.drawImage(img, 0, 0, 1, 1);
-      const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-      setAccentColor(`rgb(${r}, ${g}, ${b})`);
-    };
-  }, [data.history[0]?.cover_url]);
 
   // Таймеры для уведомлений теперь создаются индивидуально при их добавлении
 
@@ -400,6 +364,7 @@ export default function Profile() {
         setFollowModal((prev: any) => ({ ...prev, users: fetchedUsers, loading: false }));
       }
     } catch (err) {
+      console.error(err);
       setFollowModal((prev: any) => ({ ...prev, loading: false }));
     }
   };
@@ -477,6 +442,8 @@ export default function Profile() {
 
   const displayedAchs = u.achievements?.filter((a: any) => a.is_displayed !== false) || [];
 
+
+
   return (
     <div className="max-w-6xl mx-auto relative px-4 md:px-0" style={{ '--dynamic-accent': accentColor } as any}>
       <style>{`
@@ -508,7 +475,7 @@ export default function Profile() {
               <div className="text-white font-black text-sm leading-tight">{t.name}</div>
               {t.xp > 0 && <div className="text-emerald-400 font-mono text-[11px] font-bold mt-1 bg-emerald-500/10 px-1.5 py-0.5 inline-block rounded">+{t.xp} XP</div>}
             </div>
-            <button onClick={() => setToasts((prev: any[]) => prev.filter((toast: any) => toast.id !== t.id))} className="absolute top-2 right-2 text-gray-500 hover:text-white transition-colors">
+            <button onClick={() => removeToast(t.id)} className="absolute top-2 right-2 text-gray-500 hover:text-white transition-colors">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
           </div>
@@ -553,33 +520,12 @@ export default function Profile() {
               <button type="button" onClick={() => setFollowModal({ isOpen: false, type: '', title: '', users: [], loading: false })} className="text-gray-500 hover:text-white transition-colors text-xl font-black border-none bg-transparent outline-none">✕</button>
             </div>
             <div className="overflow-y-auto p-2 custom-scrollbar flex-grow bg-[#121212]/50 backdrop-blur-sm">
-              {followModal.loading ? (
-                <div className="text-center text-[var(--accent-text)] py-10 font-bold animate-pulse">Загрузка...</div>
-              ) : followModal.users.length === 0 ? (
-                <div className="text-center text-gray-500 py-10 font-medium">Тут пока пусто.</div>
-              ) : (
-                <ul className="space-y-1">
-                  {followModal.users.map((followerUser: any) => (
-                    <li key={followerUser.username}>
-                      <button 
-                        type="button" 
-                        onClick={() => { setFollowModal({ isOpen: false, type: '', title: '', users: [], loading: false }); router.push(`/user/${followerUser.username}`); }} 
-                        className="w-full flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl cursor-pointer transition-colors group border border-transparent hover:border-white/5 text-left font-normal bg-transparent border-none outline-none block"
-                      >
-                        <img src={followerUser.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${followerUser.username}&backgroundColor=transparent`} className="w-10 h-10 rounded-full bg-black object-cover shrink-0 border border-white/10" alt={followerUser.display_name} onError={(e) => { e.currentTarget.src = `https://api.dicebear.com/9.x/micah/svg?seed=${followerUser.username}&backgroundColor=transparent`; }} />
-                        <div className="truncate flex-grow">
-                          <div className="font-bold text-white text-sm truncate flex items-center gap-1 group-hover:text-[var(--accent-text)] transition-colors">
-                            {followerUser.display_name}
-                            <VerifiedBadge role={followerUser.role} isVerified={followerUser.is_verified} sizeClass="w-3.5 h-3.5" />
-                            <LvlBadge level={followerUser.level} />
-                          </div>
-                          <div className="text-xs text-gray-500 truncate">@{followerUser.username}</div>
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <FollowModalContent 
+                loading={followModal.loading} 
+                users={followModal.users} 
+                router={router} 
+                onClose={() => setFollowModal({ isOpen: false, type: '', title: '', users: [], loading: false })} 
+              />
             </div>
           </div>
         </dialog>
@@ -673,9 +619,9 @@ export default function Profile() {
             )}
 
             <div className="flex items-center gap-2 text-xs font-bold text-gray-400 bg-black/50 px-2 py-1 rounded-md border border-white/5">
-              <span onClick={() => openFollowModal('followers')} className="hover:text-white transition-colors cursor-pointer" title="Посмотреть подписчиков">{data.followStats.followers} подписчиков</span>
+              <button type="button" onClick={() => openFollowModal('followers')} className="hover:text-white transition-colors cursor-pointer bg-transparent border-none outline-none font-bold text-xs p-0 m-0 block" title="Посмотреть подписчиков">{data.followStats.followers} подписчиков</button>
               <span>•</span>
-              <span onClick={() => openFollowModal('following')} className="hover:text-white transition-colors cursor-pointer" title="Посмотреть подписки">{data.followStats.following} подписок</span>
+              <button type="button" onClick={() => openFollowModal('following')} className="hover:text-white transition-colors cursor-pointer bg-transparent border-none outline-none font-bold text-xs p-0 m-0 block" title="Посмотреть подписки">{data.followStats.following} подписок</button>
             </div>
 
             {u.streak > 0 && (
@@ -699,7 +645,7 @@ export default function Profile() {
                   <span className="text-xs font-black text-white uppercase tracking-wider leading-none group-hover:text-[var(--accent-text)] transition-colors">{a.name}</span>
 
                   <div className="absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 w-max max-w-[280px] bg-[#1a1a1a]/95 backdrop-blur-md border border-white/10 p-2.5 rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                    {a.rule_target && a.rule_target.startsWith('http') ? (
+                    {a.rule_target?.startsWith('http') ? (
                       <a href={a.rule_target} target="_blank" rel="noreferrer" className="flex items-center gap-3 group/link">
                         {a.target_image && (
                           <img src={a.target_image} className="w-10 h-10 rounded object-cover shadow-md shrink-0 border border-white/5 group-hover/link:border-[var(--accent)] transition-colors" alt={a.name} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
@@ -750,7 +696,7 @@ export default function Profile() {
             </div>
           </div>
 
-          {data.taste && data.taste.match !== undefined && (
+          {data.taste?.match !== undefined && (
             <div className="inline-flex items-center gap-3 bg-[#1DB954]/10 border border-[#1DB954]/40 px-4 py-2 rounded-lg mb-5 shadow-lg backdrop-blur-sm hover:scale-105 transition-transform">
               <span className="text-2xl drop-shadow-[0_0_5px_#1DB954] animate-fire">🔥</span>
               <div className="text-left">
@@ -908,7 +854,7 @@ export default function Profile() {
               <ul className="space-y-3">
                 {data.history.map((item: any, idx: number) => {
                   const isLatest = idx === 0;
-                  const isNowPlaying = isLatest && (item.is_playing || (new Date().getTime() - new Date(item.updated_at + 'Z').getTime() < 15 * 60 * 1000));
+                  const isNowPlaying = isLatest && (item.is_playing || (Date.now() - Date.parse(item.updated_at + 'Z') < 15 * 60 * 1000));
                   return <HistoryItem key={item.id} item={item} isLatest={isLatest} isNowPlaying={isNowPlaying} />;
                 })}
               </ul>
@@ -959,12 +905,11 @@ export default function Profile() {
                     </div>
 
                     <div className="text-gray-300 text-xs pointer-events-auto whitespace-nowrap pl-[22px] relative z-10 w-max pr-4">
-                      {item.artist.split(',').map((a: string, i: number, arr: string[]) => (
-                        <span key={i}>
+                      {item.artist.split(',').map((a: string) => (
+                        <span key={a.trim()}>
                           <a href={getArtistUrl(a.trim(), item.source)} target="_blank" rel="noreferrer" className="hover:text-[var(--accent-text)] hover:underline cursor-pointer transition-colors relative z-10 font-medium">
                             {a.trim()}
                           </a>
-                          {i < arr.length - 1 ? ', ' : ''}
                         </span>
                       ))}
                     </div>
@@ -981,17 +926,16 @@ export default function Profile() {
           <div className="bg-[#121212]/50 backdrop-blur-md p-6 rounded-2xl shadow-xl border border-white/5">
             <h2 className="text-xl font-black mb-4 flex items-center gap-2 text-[var(--accent-text)]"><span className="text-xl">🎤</span> Топ артистов</h2>
             <ul className="space-y-3">
-              {data.stats.top_artists?.map((item: any, idx: number) => (
-                <li key={idx} className="bg-white/5 hover:bg-white/10 p-3 rounded-xl flex justify-between items-start border-l-2 border-[#555] hover:border-[var(--accent)] transition-all group relative">
+              {data.stats.top_artists?.map((item: any) => (
+                <li key={item.artist} className="bg-white/5 hover:bg-white/10 p-3 rounded-xl flex justify-between items-start border-l-2 border-[#555] hover:border-[var(--accent)] transition-all group relative">
                   <div className="flex items-center gap-2 min-w-[0] overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                     <div className="shrink-0">{getPlatformIcon(item.source)}</div>
                     <div className="font-bold text-sm text-white pointer-events-auto whitespace-nowrap w-max pr-4">
-                      {item.artist.split(',').map((a: string, i: number, arr: string[]) => (
-                        <span key={i}>
+                      {item.artist.split(',').map((a: string) => (
+                        <span key={a.trim()}>
                           <a href={getArtistUrl(a.trim(), item.source)} target="_blank" rel="noreferrer" className="hover:text-[var(--accent-text)] hover:underline cursor-pointer transition-colors relative z-10">
                             {a.trim()}
                           </a>
-                          {i < arr.length - 1 ? ', ' : ''}
                         </span>
                       ))}
                     </div>
@@ -1009,15 +953,80 @@ export default function Profile() {
   );
 }
 
+function PastPlayIndicator({ item }: Readonly<{ item: any }>) {
+  const timeStr = new Date(item.time + 'Z').toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  if (item.is_imported) {
+    return (
+      <div className="flex flex-col items-end gap-1">
+        <span className="bg-black/50 text-[10px] px-2 py-1 rounded text-gray-300 border border-white/5 font-mono">
+          {timeStr}
+        </span>
+        <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider bg-white/5 px-1.5 py-0.5 rounded border border-white/5 shadow-inner">
+          Импортировано
+        </span>
+      </div>
+    );
+  }
+
+  const listenedSec = item.listened_sec || 0;
+  const showListened = listenedSec > 0;
+  const m = Math.floor(listenedSec / 60).toString().padStart(2, '0');
+  const s = (listenedSec % 60).toString().padStart(2, '0');
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <span className="bg-black/50 text-[10px] px-2 py-1 rounded text-gray-300 border border-white/5 font-mono">
+        {timeStr}
+      </span>
+      {showListened && (
+        <span className="text-[9px] text-gray-400 font-medium uppercase tracking-wider">
+          Прослушано: {m}:{s}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function NowPlayingIndicator({ item }: Readonly<{ item: any }>) {
+  const playStatusText = item.is_playing ? 'Сейчас' : 'Пауза';
+  const accentTextClass = item.is_playing ? 'text-[var(--accent-text)]' : 'text-gray-500';
+  const animClass = item.is_playing ? 'animate-[bounce_1s_infinite]' : 'opacity-40';
+  const animClass2 = item.is_playing ? 'animate-[bounce_1s_infinite_0.2s]' : 'opacity-40';
+  const animClass3 = item.is_playing ? 'animate-[bounce_1s_infinite_0.4s]' : 'opacity-40';
+
+  return (
+    <div className="flex items-center gap-2 bg-[#121212]/80 px-3 py-1.5 rounded-md border border-white/5 shadow-md">
+      <div className="flex items-center gap-1.5">
+        <span className={`text-[10px] font-black uppercase tracking-widest ${accentTextClass}`}>
+          {playStatusText}
+        </span>
+        <LiveTimer listenedSec={item.listened_sec} isPlaying={item.is_playing} updatedAt={item.updated_at} />
+      </div>
+      <div className="flex items-end gap-[2px] h-3 w-3 ml-1">
+        <div className={`w-[3px] bg-[var(--accent)] h-full rounded-t-sm ${animClass}`}></div>
+        <div className={`w-[3px] bg-[var(--accent)] h-2/3 rounded-t-sm ${animClass2}`}></div>
+        <div className={`w-[3px] bg-[var(--accent)] h-4/5 rounded-t-sm ${animClass3}`}></div>
+      </div>
+    </div>
+  );
+}
+
+function PlayStateIndicator({ item, isNowPlaying }: Readonly<{ item: any; isNowPlaying: boolean; }>) {
+  if (isNowPlaying) {
+    return <NowPlayingIndicator item={item} />;
+  }
+  return <PastPlayIndicator item={item} />;
+}
+
 function HistoryItem({ 
   item, 
   isLatest, 
   isNowPlaying 
-}: { 
+}: Readonly<{ 
   item: any; 
   isLatest: boolean; 
   isNowPlaying: boolean; 
-}) {
+}>) {
   return (
     <li className={`p-3 rounded-xl flex justify-between items-center transition-all duration-300 group relative ${isLatest ? 'bg-gradient-to-r from-white/10 to-transparent border-l-4 border-[var(--accent)] shadow-md' : 'bg-white/5 hover:bg-white/10 border border-transparent hover:border-white/5'}`}>
       <div className="flex items-center gap-4 pr-2 w-full min-w-0">
@@ -1037,12 +1046,11 @@ function HistoryItem({
           </div>
 
           <div className="text-gray-300 text-xs whitespace-nowrap pointer-events-auto relative z-10 w-max pr-4">
-            {item.artist.split(',').map((a: string, i: number, arr: string[]) => (
-              <span key={i}>
+            {item.artist.split(',').map((a: string) => (
+              <span key={a.trim()}>
                 <a href={getArtistUrl(a.trim(), item.source)} target="_blank" rel="noreferrer" className="hover:text-[var(--accent-text)] hover:underline cursor-pointer transition-colors relative z-10 font-medium">
                   {a.trim()}
                 </a>
-                {i < arr.length - 1 ? ', ' : ''}
               </span>
             ))}
           </div>
@@ -1051,37 +1059,110 @@ function HistoryItem({
       </div>
 
       <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
-        {isNowPlaying ? (
-          <div className="flex items-center gap-2 bg-[#121212]/80 px-3 py-1.5 rounded-md border border-white/5 shadow-md">
-            <div className="flex items-center gap-1.5">
-              <span className={`text-[10px] font-black uppercase tracking-widest ${item.is_playing ? 'text-[var(--accent-text)]' : 'text-gray-500'}`}>
-                {item.is_playing ? 'Сейчас' : 'Пауза'}
-              </span>
-              <LiveTimer listenedSec={item.listened_sec} isPlaying={item.is_playing} updatedAt={item.updated_at} />
-            </div>
-            <div className="flex items-end gap-[2px] h-3 w-3 ml-1">
-              <div className={`w-[3px] bg-[var(--accent)] h-full rounded-t-sm ${item.is_playing ? 'animate-[bounce_1s_infinite]' : 'opacity-40'}`}></div>
-              <div className={`w-[3px] bg-[var(--accent)] h-2/3 rounded-t-sm ${item.is_playing ? 'animate-[bounce_1s_infinite_0.2s]' : 'opacity-40'}`}></div>
-              <div className={`w-[3px] bg-[var(--accent)] h-4/5 rounded-t-sm ${item.is_playing ? 'animate-[bounce_1s_infinite_0.4s]' : 'opacity-40'}`}></div>
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col items-end gap-1">
-            <span className="bg-black/50 text-[10px] px-2 py-1 rounded text-gray-300 border border-white/5 font-mono">
-              {new Date(item.time + 'Z').toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-            </span>
-            {item.is_imported ? (
-              <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider bg-white/5 px-1.5 py-0.5 rounded border border-white/5 shadow-inner">
-                Импортировано
-              </span>
-            ) : (item.listened_sec || 0) > 0 && (
-              <span className="text-[9px] text-gray-400 font-medium uppercase tracking-wider">
-                Прослушано: {Math.floor(item.listened_sec / 60).toString().padStart(2, '0')}:{(item.listened_sec % 60).toString().padStart(2, '0')}
-              </span>
-            )}
-          </div>
-        )}
+        <PlayStateIndicator item={item} isNowPlaying={isNowPlaying} />
       </div>
     </li>
   );
+}
+
+function FollowModalContent({ 
+  loading, 
+  users, 
+  router, 
+  onClose 
+}: Readonly<{ 
+  loading: boolean; 
+  users: any[]; 
+  router: any; 
+  onClose: () => void; 
+}>) {
+  if (loading) {
+    return <div className="text-center text-[var(--accent-text)] py-10 font-bold animate-pulse">Загрузка...</div>;
+  }
+  if (users.length === 0) {
+    return <div className="text-center text-gray-500 py-10 font-medium">Тут пока пусто.</div>;
+  }
+  const fallbackAvatar = (username: string) => `https://api.dicebear.com/9.x/micah/svg?seed=${username}&backgroundColor=transparent`;
+  return (
+    <ul className="space-y-1">
+      {users.map((followerUser: any) => (
+        <li key={followerUser.username}>
+          <button 
+            type="button" 
+            onClick={() => { onClose(); router.push(`/user/${followerUser.username}`); }} 
+            className="w-full flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl cursor-pointer transition-colors group border border-transparent hover:border-white/5 text-left font-normal bg-transparent border-none outline-none block"
+          >
+            <img 
+              src={followerUser.avatar_url || fallbackAvatar(followerUser.username)} 
+              className="w-10 h-10 rounded-full bg-black object-cover shrink-0 border border-white/10" 
+              alt={followerUser.display_name} 
+              onError={(e) => { e.currentTarget.src = fallbackAvatar(followerUser.username); }} 
+            />
+            <div className="truncate flex-grow">
+              <div className="font-bold text-white text-sm truncate flex items-center gap-1 group-hover:text-[var(--accent-text)] transition-colors">
+                {followerUser.display_name}
+                <VerifiedBadge role={followerUser.role} isVerified={followerUser.is_verified} sizeClass="w-3.5 h-3.5" />
+                <LvlBadge level={followerUser.level} />
+              </div>
+              <div className="text-xs text-gray-500 truncate">@{followerUser.username}</div>
+            </div>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function useCountries() {
+  const [countries, setCountries] = useState<any[]>([]);
+  useEffect(() => {
+    fetch('https://restcountries.com/v3.1/all?fields=name,translations,cca2,flag')
+      .then(r => r.json())
+      .then(d => { 
+          if (Array.isArray(d)) {
+              const list = d.map((c: any) => ({
+                  name: c.translations?.rus?.common || c.name.common,
+                  code: c.cca2,
+                  flag: c.flag
+              }));
+              setCountries(list);
+          }
+      })
+      .catch(() => {});
+  }, []);
+  return countries;
+}
+
+function useProfileTheme(theme: string | undefined) {
+  useEffect(() => {
+    if (theme) {
+      (globalThis as any).__ACTIVE_PROFILE_THEME__ = theme;
+      globalThis.dispatchEvent(new Event('theme_update'));
+    }
+    return () => {
+      delete (globalThis as any).__ACTIVE_PROFILE_THEME__;
+      globalThis.dispatchEvent(new Event('theme_update'));
+    };
+  }, [theme]);
+}
+
+function useAccentColor(coverUrl: string | undefined) {
+  const [accentColor, setAccentColor] = useState<string>('');
+  useEffect(() => {
+    if (!coverUrl) return;
+
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.src = coverUrl;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      canvas.width = 1; canvas.height = 1;
+      ctx.drawImage(img, 0, 0, 1, 1);
+      const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+      setAccentColor(`rgb(${r}, ${g}, ${b})`);
+    };
+  }, [coverUrl]);
+  return accentColor;
 }

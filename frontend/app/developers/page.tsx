@@ -126,8 +126,7 @@ print(f"Стрик: {data['streak']} дней")`;
 
         <section>
           <h2 className="text-2xl font-black text-white mb-4 flex items-center gap-3">
-            <span className="w-8 h-8 bg-[var(--accent)] rounded-lg flex items-center justify-center text-sm font-black" style={{color: 'var(--text-on-accent)'}}>1</span>
-            Аутентификация
+            <span className="w-8 h-8 bg-[var(--accent)] rounded-lg flex items-center justify-center text-sm font-black" style={{color: 'var(--text-on-accent)'}}>1</span>{' '}Аутентификация
           </h2>
           <div className="bg-[#121212]/60 backdrop-blur-md p-6 rounded-2xl border border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-gray-300 text-sm leading-relaxed">
@@ -141,8 +140,7 @@ print(f"Стрик: {data['streak']} дней")`;
 
         <section>
           <h2 className="text-2xl font-black text-white mb-6 flex items-center gap-3">
-            <span className="w-8 h-8 bg-[var(--accent)] rounded-lg flex items-center justify-center text-sm font-black" style={{color: 'var(--text-on-accent)'}}>2</span>
-            Эндпоинты (REST API)
+            <span className="w-8 h-8 bg-[var(--accent)] rounded-lg flex items-center justify-center text-sm font-black" style={{color: 'var(--text-on-accent)'}}>2</span>{' '}Эндпоинты (REST API)
           </h2>
           <div className="bg-[#121212]/60 backdrop-blur-md p-6 rounded-2xl border border-white/5 overflow-hidden shadow-2xl">
             <div className="overflow-x-auto">
@@ -178,8 +176,7 @@ print(f"Стрик: {data['streak']} дней")`;
 
         <section>
           <h2 className="text-2xl font-black text-white mb-4 flex items-center gap-3">
-            <span className="w-8 h-8 bg-[var(--accent)] rounded-lg flex items-center justify-center text-sm font-black" style={{color: 'var(--text-on-accent)'}}>3</span>
-            Описание полей (Scrobble)
+            <span className="w-8 h-8 bg-[var(--accent)] rounded-lg flex items-center justify-center text-sm font-black" style={{color: 'var(--text-on-accent)'}}>3</span>{' '}Описание полей (Scrobble)
           </h2>
           <div className="bg-[#121212]/60 backdrop-blur-md p-6 rounded-2xl border border-white/5 space-y-3">
              <div className="flex items-center gap-2"><code className="font-bold" style={{color: 'var(--accent)'}}>api_key</code> <span className="text-gray-400 text-sm">- Твой секретный ключ для авторизации (строка).</span></div>
@@ -193,8 +190,7 @@ print(f"Стрик: {data['streak']} дней")`;
 
         <section>
           <h2 className="text-2xl font-black text-white mb-6 flex items-center gap-3">
-            <span className="w-8 h-8 bg-[var(--accent)] rounded-lg flex items-center justify-center text-sm font-black" style={{color: 'var(--text-on-accent)'}}>4</span>
-            Примеры кода
+            <span className="w-8 h-8 bg-[var(--accent)] rounded-lg flex items-center justify-center text-sm font-black" style={{color: 'var(--text-on-accent)'}}>4</span>{' '}Примеры кода
           </h2>
 
           <CodeBlock

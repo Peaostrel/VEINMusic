@@ -46,33 +46,68 @@ export default function Leaderboard() {
   );
 }
 
-function LeaderboardItem({ u, idx }: { u: any, idx: number }) {
-  const isTop3 = idx < 3;
-  let rankCrown: string;
-  if (idx === 0) rankCrown = '👑';
-  else if (idx === 1) rankCrown = '🥈';
-  else if (idx === 2) rankCrown = '🥉';
-  else rankCrown = `#${idx + 1}`;
+const RANK_CROWNS = ['👑', '🥈', '🥉'];
+const RANK_CLASSES = [
+  'text-3xl drop-shadow-[0_0_10px_#ffcc00]',
+  'text-2xl drop-shadow-[0_0_10px_#ccc]',
+  'text-xl drop-shadow-[0_0_10px_#cd7f32]'
+];
 
+function getGlowColor(theme: string): string {
+  if (theme?.startsWith('#')) return theme;
+  return (THEMES as any)[theme]?.main || '#ffcc00';
+}
+
+function getLeaderboardItemStyles(u: any, idx: number) {
+  const isTop3 = idx < 3;
   const isHighLevel = u.level >= 50;
   const isRainbow = u.theme === 'rainbow';
-  
-  let glowColor = 'transparent';
-  if (isHighLevel && !isRainbow) {
-      glowColor = u.theme?.startsWith('#') ? u.theme : ((THEMES as any)[u.theme]?.main || '#ffcc00');
+  const glowColor = isHighLevel && !isRainbow ? getGlowColor(u.theme) : 'transparent';
+
+  let itemClass = isTop3 ? 'bg-white/10 border-white/20' : 'bg-white/5 border-transparent';
+  if (isRainbow && isHighLevel) {
+    itemClass += ' theme-rainbow';
   }
 
-  let rankClass = 'text-gray-500';
-  if (idx === 0) rankClass = 'text-3xl drop-shadow-[0_0_10px_#ffcc00]';
-  else if (idx === 1) rankClass = 'text-2xl drop-shadow-[0_0_10px_#ccc]';
-  else if (idx === 2) rankClass = 'text-xl drop-shadow-[0_0_10px_#cd7f32]';
+  let itemStyle = {};
+  if (isHighLevel && !isRainbow) {
+    itemStyle = { boxShadow: `0 0 15px ${glowColor}30`, borderColor: `${glowColor}50` };
+  }
+
+  let avatarClass = isTop3 ? 'w-14 h-14' : 'w-10 h-10';
+  if (!(isHighLevel && !isRainbow)) {
+    avatarClass += ' border-transparent';
+  }
+
+  let avatarStyle = {};
+  if (isHighLevel && !isRainbow) {
+    avatarStyle = { borderColor: glowColor };
+  }
+
+  return {
+    itemClass,
+    itemStyle,
+    avatarClass,
+    avatarStyle,
+    glowColor
+  };
+}
+
+function LeaderboardItem({ u, idx }: Readonly<{ u: any; idx: number }>) {
+  const isTop3 = idx < 3;
+  const rankCrown = RANK_CROWNS[idx] || `#${idx + 1}`;
+  const rankClass = RANK_CLASSES[idx] || 'text-gray-500';
+
+  const {
+    itemClass,
+    itemStyle,
+    avatarClass,
+    avatarStyle
+  } = getLeaderboardItemStyles(u, idx);
 
   return (
-    <li className={`relative p-4 rounded-2xl flex items-center justify-between transition-all duration-300 group
-        ${isTop3 ? 'bg-white/10 border-white/20' : 'bg-white/5 border-transparent'} border
-        hover:scale-[1.02] hover:bg-white/10
-        ${isRainbow && isHighLevel ? 'theme-rainbow' : ''}`}
-        style={isHighLevel && !isRainbow ? { boxShadow: `0 0 15px ${glowColor}30`, borderColor: `${glowColor}50` } : {}}
+    <li className={`relative p-4 rounded-2xl flex items-center justify-between transition-all duration-300 group ${itemClass} border hover:scale-[1.02] hover:bg-white/10`}
+        style={itemStyle}
     >
       <div className="flex items-center gap-4 w-full min-w-0 pr-4">
         <div className={`font-black w-8 text-center shrink-0 ${rankClass}`}>
@@ -82,10 +117,8 @@ function LeaderboardItem({ u, idx }: { u: any, idx: number }) {
         <div className="relative shrink-0">
             <img 
                 src={u.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${u.username}&backgroundColor=transparent`} 
-                className={`rounded-full object-cover bg-black shadow-md border-2 transition-transform duration-300 group-hover:rotate-6
-                ${isTop3 ? 'w-14 h-14' : 'w-10 h-10'}
-                ${isHighLevel && !isRainbow ? '' : 'border-transparent'}`}
-                style={isHighLevel && !isRainbow ? { borderColor: glowColor } : {}}
+                className={`rounded-full object-cover bg-black shadow-md border-2 transition-transform duration-300 group-hover:rotate-6 ${avatarClass}`}
+                style={avatarStyle}
                 onError={(e) => { e.currentTarget.src = `https://api.dicebear.com/9.x/micah/svg?seed=${u.username}&backgroundColor=transparent`; }}
                 alt="avatar" 
             />
@@ -100,11 +133,10 @@ function LeaderboardItem({ u, idx }: { u: any, idx: number }) {
             <div className="text-gray-400 text-xs font-medium mt-0.5 truncate">@{u.username}</div>
         </div>
       </div>
-
-      <div className="shrink-0 flex flex-col items-end">
-          <div className="bg-[#1a1a1a] text-[var(--accent-text)] font-black px-3 py-1.5 rounded-lg border border-white/5 shadow-inner">
-              {u.total_xp.toLocaleString('ru-RU')} XP
-          </div>
+      
+      <div className="text-right shrink-0">
+          <div className="font-black text-white text-lg">{u.total_xp || u.total_scrobbles || 0} <span className="text-xs text-gray-500 font-normal">XP</span></div>
+          <div className="text-[10px] text-gray-500 font-black uppercase tracking-wider mt-0.5">LVL {Math.floor((u.total_xp || u.total_scrobbles || 0) / 100) + 1}</div>
       </div>
     </li>
   );

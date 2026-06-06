@@ -1,6 +1,5 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -59,6 +58,7 @@ export default function Auth() {
       setStep('success');
       
     } catch (err) {
+      console.error(err);
       setError('Ошибка сети. Бэкенд не отвечает.');
       setLoading(false);
     }
