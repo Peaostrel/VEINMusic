@@ -7,16 +7,11 @@ import os
 from app.database import get_db
 from app.models import User, Scrobble, Track, Achievement, UserAchievement, Follow
 from app.schemas import VerifyUserRequest, LevelUpdate, AdminUserUpdate, AchCreate, AchUpdate, AchAssign
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_admin_user
 from app.core.websockets import manager
 
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
-
-def get_admin_user(current_user: Annotated[User, Depends(get_current_user)]):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Доступ запрещен")
-    return current_user
 
 @router.get("/stats")
 def get_admin_stats(db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
@@ -25,12 +20,20 @@ def get_admin_stats(db: Annotated[Session, Depends(get_db)], admin: Annotated[Us
     total_tracks = db.query(Track).count()
     active_ws = {u: len(conns) for u, conns in manager.active_connections.items()}
     
+    # Optimize N+1 queries by grouping scrobbles statistics by user_id
+    stats = db.query(
+        Scrobble.user_id,
+        func.count(Scrobble.id).label("scrobbles_count"),
+        func.sum(Scrobble.xp_earned).label("sum_xp")
+    ).group_by(Scrobble.user_id).all()
+    
+    stats_dict = {row.user_id: (row.scrobbles_count, row.sum_xp or 0) for row in stats}
+    
     users = db.query(User).all()
     user_list = []
     for u in users:
-        scrobbles_count = db.query(Scrobble).filter(Scrobble.user_id == u.id).count()
-        txp = db.query(func.sum(Scrobble.xp_earned)).filter(Scrobble.user_id == u.id).scalar() or 0
-        total_xp = txp + (u.integration.bonus_xp or 0)
+        scrobbles_count, sum_xp = stats_dict.get(u.id, (0, 0))
+        total_xp = sum_xp + (u.integration.bonus_xp or 0)
         user_list.append({
             "id": u.id, "username": u.username, "display_name": u.profile.display_name,
             "avatar_url": u.profile.avatar_url, "bio": u.profile.bio, "is_verified": u.integration.is_verified,

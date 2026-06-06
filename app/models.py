@@ -64,7 +64,7 @@ class UserIntegration(Base):
     lastfm_username = Column(String, nullable=True)
     spotify_access_token = Column(String, nullable=True)
     spotify_refresh_token = Column(String, nullable=True)
-    last_sync = Column(DateTime(timezone=False), nullable=True)
+    last_sync = Column(DateTime(timezone=True), nullable=True)
     
     user = relationship("User", back_populates="integration")
 
@@ -84,11 +84,11 @@ class Scrobble(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), index=True)
     track_id = Column(Integer, ForeignKey("tracks.id", ondelete="CASCADE"), index=True)
-    played_at = Column(DateTime(timezone=False), default=datetime.utcnow)
+    played_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     source = Column(String)
     listened_sec = Column(Integer, default=0)
     is_playing = Column(Boolean, default=True)
-    updated_at = Column(DateTime(timezone=False), default=datetime.utcnow) 
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)) 
     xp_earned = Column(Integer, default=1)
     is_imported = Column(Boolean, default=False)
     
@@ -113,7 +113,7 @@ class UserAchievement(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), index=True)
     achievement_id = Column(Integer, ForeignKey("achievements.id", ondelete="CASCADE"), index=True)
-    earned_at = Column(DateTime(timezone=False), default=datetime.utcnow)
+    earned_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     is_displayed = Column(Boolean, default=True)
     notified = Column(Boolean, default=False)
     
@@ -125,14 +125,14 @@ class Follow(Base):
     id = Column(Integer, primary_key=True, index=True)
     follower_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), index=True)
     following_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), index=True)
-    created_at = Column(DateTime(timezone=False), default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 class ScrobbleLike(Base):
     __tablename__ = "scrobble_likes"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), index=True)
     scrobble_id = Column(Integer, ForeignKey("scrobbles.id", ondelete="CASCADE"), index=True)
-    created_at = Column(DateTime(timezone=False), default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 class ScrobbleComment(Base):
     __tablename__ = "scrobble_comments"
@@ -140,4 +140,4 @@ class ScrobbleComment(Base):
     user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), index=True)
     scrobble_id = Column(Integer, ForeignKey("scrobbles.id", ondelete="CASCADE"), index=True)
     content = Column(String)
-    created_at = Column(DateTime(timezone=False), default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

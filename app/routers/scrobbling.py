@@ -2,48 +2,69 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone, timedelta
+import asyncio
 
 from app.database import get_db
 from app.models import User, UserProfile, Scrobble, Track, ScrobbleLike, ScrobbleComment, Follow
 from app.schemas import ScrobbleData, LikeRequest, CommentRequest
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_current_user_optional
 from app.services.scrobble_processor import process_scrobble, format_history_item
+from typing import Optional
 
 router = APIRouter(prefix="/api", tags=["scrobbling"])
 
+USER_SCROBBLE_LOCKS = {}
+
+def get_user_lock(user_id: int):
+    if user_id not in USER_SCROBBLE_LOCKS:
+        USER_SCROBBLE_LOCKS[user_id] = asyncio.Lock()
+    return USER_SCROBBLE_LOCKS[user_id]
+
 @router.post("/scrobble")
 async def add_scrobble(data: ScrobbleData, background_tasks: BackgroundTasks, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
-    try:
-        user = current_user
-        
-        # Anti-Cheat: Max 40 scrobbles per hour
-        hour_ago = datetime.utcnow() - timedelta(hours=1)
-        scrobbles_h = db.query(Scrobble).filter(Scrobble.user_id == user.id, Scrobble.played_at >= hour_ago).count()
-        if scrobbles_h > 40:
-             return {"status": "flagged", "message": "Слишком много прослушиваний за час (Anti-Cheat)"}
+    user = current_user
+    lock = get_user_lock(user.id)
+    
+    async with lock:
+        try:
+            # Anti-Cheat: Max 40 scrobbles per hour
+            now = datetime.now(timezone.utc)
+            hour_ago = now - timedelta(hours=1)
+            scrobbles_h = db.query(Scrobble).filter(Scrobble.user_id == user.id, Scrobble.played_at >= hour_ago).count()
+            if scrobbles_h > 40:
+                 return {"status": "flagged", "message": "Слишком много прослушиваний за час (Anti-Cheat)"}
 
-        # Anti-Spam: Max 1 new scrobble per 10 seconds
-        last_s = db.query(Scrobble).filter(Scrobble.user_id == user.id).order_by(Scrobble.id.desc()).first()
-        if last_s and (datetime.utcnow() - last_s.played_at).total_seconds() < 10:
-            track = db.query(Track).filter(Track.title == data.title, Track.artist == data.artist).first()
-            if not track or last_s.track_id != track.id:
-                return {"status": "rate_limited", "message": "Слишком частые скробблы"}
+            # Anti-Spam: Max 1 new scrobble per 2 seconds (allows quick skips which are handled by process_scrobble)
+            last_s = db.query(Scrobble).filter(Scrobble.user_id == user.id).order_by(Scrobble.id.desc()).first()
+            if last_s and (now - last_s.updated_at).total_seconds() < 2:
+                # Case-insensitive track query for spam check
+                from sqlalchemy import func
+                track = db.query(Track).filter(func.lower(Track.title) == func.lower(data.title), func.lower(Track.artist) == func.lower(data.artist)).first()
+                if not track or last_s.track_id != track.id:
+                    return {"status": "rate_limited", "message": "Слишком частые скробблы"}
 
-        res = await process_scrobble(db, user, data.title, data.artist, data.cover_url, data.track_url, data.source, data.progress_sec, data.is_playing, data.duration, data.album)
-        
-        from app.routers.extended import run_check_achievements_bg
-        background_tasks.add_task(run_check_achievements_bg, user.id)
-        
-        return {"status": res}
-    except Exception as e:
-        import logging
-        logging.error(f"Scrobble error: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+            res = await process_scrobble(db, user, data.title, data.artist, data.cover_url, data.track_url, data.source, data.progress_sec, data.is_playing, data.duration, data.album)
+            
+            from app.routers.extended import run_check_achievements_bg
+            background_tasks.add_task(run_check_achievements_bg, user.id)
+            
+            return {"status": res}
+        except Exception as e:
+            import logging
+            logging.error(f"Scrobble error: {e}")
+            raise HTTPException(status_code=500, detail="Internal Server Error")
 
 @router.get("/history/{username}")
-def get_history(username: str, db: Annotated[Session, Depends(get_db)]):
+def get_history(username: str, request: Request, db: Annotated[Session, Depends(get_db)], current_user: Annotated[Optional[User], Depends(get_current_user_optional)] = None):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404)
+    
+    # Privacy check: if user is private, only the user themselves can view their history
+    if user.profile.is_private:
+        is_owner = current_user and current_user.id == user.id
+        if not is_owner:
+            raise HTTPException(status_code=403, detail="Это приватный профиль")
+            
     scrobbles = db.query(Scrobble, Track).join(Track).filter(Scrobble.user_id == user.id).order_by(Scrobble.id.desc()).limit(10).all()
     
     s_ids = [s.id for s, t in scrobbles]
@@ -73,10 +94,14 @@ def get_global_history(db: Annotated[Session, Depends(get_db)]):
     return [format_history_item(s, t, counters=counters) for s, t in scrobbles]
 
 @router.get("/friends-history/{username}")
-def get_friends_history(username: str, db: Annotated[Session, Depends(get_db)]):
+def get_friends_history(username: str, request: Request, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = db.query(User).filter(User.username == username).first()
     if not user: raise HTTPException(404)
     
+    # Only the user themselves can see their friends' history
+    if current_user.id != user.id:
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+        
     follows = db.query(Follow.following_id).filter(Follow.follower_id == user.id).all()
     following_ids = [f[0] for f in follows]
     
@@ -104,6 +129,11 @@ def api_get_taste_twins(username: str, db: Annotated[Session, Depends(get_db)]):
 @router.post("/scrobble/{scrobble_id}/like")
 def toggle_like(scrobble_id: int, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
+    # Verify scrobble exists
+    scrobble = db.query(Scrobble).filter(Scrobble.id == scrobble_id).first()
+    if not scrobble:
+        raise HTTPException(status_code=404, detail="Скроббл не найден")
+        
     like = db.query(ScrobbleLike).filter_by(user_id=user.id, scrobble_id=scrobble_id).first()
     if like:
         db.delete(like); db.commit()
@@ -114,8 +144,13 @@ def toggle_like(scrobble_id: int, db: Annotated[Session, Depends(get_db)], curre
 
 @router.post("/scrobble/{scrobble_id}/comment")
 def add_comment(scrobble_id: int, data: CommentRequest, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
-    from app.routers.profile import sanitize_text
+    from app.utils import sanitize_text
     user = current_user
+    # Verify scrobble exists
+    scrobble = db.query(Scrobble).filter(Scrobble.id == scrobble_id).first()
+    if not scrobble:
+        raise HTTPException(status_code=404, detail="Скроббл не найден")
+        
     clean_content = sanitize_text(data.content)
     db.add(ScrobbleComment(user_id=user.id, scrobble_id=scrobble_id, content=clean_content))
     db.commit()

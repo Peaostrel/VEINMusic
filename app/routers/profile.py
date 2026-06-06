@@ -3,20 +3,17 @@ from sqlalchemy.orm import Session
 from typing import Annotated, Optional
 from datetime import datetime, timezone
 import json
+import secrets
+import hashlib
 
 from app.database import get_db
 from app.models import User, Achievement, UserAchievement, Scrobble, Track
 from app.schemas import ProfileUpdate, LikeRequest
 from app.core.security import get_current_user
 from app.services.metadata_search import search_metadata
+from app.utils import sanitize_text
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])
-
-def sanitize_text(text_val: str) -> str:
-    import re
-    if not text_val: return text_val
-    text_val = re.sub(r'<[^>]*>', '', text_val)
-    return text_val.replace('"', '&quot;').replace("'", '&#39;').replace('<', '&lt;').replace('>', '&gt;')
 
 async def _update_favorite(user_profile, field_value, field_name, entity_type):
     if field_value is None:
@@ -80,4 +77,10 @@ def update_privacy(data: dict, db: Annotated[Session, Depends(get_db)], current_
     db.commit()
     return {"status": "ok"}
 
-# Add other profile-related endpoints here
+@router.post("/apikey/generate")
+def generate_api_key(db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
+    raw_key = secrets.token_hex(16)
+    hashed_key = hashlib.sha256(raw_key.encode('utf-8')).hexdigest()
+    current_user.api_key = hashed_key
+    db.commit()
+    return {"api_key": raw_key}

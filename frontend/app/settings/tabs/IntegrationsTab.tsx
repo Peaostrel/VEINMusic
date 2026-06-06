@@ -2,6 +2,7 @@ export default function IntegrationsTab({
     data, updateData, userProfile, 
     handleDisconnect, saveYandexToken, 
     startLastfmImport, userApiKey, 
+    generatedApiKey, handleGenerateApiKey,
     handleCopyKey, copied, API_URL
 }: any) {
   return (
@@ -84,13 +85,39 @@ export default function IntegrationsTab({
         </div>
 
         {/* Extension */}
-        {userApiKey && (
+        {userProfile?.has_api_key && (
             <div className="bg-[#121212]/50 p-6 rounded-xl border border-white/5 flex flex-col gap-4 relative overflow-hidden shadow-md">
                 <div className="absolute top-0 left-0 w-1 h-full bg-[var(--accent)]"></div>
-                <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-4"><div className="w-12 h-12 bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] rounded-xl flex items-center justify-center font-black text-2xl shadow-lg shrink-0" style={{color: 'var(--text-on-accent)'}}>V</div><div><h3 className="font-bold text-lg text-white">Расширение VEIN</h3><p className="text-sm text-gray-400">Ключ для браузерного скробблера.</p></div></div>
-                    <div className="flex items-center gap-3 bg-[#1a1a1a] p-2 rounded-lg border border-white/5"><code className="text-[var(--accent-text)] px-3 font-mono text-sm">{userApiKey}</code><button type="button" onClick={handleCopyKey} className="bg-white/5 border border-white/10 text-white hover:text-[var(--accent-text)] px-3 py-1.5 rounded font-bold text-xs">{copied ? 'OK!' : 'Copy'}</button></div>
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] rounded-xl flex items-center justify-center font-black text-2xl shadow-lg shrink-0" style={{color: 'var(--text-on-accent)'}}>V</div>
+                        <div>
+                            <h3 className="font-bold text-lg text-white">Расширение VEIN</h3>
+                            <p className="text-sm text-gray-400">Ключ для браузерного скробблера.</p>
+                        </div>
+                    </div>
+                    
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+                        <div className="flex items-center gap-2 bg-black/30 p-2 rounded-lg border border-white/5">
+                            <code className="text-[var(--accent-text)] px-3 font-mono text-sm">
+                                {generatedApiKey ? generatedApiKey : "••••••••••••••••••••••••••••••••"}
+                            </code>
+                            {generatedApiKey && (
+                                <button type="button" onClick={handleCopyKey} className="bg-white/5 border border-white/10 text-white hover:text-[var(--accent-text)] px-3 py-1.5 rounded font-bold text-xs">
+                                    {copied ? 'OK!' : 'Copy'}
+                                </button>
+                            )}
+                        </div>
+                        <button type="button" onClick={handleGenerateApiKey} className="bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] px-4 py-2.5 rounded-lg font-bold text-xs transition-all text-center">
+                            {generatedApiKey ? 'Сгенерировать другой' : 'Сбросить и сгенерировать API ключ'}
+                        </button>
+                    </div>
                 </div>
+                {generatedApiKey && (
+                    <div className="text-xs text-yellow-500 font-semibold border-t border-yellow-500/10 pt-2 mt-1">
+                        ⚠️ Внимание: этот ключ показывается только один раз! Обязательно скопируйте его прямо сейчас. При перезагрузке страницы он скроется.
+                    </div>
+                )}
             </div>
         )}
     </div>

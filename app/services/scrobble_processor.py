@@ -1,10 +1,10 @@
 from sqlalchemy.orm import Session
-from datetime import datetime, timezone
+from sqlalchemy import func
+from datetime import datetime, timezone, timedelta
 import httpx
 
 from app.models import User, Track, Scrobble, ScrobbleLike, ScrobbleComment
 from app.core.websockets import manager
-# import get_track_genre, get_track_duration later
 
 async def get_track_duration(url: str) -> int:
     if not url or not url.startswith("http"): return 180 
@@ -40,10 +40,17 @@ async def get_track_genre(url: str, artist: str = None) -> str:
 
 def format_history_item(scrobble, track, db: Session = None, counters: dict = None):
     upd_time = scrobble.updated_at or scrobble.played_at
-    now = datetime.utcnow()
-    is_playing = scrobble.is_playing and (now - upd_time).total_seconds() < 15
+    if upd_time.tzinfo is None:
+        upd_time = upd_time.replace(tzinfo=timezone.utc)
     
-    diff = now - scrobble.played_at
+    played_time = scrobble.played_at
+    if played_time.tzinfo is None:
+        played_time = played_time.replace(tzinfo=timezone.utc)
+        
+    now = datetime.now(timezone.utc)
+    is_playing = scrobble.is_playing and (now - upd_time).total_seconds() < 45
+    
+    diff = now - played_time
     if diff.total_seconds() < 60:
         rel_time = "только что"
     elif diff.total_seconds() < 3600:
@@ -51,14 +58,14 @@ def format_history_item(scrobble, track, db: Session = None, counters: dict = No
     elif diff.total_seconds() < 86400:
         rel_time = f"{int(diff.total_seconds() // 3600)}ч назад"
     else:
-        rel_time = scrobble.played_at.strftime("%d %b")
+        rel_time = played_time.strftime("%d %b")
 
     data = {
         "id": scrobble.id,
         "username": scrobble.user.username if scrobble.user else None,
         "avatar_url": scrobble.user.profile.avatar_url if (scrobble.user and scrobble.user.profile) else None,
         "artist": track.artist, "title": track.title, "cover_url": track.cover_url,
-        "track_url": track.track_url, "source": scrobble.source, "time": str(scrobble.played_at),
+        "track_url": track.track_url, "source": scrobble.source, "time": str(played_time),
         "relative_time": rel_time,
         "duration": track.duration, "listened_sec": scrobble.listened_sec,
         "is_playing": is_playing, "updated_at": str(upd_time),
@@ -73,7 +80,12 @@ def format_history_item(scrobble, track, db: Session = None, counters: dict = No
     return data
 
 async def process_scrobble(db: Session, user: User, title: str, artist: str, cover_url: str, track_url: str, source: str, progress_sec: int, is_playing: bool, duration: int, album: str = None):
-    track = db.query(Track).filter(Track.title == title, Track.artist == artist).first()
+    # Case-insensitive track deduplication query
+    track = db.query(Track).filter(
+        func.lower(Track.title) == func.lower(title),
+        func.lower(Track.artist) == func.lower(artist)
+    ).first()
+    
     if not track:
         track = Track(title=title, artist=artist, cover_url=cover_url, track_url=track_url, duration=duration or 0, album=album)
         db.add(track)
@@ -106,13 +118,26 @@ async def process_scrobble(db: Session, user: User, title: str, artist: str, cov
         track.genre = await get_track_genre(track.track_url)
         db.commit()
         
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     last_scrobble = db.query(Scrobble).filter(Scrobble.user_id == user.id).order_by(Scrobble.id.desc()).first()
     
     is_new = False
+    if last_scrobble:
+        l_played_at = last_scrobble.played_at.replace(tzinfo=timezone.utc) if last_scrobble.played_at.tzinfo is None else last_scrobble.played_at
+        l_updated_at = last_scrobble.updated_at.replace(tzinfo=timezone.utc) if last_scrobble.updated_at.tzinfo is None else last_scrobble.updated_at
+    else:
+        l_played_at = None
+        l_updated_at = None
+
     if not last_scrobble or last_scrobble.track_id != track.id:
-        if last_scrobble and last_scrobble.is_playing and (now - last_scrobble.updated_at).total_seconds() < 1.0:
+        if last_scrobble and last_scrobble.is_playing and (now - l_updated_at).total_seconds() < 1.0:
             return "ignored_spam_protection"
+            
+        # Support skipping tracks quickly by deleting bare-listened tracks
+        if last_scrobble and (now - l_played_at).total_seconds() < 15 and last_scrobble.listened_sec < 10:
+            db.delete(last_scrobble)
+            db.commit()
+            
         is_new = True
     elif progress_sec < 5 and (last_scrobble.listened_sec or 0) > 30: 
         is_new = True
@@ -126,10 +151,11 @@ async def process_scrobble(db: Session, user: User, title: str, artist: str, cov
             "track": format_history_item(new_s, track)
         })
     else:
-        time_elapsed = (now - last_scrobble.updated_at).total_seconds()
+        time_elapsed = (now - l_updated_at).total_seconds()
         old_listened = last_scrobble.listened_sec or 0
         
-        if last_scrobble.is_playing and is_playing and 0 < time_elapsed < 90:
+        # Use 35s limit to handle player update intervals
+        if last_scrobble.is_playing and is_playing and 0 < time_elapsed < 35:
             last_scrobble.listened_sec = old_listened + int(round(time_elapsed))
             
         last_scrobble.is_playing = is_playing
@@ -154,15 +180,16 @@ async def process_scrobble(db: Session, user: User, title: str, artist: str, cov
             last_scrobble.xp_earned = 2 if is_fav else 1
             db.commit()
             
-            # streak update logic
-            from datetime import timedelta
-            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
             scrobbles_today = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.played_at >= today_start, Scrobble.listened_sec * 100 >= Track.duration * 85).count()
             if scrobbles_today >= 5:
                 today_str = today_start.strftime("%Y-%m-%d")
                 yesterday_str = (today_start - timedelta(days=1)).strftime("%Y-%m-%d")
-                if user.integration.last_streak_date != today_str:
-                    if user.integration.last_streak_date == yesterday_str: user.integration.current_streak = (user.integration.current_streak or 0) + 1
+                
+                # Retrieve last streak date securely
+                last_streak_date = user.integration.last_streak_date
+                if last_streak_date != today_str:
+                    if last_streak_date == yesterday_str: user.integration.current_streak = (user.integration.current_streak or 0) + 1
                     else: user.integration.current_streak = 1
                     user.integration.last_streak_date = today_str
                     db.commit()

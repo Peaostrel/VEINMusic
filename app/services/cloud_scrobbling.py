@@ -69,26 +69,39 @@ async def sync_yandex_status(user: User, db: Session, process_func):
                 "User-Agent": "Yandex-Music-API"
             }
             resp = await client.get("https://api.music.yandex.net/external-api/status", headers=headers, timeout=5.0)
+            if resp.status_code == 403:
+                print(f"Yandex OAuth token invalid or expired for user {user.username}")
+                return
             if resp.status_code == 200:
-                data = resp.json()
-                if data.get("result") and data["result"].get("nowPlaying"):
-                    np = data["result"]["nowPlaying"]
-                    track_data = np.get("track")
-                    if not track_data: return
+                try:
+                    data = resp.json()
+                except Exception as je:
+                    print(f"Yandex JSON parse error for user {user.username}: {je}")
+                    return
+                
+                result = data.get("result")
+                if not result or not isinstance(result, dict):
+                    return
+                np = result.get("nowPlaying")
+                if not np or not isinstance(np, dict):
+                    return
+                track_data = np.get("track")
+                if not track_data or not isinstance(track_data, dict):
+                    return
                     
-                    title = track_data.get("title")
-                    artist = ", ".join([a["name"] for a in track_data.get("artists", [])])
-                    cover_uri = track_data.get("coverUri")
-                    cover = "https://" + cover_uri.replace("%%", "400x400") if cover_uri else None
-                    track_id = track_data.get("id")
-                    track_url = f"https://music.yandex.ru/track/{track_id}"
-                    duration = int(track_data.get("durationMs", 0) / 1000)
-                    progress = int(np.get("progressMs", 0) / 1000)
-                    album = track_data.get("albums", [{}])[0].get("title") if track_data.get("albums") else None
-                    
-                    await process_func(db, user, title, artist, cover, track_url, "yandex", progress, True, duration, album)
+                title = track_data.get("title")
+                artist = ", ".join([a["name"] for a in track_data.get("artists", []) if isinstance(a, dict) and "name" in a])
+                cover_uri = track_data.get("coverUri")
+                cover = "https://" + cover_uri.replace("%%", "400x400") if cover_uri else None
+                track_id = track_data.get("id")
+                track_url = f"https://music.yandex.ru/track/{track_id}"
+                duration = int(track_data.get("durationMs", 0) / 1000)
+                progress = int(np.get("progressMs", 0) / 1000)
+                album = track_data.get("albums", [{}])[0].get("title") if (track_data.get("albums") and isinstance(track_data.get("albums"), list) and len(track_data.get("albums")) > 0) else None
+                
+                await process_func(db, user, title, artist, cover, track_url, "yandex", progress, True, duration, album)
         except Exception as e:
-            print(f"Yandex sync error: {e}")
+            print(f"Yandex sync error for user {user.username}: {e}")
 
 async def poll_external_services(process_func):
     """
@@ -102,6 +115,8 @@ async def poll_external_services(process_func):
             users = db.query(User).join(UserIntegration).filter((UserIntegration.spotify_refresh_token != None) | (UserIntegration.yandex_token != None)).all()
             
             async def poll_user(user_id):
+                # Add jitter inside the task itself so all tasks run concurrently
+                await asyncio.sleep(random.uniform(0.1, 2.0))
                 local_db = SessionLocal()
                 try:
                     u = local_db.query(User).filter(User.id == user_id).first()
@@ -113,7 +128,7 @@ async def poll_external_services(process_func):
                     if u.integration.yandex_token:
                         await sync_yandex_status(u, local_db, process_func)
                     
-                    u.integration.last_sync = datetime.utcnow()
+                    u.integration.last_sync = datetime.now(timezone.utc)
                     local_db.commit()
                 except Exception as e:
                     print(f"Error polling user {user_id}: {e}")
@@ -121,17 +136,11 @@ async def poll_external_services(process_func):
                     local_db.close()
 
             if users:
-                # Add jitter to polling to prevent rate limits
-                # Poll every 30-45 seconds per user
-                tasks = []
-                for u in users:
-                    await asyncio.sleep(random.uniform(0.1, 1.0)) # Jitter between users
-                    tasks.append(poll_user(u.id))
+                tasks = [poll_user(u.id) for u in users]
                 await asyncio.gather(*tasks)
                 
         except Exception as e:
             print(f"Cloud Worker Global Error: {e}")
         finally:
             db.close()
-        # Increased delay from 15 to 30 to avoid rate limits
         await asyncio.sleep(30)

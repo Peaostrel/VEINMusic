@@ -1,6 +1,7 @@
 import os
 import asyncio
 import secrets
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -14,9 +15,44 @@ from app.services.cloud_scrobbling import poll_external_services
 from app.services.scrobble_processor import process_scrobble
 from app.core.websockets import manager
 
+background_tasks = set()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize DB (creates tables if they don't exist)
+    Base.metadata.create_all(bind=engine)
+    
+    # Run API key migration for existing users (hash plain-text API keys of length != 64)
+    from app.database import SessionLocal
+    import hashlib
+    from app.models import User
+    db = SessionLocal()
+    try:
+        users = db.query(User).all()
+        for user in users:
+            if user.api_key and len(user.api_key) != 64:
+                user.api_key = hashlib.sha256(user.api_key.encode('utf-8')).hexdigest()
+        db.commit()
+    except Exception as e:
+        print(f"Startup migration failed: {e}")
+        db.rollback()
+    finally:
+        db.close()
+        
+    # Start cloud scrobbling with safe interval
+    task = asyncio.create_task(poll_external_services(process_scrobble))
+    background_tasks.add(task)
+    task.add_done_callback(background_tasks.discard)
+    
+    yield
+    
+    # Cancel background tasks on shutdown
+    for t in list(background_tasks):
+        t.cancel()
+
 # Setup Rate Limiting
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI(title="VEIN Music API")
+app = FastAPI(title="VEIN Music API", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -43,18 +79,6 @@ app.include_router(scrobbling.router)
 app.include_router(admin.router)
 app.include_router(extended.router)
 
-background_tasks = set()
-
-@app.on_event("startup")
-async def startup_event():
-    # Initialize DB (creates tables if they don't exist)
-    Base.metadata.create_all(bind=engine)
-    
-    # Start cloud scrobbling with safe interval
-    task = asyncio.create_task(poll_external_services(process_scrobble))
-    background_tasks.add(task)
-    task.add_done_callback(background_tasks.discard)
-
 # Setup WebSocket manually at root
 from fastapi import WebSocket, WebSocketDisconnect, Depends
 from sqlalchemy.orm import Session
@@ -67,7 +91,21 @@ async def websocket_route(websocket: WebSocket, username: str, db: Session = Dep
     if user and user.profile.is_private:
         # We check cookies first, then token for extensions
         token = websocket.cookies.get("api_key") or websocket.query_params.get("token")
-        if not token or not user.api_key or not secrets.compare_digest(token, user.api_key):
+        if not token or not user.api_key:
+            await websocket.close(code=4003)
+            return
+            
+        import hashlib
+        from app.core.security import verify_session_token
+        
+        valid = False
+        if ":" in token:
+            valid = verify_session_token(token, user)
+        else:
+            hashed_token = hashlib.sha256(token.encode('utf-8')).hexdigest()
+            valid = secrets.compare_digest(hashed_token, user.api_key)
+            
+        if not valid:
             await websocket.close(code=4003)
             return
 
@@ -83,3 +121,4 @@ async def websocket_route(websocket: WebSocket, username: str, db: Session = Dep
                 })
     except WebSocketDisconnect:
         manager.disconnect(websocket, username)
+

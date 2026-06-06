@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from app.schemas import AchCreate, AchUpdate, AchAssign, ToggleAch, MarkRead, LevelUpdate, AdminUserUpdate, ApiKeyRequest
 
 from sqlalchemy.orm import Session
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_admin_user
 from sqlalchemy import text, func
 from datetime import datetime, timedelta, timezone
 import re
@@ -19,7 +19,6 @@ YANDEX_MUSIC_DOMAIN = "music.yandex.ru"
 import httpx
 import time
 import uuid
-import bcrypt
 
 from app.core.websockets import manager
 
@@ -28,6 +27,7 @@ from app.models import User, Achievement, UserAchievement, Follow, Scrobble, Tra
 from app.schemas import FollowAction, LikeRequest, CommentRequest
 from app.services.scrobble_processor import format_history_item
 from app.services.og_parser import parse_og_meta
+from app.utils import sanitize_text
 
 # --- Missing constants & globals ---
 import os
@@ -36,21 +36,33 @@ LASTFM_API_KEY = os.getenv("LASTFM_API_KEY")
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 LASTFM_BASE_URL = "https://ws.audioscrobbler.com/2.0/"
 IMPORTING_USERS = set()
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+
 CACHE = {}
+MAX_CACHE_SIZE = 500
+
 def get_from_cache(key: str, ttl: int = 300):
     if key in CACHE:
         entry = CACHE[key]
         if time.time() - entry['ts'] < ttl:
             return entry['data']
+        else:
+            del CACHE[key]
     return None
 
 def set_to_cache(key: str, data: any):
-    CACHE[key] = {'data': data, 'ts': time.time()}
-
-def get_admin_user(current_user: Annotated[User, Depends(get_current_user)]):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Доступ запрещен")
-    return current_user
+    now = time.time()
+    if len(CACHE) >= MAX_CACHE_SIZE:
+        expired_keys = [k for k, v in CACHE.items() if now - v['ts'] >= 300]
+        for k in expired_keys:
+            del CACHE[k]
+        if len(CACHE) >= MAX_CACHE_SIZE:
+            oldest_key = min(CACHE.keys(), key=lambda k: CACHE[k]['ts'])
+            del CACHE[oldest_key]
+    CACHE[key] = {'data': data, 'ts': now}
 
 def get_active_streak(user: User):
     if not user.integration.last_streak_date: return 0
@@ -59,6 +71,24 @@ def get_active_streak(user: User):
     if user.integration.last_streak_date in [today_str, yesterday_str]:
         return user.integration.current_streak or 0
     return 0
+
+def get_user_timezone_offset(location: str) -> int:
+    if not location: return 3
+    loc = location.lower()
+    if "москва" in loc or "moscow" in loc or "санкт" in loc or "питер" in loc or "россия" in loc or "russia" in loc: return 3
+    if "калининград" in loc: return 2
+    if "самара" in loc: return 4
+    if "екатеринбург" in loc: return 5
+    if "омск" in loc: return 6
+    if "новосибирск" in loc or "красноярск" in loc: return 7
+    if "иркутск" in loc: return 8
+    if "якутск" in loc: return 9
+    if "владивосток" in loc: return 10
+    if "магадан" in loc: return 11
+    if "камчатка" in loc or "анадырь" in loc: return 12
+    if "лондон" in loc or "london" in loc or "uk" in loc: return 0
+    if "германия" in loc or "germany" in loc or "берлин" in loc or "paris" in loc or "франция" in loc: return 1
+    return 3
 
 def check_auto_achievements(user, db: Session):
     auto_achs = db.query(Achievement).filter(Achievement.rule_type != "manual").all()
@@ -71,7 +101,8 @@ def check_auto_achievements(user, db: Session):
             if db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85).count() >= ach.rule_value: granted = True
         elif ach.rule_type == "night_scrobbles":
             valid_times = db.query(Scrobble.played_at).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85).all()
-            night_count = sum(1 for (dt,) in valid_times if dt.replace(tzinfo=timezone.utc).astimezone().strftime('%H') in ['00', '01', '02', '03', '04', '05'])
+            offset = get_user_timezone_offset(user.profile.location if user.profile else None)
+            night_count = sum(1 for (dt,) in valid_times if (dt + timedelta(hours=offset)).strftime('%H') in ['00', '01', '02', '03', '04', '05'])
             if night_count >= ach.rule_value: granted = True
         elif ach.rule_type == "specific_track" and ach.rule_target:
             if ach.rule_target.startswith("http"):
@@ -155,10 +186,7 @@ def get_taste_match_internal(viewer, profile, db):
     return {"match": min(match_percent, 100), "common_artists": common_artists[:5]}
 
 
-def sanitize_text(text_val: str) -> str:
-    if not text_val: return text_val
-    text_val = re.sub(r'<[^>]*>', '', text_val)
-    return text_val.replace('"', '&quot;').replace("'", '&#39;').replace('<', '&lt;').replace('>', '&gt;')
+# sanitize_text imported from app.utils
 
 def get_taste_twins(username: str, db: Session):
     me = db.query(User).filter(User.username == username).first()
@@ -249,9 +277,13 @@ def get_user_info(username: str, request: Request, db: Annotated[Session, Depend
     if not user: raise HTTPException(404, "Юзер не найден")
     role = user.role or "user"
 
-    # Privacy check for profile data
-    api_key = request.cookies.get("api_key") or request.headers.get("Authorization", "").replace("Bearer ", "")
-    is_owner = api_key and user.api_key == api_key
+    # Privacy check for profile data using get_current_user securely
+    current_u = None
+    try:
+        current_u = get_current_user(request, db)
+    except Exception:
+        pass
+    is_owner = current_u and current_u.id == user.id
     
     if user.profile.is_private and not is_owner:
         return {
@@ -271,7 +303,7 @@ def get_user_info(username: str, request: Request, db: Annotated[Session, Depend
         "lastfm_username": user.integration.lastfm_username, "last_sync": user.integration.last_sync, "role": role,
         "achievements": [{"id": a.id, "name": a.name, "description": a.description, "icon": a.icon, "target_image": a.target_image, "reward_xp": a.reward_xp, "is_displayed": ua.is_displayed, "earned_at": ua.earned_at} for a, ua in ach_data],
         "streak": get_active_streak(user),
-        "api_key": user.api_key if is_owner else None
+        "has_api_key": bool(user.api_key) if is_owner else False
     }
 
 
@@ -1023,7 +1055,11 @@ def remove_achievement_from_user(target_username: str, achievement_id: int, db: 
 @router.post("/api/admin/users/{target_username}/level")
 def update_user_level(target_username: str, data: LevelUpdate, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     target = db.query(User).filter(User.username == target_username).first()
-    target.integration.bonus_xp = ((data.new_level - 1) * 100) - db.query(Scrobble).join(Track).filter(Scrobble.user_id == target.id, Scrobble.listened_sec * 100 >= Track.duration * 85).count()
+    if not target: raise HTTPException(404, "Юзер не найден")
+    if data.new_level <= 0 or data.new_level > 10000:
+        raise HTTPException(status_code=400, detail="Уровень должен быть от 1 до 10000")
+    count_scrobbles = db.query(Scrobble).join(Track).filter(Scrobble.user_id == target.id, Scrobble.listened_sec * 100 >= Track.duration * 85).count()
+    target.integration.bonus_xp = max(0, ((data.new_level - 1) * 100) - count_scrobbles)
     db.commit()
     return {"status": "ok"}
 
@@ -1068,7 +1104,7 @@ def toggle_achievement(data: ToggleAch, db: Annotated[Session, Depends(get_db)],
 
 # --- POST /api/upload ---
 @router.post("/api/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(current_user: Annotated[User, Depends(get_current_user)], file: UploadFile = File(...)):
     # Security: Validate file type
     allowed_types = ["image/jpeg", "image/png", "image/webp", "image/gif"]
     if file.content_type not in allowed_types:
@@ -1081,12 +1117,11 @@ async def upload_file(file: UploadFile = File(...)):
         raise HTTPException(400, "Файл слишком большой (макс. 5МБ)")
     
     ext = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
-    # Sanitize extension
     if ext.lower() not in ["jpg", "jpeg", "png", "webp", "gif"]:
         ext = "jpg"
         
     filename = f"{uuid.uuid4().hex}.{ext}"
-    file_path = os.path.join("uploads", filename)
+    file_path = os.path.join(UPLOADS_DIR, filename)
     with open(file_path, "wb") as buffer:
         buffer.write(content)
     return {"url": f"{API_BASE_URL}/uploads/{filename}"}
@@ -1094,9 +1129,14 @@ async def upload_file(file: UploadFile = File(...)):
 
 # --- GET /uploads/{filename} ---
 @router.get("/uploads/{filename}")
-async def get_upload(filename: str):
+async def get_upload(filename: str, current_user: Annotated[User, Depends(get_current_user)]):
     clean_filename = os.path.basename(filename)
-    file_path = os.path.join("uploads", clean_filename)
+    file_path = os.path.join(UPLOADS_DIR, clean_filename)
+    # Path traversal protection
+    real_path = os.path.abspath(file_path)
+    real_uploads_dir = os.path.abspath(UPLOADS_DIR)
+    if not real_path.startswith(real_uploads_dir):
+        raise HTTPException(status_code=400, detail="Invalid path")
     if os.path.exists(file_path):
         return FileResponse(file_path)
     raise HTTPException(status_code=404, detail="Файл не найден")
@@ -1123,13 +1163,13 @@ async def get_album_track_count(url: str) -> int:
     try:
         async with httpx.AsyncClient(headers=headers, timeout=5.0) as client:
             if YANDEX_MUSIC_DOMAIN in url and ALBUM_PATH in url:
-                album_id = url.split(ALBUM_PATH)[1].split('/')[0].split('?')[0]
-                res = (await client.get(f"https://{YANDEX_MUSIC_DOMAIN}/handlers/album.jsx?album={album_id}")).json()
-                return res.get("trackCount", 0)
+                  album_id = url.split(ALBUM_PATH)[1].split('/')[0].split('?')[0]
+                  res = (await client.get(f"https://{YANDEX_MUSIC_DOMAIN}/handlers/album.jsx?album={album_id}")).json()
+                  return res.get("trackCount", 0)
             elif "spotify.com" in url and ALBUM_PATH in url:
-                resp = await client.get(url)
-                match = re.search(r'music:song_count["\']\s+content=["\'](\d+)["\']', resp.text, re.IGNORECASE)
-                if match: return int(match.group(1))
+                  resp = await client.get(url)
+                  match = re.search(r'music:song_count["\']\s+content=["\'](\d+)["\']', resp.text, re.IGNORECASE)
+                  if match: return int(match.group(1))
     except Exception as e:
         print(f"Album track count error: {e}")
     return 0
@@ -1309,7 +1349,7 @@ async def import_lastfm_history(user_id: int, db_session_factory):
                     album = t.get("album", {}).get("#text")
                     cover = t.get("image", [{}, {}, {}, {"#text": ""}])[3].get("#text")
                     uts = int(t.get("date", {}).get("uts", 0))
-                    dt = datetime.fromtimestamp(uts, tz=timezone.utc).replace(tzinfo=None)
+                    dt = datetime.fromtimestamp(uts, tz=timezone.utc)
                     
                     # Check if already exists
                     existing = db.query(Scrobble).filter(Scrobble.user_id == user.id, Scrobble.played_at == dt).first()

@@ -91,7 +91,7 @@ class LikeRequest(BaseModel):
 
 class CommentRequest(BaseModel): 
     api_key: Optional[str] = None
-    content: str
+    content: str = Field(..., max_length=1000)
 
 class AdminUserUpdate(BaseModel): 
     api_key: Optional[str] = None

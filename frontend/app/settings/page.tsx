@@ -58,6 +58,7 @@ function SettingsContent() {
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
   const [cropFieldTarget, setCropFieldTarget] = useState<string | null>(null);
+  const [generatedApiKey, setGeneratedApiKey] = useState<string | null>(null);
 
   const [data, setData] = useState({
       displayName: '', bio: '', avatarUrl: '', coverUrl: '', location: '', favoriteGenre: '', equipment: '',
@@ -224,9 +225,31 @@ function SettingsContent() {
   const updateSocialLink = (id: number, field: string, value: string) => setSocialLinks(socialLinks.map(l => l.id === id ? { ...l, [field]: value } : l));
   const removeSocialLink = (id: number) => setSocialLinks(socialLinks.filter(l => l.id !== id));
 
+  const handleGenerateApiKey = async () => {
+    if (!confirm("Вы уверены, что хотите сбросить текущий API ключ? Все ваши сторонние приложения/расширения перестанут работать, пока вы не обновите в них ключ.")) return;
+    setStatus('Генерация...');
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/profile/apikey/generate`, {
+        credentials: 'include',
+        method: 'POST'
+      });
+      if (res.ok) {
+        const d = await res.json();
+        setGeneratedApiKey(d.api_key);
+        setStatus('✅ Новый API ключ успешно сгенерирован!');
+        setTimeout(() => setStatus(''), 5000);
+      } else {
+        setStatus('❌ Ошибка при генерации');
+      }
+    } catch (e) {
+      setStatus('❌ Ошибка сети');
+    }
+  };
+
   const handleCopyKey = () => {
-    if (userProfile?.api_key) {
-      navigator.clipboard.writeText(userProfile.api_key);
+    const keyToCopy = generatedApiKey || userProfile?.api_key;
+    if (keyToCopy) {
+      navigator.clipboard.writeText(keyToCopy);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       setStatus('✅ API ключ скопирован в буфер обмена');
@@ -393,6 +416,7 @@ function SettingsContent() {
                       data={data} updateData={updateData} userProfile={userProfile} 
                       handleDisconnect={handleDisconnect} saveYandexToken={saveYandexToken} 
                       startLastfmImport={startLastfmImport} userApiKey={userProfile?.api_key || ""} 
+                      generatedApiKey={generatedApiKey} handleGenerateApiKey={handleGenerateApiKey}
                       handleCopyKey={handleCopyKey} copied={copied} API_URL={process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"} 
                   />
               )}
