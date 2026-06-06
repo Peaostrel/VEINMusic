@@ -12,7 +12,7 @@ export const THEMES = {
   cyan: { main: '#00ffff', hover: '#0088ff', glow: 'rgba(0,255,255,0.3)', glowStrong: 'rgba(0,255,255,0.6)' },
 };
 
-const isValidUser = (u: any) => {
+const isValidUser = (u: unknown) => {
     if (!u) return false;
     const s = String(u).trim().toLowerCase();
     return s !== '' && s !== 'null' && s !== 'undefined' && s !== 'false' && s !== '[]' && s !== '{}';
@@ -58,9 +58,74 @@ export const LvlBadge = ({ level }: { level: number }) => {
     );
 };
 
+interface UserProfile {
+  username: string;
+  display_name?: string;
+  avatar_url?: string | null;
+  avatar_frame?: string | null;
+  role?: string;
+  is_verified?: boolean;
+  level?: number;
+}
+
+const hexToRgbVals = (hex: string) => {
+    hex = hex.replace('#', '');
+    if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+    return {
+        r: Number.parseInt(hex.substring(0, 2), 16) || 0,
+        g: Number.parseInt(hex.substring(2, 4), 16) || 0,
+        b: Number.parseInt(hex.substring(4, 6), 16) || 0
+    };
+};
+
+const applyTheme = (themeKey: string) => {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    let r = 0, g = 0, b = 0;
+    const isRainbow = themeKey === 'rainbow';
+    if (!isRainbow) {
+        if (themeKey?.startsWith('#')) {
+            const vals = hexToRgbVals(themeKey);
+            r = vals.r; g = vals.g; b = vals.b;
+        } else {
+            const t = THEMES[themeKey as keyof typeof THEMES] || THEMES.classic;
+            const vals = hexToRgbVals(t.main);
+            r = vals.r; g = vals.g; b = vals.b;
+        }
+    }
+    const lum = (r * 299 + g * 587 + b * 114) / 1000;
+    const textOnAccent = lum < 150 || isRainbow ? '#ffffff' : '#121212';
+    const accentText = lum < 60 && !isRainbow ? '#ffffff' : 'var(--accent)';
+    root.style.setProperty('--text-on-accent', textOnAccent);
+    root.style.setProperty('--accent-text', accentText);
+    if (isRainbow) { 
+        root.classList.add('theme-rainbow'); 
+        // Set rainbow starting values immediately so var(--accent) is never undefined
+        // JS interval takes over in 40ms with smooth animation
+        root.style.setProperty('--accent', '#ff0044');
+        root.style.setProperty('--accent-hover', '#ff0044');
+        root.style.setProperty('--accent-glow', 'rgba(255, 0, 68, 0.3)');
+        root.style.setProperty('--accent-glow-strong', 'rgba(255, 0, 68, 0.6)');
+    } 
+    else if (themeKey?.startsWith('#')) {
+        root.classList.remove('theme-rainbow');
+        root.style.setProperty('--accent', themeKey);
+        root.style.setProperty('--accent-hover', themeKey);
+        root.style.setProperty('--accent-glow', `rgba(${r}, ${g}, ${b}, 0.3)`);
+        root.style.setProperty('--accent-glow-strong', `rgba(${r}, ${g}, ${b}, 0.6)`);
+    } else {
+        root.classList.remove('theme-rainbow');
+        const t = THEMES[themeKey as keyof typeof THEMES] || THEMES.classic;
+        root.style.setProperty('--accent', t.main);
+        root.style.setProperty('--accent-hover', t.hover);
+        root.style.setProperty('--accent-glow', t.glow);
+        root.style.setProperty('--accent-glow-strong', t.glowStrong);
+    }
+};
+
 export default function Navbar() {
   const [username, setUsername] = useState<string | null>(null);
-  const [userProfile, setUserProfile] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -71,66 +136,11 @@ export default function Navbar() {
   }, [pathname]);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  const hexToRgbVals = (hex: string) => {
-      hex = hex.replace('#', '');
-      if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
-      return {
-          r: Number.parseInt(hex.substring(0, 2), 16) || 0,
-          g: Number.parseInt(hex.substring(2, 4), 16) || 0,
-          b: Number.parseInt(hex.substring(4, 6), 16) || 0
-      };
-  };
-
-  const applyTheme = (themeKey: string) => {
-      if (typeof document === 'undefined') return;
-      const root = document.documentElement;
-      let r = 0, g = 0, b = 0;
-      const isRainbow = themeKey === 'rainbow';
-      if (!isRainbow) {
-          if (themeKey?.startsWith('#')) {
-              const vals = hexToRgbVals(themeKey);
-              r = vals.r; g = vals.g; b = vals.b;
-          } else {
-              const t = THEMES[themeKey as keyof typeof THEMES] || THEMES.classic;
-              const vals = hexToRgbVals(t.main);
-              r = vals.r; g = vals.g; b = vals.b;
-          }
-      }
-      const lum = (r * 299 + g * 587 + b * 114) / 1000;
-      const textOnAccent = lum < 150 || isRainbow ? '#ffffff' : '#121212';
-      const accentText = lum < 60 && !isRainbow ? '#ffffff' : 'var(--accent)';
-      root.style.setProperty('--text-on-accent', textOnAccent);
-      root.style.setProperty('--accent-text', accentText);
-      if (isRainbow) { 
-          root.classList.add('theme-rainbow'); 
-          // Set rainbow starting values immediately so var(--accent) is never undefined
-          // JS interval takes over in 40ms with smooth animation
-          root.style.setProperty('--accent', '#ff0044');
-          root.style.setProperty('--accent-hover', '#ff0044');
-          root.style.setProperty('--accent-glow', 'rgba(255, 0, 68, 0.3)');
-          root.style.setProperty('--accent-glow-strong', 'rgba(255, 0, 68, 0.6)');
-      } 
-      else if (themeKey?.startsWith('#')) {
-          root.classList.remove('theme-rainbow');
-          root.style.setProperty('--accent', themeKey);
-          root.style.setProperty('--accent-hover', themeKey);
-          root.style.setProperty('--accent-glow', `rgba(${r}, ${g}, ${b}, 0.3)`);
-          root.style.setProperty('--accent-glow-strong', `rgba(${r}, ${g}, ${b}, 0.6)`);
-      } else {
-          root.classList.remove('theme-rainbow');
-          const t = THEMES[themeKey as keyof typeof THEMES] || THEMES.classic;
-          root.style.setProperty('--accent', t.main);
-          root.style.setProperty('--accent-hover', t.hover);
-          root.style.setProperty('--accent-glow', t.glow);
-          root.style.setProperty('--accent-glow-strong', t.glowStrong);
-      }
-  };
 
   const [currentTheme, setCurrentTheme] = useState('classic');
 
@@ -139,8 +149,8 @@ export default function Navbar() {
           let t: string;
           if (globalThis.location.pathname.toLowerCase().includes('/auth')) {
               t = 'classic';
-          } else if (globalThis.location.pathname.toLowerCase().startsWith('/user/') && (globalThis as any).__ACTIVE_PROFILE_THEME__) {
-              t = (globalThis as any).__ACTIVE_PROFILE_THEME__;
+          } else if (globalThis.location.pathname.toLowerCase().startsWith('/user/') && (globalThis as unknown as Record<string, string>).__ACTIVE_PROFILE_THEME__) {
+              t = (globalThis as unknown as Record<string, string>).__ACTIVE_PROFILE_THEME__;
           } else {
               const storedUser = localStorage.getItem('username');
               if (isValidUser(storedUser)) {
@@ -291,7 +301,7 @@ export default function Navbar() {
                               <div className="w-9 h-9 rounded-full overflow-hidden bg-black shrink-0"><img src={u.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${u.username}&backgroundColor=transparent`} alt="Avatar" className="w-full h-full object-cover" /></div>
                               <div className="truncate flex-grow">
                                   <div className="font-bold text-white text-sm truncate flex items-center gap-1">
-                                      {u.display_name} <VerifiedBadge role={u.role} isVerified={u.is_verified} sizeClass="w-3.5 h-3.5" /><LvlBadge level={u.level} />
+                                      {u.display_name} <VerifiedBadge role={u.role} isVerified={u.is_verified} sizeClass="w-3.5 h-3.5" /><LvlBadge level={u.level || 1} />
                                   </div>
                                   <div className="text-xs text-gray-500 truncate">@{u.username}</div>
                               </div>

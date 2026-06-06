@@ -2,8 +2,19 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
+interface FeedItem {
+    id: number;
+    username: string;
+    avatar_url?: string;
+    cover_url?: string;
+    relative_time: string;
+    title: string;
+    artist: string;
+    is_playing?: boolean;
+}
+
 export default function GlobalFeed() {
-    const [feed, setFeed] = useState<any[]>([]);
+    const [feed, setFeed] = useState<FeedItem[]>([]);
     const [loading, setLoading] = useState(true);
     const router = useRouter();
 

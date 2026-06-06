@@ -59,7 +59,7 @@ def test_update_profile_success(auth_client, db, auth_user):
 
 def test_update_profile_validation_urls(auth_client):
     # Bad avatar URL
-    payload = {"avatar_url": "ftp://bad-url.com"}
+    payload = {"avatar_url": "invalid://bad-url.com"}
     resp = auth_client.post("/api/profile/update", json=payload)
     assert resp.status_code == 400
     assert "Invalid URL" in resp.text

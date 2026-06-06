@@ -59,8 +59,14 @@ function getAchField<K extends keyof Achievement>(
     editingAch: Achievement | null,
     newAch: Omit<Achievement, 'id'>,
     field: K
-): any {
-    return editingAch ? editingAch[field] : (newAch as any)[field];
+): unknown {
+    if (editingAch) {
+        return editingAch[field];
+    }
+    if (field === 'id') {
+        return undefined;
+    }
+    return (newAch as Record<string, unknown>)[field as string];
 }
 
 // ─── Helper: patch editingAch or newAch ──────────────────────────────────────
