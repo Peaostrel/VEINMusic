@@ -19,48 +19,65 @@ function parseMarkdownForNode(node: any, nodeIdx: number) {
     }
     const finalNodes: any[] = [];
     let lastIndex = 0;
-    while (true) {
-        const startBracket = node.indexOf('[', lastIndex);
-        if (startBracket === -1) break;
-
-        const endBracket = node.indexOf(']', startBracket);
-        if (endBracket === -1) break;
-
-        // Проверяем, идет ли сразу после ']' символ '('
-        if (endBracket + 1 >= node.length || node[endBracket + 1] !== '(') {
-            if (startBracket > lastIndex) {
-                finalNodes.push(node.substring(lastIndex, startBracket + 1));
-            } else {
-                finalNodes.push('[');
-            }
-            lastIndex = startBracket + 1;
-            continue;
+    while (lastIndex < node.length) {
+        const link = findNextLink(node, lastIndex);
+        if (!link) {
+            finalNodes.push(node.substring(lastIndex));
+            break;
         }
 
-        const endParenthesis = node.indexOf(')', endBracket + 2);
-        if (endParenthesis === -1) break;
-
-        // Нашли ссылку!
-        if (startBracket > lastIndex) {
-            finalNodes.push(node.substring(lastIndex, startBracket));
+        if (link.startBracket > lastIndex) {
+            finalNodes.push(node.substring(lastIndex, link.startBracket));
         }
-
-        const linkText = node.substring(startBracket + 1, endBracket);
-        const linkUrl = node.substring(endBracket + 2, endParenthesis);
 
         finalNodes.push(
-            <a key={`md-${nodeIdx}-${startBracket}`} href={linkUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline font-bold">
-                {linkText}
+            <a key={`md-${nodeIdx}-${link.startBracket}`} href={link.linkUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline font-bold">
+                {link.linkText}
             </a>
         );
 
-        lastIndex = endParenthesis + 1;
+        lastIndex = link.endParenthesis + 1;
     }
 
-    if (lastIndex < node.length) {
-        finalNodes.push(node.substring(lastIndex));
-    }
     return finalNodes;
+}
+
+interface ParsedLink {
+    startBracket: number;
+    endBracket: number;
+    endParenthesis: number;
+    linkText: string;
+    linkUrl: string;
+}
+
+function findNextLink(node: string, lastIndex: number): ParsedLink | null {
+    let searchStart = lastIndex;
+    while (true) {
+        const startBracket = node.indexOf('[', searchStart);
+        if (startBracket === -1) {
+            return null;
+        }
+
+        const endBracket = node.indexOf(']', startBracket);
+        if (endBracket === -1) {
+            return null;
+        }
+
+        if (endBracket + 1 < node.length && node[endBracket + 1] === '(') {
+            const endParenthesis = node.indexOf(')', endBracket + 2);
+            if (endParenthesis !== -1) {
+                return {
+                    startBracket,
+                    endBracket,
+                    endParenthesis,
+                    linkText: node.substring(startBracket + 1, endBracket),
+                    linkUrl: node.substring(endBracket + 2, endParenthesis),
+                };
+            }
+        }
+
+        searchStart = startBracket + 1;
+    }
 }
 
 function renderDescriptionWithLinks(desc: string, meta: string | null, url: string | null, name: string) {
