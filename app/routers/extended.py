@@ -63,24 +63,31 @@ except Exception as e:
 CACHE = {}
 MAX_CACHE_SIZE = 500
 
-def get_from_cache(key: str, ttl: int = 300):
+def _get_from_redis(key: str, ttl: int):
     global redis_client
-    if redis_client:
-        try:
-            val = redis_client.get(key)
-            if val is not None:
-                entry = json.loads(val)
-                if time.time() - entry.get('ts', 0) < ttl:
-                    return entry.get('data')
-                else:
-                    try:
-                        redis_client.delete(key)
-                    except Exception:
-                        pass
-            return None
-        except Exception as e:
-            import logging
-            logging.warning(f"Redis error in get_from_cache: {e}. Falling back to in-memory.")
+    if not redis_client:
+        return None
+    try:
+        val = redis_client.get(key)
+        if val is not None:
+            entry = json.loads(val)
+            if time.time() - entry.get('ts', 0) < ttl:
+                return entry.get('data')
+            else:
+                try:
+                    redis_client.delete(key)
+                except Exception:
+                    pass
+        return None
+    except Exception as e:
+        import logging
+        logging.warning(f"Redis error in get_from_cache: {e}. Falling back to in-memory.")
+    return None
+
+def get_from_cache(key: str, ttl: int = 300):
+    val = _get_from_redis(key, ttl)
+    if val is not None:
+        return val
     
     if key in CACHE:
         entry = CACHE[key]

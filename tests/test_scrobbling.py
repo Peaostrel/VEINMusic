@@ -81,7 +81,7 @@ def test_auto_achievements_flow(auth_client, db, test_user):
     assert user_ach is not None
     
     # Verify level calculation
-    level, rank, total_xp, theme = get_user_level_info(test_user, db)
+    level, rank, _, _ = get_user_level_info(test_user, db)
     assert level >= 1
     assert rank in ["Турист", "Меломан", "Аудиофил", "Маньяк", "Легенда", "Божество"]
 
@@ -92,7 +92,7 @@ def test_anti_cheat_triggered(auth_client, db, test_user):
     
     # Insert 45 scrobbles in the last hour
     now = datetime.datetime.now(datetime.timezone.utc)
-    for i in range(45):
+    for _ in range(45):
         s = Scrobble(user_id=test_user.id, track_id=track.id, played_at=now, listened_sec=120, source="yandex")
         db.add(s)
     db.commit()
