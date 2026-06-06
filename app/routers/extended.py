@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 import re
 import urllib.parse
 TRACK_PATH = "/track/"
+YANDEX_MUSIC_DOMAIN = "music.yandex.ru"
 import httpx
 import time
 import uuid
@@ -219,6 +220,27 @@ router = APIRouter(tags=["extended"])
 
 
 
+# --- /api/user/mood ---
+@router.get("/api/user/mood")
+def get_user_mood(username: str, db: Annotated[Session, Depends(get_db)]):
+    user = db.query(User).filter(User.username == username).first()
+    if not user: raise HTTPException(404)
+    
+    # Analyze last 10 tracks
+    recent = db.query(Track.genre, Track.title).join(Scrobble).filter(Scrobble.user_id == user.id).order_by(Scrobble.id.desc()).limit(10).all()
+    if not recent: return {"mood": "Тишина", "emoji": "😶"}
+    
+    genres = [r[0].lower() if r[0] else "" for r in recent]
+    titles = [r[1].lower() if r[1] else "" for r in recent]
+    
+    if any(g in ['rock', 'metal', 'phonk'] for g in genres): return {"mood": "Энергичный хайп", "emoji": "🔥"}
+    if any(g in ['lofi', 'jazz', 'ambient', 'classical'] for g in genres): return {"mood": "Фокус и чилл", "emoji": "📚"}
+    if any(g in ['pop', 'dance', 'electronic'] for g in genres): return {"mood": "Танцевальный вайб", "emoji": "💃"}
+    if any(w in titles for w in ['sad', 'lonely', 'rain', 'cry']): return {"mood": "Меланхолия", "emoji": "🌧️"}
+    
+    return {"mood": "Меломан", "emoji": "🎧"}
+
+
 # --- /api/user/{username} ---
 @router.get("/api/user/{username}")
 def get_user_info(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
@@ -247,7 +269,8 @@ def get_user_info(username: str, request: Request, db: Annotated[Session, Depend
         "spotify_linked": bool(user.integration.spotify_refresh_token), "yandex_linked": bool(user.integration.yandex_token),
         "lastfm_username": user.integration.lastfm_username, "last_sync": user.integration.last_sync, "role": role,
         "achievements": [{"id": a.id, "name": a.name, "description": a.description, "icon": a.icon, "target_image": a.target_image, "reward_xp": a.reward_xp, "is_displayed": ua.is_displayed, "earned_at": ua.earned_at} for a, ua in ach_data],
-        "streak": get_active_streak(user)
+        "streak": get_active_streak(user),
+        "api_key": user.api_key if is_owner else None
     }
 
 
@@ -437,25 +460,7 @@ def get_wrapped_stats(username: str, db: Annotated[Session, Depends(get_db)]):
     }
 
 
-# --- /api/user/mood ---
-@router.get("/api/user/mood")
-def get_user_mood(username: str, db: Annotated[Session, Depends(get_db)]):
-    user = db.query(User).filter(User.username == username).first()
-    if not user: raise HTTPException(404)
-    
-    # Analyze last 10 tracks
-    recent = db.query(Track.genre, Track.title).join(Scrobble).filter(Scrobble.user_id == user.id).order_by(Scrobble.id.desc()).limit(10).all()
-    if not recent: return {"mood": "Тишина", "emoji": "😶"}
-    
-    genres = [r[0].lower() if r[0] else "" for r in recent]
-    titles = [r[1].lower() if r[1] else "" for r in recent]
-    
-    if any(g in ['rock', 'metal', 'phonk'] for g in genres): return {"mood": "Энергичный хайп", "emoji": "🔥"}
-    if any(g in ['lofi', 'jazz', 'ambient', 'classical'] for g in genres): return {"mood": "Фокус и чилл", "emoji": "📚"}
-    if any(g in ['pop', 'dance', 'electronic'] for g in genres): return {"mood": "Танцевальный вайб", "emoji": "💃"}
-    if any(w in titles for w in ['sad', 'lonely', 'rain', 'cry']): return {"mood": "Меланхолия", "emoji": "🌧️"}
-    
-    return {"mood": "Меломан", "emoji": "🎧"}
+
 
 
 # --- /api/search/taste ---
@@ -481,7 +486,7 @@ def search_by_taste(my_username: str, db: Annotated[Session, Depends(get_db)]):
 @router.get("/api/feed/global")
 def get_global_feed(db: Annotated[Session, Depends(get_db)]):
     # Latest scrobbles from public users
-    scrobbles = db.query(Scrobble).join(User).filter(User.is_private == False).order_by(Scrobble.id.desc()).limit(20).all()
+    scrobbles = db.query(Scrobble).join(User).join(UserProfile).filter(UserProfile.is_private == False).order_by(Scrobble.id.desc()).limit(20).all()
     return {"feed": [format_history_item(s, s.track) for s in scrobbles]}
 
 
@@ -504,19 +509,19 @@ def get_detailed_stats(username: str, db: Annotated[Session, Depends(get_db)], p
     unique_tracks = db.query(func.count(func.distinct(Track.id))).join(Scrobble).filter(*base_filter).scalar() or 0
     
     # 2. Top Artists
-    top_artists_raw = db.query(Track.artist, func.count(Scrobble.id).label('plays'), Scrobble.source)\
+    top_artists_raw = db.query(Track.artist, func.count(Scrobble.id).label('plays'), func.max(Scrobble.source).label('source'))\
         .join(Scrobble).filter(*base_filter).group_by(Track.artist)\
         .order_by(text('plays DESC')).limit(10).all()
     
     # 3. Top Tracks
-    top_tracks_raw = db.query(Track.title, Track.artist, Track.cover_url, Track.track_url, func.count(Scrobble.id).label('plays'), Scrobble.source)\
-        .join(Scrobble).filter(*base_filter).group_by(Track.id)\
+    top_tracks_raw = db.query(Track.title, Track.artist, Track.cover_url, Track.track_url, func.count(Scrobble.id).label('plays'), func.max(Scrobble.source).label('source'))\
+        .join(Scrobble).filter(*base_filter).group_by(Track.id, Track.title, Track.artist, Track.cover_url, Track.track_url)\
         .order_by(text('plays DESC')).limit(10).all()
         
     # 4. Top Albums
-    top_albums_raw = db.query(Track.album, Track.artist, Track.cover_url, func.count(Scrobble.id).label('plays'), Scrobble.source)\
+    top_albums_raw = db.query(Track.album, Track.artist, Track.cover_url, func.count(Scrobble.id).label('plays'), func.max(Scrobble.source).label('source'))\
         .join(Scrobble).filter(*base_filter, Track.album != None)\
-        .group_by(Track.album, Track.artist)\
+        .group_by(Track.album, Track.artist, Track.cover_url)\
         .order_by(text('plays DESC')).limit(10).all()
 
     # 5. Genre & Source counts
@@ -525,7 +530,15 @@ def get_detailed_stats(username: str, db: Annotated[Session, Depends(get_db)], p
     
     # 6. Activity (Simplified for performance)
     # Note: Complex timezone grouping is better in Python if row count is low, but here we estimate
-    hours_raw = db.query(func.strftime('%H', Scrobble.played_at), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.strftime('%H', Scrobble.played_at)).all()
+    try:
+        is_postgres = db.get_bind().dialect.name == "postgresql"
+    except Exception:
+        is_postgres = True
+        
+    if is_postgres:
+        hours_raw = db.query(func.to_char(Scrobble.played_at, 'HH24'), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.to_char(Scrobble.played_at, 'HH24')).all()
+    else:
+        hours_raw = db.query(func.strftime('%H', Scrobble.played_at), func.count(Scrobble.id)).join(Track).filter(*base_filter).group_by(func.strftime('%H', Scrobble.played_at)).all()
     hours_activity = {f"{i:02d}": 0 for i in range(24)}
     for h, count in hours_raw: hours_activity[h] = count
 
@@ -646,8 +659,8 @@ def get_current_track(username: str, db: Annotated[Session, Depends(get_db)]):
 # --- /api/scrobble/{scrobble_id}/comments ---
 @router.get("/api/scrobble/{scrobble_id}/comments")
 def get_comments(scrobble_id: int, db: Annotated[Session, Depends(get_db)]):
-    comments = db.query(ScrobbleComment, User.username, User.avatar_url).join(User).filter(ScrobbleComment.scrobble_id == scrobble_id).all()
-    return [{"id": c.ScrobbleComment.id, "content": c.ScrobbleComment.content, "username": c.username, "avatar_url": c.profile.avatar_url, "created_at": c.ScrobbleComment.created_at} for c in comments]
+    comments = db.query(ScrobbleComment, User.username, UserProfile.avatar_url).join(User, ScrobbleComment.user_id == User.id).join(UserProfile, User.id == UserProfile.user_id).filter(ScrobbleComment.scrobble_id == scrobble_id).all()
+    return [{"id": c.ScrobbleComment.id, "content": c.ScrobbleComment.content, "username": c.username, "avatar_url": c.avatar_url, "created_at": c.ScrobbleComment.created_at} for c in comments]
 
 
 # --- /api/follow-stats/{viewer}/{profile} ---
@@ -776,7 +789,7 @@ async def smart_redirect(source: str, type: str, q: str):
 @router.get("/api/search/users")
 def search_users(q: str, db: Annotated[Session, Depends(get_db)]):
     if not q or len(q) < 2: return []
-    users = db.query(User).filter((User.username.ilike(f"%{q}%")) | (User.display_name.ilike(f"%{q}%"))).limit(10).all()
+    users = db.query(User).join(UserProfile).filter((User.username.ilike(f"%{q}%")) | (UserProfile.display_name.ilike(f"%{q}%"))).limit(10).all()
     res = []
     for u in users:
         lvl, rank, _, theme = get_user_level_info(u, db)

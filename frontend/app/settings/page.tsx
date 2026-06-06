@@ -225,7 +225,16 @@ function SettingsContent() {
   const removeSocialLink = (id: number) => setSocialLinks(socialLinks.filter(l => l.id !== id));
 
   const handleCopyKey = () => {
-    setStatus('API ключи вырезаны из настроек. Используйте cookie.');
+    if (userProfile?.api_key) {
+      navigator.clipboard.writeText(userProfile.api_key);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      setStatus('✅ API ключ скопирован в буфер обмена');
+      setTimeout(() => setStatus(''), 3000);
+    } else {
+      setStatus('⚠️ API ключ не найден!');
+      setTimeout(() => setStatus(''), 2000);
+    }
   };
 
   const handleSubmit = async (e: any) => {
@@ -248,6 +257,8 @@ function SettingsContent() {
         })
       });
       if (!res.ok) throw new Error('Ошибка при сохранении');
+      localStorage.setItem('site_theme', data.theme);
+      window.dispatchEvent(new Event('theme_update'));
       setStatus('✅ Успешно!'); 
       setTimeout(() => setStatus(''), 2000);
     } catch (err: any) { setStatus('❌ ' + err.message); }
@@ -352,6 +363,11 @@ function SettingsContent() {
                           countries={countries} cities={cities} 
                           isCityInputFocused={isCityInputFocused} setIsCityInputFocused={setIsCityInputFocused} 
                           onSelectFile={onSelectFile} 
+                          username={userProfile?.username || ""}
+                          socialLinks={socialLinks}
+                          addSocialLink={addSocialLink}
+                          updateSocialLink={updateSocialLink}
+                          removeSocialLink={removeSocialLink}
                       />
                   )}
 
@@ -376,7 +392,7 @@ function SettingsContent() {
                   <IntegrationsTab 
                       data={data} updateData={updateData} userProfile={userProfile} 
                       handleDisconnect={handleDisconnect} saveYandexToken={saveYandexToken} 
-                      startLastfmImport={startLastfmImport} userApiKey={""} 
+                      startLastfmImport={startLastfmImport} userApiKey={userProfile?.api_key || ""} 
                       handleCopyKey={handleCopyKey} copied={copied} API_URL={process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"} 
                   />
               )}

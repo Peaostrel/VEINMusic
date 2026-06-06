@@ -9,14 +9,20 @@ import Footer from './Footer';
  * Содержит: Navbar, Footer и общие стили.
  * Здесь же применен фикс для гидратации (suppressHydrationWarning).
  */
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+
+export const viewport: Viewport = {
+  themeColor: '#ffcc00',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
 
 export const metadata: Metadata = {
   title: 'VEIN Music',
   description: 'Твой музыкальный профиль',
   manifest: '/manifest.json',
-  themeColor: '#ffcc00',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',

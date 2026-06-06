@@ -168,7 +168,11 @@ export default function Home() {
                     >
                         <div className="flex items-center gap-4">
                             <div className="w-16 h-16 bg-black rounded-xl overflow-hidden shrink-0 shadow-lg relative">
-                                <img src={item.cover_url || "https://placehold.co/100x100/282828/ffcc00?text=🎵"} alt="Cover" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                {item.cover_url ? (
+                                    <img src={item.cover_url} alt="Cover" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                ) : (
+                                    <div className="w-full h-full bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-lg text-yellow-500/80 shadow-inner group-hover:scale-110 transition-transform duration-500">🎵</div>
+                                )}
                                 {item.is_playing && (
                                     <div className="absolute inset-0 bg-[var(--accent)]/10 animate-pulse flex items-center justify-center">
                                         <div className="flex gap-0.5 items-end h-3">

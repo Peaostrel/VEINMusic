@@ -367,7 +367,11 @@ export default function AdminPanel() {
                   {stats.tracks?.map(t => (
                       <div key={t.id} className="bg-[#1a1010] border border-red-900/10 hover:border-red-500/50 transition-colors p-3 rounded-xl flex items-center justify-between group">
                           <div className="flex items-center gap-4 truncate">
-                              <img src={t.cover_url || "https://placehold.co/50x50/222/ffcc00?text=🎵"} className="w-12 h-12 rounded object-cover border border-white/5 shrink-0" alt="cover"/>
+                              {t.cover_url ? (
+                                  <img src={t.cover_url} className="w-12 h-12 rounded object-cover border border-white/5 shrink-0" alt="cover"/>
+                              ) : (
+                                  <div className="w-12 h-12 rounded bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-sm text-yellow-500/80 shrink-0 shadow-inner">🎵</div>
+                              )}
                               <div className="truncate">
                                   <div className="font-bold text-white text-sm truncate">{t.title}</div>
                                   <div className="text-xs text-gray-400 truncate">{t.artist}</div>

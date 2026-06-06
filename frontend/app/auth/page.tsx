@@ -18,6 +18,12 @@ export default function Auth() {
     if (storedUser) {
       setUsername(storedUser);
       setStep('success');
+      // Load api_key for already-logged-in user
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+      fetch(`${API_URL}/api/user/${storedUser}`, { credentials: 'include' })
+        .then(r => r.json())
+        .then(d => { if (d.api_key) setApiKey(d.api_key); })
+        .catch(() => {});
     }
   }, []);
 
@@ -63,6 +69,13 @@ export default function Auth() {
 
       localStorage.setItem('username', data.username);
       window.dispatchEvent(new Event('themeChanged'));
+
+      // Fetch api_key from user profile (returned only to the owner via cookie)
+      try {
+        const profileRes = await fetch(`${API_URL}/api/user/${data.username}`, { credentials: 'include' });
+        const profileData = await profileRes.json();
+        if (profileData.api_key) setApiKey(profileData.api_key);
+      } catch {}
 
       setStep('success');
       
@@ -140,7 +153,7 @@ export default function Auth() {
             <h2 className="text-2xl font-black text-white mb-2">ПРОВЕРКА СВЯЗИ</h2>
             <p className="text-gray-400 text-sm mb-6">Твой личный API ключ для работы:</p>
             
-            <div className="bg-[#121212] border border-white/10 text-[var(--accent)] font-mono text-sm p-4 rounded-xl mb-6 select-all overflow-x-auto shadow-inner">
+            <div className="bg-[#121212] border border-white/10 font-mono text-sm p-4 rounded-xl mb-6 select-all overflow-x-auto shadow-inner" style={{color: 'var(--accent)'}}>
               {apiKey}
             </div>
             

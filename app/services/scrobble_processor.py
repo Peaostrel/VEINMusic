@@ -55,6 +55,8 @@ def format_history_item(scrobble, track, db: Session = None, counters: dict = No
 
     data = {
         "id": scrobble.id,
+        "username": scrobble.user.username if scrobble.user else None,
+        "avatar_url": scrobble.user.profile.avatar_url if (scrobble.user and scrobble.user.profile) else None,
         "artist": track.artist, "title": track.title, "cover_url": track.cover_url,
         "track_url": track.track_url, "source": scrobble.source, "time": str(scrobble.played_at),
         "relative_time": rel_time,

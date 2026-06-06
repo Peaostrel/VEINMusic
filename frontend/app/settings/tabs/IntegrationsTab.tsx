@@ -60,7 +60,9 @@ export default function IntegrationsTab({
             <div className="absolute top-0 left-0 w-1 h-full bg-[#D51007]"></div>
             <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
-                    <img src="https://www.svgrepo.com/show/331464/lastfm.svg" className="w-12 h-12" alt="Last.fm" />
+                    <svg viewBox="0 0 24 24" fill="#D51007" className="w-12 h-12 shrink-0 drop-shadow-[0_0_8px_rgba(213,16,7,0.4)]" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M10.584 17.21l-.88-2.392s-1.43 1.594-3.573 1.594c-1.897 0-3.244-1.649-3.244-4.288 0-3.382 1.704-4.591 3.381-4.591 2.42 0 3.189 1.567 3.849 3.574l.88 2.749c.88 2.666 2.529 4.81 7.285 4.81 3.409 0 5.718-1.044 5.718-3.793 0-2.227-1.265-3.381-3.63-3.931l-1.758-.385c-1.21-.275-1.567-.77-1.567-1.595 0-.934.742-1.484 1.952-1.484 1.32 0 2.034.495 2.144 1.677l2.749-.33c-.22-2.474-1.924-3.492-4.729-3.492-2.474 0-4.893.935-4.893 3.932 0 1.87.907 3.051 3.189 3.601l1.87.44c1.402.33 1.869.907 1.869 1.704 0 1.017-.99 1.43-2.86 1.43-2.776 0-3.93-1.457-4.59-3.464l-.907-2.75c-1.155-3.573-2.997-4.893-6.653-4.893C2.144 5.333 0 7.89 0 12.233c0 4.18 2.144 6.434 5.993 6.434 3.106 0 4.591-1.457 4.591-1.457z"/>
+                    </svg>
                     <div><h3 className="font-bold text-lg text-white">Last.fm Import</h3><p className="text-sm text-gray-400">Импорт истории прослушиваний.</p></div>
                 </div>
                 <div className="flex flex-col gap-2 w-64">
@@ -86,7 +88,7 @@ export default function IntegrationsTab({
             <div className="bg-[#121212]/50 p-6 rounded-xl border border-white/5 flex flex-col gap-4 relative overflow-hidden shadow-md">
                 <div className="absolute top-0 left-0 w-1 h-full bg-[var(--accent)]"></div>
                 <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-4"><div className="w-12 h-12 bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] rounded-xl flex items-center justify-center text-black font-black text-2xl shadow-lg shrink-0">V</div><div><h3 className="font-bold text-lg text-white">Расширение VEIN</h3><p className="text-sm text-gray-400">Ключ для браузерного скробблера.</p></div></div>
+                    <div className="flex items-center gap-4"><div className="w-12 h-12 bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] rounded-xl flex items-center justify-center font-black text-2xl shadow-lg shrink-0" style={{color: 'var(--text-on-accent)'}}>V</div><div><h3 className="font-bold text-lg text-white">Расширение VEIN</h3><p className="text-sm text-gray-400">Ключ для браузерного скробблера.</p></div></div>
                     <div className="flex items-center gap-3 bg-[#1a1a1a] p-2 rounded-lg border border-white/5"><code className="text-[var(--accent-text)] px-3 font-mono text-sm">{userApiKey}</code><button type="button" onClick={handleCopyKey} className="bg-white/5 border border-white/10 text-white hover:text-[var(--accent-text)] px-3 py-1.5 rounded font-bold text-xs">{copied ? 'OK!' : 'Copy'}</button></div>
                 </div>
             </div>

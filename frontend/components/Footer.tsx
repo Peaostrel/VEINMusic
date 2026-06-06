@@ -7,8 +7,8 @@ export default function Footer() {
       <div className="max-w-6xl mx-auto px-4 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
         
         <div className="flex items-center gap-2 grayscale opacity-50 hover:grayscale-0 hover:opacity-100 transition-all duration-300">
-          <div className="w-6 h-6 bg-[var(--accent)] rounded flex items-center justify-center text-[#121212] font-black text-sm">V</div>
-          <span className="font-bold text-sm text-white tracking-widest">VEIN<span className="text-[var(--accent)]">Music</span></span>
+          <div className="w-6 h-6 bg-[var(--accent)] rounded flex items-center justify-center font-black text-sm" style={{color: 'var(--text-on-accent)'}}>V</div>
+          <span className="font-bold text-sm text-white tracking-widest">VEIN<span style={{color: 'var(--accent)'}}>Music</span></span>
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-6 text-sm font-medium text-gray-500">

@@ -13,6 +13,7 @@ const getPlatformIcon = (source: string) => {
         case 'soundcloud': return <img src="https://img.icons8.com/?size=100&id=13669&format=png&color=FF5500" alt="SoundCloud" className="w-4 h-4 shrink-0 object-contain drop-shadow-[0_0_5px_rgba(255,85,0,0.5)]" />;
         case 'apple_music': return <img src="https://img.icons8.com/?size=100&id=81TSi6Gqk0tm&format=png&color=FA243C" alt="Apple Music" className="w-4 h-4 shrink-0 object-contain drop-shadow-[0_0_5px_rgba(250,36,60,0.5)]" />;
         case 'yandex': return <img src="/yandex.png" alt="Яндекс" className="w-4 h-4 shrink-0 object-contain drop-shadow-[0_0_5px_var(--accent-glow)]" />;
+        case 'lastfm': return <svg viewBox="0 0 24 24" fill="#D51007" className="w-4 h-4 shrink-0 drop-shadow-[0_0_5px_rgba(213,16,7,0.5)]" xmlns="http://www.w3.org/2000/svg"><path d="M10.584 17.21l-.88-2.392s-1.43 1.594-3.573 1.594c-1.897 0-3.244-1.649-3.244-4.288 0-3.382 1.704-4.591 3.381-4.591 2.42 0 3.189 1.567 3.849 3.574l.88 2.749c.88 2.666 2.529 4.81 7.285 4.81 3.409 0 5.718-1.044 5.718-3.793 0-2.227-1.265-3.381-3.63-3.931l-1.758-.385c-1.21-.275-1.567-.77-1.567-1.595 0-.934.742-1.484 1.952-1.484 1.32 0 2.034.495 2.144 1.677l2.749-.33c-.22-2.474-1.924-3.492-4.729-3.492-2.474 0-4.893.935-4.893 3.932 0 1.87.907 3.051 3.189 3.601l1.87.44c1.402.33 1.869.907 1.869 1.704 0 1.017-.99 1.43-2.86 1.43-2.776 0-3.93-1.457-4.59-3.464l-.907-2.75c-1.155-3.573-2.997-4.893-6.653-4.893C2.144 5.333 0 7.89 0 12.233c0 4.18 2.144 6.434 5.993 6.434 3.106 0 4.591-1.457 4.591-1.457z"/></svg>;
         default: return <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 shrink-0 text-gray-400 drop-shadow-[0_0_5px_rgba(156,163,175,0.5)]"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>;
     }
 };
@@ -102,7 +103,7 @@ export default function DetailedStats() {
         return acc;
     }, {});
     const topSource = Object.keys(sourceCounts).sort((a,b) => sourceCounts[b] - sourceCounts[a])[0] || 'yandex';
-    const sourceNames: any = { spotify: 'Spotify', yandex: 'Яндекс Музыка', vk: 'ВКонтакте', youtube_music: 'YouTube Music', soundcloud: 'SoundCloud', apple_music: 'Apple Music' };
+    const sourceNames: any = { spotify: 'Spotify', yandex: 'Яндекс Музыка', vk: 'ВКонтакте', youtube_music: 'YouTube Music', soundcloud: 'SoundCloud', apple_music: 'Apple Music', lastfm: 'Last.fm' };
     
     const daysDivider = period === '7d' ? 7 : period === '30d' ? 30 : Math.max(Object.keys(activity_graph || {}).length, 1);
     const avgPerDay = Math.round(total_scrobbles / daysDivider);
@@ -133,7 +134,8 @@ export default function DetailedStats() {
                         <button 
                             key={p} 
                             onClick={() => setPeriod(p)}
-                            className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${period === p ? 'bg-[var(--accent)] text-[#121212] shadow-[0_0_15px_var(--accent-glow)]' : 'text-gray-400 hover:text-white'}`}
+                            className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${period === p ? 'bg-[var(--accent)] shadow-[0_0_15px_var(--accent-glow)]' : 'text-gray-400 hover:text-white'}`}
+                            style={period === p ? {color: 'var(--text-on-accent)'} : undefined}
                         >
                             {p === '7d' ? '7 Дней' : p === '30d' ? '30 Дней' : 'Всё время'}
                         </button>
@@ -232,7 +234,11 @@ export default function DetailedStats() {
                                 <div key={i} className="relative group">
                                     <div className="flex items-start gap-3 relative z-10 p-2 border border-transparent hover:border-white/5 rounded-xl transition-colors">
                                         <span className="text-gray-500 font-bold w-4 text-right shrink-0 mt-2">{i + 1}</span>
-                                        <img src={t.cover_url || "https://placehold.co/100x100/282828/ffcc00?text=🎵"} referrerPolicy="no-referrer" className="w-10 h-10 rounded shadow-sm object-cover shrink-0 mt-0.5" alt="cover"/>
+                                        {t.cover_url ? (
+                                            <img src={t.cover_url} referrerPolicy="no-referrer" className="w-10 h-10 rounded shadow-sm object-cover shrink-0 mt-0.5" alt="cover"/>
+                                        ) : (
+                                            <div className="w-10 h-10 rounded bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-sm text-yellow-500/80 shadow-sm shrink-0 mt-0.5">🎵</div>
+                                        )}
                                         <div className="flex-grow min-w-0">
                                             <div className="flex items-start gap-1.5 mb-0.5">
                                                 <div className="mt-1 shrink-0">{getPlatformIcon(t.source)}</div>

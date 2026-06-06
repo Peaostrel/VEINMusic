@@ -38,9 +38,13 @@ export default function GlobalFeed() {
                 {feed.map((s, i) => (
                     <div key={i} className="bg-[#121212]/50 backdrop-blur-md p-4 rounded-xl border border-white/5 flex items-center gap-4 hover:border-[var(--accent)] transition-all group cursor-pointer" onClick={() => router.push(`/user/${s.username}`)}>
                         <div className="relative shrink-0">
-                            <img src={s.cover_url || "https://placehold.co/100x100/282828/ffcc00?text=🎵"} className="w-14 h-14 rounded-lg object-cover shadow-lg group-hover:scale-105 transition-transform" onError={e => e.currentTarget.src = "https://placehold.co/100x100/282828/ffcc00?text=🎵"} />
+                            {s.cover_url ? (
+                                <img src={s.cover_url} className="w-14 h-14 rounded-lg object-cover shadow-lg group-hover:scale-105 transition-transform" alt="Cover" />
+                            ) : (
+                                <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-lg text-yellow-500/80 shadow-lg group-hover:scale-105 transition-transform">🎵</div>
+                            )}
                             <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full border-2 border-[#121212] overflow-hidden bg-black">
-                                <img src={s.avatar_url || `https://ui-avatars.com/api/?name=${s.username}&background=random`} className="w-full h-full object-cover" onError={e => e.currentTarget.src = `https://ui-avatars.com/api/?name=${s.username}&background=random`} />
+                                <img src={s.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${s.username}&backgroundColor=transparent`} className="w-full h-full object-cover bg-[#282828]" onError={e => e.currentTarget.src = `https://api.dicebear.com/9.x/micah/svg?seed=${s.username}&backgroundColor=transparent`} />
                             </div>
                         </div>
                         <div className="flex-grow min-w-0">
@@ -52,10 +56,8 @@ export default function GlobalFeed() {
                             <p className="text-gray-400 text-sm truncate">{s.artist}</p>
                         </div>
                         <div className="hidden md:block shrink-0">
-                             {s.is_playing ? (
+                             {s.is_playing && (
                                  <div className="bg-emerald-500/10 px-3 py-1 rounded-full text-[10px] font-black text-emerald-500 uppercase tracking-widest animate-pulse border border-emerald-500/20">Listening Now</div>
-                             ) : (
-                                 <div className="bg-white/5 px-3 py-1 rounded-full text-[10px] font-black text-gray-500 uppercase tracking-widest">{s.relative_time}</div>
                              )}
                         </div>
                     </div>

@@ -92,7 +92,7 @@ class Scrobble(Base):
     xp_earned = Column(Integer, default=1)
     is_imported = Column(Boolean, default=False)
     
-    user = relationship("User", back_populates="scrobbles")
+    user = relationship("User", back_populates="scrobbles", lazy="joined")
     track = relationship("Track")
 
 class Achievement(Base):

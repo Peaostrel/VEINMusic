@@ -49,6 +49,8 @@ const getPlatformIcon = (source: string) => {
       return <img src="https://img.icons8.com/?size=100&id=81TSi6Gqk0tm&format=png&color=FA243C" alt="Apple Music" className="w-4 h-4 shrink-0 object-contain drop-shadow-[0_0_5px_rgba(250,36,60,0.5)]" />;
     case 'yandex':
       return <img src="/yandex.png" alt="Яндекс" className="w-4 h-4 shrink-0 object-contain drop-shadow-[0_0_5px_var(--accent-glow)]" />;
+    case 'lastfm':
+      return <svg viewBox="0 0 24 24" fill="#D51007" className="w-4 h-4 shrink-0 drop-shadow-[0_0_5px_rgba(213,16,7,0.5)]" xmlns="http://www.w3.org/2000/svg"><path d="M10.584 17.21l-.88-2.392s-1.43 1.594-3.573 1.594c-1.897 0-3.244-1.649-3.244-4.288 0-3.382 1.704-4.591 3.381-4.591 2.42 0 3.189 1.567 3.849 3.574l.88 2.749c.88 2.666 2.529 4.81 7.285 4.81 3.409 0 5.718-1.044 5.718-3.793 0-2.227-1.265-3.381-3.63-3.931l-1.758-.385c-1.21-.275-1.567-.77-1.567-1.595 0-.934.742-1.484 1.952-1.484 1.32 0 2.034.495 2.144 1.677l2.749-.33c-.22-2.474-1.924-3.492-4.729-3.492-2.474 0-4.893.935-4.893 3.932 0 1.87.907 3.051 3.189 3.601l1.87.44c1.402.33 1.869.907 1.869 1.704 0 1.017-.99 1.43-2.86 1.43-2.776 0-3.93-1.457-4.59-3.464l-.907-2.75c-1.155-3.573-2.997-4.893-6.653-4.893C2.144 5.333 0 7.89 0 12.233c0 4.18 2.144 6.434 5.993 6.434 3.106 0 4.591-1.457 4.591-1.457z"/></svg>;
     default:
       return <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 shrink-0 text-gray-400 drop-shadow-[0_0_5px_rgba(156,163,175,0.5)]"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" /></svg>;
   }
@@ -90,7 +92,11 @@ const getTrackUrl = (t: any) => {
 const SocialIcons = {
   telegram: <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M11.944 0A12 12 0 000 12a12 12 0 0012 12 12 12 0 0012-12A12 12 0 0012 0a12 12 0 00-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 01.171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.892-.661 3.495-1.524 5.83-2.529 7.005-3.017 3.332-1.392 4.02-1.631 4.464-1.639z" /></svg>,
   vk: <svg viewBox="0 0 24 24" className="w-5 h-5"><rect width="24" height="24" rx="5.5" fill="#000" /><path fill="#fff" d="M15.5 17c-5.5 0-8.6-3.8-8.7-10h2.7c.1 4.5 2.1 6.4 3.7 6.8V7h2.5v3.9c1.5-.2 3.1-1.9 3.6-3.9h2.5c-.4 2.5-2.2 4.2-3.5 5 1.3.6 3.4 2 4.2 5h-2.8c-.6-2-2.2-3.5-4.2-3.7V17h-2z" /></svg>,
-  steam: <img src="https://www.svgrepo.com/show/473800/steam.svg" alt="Steam" className="w-5 h-5 brightness-0 invert group-hover:invert-0 transition-all duration-200" />,
+  steam: (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 transition-all duration-200" xmlns="http://www.w3.org/2000/svg">
+      <path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.454 1.012H7.54zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.253 0-2.265-1.014-2.265-2.265z" />
+    </svg>
+  ),
   github: <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.298 24 12c0-6.627-5.373-12-12-12z" /></svg>,
   instagram: <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" /></svg>
 };
@@ -579,7 +585,9 @@ export default function Profile() {
             className={`bg-red-500/10 border border-red-500/30 text-red-400 px-5 py-2.5 text-sm rounded-lg hover:bg-red-500/20 transition backdrop-blur-sm flex items-center gap-2 font-bold ${importLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
             title="Импортировать историю из Last.fm"
           >
-            <img src="https://www.svgrepo.com/show/353982/lastfm.svg" className="w-4 h-4" alt="Last.fm" />
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4" xmlns="http://www.w3.org/2000/svg">
+              <path d="M10.584 17.21l-.88-2.392s-1.43 1.594-3.573 1.594c-1.897 0-3.244-1.649-3.244-4.288 0-3.382 1.704-4.591 3.381-4.591 2.42 0 3.189 1.567 3.849 3.574l.88 2.749c.88 2.666 2.529 4.81 7.285 4.81 3.409 0 5.718-1.044 5.718-3.793 0-2.227-1.265-3.381-3.63-3.931l-1.758-.385c-1.21-.275-1.567-.77-1.567-1.595 0-.934.742-1.484 1.952-1.484 1.32 0 2.034.495 2.144 1.677l2.749-.33c-.22-2.474-1.924-3.492-4.729-3.492-2.474 0-4.893.935-4.893 3.932 0 1.87.907 3.051 3.189 3.601l1.87.44c1.402.33 1.869.907 1.869 1.704 0 1.017-.99 1.43-2.86 1.43-2.776 0-3.93-1.457-4.59-3.464l-.907-2.75c-1.155-3.573-2.997-4.893-6.653-4.893C2.144 5.333 0 7.89 0 12.233c0 4.18 2.144 6.434 5.993 6.434 3.106 0 4.591-1.457 4.591-1.457z"/>
+            </svg>
             {importLoading ? 'Запуск...' : 'Импорт Last.fm'}
           </button>
         )}
@@ -800,7 +808,11 @@ export default function Profile() {
 
               {u.favorite_artist && (
                 <a href={u.favorite_artist_url && u.favorite_artist_url !== '#' ? u.favorite_artist_url : getArtistUrl(u.favorite_artist, 'yandex')} target="_blank" rel="noreferrer" className="bg-[#121212]/80 p-3 pr-6 rounded-xl border border-white/5 hover:border-[var(--accent)] group transition-all shadow-md flex items-center gap-4 w-max max-w-full">
-                  <img src={u.favorite_artist_cover || "https://placehold.co/100x100/282828/ffcc00?text=🎤"} className="w-14 h-14 rounded-full object-cover group-hover:scale-110 transition-transform duration-500 shadow-inner shrink-0" onError={(e) => { e.currentTarget.src = "https://placehold.co/100x100/282828/ffcc00?text=🎤"; }} />
+                  {u.favorite_artist_cover ? (
+                    <img src={u.favorite_artist_cover} className="w-14 h-14 rounded-full object-cover group-hover:scale-110 transition-transform duration-500 shadow-inner shrink-0" alt="Artist" />
+                  ) : (
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-xl text-yellow-500 group-hover:scale-110 transition-transform duration-500 shadow-inner shrink-0">🎤</div>
+                  )}
                   <div className="text-left flex flex-col justify-center">
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Любимый артист</p>
                     <p className="font-black text-white group-hover:text-[var(--accent-text)] text-sm transition-colors whitespace-nowrap pr-4">{u.favorite_artist}</p>
@@ -810,7 +822,11 @@ export default function Profile() {
 
               {u.favorite_track && (
                 <a href={u.favorite_track_url && u.favorite_track_url !== '#' ? u.favorite_track_url : getTrackUrl({ artist: u.favorite_artist || '', title: u.favorite_track, source: 'yandex' })} target="_blank" rel="noreferrer" className="bg-[#121212]/80 p-3 pr-6 rounded-xl border border-white/5 hover:border-[var(--accent)] group transition-all shadow-md flex items-center gap-4 w-max max-w-full">
-                  <img src={u.favorite_track_cover || "https://placehold.co/100x100/282828/ffcc00?text=🎵"} className="w-14 h-14 rounded object-cover group-hover:scale-110 transition-transform duration-500 shadow-inner shrink-0" onError={(e) => { e.currentTarget.src = "https://placehold.co/100x100/282828/ffcc00?text=🎵"; }} />
+                  {u.favorite_track_cover ? (
+                    <img src={u.favorite_track_cover} className="w-14 h-14 rounded object-cover group-hover:scale-110 transition-transform duration-500 shadow-inner shrink-0" alt="Track" />
+                  ) : (
+                    <div className="w-14 h-14 rounded bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-xl text-yellow-500 group-hover:scale-110 transition-transform duration-500 shadow-inner shrink-0">🎵</div>
+                  )}
                   <div className="text-left flex flex-col justify-center">
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Любимый трек</p>
                     <p className="font-black text-white group-hover:text-[var(--accent-text)] text-sm transition-colors whitespace-nowrap pr-4">{u.favorite_track}</p>
@@ -820,7 +836,11 @@ export default function Profile() {
 
               {u.favorite_album && (
                 <a href={u.favorite_album_url && u.favorite_album_url !== '#' ? u.favorite_album_url : `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/redirect?source=yandex&type=album&q=${encodeURIComponent(((u.favorite_artist ? u.favorite_artist + ' ' : '') + u.favorite_album).trim())}`} target="_blank" rel="noreferrer" className="bg-[#121212]/80 p-3 pr-6 rounded-xl border border-white/5 hover:border-[var(--accent)] group transition-all shadow-md flex items-center gap-4 w-max max-w-full">
-                  <img src={u.favorite_album_cover || "https://placehold.co/100x100/282828/ffcc00?text=💿"} className="w-14 h-14 rounded-md object-cover group-hover:scale-110 transition-transform duration-500 shadow-inner shrink-0" onError={(e) => { e.currentTarget.src = "https://placehold.co/100x100/282828/ffcc00?text=💿"; }} />
+                  {u.favorite_album_cover ? (
+                    <img src={u.favorite_album_cover} className="w-14 h-14 rounded-md object-cover group-hover:scale-110 transition-transform duration-500 shadow-inner shrink-0" alt="Album" />
+                  ) : (
+                    <div className="w-14 h-14 rounded-md bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-xl text-yellow-500 group-hover:scale-110 transition-transform duration-500 shadow-inner shrink-0">💿</div>
+                  )}
                   <div className="text-left flex flex-col justify-center">
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Любимый альбом</p>
                     <p className="font-black text-white group-hover:text-[var(--accent-text)] text-sm transition-colors whitespace-nowrap pr-4">{u.favorite_album}</p>
@@ -842,7 +862,11 @@ export default function Profile() {
               <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
                 {recs.map((r, i) => (
                   <div key={i} className="min-w-[150px] bg-white/5 p-3 rounded-xl border border-white/5 hover:border-[var(--accent)] transition-all group">
-                    <img src={r.cover_url || "https://placehold.co/150x150/282828/ffcc00?text=🎤"} className="w-full aspect-square rounded-lg object-cover mb-3 group-hover:scale-105 transition-transform" />
+                    {r.cover_url ? (
+                      <img src={r.cover_url} className="w-full aspect-square rounded-lg object-cover mb-3 group-hover:scale-105 transition-transform" alt="Artist" />
+                    ) : (
+                      <div className="w-full aspect-square rounded-lg bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-3xl text-yellow-500 mb-3 group-hover:scale-105 transition-transform">🎤</div>
+                    )}
                     <p className="font-bold text-sm text-white truncate">{r.artist}</p>
                     <p className="text-[10px] text-gray-500 mt-1">{r.reason}</p>
                   </div>
@@ -863,7 +887,11 @@ export default function Profile() {
                     <li key={idx} className={`p-3 rounded-xl flex justify-between items-center transition-all duration-300 group relative ${isLatest ? 'bg-gradient-to-r from-white/10 to-transparent border-l-4 border-[var(--accent)] shadow-md' : 'bg-white/5 hover:bg-white/10 border border-transparent hover:border-white/5'}`}>
                       <div className="flex items-center gap-4 pr-2 w-full min-w-0">
                         <div className="w-12 h-12 rounded bg-black shrink-0 overflow-hidden shadow z-10 pointer-events-auto relative">
-                          <img src={item.cover_url || "https://placehold.co/100x100/282828/ffcc00?text=🎵"} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = "https://placehold.co/100x100/282828/ffcc00?text=🎵"; }} />
+                          {item.cover_url ? (
+                            <img src={item.cover_url} className="w-full h-full object-cover" alt="Cover" />
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-xl text-yellow-500/80 shadow-inner">🎵</div>
+                          )}
                         </div>
                         <div className="flex flex-col justify-center flex-grow min-w-[0] overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                           <div className="flex items-center gap-1.5 mb-0.5 w-max">
@@ -929,7 +957,7 @@ export default function Profile() {
 
         <div className="space-y-8">
           
-          {wrapped && (
+          {wrapped && wrapped.top_artist !== "Нет данных" && (
             <div className="bg-gradient-to-br from-[var(--accent)]/20 to-black p-6 rounded-2xl border border-[var(--accent)]/30 shadow-[0_0_30px_var(--accent-glow)] relative overflow-hidden group">
               <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--accent)]/10 blur-3xl rounded-full"></div>
               <h2 className="text-xl font-black mb-4 flex items-center gap-2 text-white"><span className="text-xl">📊</span> Итоги месяца</h2>
@@ -955,7 +983,11 @@ export default function Profile() {
               {data.stats.top_tracks?.map((item: any, idx: number) => (
                 <li key={idx} className={`p-2 rounded-xl flex gap-3 items-start transition-all border group relative ${item.is_playing ? 'bg-[var(--accent)]/10 border-[var(--accent)] shadow-[0_0_15px_var(--accent-glow)]' : 'bg-white/5 border-transparent hover:bg-white/10 hover:border-white/5'}`}>
                   <div className="relative w-10 h-10 rounded bg-[#1a1a1a] shrink-0 overflow-hidden shadow-sm mt-0.5">
-                    <img src={item.cover_url || "https://placehold.co/100x100/282828/ffcc00?text=🎵"} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" onError={(e) => { e.currentTarget.src = "https://placehold.co/100x100/282828/ffcc00?text=🎵"; }} />
+                    {item.cover_url ? (
+                      <img src={item.cover_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="Cover" />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-sm text-yellow-500/80 shadow-inner">🎵</div>
+                    )}
                   </div>
                   <div className="flex-grow min-w-[0] flex flex-col justify-center overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                     <div className="flex items-center gap-2 mb-0.5 w-max">

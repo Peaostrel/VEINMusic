@@ -120,14 +120,14 @@ print(f"Стрик: {data['streak']} дней")`;
 
         <section>
           <h2 className="text-2xl font-black text-white mb-4 flex items-center gap-3">
-            <span className="w-8 h-8 bg-[var(--accent)] rounded-lg flex items-center justify-center text-[#121212] text-sm">1</span>
+            <span className="w-8 h-8 bg-[var(--accent)] rounded-lg flex items-center justify-center text-sm font-black" style={{color: 'var(--text-on-accent)'}}>1</span>
             Аутентификация
           </h2>
           <div className="bg-[#121212]/60 backdrop-blur-md p-6 rounded-2xl border border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-gray-300 text-sm leading-relaxed">
               Для POST-запросов используй свой <code>api_key</code>. Публичные GET-запросы работают без ключа.
             </p>
-            <Link href="/settings" className="bg-white/5 hover:bg-[var(--accent)] hover:text-[#121212] px-5 py-2.5 rounded-xl font-bold text-sm transition-all border border-white/10 shrink-0 whitespace-nowrap">
+            <Link href="/settings" className="bg-white/5 hover:bg-[var(--accent)] hover:text-[var(--text-on-accent)] px-5 py-2.5 rounded-xl font-bold text-sm transition-all border border-white/10 shrink-0 whitespace-nowrap">
               Найти мой ключ
             </Link>
           </div>
@@ -135,7 +135,7 @@ print(f"Стрик: {data['streak']} дней")`;
 
         <section>
           <h2 className="text-2xl font-black text-white mb-6 flex items-center gap-3">
-            <span className="w-8 h-8 bg-[var(--accent)] rounded-lg flex items-center justify-center text-[#121212] text-sm">2</span>
+            <span className="w-8 h-8 bg-[var(--accent)] rounded-lg flex items-center justify-center text-sm font-black" style={{color: 'var(--text-on-accent)'}}>2</span>
             Эндпоинты (REST API)
           </h2>
           <div className="bg-[#121212]/60 backdrop-blur-md p-6 rounded-2xl border border-white/5 overflow-hidden shadow-2xl">
@@ -172,11 +172,11 @@ print(f"Стрик: {data['streak']} дней")`;
 
         <section>
           <h2 className="text-2xl font-black text-white mb-4 flex items-center gap-3">
-            <span className="w-8 h-8 bg-[var(--accent)] rounded-lg flex items-center justify-center text-[#121212] text-sm">3</span>
+            <span className="w-8 h-8 bg-[var(--accent)] rounded-lg flex items-center justify-center text-sm font-black" style={{color: 'var(--text-on-accent)'}}>3</span>
             Описание полей (Scrobble)
           </h2>
           <div className="bg-[#121212]/60 backdrop-blur-md p-6 rounded-2xl border border-white/5 space-y-3">
-             <div className="flex items-center gap-2"><code className="text-[var(--accent)] font-bold">api_key</code> <span className="text-gray-400 text-sm">- Твой секретный ключ для авторизации (строка).</span></div>
+             <div className="flex items-center gap-2"><code className="font-bold" style={{color: 'var(--accent)'}}>api_key</code> <span className="text-gray-400 text-sm">- Твой секретный ключ для авторизации (строка).</span></div>
              <div className="flex items-center gap-2"><code className="text-white font-bold">title</code> <span className="text-gray-400 text-sm">- Название трека (обязательное).</span></div>
              <div className="flex items-center gap-2"><code className="text-white font-bold">artist</code> <span className="text-gray-400 text-sm">- Имя исполнителя (обязательное).</span></div>
              <div className="flex items-center gap-2"><code className="text-white font-bold">source</code> <span className="text-gray-400 text-sm">- Источник (например: <code>discord_rpc</code>, <code>custom_script</code>).</span></div>
@@ -187,7 +187,7 @@ print(f"Стрик: {data['streak']} дней")`;
 
         <section>
           <h2 className="text-2xl font-black text-white mb-6 flex items-center gap-3">
-            <span className="w-8 h-8 bg-[var(--accent)] rounded-lg flex items-center justify-center text-[#121212] text-sm">4</span>
+            <span className="w-8 h-8 bg-[var(--accent)] rounded-lg flex items-center justify-center text-sm font-black" style={{color: 'var(--text-on-accent)'}}>4</span>
             Примеры кода
           </h2>
 

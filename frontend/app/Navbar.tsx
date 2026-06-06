@@ -110,10 +110,12 @@ export default function Navbar() {
       root.style.setProperty('--accent-text', accentText);
       if (isRainbow) { 
           root.classList.add('theme-rainbow'); 
-          root.style.removeProperty('--accent');
-          root.style.removeProperty('--accent-hover');
-          root.style.removeProperty('--accent-glow');
-          root.style.removeProperty('--accent-glow-strong');
+          // Set rainbow starting values immediately so var(--accent) is never undefined
+          // JS interval takes over in 40ms with smooth animation
+          root.style.setProperty('--accent', '#ff0044');
+          root.style.setProperty('--accent-hover', '#ff0044');
+          root.style.setProperty('--accent-glow', 'rgba(255, 0, 68, 0.3)');
+          root.style.setProperty('--accent-glow-strong', 'rgba(255, 0, 68, 0.6)');
       } 
       else if (themeKey && themeKey.startsWith('#')) {
           root.classList.remove('theme-rainbow');
@@ -158,22 +160,29 @@ export default function Navbar() {
     if (currentTheme !== 'rainbow') return;
     const root = document.documentElement;
     let hue = 0;
+
+    // Convert hsl(h, 100%, 50%) to RGB luminance to pick readable text color
+    const getLuminance = (h: number) => {
+      const s = 1, l = 0.5;
+      const k = (n: number) => (n + h / 30) % 12;
+      const a = s * Math.min(l, 1 - l);
+      const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+      const r = f(0) * 255, g = f(8) * 255, b = f(4) * 255;
+      return (r * 299 + g * 587 + b * 114) / 1000;
+    };
+
     const interval = setInterval(() => {
         hue = (hue + 2) % 360;
         root.style.setProperty('--accent', `hsl(${hue}, 100%, 50%)`);
         root.style.setProperty('--accent-hover', `hsl(${hue}, 100%, 50%)`);
         root.style.setProperty('--accent-glow', `hsla(${hue}, 100%, 100%, 0.3)`);
         root.style.setProperty('--accent-glow-strong', `hsla(${hue}, 100%, 100%, 0.6)`);
+        // Dynamically switch button text to stay readable
+        const lum = getLuminance(hue);
+        root.style.setProperty('--text-on-accent', lum > 140 ? '#121212' : '#ffffff');
     }, 40);
     return () => {
         clearInterval(interval);
-        // Безопасный возврат
-        if (typeof document !== 'undefined') {
-            document.documentElement.style.removeProperty('--accent');
-            document.documentElement.style.removeProperty('--accent-hover');
-            document.documentElement.style.removeProperty('--accent-glow');
-            document.documentElement.style.removeProperty('--accent-glow-strong');
-        }
     };
   }, [currentTheme]);
 
@@ -184,7 +193,11 @@ export default function Navbar() {
         setUsername(storedUser);
         fetch(`${API_URL}/api/user/${storedUser}`, { credentials: 'include' }).then(res => res.json()).then(data => { 
                 setUserProfile(data);
-                if (data.theme) { localStorage.setItem('site_theme', data.theme); window.dispatchEvent(new Event('theme_update')); }
+                // Only apply DB theme on first load — don't override theme the user has already chosen this session
+                if (data.theme && !localStorage.getItem('site_theme')) { 
+                    localStorage.setItem('site_theme', data.theme); 
+                    window.dispatchEvent(new Event('theme_update')); 
+                }
         }).catch(() => {});
       }
   }, []);
@@ -226,25 +239,16 @@ export default function Navbar() {
   return (
     <>
       <style>{`
-        @property --accent { syntax: '<color>'; inherits: true; initial-value: #ffcc00; }
-        @property --accent-glow { syntax: '<color>'; inherits: true; initial-value: rgba(255,204,0,0.3); }
-        .theme-rainbow { animation: rainbow-anim 4s linear infinite !important; --accent-hover: var(--accent) !important; --accent-glow-strong: var(--accent-glow) !important; }
-        @keyframes rainbow-anim {
-            0% { --accent: #ff0044; --accent-glow: rgba(255,0,68,0.3); }
-            25% { --accent: #aa00ff; --accent-glow: rgba(170,0,255,0.3); }
-            50% { --accent: #00eeff; --accent-glow: rgba(0,238,255,0.3); }
-            75% { --accent: #00ffaa; --accent-glow: rgba(0,255,170,0.3); }
-            100% { --accent: #ff0044; --accent-glow: rgba(255,0,68,0.3); }
-        }
+        .navbar-accent { color: var(--accent) !important; filter: drop-shadow(0 0 10px var(--accent-glow-strong)); }
         ::selection { background-color: var(--accent) !important; color: #000 !important; }
       `}</style>
       <nav className="fixed top-4 left-1/2 -translate-x-1/2 w-[95%] max-w-6xl z-50">
         <div className="bg-[#121212]/70 backdrop-blur-xl border border-white/5 rounded-2xl px-4 py-3 flex items-center justify-between shadow-[0_8px_30px_rgb(0,0,0,0.4)] gap-4">
           <Link href="/" className="flex items-center gap-3 group shrink-0">
             <div className="w-10 h-10 bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] rounded-xl flex items-center justify-center text-[var(--text-on-accent)] font-black text-2xl group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shadow-[0_0_15px_var(--accent-glow)]">V</div>
-            <span className="font-black text-2xl tracking-tight hidden lg:block text-white">
+            <span className="font-black text-2xl tracking-tight hidden lg:block" style={{color: 'white'}}>
                 VEIN
-                <span className="text-[var(--accent)] drop-shadow-[0_0_10px_var(--accent-glow-strong)] transition-colors duration-500">Music</span>
+                <span style={{color: 'var(--accent)', filter: 'drop-shadow(0 0 10px var(--accent-glow-strong))'}}>Music</span>
             </span>
           </Link>
           <div className="flex-grow max-w-md relative" ref={searchRef}>

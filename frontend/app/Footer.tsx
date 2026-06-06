@@ -33,8 +33,8 @@ export default function Footer() {
           {/* Колонка 1: Описание */}
           <div className="flex flex-col gap-2">
             <Link href="/" className="flex items-center gap-2 font-black text-xl tracking-tight text-white group w-fit">
-              <div className="w-7 h-7 bg-[var(--accent)] rounded-lg flex items-center justify-center text-white font-black text-base group-hover:scale-105 transition-transform">V</div>
-              <span>VEIN<span className="text-[var(--accent)]">Music</span></span>
+              <div className="w-7 h-7 bg-[var(--accent)] rounded-lg flex items-center justify-center font-black text-base group-hover:scale-105 transition-transform" style={{color: 'var(--text-on-accent)'}}>V</div>
+              <span>VEIN<span style={{color: 'var(--accent)'}}>Music</span></span>
             </Link>
             <p className="text-gray-500 text-xs mt-1 leading-relaxed max-w-xs">
               Автоматический трекинг прослушиваний. Твоя музыкальная жизнь в одном дашборде.

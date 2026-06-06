@@ -42,7 +42,7 @@ export default function About() {
 
       {/* HERO Section */}
       <div className="text-center py-20 relative z-10 w-full flex flex-col items-center">
-        <div className="w-20 h-20 bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] rounded-3xl flex items-center justify-center text-white font-black text-4xl shadow-[0_0_40px_var(--accent-glow-strong)] mb-8 animate-float">
+        <div className="w-20 h-20 bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] rounded-3xl flex items-center justify-center font-black text-4xl shadow-[0_0_40px_var(--accent-glow-strong)] mb-8 animate-float" style={{color: 'var(--text-on-accent)'}}>
           V
         </div>
         
