@@ -966,7 +966,7 @@ function ProfileActions({
   onShowWrapped,
   onListenTogether,
   router
-}: ProfileActionsProps) {
+}: Readonly<ProfileActionsProps>) {
   return (
     <div className="flex flex-wrap justify-end gap-4 mb-4 pt-4">
       {isLogged && !isMyProfile && (
@@ -1035,7 +1035,7 @@ function ProfileHeaderSection({
   openFollowModal,
   displayedAchs,
   router
-}: ProfileHeaderSectionProps) {
+}: Readonly<ProfileHeaderSectionProps>) {
   return (
     <div className="px-6 md:px-10 pb-8 pt-0 flex flex-col md:flex-row items-center md:items-start md:gap-8 relative z-10">
       <div className="relative shrink-0 z-20 -mt-20 md:-mt-24 mb-4 md:mb-0 group flex flex-col items-center">
@@ -1150,7 +1150,7 @@ function ProfileStatsSection({
   socialLinks,
   countries,
   favoriteAlbumRedirectUrl
-}: ProfileStatsSectionProps) {
+}: Readonly<ProfileStatsSectionProps>) {
   return (
     <div className="px-6 md:px-10 pb-8">
       <div className="max-w-md bg-[#121212]/50 p-3 rounded-xl border border-white/5 backdrop-blur-sm mb-5 shadow-lg mx-auto md:mx-0">
