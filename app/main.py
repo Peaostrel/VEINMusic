@@ -49,6 +49,10 @@ async def lifespan(app: FastAPI):
     # Cancel background tasks on shutdown
     for t in set(background_tasks):
         t.cancel()
+        
+    from app.core import redis
+    if redis.arq_pool:
+        await redis.arq_pool.close()
 
 # Setup Rate Limiting
 limiter = Limiter(key_func=get_remote_address)

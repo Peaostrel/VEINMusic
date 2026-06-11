@@ -10,22 +10,15 @@ from app.schemas import ScrobbleData, LikeRequest, CommentRequest
 from app.core.security import get_current_user, get_current_user_optional
 from app.services.scrobble_processor import process_scrobble, format_history_item
 from typing import Optional
+from app.core.redis import redis_lock
 
 router = APIRouter(prefix="/api", tags=["scrobbling"])
-
-USER_SCROBBLE_LOCKS = {}
-
-def get_user_lock(user_id: int):
-    if user_id not in USER_SCROBBLE_LOCKS:
-        USER_SCROBBLE_LOCKS[user_id] = asyncio.Lock()
-    return USER_SCROBBLE_LOCKS[user_id]
 
 @router.post("/scrobble", responses={500: {"description": "Internal server error"}})
 async def add_scrobble(data: ScrobbleData, background_tasks: BackgroundTasks, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
-    lock = get_user_lock(user.id)
     
-    async with lock:
+    async with redis_lock(f"scrobble_lock:{user.id}", expire_sec=10):
         try:
             # Anti-Cheat: Max 40 scrobbles per hour
             now = datetime.now(timezone.utc)
@@ -45,8 +38,8 @@ async def add_scrobble(data: ScrobbleData, background_tasks: BackgroundTasks, db
 
             res = await process_scrobble(db, user, data.title, data.artist, data.cover_url, data.track_url, data.source, data.progress_sec, data.is_playing, data.duration, data.album)
             
-            from app.routers.extended import run_check_achievements_bg
-            background_tasks.add_task(run_check_achievements_bg, user.id)
+            from app.core.redis import enqueue_background_task
+            await enqueue_background_task('check_achievements', user.id, background_tasks=background_tasks)
             
             return {"status": res}
         except Exception:

@@ -11,3 +11,4 @@ slowapi
 asyncpg
 alembic
 redis
+arq
