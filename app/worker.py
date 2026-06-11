@@ -8,8 +8,7 @@ from app.routers.extended import check_auto_achievements
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
-async def check_achievements(ctx, user_id: int):
-    """arq background job to check and award auto-achievements for a user."""
+def _sync_check_achievements(user_id: int):
     db = SessionLocal()
     try:
         # Run synchronous DB query and achievements checker
@@ -21,10 +20,17 @@ async def check_achievements(ctx, user_id: int):
     finally:
         db.close()
 
+async def check_achievements(ctx, user_id: int):
+    """arq background job to check and award auto-achievements for a user."""
+    # Execute synchronous database operations in a separate thread pool to prevent blocking the worker event loop
+    await asyncio.to_thread(_sync_check_achievements, user_id)
+
 async def startup(ctx):
+    await asyncio.sleep(0)
     print("arq worker starting up...")
 
 async def shutdown(ctx):
+    await asyncio.sleep(0)
     print("arq worker shutting down...")
 
 class WorkerSettings:
