@@ -71,7 +71,7 @@ export default function About() {
           { label: 'Треков в базе', value: (stats?.total_tracks || 0).toLocaleString() + ' 💿' },
           { label: 'Слушателей', value: (stats?.total_users || 0).toLocaleString() + ' 👥' },
           { label: 'Онлайн', value: (stats?.online || 0) + ' 🔥' }
-        ].map((item, idx) => (
+        ].map((item) => (
           <div key={item.label} className="bg-[#121212]/60 backdrop-blur-md border border-white/5 p-6 rounded-2xl text-center shadow-lg hover:border-[var(--accent)]/30 transition-all group">
             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1 group-hover:text-[var(--accent)] transition-colors">{item.label}</p>
             <p className="text-xl md:text-3xl font-black text-white">{item.value}</p>
@@ -102,7 +102,7 @@ export default function About() {
               title: 'Ачивки и LVL (Для фана)',
               desc: 'Получай XP за прослушивание 85% длины трека. Прокачивай LVL и собирай достижения. Стрик сгорает, если пропустить день.'
             }
-          ].map((feat, idx) => (
+          ].map((feat) => (
             <div key={feat.title} className="bg-[#1a1a1a]/80 backdrop-blur-md border border-white/5 p-8 rounded-3xl hover:bg-[#1f1f1f] hover:border-[var(--accent)]/40 hover:-translate-y-2 transition-all duration-300 shadow-xl group">
               <div className="text-4xl mb-4 bg-[var(--accent)]/10 w-14 h-14 rounded-2xl flex items-center justify-center shadow-[0_0_15px_var(--accent-glow)] group-hover:scale-110 transition-transform">
                 {feat.icon}
@@ -122,7 +122,7 @@ export default function About() {
             { step: '1', title: 'Установи Расширение (Обязательно)', desc: 'Без него мы считывать музыку не умеем. Расширение зацепит плеер во вкладке в фоне.' },
             { step: '2', title: 'Врубай Музыку и Слушай', desc: 'Плееру нужна буквально 1 секунда, чтобы расширение поняло, что трек запустился. Оно следит мгновенно.' },
             { step: '3', title: 'Смотри Стату. Молимся на базу данных', desc: 'Каждая сессия сохраняется. Если база не занята — она появится в профиле за пару секунд.' }
-          ].map((item, idx) => (
+          ].map((item) => (
             <div key={item.step} className="bg-[#121212]/60 p-5 rounded-2xl border border-white/5 flex items-center gap-4 hover:bg-black/40 transition-colors shadow-md">
               <div className="w-12 h-12 bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] text-[var(--text-on-accent)] font-black text-xl rounded-xl flex items-center justify-center shadow-lg shrink-0">
                 {item.step}

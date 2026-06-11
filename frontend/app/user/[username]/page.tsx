@@ -304,7 +304,7 @@ export default function Profile() {
     return () => {
       if (wsRef.current) wsRef.current.close();
     };
-  }, [username, isMyProfile]);
+  }, [username, isMyProfile, router]);
 
 
 
@@ -619,7 +619,7 @@ export default function Profile() {
           <div className="bg-[#121212]/50 backdrop-blur-md p-6 rounded-2xl shadow-xl border border-white/5">
             <h2 className="text-xl font-black mb-4 flex items-center gap-2 text-[var(--accent-text)]"><span className="text-xl animate-fire">🔥</span> Топ треков</h2>
             <ul className="space-y-3">
-              {data.stats.top_tracks?.map((item: any, idx: number) => (
+              {data.stats.top_tracks?.map((item: any) => (
                 <li key={item.title + item.artist} className={`p-2 rounded-xl flex gap-3 items-start transition-all border group relative ${item.is_playing ? 'bg-[var(--accent)]/10 border-[var(--accent)] shadow-[0_0_15px_var(--accent-glow)]' : 'bg-white/5 border-transparent hover:bg-white/10 hover:border-white/5'}`}>
                   <div className="relative w-10 h-10 rounded bg-[#1a1a1a] shrink-0 overflow-hidden shadow-sm mt-0.5">
                     {item.cover_url ? (

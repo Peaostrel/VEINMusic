@@ -1,7 +1,7 @@
 export default function IntegrationsTab({ 
     data, updateData, userProfile, 
     handleDisconnect, saveYandexToken, 
-    startLastfmImport, userApiKey, 
+    startLastfmImport, 
     generatedApiKey, handleGenerateApiKey,
     handleCopyKey, copied, API_URL
 }: any) {

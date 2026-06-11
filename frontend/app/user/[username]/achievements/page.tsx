@@ -3,10 +3,6 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 
-function escapeRegExp(str: string) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
-}
-
 function getRarityStyle(rarity: number): string {
     if (rarity < 10) return 'bg-orange-500/10 text-orange-400 border-orange-500/20';
     if (rarity < 30) return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
