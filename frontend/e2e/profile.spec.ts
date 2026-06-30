@@ -1,10 +1,11 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Profile Page Flow', () => {
-  const testUser = `testuser_${Date.now()}`;
+  let testUser: string;
   const testPassword = 'testpassword123';
 
   test.beforeEach(async ({ page }) => {
+    testUser = `testuser_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
     // Register the user first to ensure they exist
     await page.goto('/auth');
     await page.getByRole('button', { name: /Нет аккаунта\? Зарегистрироваться/i }).click();
