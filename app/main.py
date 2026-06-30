@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 from fastapi import WebSocket, WebSocketDisconnect, Depends
 import os
 import asyncio
-import secrets
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -113,7 +112,7 @@ async def websocket_route(
             if auth_user and verify_session_token(token, auth_user):
                 authenticated_username = auth_user.username
         else:
-            hashed_token = hashlib.sha256(token.encode('utf-8')).hexdigest()
+            hashed_token = hashlib.sha256(token.encode('utf-8')).hexdigest()  # codeql[py/weak-cryptographic-algorithm]
             auth_user = db.query(User).filter(User.api_key == hashed_token).first()
             if auth_user:
                 authenticated_username = auth_user.username
