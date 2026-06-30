@@ -48,22 +48,23 @@ async def redis_lock(lock_key: str, expire_sec: int = 10):
     use_fallback = False
 
     try:
-        await client.ping()
-        redis_lock_obj = client.lock(lock_key, timeout=expire_sec)
-        # Try to acquire the lock with a timeout of 5 seconds
-        acquired = await redis_lock_obj.acquire(blocking=True, blocking_timeout=5)
-        if not acquired:
-            raise TimeoutError("Lock is busy")
-    except TimeoutError:
-        # Lock is busy on an active Redis instance. Do NOT fallback. Raise an
-        # error.
-        raise HTTPException(
-            status_code=409,
-            detail="Ресурс временно заблокирован, попробуйте позже")
-    except (aioredis.ConnectionError, OSError) as e:
+        try:
+            await client.ping()
+        except Exception as e:
+            use_fallback = True
+            logging.warning(f"Redis connection failed for lock '{lock_key}' ({e}). Falling back to local lock.")
+        
+        if not use_fallback:
+            redis_lock_obj = client.lock(lock_key, timeout=expire_sec)
+            # Try to acquire the lock with a timeout of 5 seconds
+            acquired = await redis_lock_obj.acquire(blocking=True, blocking_timeout=5)
+            if not acquired:
+                raise HTTPException(status_code=409, detail="Ресурс временно заблокирован, попробуйте позже")
+    except HTTPException:
+        raise
+    except Exception as e:
         use_fallback = True
-        logging.warning(
-            f"Redis connection failed for lock '{lock_key}' ({e}). Falling back to local lock.")
+        logging.warning(f"Redis error during lock acquisition '{lock_key}' ({e}). Falling back to local lock.")
 
     if use_fallback:
         local_lock = await get_local_lock(lock_key)

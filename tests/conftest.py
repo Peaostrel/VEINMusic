@@ -1,4 +1,4 @@
-from app.models import Achievement, User, UserProfile, UserIntegration
+from app.models import User, UserProfile, UserIntegration, Track, Scrobble, Achievement, UserAchievement, Follow, ScrobbleLike, ScrobbleComment
 from app.main import app
 from app.database import Base, get_db, engine, SessionLocal
 import os
