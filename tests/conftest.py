@@ -1,10 +1,6 @@
-from app.models import User, UserProfile, UserIntegration, Track, Scrobble, Achievement, UserAchievement, Follow, ScrobbleLike, ScrobbleComment
-from app.main import app
-from app.database import Base, get_db, engine, SessionLocal
 import os
 import sys
 import pytest
-from fastapi.testclient import TestClient
 
 # Setup system path to import app correctly
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -17,6 +13,11 @@ TEST_DB_URL = f"sqlite:///{TEST_DB_FILE}"
 # Force env vars for testing before importing database module
 os.environ["DATABASE_URL"] = TEST_DB_URL
 os.environ["REDIS_URL"] = "redis://mock_redis_disabled"
+
+from app.models import User, UserProfile, UserIntegration, Track, Scrobble, Achievement, UserAchievement, Follow, ScrobbleLike, ScrobbleComment  # noqa: E402, F401
+from app.main import app  # noqa: E402
+from app.database import Base, get_db, engine, SessionLocal  # noqa: E402, F401
+from fastapi.testclient import TestClient  # noqa: E402
 
 
 @pytest.fixture(scope="session", autouse=True)
