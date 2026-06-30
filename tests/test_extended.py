@@ -5,11 +5,17 @@ from app.models import User, Scrobble, Track
 from app.core.security import create_session_token
 from app.database import SessionLocal
 
+
 @pytest.fixture
 def auth_client(client):
-    client.post("/auth/register", json={"username": "extendeduser", "password": "password"})
+    client.post(
+        "/auth/register",
+        json={
+            "username": "extendeduser",
+            "password": "password"})
     client.headers["Origin"] = "http://localhost:3000"
     return client
+
 
 @pytest.fixture
 def auth_user(db, auth_client):
@@ -17,14 +23,20 @@ def auth_user(db, auth_client):
     db = SessionLocal()
     return db.query(User).filter(User.username == "extendeduser").first()
 
+
 def test_user_mood_empty(client, db, auth_user):
     resp = client.get(f"/api/user/mood?username={auth_user.username}")
     assert resp.status_code == 200
     data = resp.json()
     assert data["mood"] == "Тишина"
 
+
 def test_user_mood_rock(auth_client, db, auth_user):
-    track = Track(title="Rock Song", artist="Rock Band", genre="rock", duration=150)
+    track = Track(
+        title="Rock Song",
+        artist="Rock Band",
+        genre="rock",
+        duration=150)
     db.add(track)
     db.commit()
     scrobble = Scrobble(
@@ -36,10 +48,11 @@ def test_user_mood_rock(auth_client, db, auth_user):
     )
     db.add(scrobble)
     db.commit()
-    
+
     resp = auth_client.get(f"/api/user/mood?username={auth_user.username}")
     assert resp.status_code == 200
     assert resp.json()["mood"] == "Энергичный хайп"
+
 
 def test_get_wrapped_stats(auth_client, db, auth_user):
     # Setup some scrobbles
@@ -62,6 +75,7 @@ def test_get_wrapped_stats(auth_client, db, auth_user):
     assert data["top_artist"] == "Artist 1"
     assert data["total_minutes"] == 3
 
+
 def test_get_detailed_stats(auth_client, db, auth_user):
     track = Track(title="Detailed", artist="DetailArtist", duration=120)
     db.add(track)
@@ -75,8 +89,9 @@ def test_get_detailed_stats(auth_client, db, auth_user):
     )
     db.add(scrobble)
     db.commit()
-    
-    resp = auth_client.get(f"/api/detailed-stats/{auth_user.username}?period=all")
+
+    resp = auth_client.get(
+        f"/api/detailed-stats/{auth_user.username}?period=all")
     assert resp.status_code == 200
     data = resp.json()
     assert data["total_scrobbles"] == 1

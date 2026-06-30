@@ -1,5 +1,6 @@
 from fastapi import WebSocket
 
+
 class ConnectionManager:
     def __init__(self):
         self.active_connections: dict[str, list[WebSocket]] = {}
@@ -19,10 +20,12 @@ class ConnectionManager:
     async def broadcast_to_user(self, username: str, message: dict):
         if username in self.active_connections:
             for connection in self.active_connections[username]:
-                try: 
+                try:
                     await connection.send_json(message)
                 except Exception as e:
                     import logging
-                    logging.debug(f"Failed to send WS message to {username}: {e}")
+                    logging.debug(
+                        f"Failed to send WS message to {username}: {e}")
+
 
 manager = ConnectionManager()

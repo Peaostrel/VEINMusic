@@ -1,12 +1,15 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
-class UserCreate(BaseModel): 
+
+class UserCreate(BaseModel):
     username: str = Field(..., max_length=32)
     password: str = Field(..., max_length=128)
 
-class ScrobbleData(BaseModel): 
-    # api_key parameter is removed since we use cookies now, but we'll keep it optional for extension compatibility if needed
+
+class ScrobbleData(BaseModel):
+    # api_key parameter is removed since we use cookies now, but we'll keep it
+    # optional for extension compatibility if needed
     api_key: Optional[str] = None
     title: str
     artist: str
@@ -17,6 +20,7 @@ class ScrobbleData(BaseModel):
     progress_sec: Optional[int] = 0
     is_playing: Optional[bool] = True
     duration: Optional[int] = 0
+
 
 class ProfileUpdate(BaseModel):
     # api_key optional for compatibility, but we rely on cookies
@@ -47,11 +51,13 @@ class ProfileUpdate(BaseModel):
     hidden_artists: Optional[str] = ""
     lastfm_username: Optional[str] = None
 
-class LevelUpdate(BaseModel): 
+
+class LevelUpdate(BaseModel):
     api_key: Optional[str] = None
     new_level: int
 
-class AchCreate(BaseModel): 
+
+class AchCreate(BaseModel):
     api_key: Optional[str] = None
     name: str
     description: str
@@ -63,7 +69,8 @@ class AchCreate(BaseModel):
     target_image: Optional[str] = None
     reward_xp: int = 0
 
-class AchUpdate(BaseModel): 
+
+class AchUpdate(BaseModel):
     api_key: Optional[str] = None
     name: str
     description: str
@@ -75,36 +82,45 @@ class AchUpdate(BaseModel):
     target_image: Optional[str] = None
     reward_xp: int = 0
 
-class AchAssign(BaseModel): 
+
+class AchAssign(BaseModel):
     api_key: Optional[str] = None
     achievement_id: int
 
-class ToggleAch(BaseModel): 
+
+class ToggleAch(BaseModel):
     api_key: Optional[str] = None
     achievement_id: int
 
-class FollowAction(BaseModel): 
+
+class FollowAction(BaseModel):
     api_key: Optional[str] = None
 
-class VerifyUserRequest(BaseModel): 
+
+class VerifyUserRequest(BaseModel):
     api_key: Optional[str] = None
     is_verified: bool
 
-class MarkRead(BaseModel): 
+
+class MarkRead(BaseModel):
     ua_ids: List[int]
 
-class LikeRequest(BaseModel): 
+
+class LikeRequest(BaseModel):
     api_key: Optional[str] = None
 
-class CommentRequest(BaseModel): 
+
+class CommentRequest(BaseModel):
     api_key: Optional[str] = None
     content: str = Field(..., max_length=1000)
 
-class AdminUserUpdate(BaseModel): 
+
+class AdminUserUpdate(BaseModel):
     api_key: Optional[str] = None
     display_name: Optional[str] = None
     bio: Optional[str] = None
     avatar_url: Optional[str] = None
 
-class ApiKeyRequest(BaseModel): 
+
+class ApiKeyRequest(BaseModel):
     api_key: Optional[str] = None

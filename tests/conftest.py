@@ -1,3 +1,6 @@
+from app.models import Achievement, User, UserProfile, UserIntegration
+from app.main import app
+from app.database import Base, get_db, engine, SessionLocal
 import os
 import sys
 import pytest
@@ -15,9 +18,6 @@ TEST_DB_URL = f"sqlite:///{TEST_DB_FILE}"
 os.environ["DATABASE_URL"] = TEST_DB_URL
 os.environ["REDIS_URL"] = "redis://mock_redis_disabled"
 
-from app.database import Base, get_db, engine, SessionLocal
-from app.main import app
-from app.models import Achievement, User, UserProfile, UserIntegration
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_database():
@@ -27,10 +27,10 @@ def setup_test_database():
             os.remove(TEST_DB_FILE)
         except Exception:
             pass
-            
+
     # Create all tables
     Base.metadata.create_all(bind=engine)
-    
+
     # Seed default achievements
     db = SessionLocal()
     sample_achievements = [
@@ -65,15 +65,16 @@ def setup_test_database():
         db.add(db_ach)
     db.commit()
     db.close()
-    
+
     yield
-    
+
     # Clean up at the end of session
     if os.path.exists(TEST_DB_FILE):
         try:
             os.remove(TEST_DB_FILE)
         except Exception:
             pass
+
 
 @pytest.fixture(scope="function")
 def db():
@@ -90,6 +91,7 @@ def db():
                 db_cleanup.execute(table.delete())
         db_cleanup.commit()
         db_cleanup.close()
+
 
 @pytest.fixture(scope="function")
 def client(db):

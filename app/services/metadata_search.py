@@ -6,7 +6,11 @@ from typing import Optional
 TEXT_KEY = "#text"
 
 
-async def _search_itunes(client: httpx.AsyncClient, query: str, itunes_entity: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
+async def _search_itunes(client: httpx.AsyncClient,
+                         query: str,
+                         itunes_entity: str) -> tuple[Optional[str],
+                                                      Optional[str],
+                                                      Optional[str]]:
     url = f"https://itunes.apple.com/search?term={urllib.parse.quote(query.strip())}&entity={itunes_entity}&limit=1"
     try:
         r = await client.get(url)
@@ -33,7 +37,11 @@ async def _search_itunes(client: httpx.AsyncClient, query: str, itunes_entity: s
     return None, None, None
 
 
-def _apply_genius_hit(result: dict, entity_type: str, title: Optional[str], cover: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+def _apply_genius_hit(result: dict,
+                      entity_type: str,
+                      title: Optional[str],
+                      cover: Optional[str]) -> tuple[Optional[str],
+                                                     Optional[str]]:
     """Apply a Genius search hit to update title/cover based on entity type."""
     if entity_type == 'artist':
         cover = cover or result.get('image_url')
@@ -45,9 +53,11 @@ def _apply_genius_hit(result: dict, entity_type: str, title: Optional[str], cove
         if not title:
             artist_name = result.get('artist', {}).get('name', '')
             album_name = result.get('name', '')
-            title = re.sub(r'\([^)]*\)$', '', f"{artist_name} — {album_name}").strip()
+            title = re.sub(r'\([^)]*\)$', '',
+                           f"{artist_name} — {album_name}").strip()
     else:
-        cover = cover or result.get('song_art_image_thumbnail_url') or result.get('header_image_url')
+        cover = cover or result.get(
+            'song_art_image_thumbnail_url') or result.get('header_image_url')
         if not title:
             artist_name = result.get('primary_artist', {}).get('name', '')
             song_title = result.get('title', '')
@@ -55,7 +65,12 @@ def _apply_genius_hit(result: dict, entity_type: str, title: Optional[str], cove
     return title, cover
 
 
-async def _search_genius(client: httpx.AsyncClient, query: str, entity_type: str, title: Optional[str], cover: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+async def _search_genius(client: httpx.AsyncClient,
+                         query: str,
+                         entity_type: str,
+                         title: Optional[str],
+                         cover: Optional[str]) -> tuple[Optional[str],
+                                                        Optional[str]]:
     try:
         genius_url = f"https://genius.com/api/search/multi?per_page=1&q={urllib.parse.quote(query.strip())}"
         r_genius = await client.get(genius_url)
@@ -64,12 +79,17 @@ async def _search_genius(client: httpx.AsyncClient, query: str, entity_type: str
         sections = r_genius.json().get('response', {}).get('sections', [])
         for section in sections:
             s_type = section.get('type')
-            type_match = (s_type == entity_type) or (entity_type not in ['artist', 'album'] and s_type == 'song')
+            type_match = (
+                s_type == entity_type) or (
+                entity_type not in [
+                    'artist',
+                    'album'] and s_type == 'song')
             if not type_match:
                 continue
             hits = section.get('hits', [])
             if hits:
-                title, cover = _apply_genius_hit(hits[0].get('result', {}), entity_type, title, cover)
+                title, cover = _apply_genius_hit(hits[0].get(
+                    'result', {}), entity_type, title, cover)
                 break
     except Exception as e:
         print(f"Genius API Error: {e}")
@@ -78,10 +98,18 @@ async def _search_genius(client: httpx.AsyncClient, query: str, entity_type: str
 
 def _get_lastfm_extralarge(images: list) -> Optional[str]:
     """Extract extralarge image URL from a Last.fm image list."""
-    return next((img[TEXT_KEY] for img in images if img.get('size') == 'extralarge' and img.get(TEXT_KEY)), None)
+    return next((img[TEXT_KEY] for img in images if img.get(
+        'size') == 'extralarge' and img.get(TEXT_KEY)), None)
 
 
-async def _fetch_lastfm_album(client: httpx.AsyncClient, artist: str, item_name: str, title: Optional[str], cover: Optional[str], lastfm_key: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
+async def _fetch_lastfm_album(client: httpx.AsyncClient,
+                              artist: str,
+                              item_name: str,
+                              title: Optional[str],
+                              cover: Optional[str],
+                              lastfm_key: str) -> tuple[Optional[str],
+                                                        Optional[str],
+                                                        Optional[str]]:
     l_url = (
         f"https://ws.audioscrobbler.com/2.0/?method=album.getinfo"
         f"&api_key={lastfm_key}&artist={urllib.parse.quote(artist)}"
@@ -100,7 +128,14 @@ async def _fetch_lastfm_album(client: httpx.AsyncClient, artist: str, item_name:
     return title, cover, ext_url
 
 
-async def _fetch_lastfm_track(client: httpx.AsyncClient, artist: str, item_name: str, title: Optional[str], cover: Optional[str], lastfm_key: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
+async def _fetch_lastfm_track(client: httpx.AsyncClient,
+                              artist: str,
+                              item_name: str,
+                              title: Optional[str],
+                              cover: Optional[str],
+                              lastfm_key: str) -> tuple[Optional[str],
+                                                        Optional[str],
+                                                        Optional[str]]:
     l_url = (
         f"https://ws.audioscrobbler.com/2.0/?method=track.getinfo"
         f"&api_key={lastfm_key}&artist={urllib.parse.quote(artist)}"
@@ -110,7 +145,10 @@ async def _fetch_lastfm_track(client: httpx.AsyncClient, artist: str, item_name:
     r_l = await client.get(l_url)
     if r_l.status_code == 200:
         l_data = r_l.json().get('track', {})
-        extralarge = _get_lastfm_extralarge(l_data.get('album', {}).get('image', []))
+        extralarge = _get_lastfm_extralarge(
+            l_data.get(
+                'album', {}).get(
+                'image', []))
         if extralarge:
             cover = extralarge
         if not title and l_data.get('name'):
@@ -119,7 +157,14 @@ async def _fetch_lastfm_track(client: httpx.AsyncClient, artist: str, item_name:
     return title, cover, ext_url
 
 
-async def _search_lastfm(client: httpx.AsyncClient, query: str, entity_type: str, title: Optional[str], cover: Optional[str], lastfm_key: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
+async def _search_lastfm(client: httpx.AsyncClient,
+                         query: str,
+                         entity_type: str,
+                         title: Optional[str],
+                         cover: Optional[str],
+                         lastfm_key: str) -> tuple[Optional[str],
+                                                   Optional[str],
+                                                   Optional[str]]:
     try:
         parts = [p.strip() for p in query.strip().replace('—', '-').split('-')]
         if len(parts) < 2:
@@ -135,7 +180,8 @@ async def _search_lastfm(client: httpx.AsyncClient, query: str, entity_type: str
     return title, cover, None
 
 
-async def search_metadata(query: str, entity_type: str) -> tuple[str, str, str]:
+async def search_metadata(
+        query: str, entity_type: str) -> tuple[str, str, str]:
     if not query or not query.strip():
         return None, None, None
 

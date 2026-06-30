@@ -18,17 +18,23 @@ _BACKGROUND_TASKS = set()
 _LOCAL_LOCKS = {}
 _LOCAL_LOCKS_LOCK = asyncio.Lock()
 
+
 def get_redis_client():
     global redis_client
     if redis_client is None:
-        redis_client = aioredis.from_url(REDIS_URL, decode_responses=True, socket_connect_timeout=2)
+        redis_client = aioredis.from_url(
+            REDIS_URL,
+            decode_responses=True,
+            socket_connect_timeout=2)
     return redis_client
+
 
 async def get_local_lock(lock_key: str) -> asyncio.Lock:
     async with _LOCAL_LOCKS_LOCK:
         if lock_key not in _LOCAL_LOCKS:
             _LOCAL_LOCKS[lock_key] = asyncio.Lock()
         return _LOCAL_LOCKS[lock_key]
+
 
 @asynccontextmanager
 async def redis_lock(lock_key: str, expire_sec: int = 10):
@@ -40,7 +46,7 @@ async def redis_lock(lock_key: str, expire_sec: int = 10):
     client = get_redis_client()
     redis_lock_obj = None
     use_fallback = False
-    
+
     try:
         await client.ping()
         redis_lock_obj = client.lock(lock_key, timeout=expire_sec)
@@ -49,11 +55,15 @@ async def redis_lock(lock_key: str, expire_sec: int = 10):
         if not acquired:
             raise TimeoutError("Lock is busy")
     except TimeoutError:
-        # Lock is busy on an active Redis instance. Do NOT fallback. Raise an error.
-        raise HTTPException(status_code=409, detail="Ресурс временно заблокирован, попробуйте позже")
+        # Lock is busy on an active Redis instance. Do NOT fallback. Raise an
+        # error.
+        raise HTTPException(
+            status_code=409,
+            detail="Ресурс временно заблокирован, попробуйте позже")
     except (aioredis.ConnectionError, OSError) as e:
         use_fallback = True
-        logging.warning(f"Redis connection failed for lock '{lock_key}' ({e}). Falling back to local lock.")
+        logging.warning(
+            f"Redis connection failed for lock '{lock_key}' ({e}). Falling back to local lock.")
 
     if use_fallback:
         local_lock = await get_local_lock(lock_key)
@@ -68,6 +78,7 @@ async def redis_lock(lock_key: str, expire_sec: int = 10):
             except Exception:
                 logging.exception(f"Failed to release Redis lock '{lock_key}'")
 
+
 async def get_arq_pool():
     global arq_pool
     if arq_pool is None:
@@ -78,6 +89,7 @@ async def get_arq_pool():
             logging.exception("Failed to initialize arq Redis pool")
             arq_pool = None
     return arq_pool
+
 
 async def enqueue_background_task(job_name: str, *args, background_tasks=None):
     """
@@ -91,8 +103,9 @@ async def enqueue_background_task(job_name: str, *args, background_tasks=None):
             await pool.enqueue_job(job_name, *args)
             return True
         except Exception:
-            logging.exception(f"Failed to enqueue job '{job_name}' to arq. Falling back to local/inline background tasks.")
-            
+            logging.exception(
+                f"Failed to enqueue job '{job_name}' to arq. Falling back to local/inline background tasks.")
+
     # Fallback mechanisms
     if background_tasks:
         if job_name == 'check_achievements':
@@ -102,8 +115,11 @@ async def enqueue_background_task(job_name: str, *args, background_tasks=None):
     else:
         if job_name == 'check_achievements':
             from app.routers.extended import run_check_achievements_bg
-            # Execute safely in a separate thread to avoid blocking the asyncio event loop
-            task = asyncio.create_task(asyncio.to_thread(run_check_achievements_bg, *args))
+            # Execute safely in a separate thread to avoid blocking the asyncio
+            # event loop
+            task = asyncio.create_task(
+                asyncio.to_thread(
+                    run_check_achievements_bg, *args))
             _BACKGROUND_TASKS.add(task)
             task.add_done_callback(_BACKGROUND_TASKS.discard)
             return True
