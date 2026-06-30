@@ -12,7 +12,19 @@ on:
 
 jobs:
   backend-test:
+    name: Backend Tests & Lint
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -27,16 +39,22 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest
+          pip install pytest ruff flake8 httpx
+
+      - name: Run Ruff Check
+        run: ruff check app
+
+      - name: Run Flake8 Check
+        run: flake8 app
 
       - name: Run Pytest
         env:
           DATABASE_URL: 'sqlite:///:memory:'
           REDIS_URL: 'redis://localhost:6379'
-        run: |
-          pytest
+        run: pytest tests/
 
   frontend-build:
+    name: Frontend Tests & Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -53,9 +71,13 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Run Linter
+      - name: Run Linter (ESLint)
         working-directory: frontend
         run: npm run lint
+
+      - name: Run Type Check (TypeScript)
+        working-directory: frontend
+        run: npx tsc --noEmit
 
       - name: Build Next.js App
         working-directory: frontend
