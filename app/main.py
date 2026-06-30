@@ -1,10 +1,13 @@
+from app.models import User
+from app.database import get_db
+from sqlalchemy.orm import Session
+from fastapi import WebSocket, WebSocketDisconnect, Depends
 import os
 import asyncio
 import secrets
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -17,12 +20,14 @@ from app.core.websockets import manager
 
 background_tasks = set()
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize DB (creates tables if they don't exist)
     Base.metadata.create_all(bind=engine)
-    
-    # Run API key migration for existing users (hash plain-text API keys of length != 64)
+
+    # Run API key migration for existing users (hash plain-text API keys of
+    # length != 64)
     from app.database import SessionLocal
     import hashlib
     from app.models import User
@@ -31,25 +36,26 @@ async def lifespan(app: FastAPI):
         users = db.query(User).all()
         for user in users:
             if user.api_key and len(user.api_key) != 64:
-                user.api_key = hashlib.sha256(user.api_key.encode('utf-8')).hexdigest()
+                user.api_key = hashlib.sha256(
+                    user.api_key.encode('utf-8')).hexdigest()
         db.commit()
     except Exception as e:
         print(f"Startup migration failed: {e}")
         db.rollback()
     finally:
         db.close()
-        
+
     # Start cloud scrobbling with safe interval
     task = asyncio.create_task(poll_external_services(process_scrobble))
     background_tasks.add(task)
     task.add_done_callback(background_tasks.discard)
-    
+
     yield
-    
+
     # Cancel background tasks on shutdown
     for t in set(background_tasks):
         t.cancel()
-        
+
     from app.core import redis
     if redis.arq_pool:
         await redis.arq_pool.close()
@@ -69,10 +75,10 @@ allowed_origins = [
 ]
 
 app.add_middleware(
-    CORSMiddleware, 
-    allow_origins=allowed_origins, 
-    allow_credentials=True, 
-    allow_methods=["*"], 
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
     allow_headers=["*"]
 )
 
@@ -84,31 +90,32 @@ app.include_router(admin.router)
 app.include_router(extended.router)
 
 # Setup WebSocket manually at root
-from fastapi import WebSocket, WebSocketDisconnect, Depends
-from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import User
+
 
 @app.websocket("/ws/{username}")
-async def websocket_route(websocket: WebSocket, username: str, db: Session = Depends(get_db)):
+async def websocket_route(
+        websocket: WebSocket,
+        username: str,
+        db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == username).first()
     if user and user.profile.is_private:
         # We check cookies first, then token for extensions
-        token = websocket.cookies.get("api_key") or websocket.query_params.get("token")
+        token = websocket.cookies.get(
+            "api_key") or websocket.query_params.get("token")
         if not token or not user.api_key:
             await websocket.close(code=4003)
             return
-            
+
         import hashlib
         from app.core.security import verify_session_token
-        
+
         valid = False
         if ":" in token:
             valid = verify_session_token(token, user)
         else:
             hashed_token = hashlib.sha256(token.encode('utf-8')).hexdigest()
             valid = secrets.compare_digest(hashed_token, user.api_key)
-            
+
         if not valid:
             await websocket.close(code=4003)
             return
@@ -125,4 +132,3 @@ async def websocket_route(websocket: WebSocket, username: str, db: Session = Dep
                 })
     except WebSocketDisconnect:
         manager.disconnect(websocket, username)
-

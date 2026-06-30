@@ -1,6 +1,7 @@
 import pytest
 from app.models import User, UserProfile, UserIntegration
 
+
 def test_register_success(client, db):
     # Register new user
     response = client.post("/auth/register", json={
@@ -8,8 +9,8 @@ def test_register_success(client, db):
         "password": "strongpassword123"  # NOSONAR
     })
     assert response.status_code == 200
-    assert response.json()["username"] == "testuser" # lowercase check
-    
+    assert response.json()["username"] == "testuser"  # lowercase check
+
     # Verify DB state
     db_user = db.query(User).filter(User.username == "testuser").first()
     assert db_user is not None
@@ -17,7 +18,8 @@ def test_register_success(client, db):
     assert db_user.profile is not None
     assert db_user.integration is not None
     assert db_user.api_key is not None
-    assert len(db_user.api_key) == 64 # SHA-256 length in hex
+    assert len(db_user.api_key) == 64  # SHA-256 length in hex
+
 
 def test_register_validation_errors(client, db):
     # Short username
@@ -50,6 +52,7 @@ def test_register_validation_errors(client, db):
     assert resp.status_code == 400
     assert "Никнейм занят" in resp.text
 
+
 def test_login_success_and_logout(client, db):
     # Register first
     client.post("/auth/register", json={
@@ -69,7 +72,9 @@ def test_login_success_and_logout(client, db):
     # Log out
     resp = client.post("/auth/logout")
     assert resp.status_code == 200
-    assert resp.cookies.get("api_key") is None or resp.cookies.get("api_key") == ""
+    assert resp.cookies.get(
+        "api_key") is None or resp.cookies.get("api_key") == ""
+
 
 def test_login_failure(client, db):
     # Try logging in with non-existent user
@@ -85,7 +90,7 @@ def test_login_failure(client, db):
         "username": "loginuser",
         "password": "password123"  # NOSONAR
     })
-    
+
     # Log in with bad password
     resp = client.post("/auth/login", json={
         "username": "loginuser",
