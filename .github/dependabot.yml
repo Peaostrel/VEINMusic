@@ -1,0 +1,19 @@
+version: 2
+updates:
+  # 1. Настройки для бэкенда (Python)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # 2. Настройки для фронтенда (React/Next.js)
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+
+  # 3. Настройки для самих скриптов GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
