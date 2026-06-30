@@ -91,31 +91,34 @@ app.include_router(extended.router)
 # Setup WebSocket manually at root
 
 
+def _get_ws_authenticated_username(websocket: WebSocket, db: Session) -> str | None:
+    token = websocket.cookies.get("api_key") or websocket.query_params.get("token")
+    if not token:
+        return None
+
+    import hashlib
+    from app.core.security import verify_session_token
+
+    if ":" in token:
+        auth_username = token.split(":")[0]
+        auth_user = db.query(User).filter(User.username == auth_username).first()
+        if auth_user and verify_session_token(token, auth_user):
+            return auth_user.username
+    else:
+        hashed_token = hashlib.sha256(token.encode('utf-8')).hexdigest()  # codeql[py/weak-cryptographic-algorithm]
+        auth_user = db.query(User).filter(User.api_key == hashed_token).first()
+        if auth_user:
+            return auth_user.username
+    return None
+
+
 @app.websocket("/ws/{username}")
 async def websocket_route(
         websocket: WebSocket,
         username: str,
         db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == username).first()
-
-    authenticated_username = None
-    token = websocket.cookies.get(
-        "api_key") or websocket.query_params.get("token")
-
-    if token:
-        import hashlib
-        from app.core.security import verify_session_token
-
-        if ":" in token:
-            auth_username = token.split(":")[0]
-            auth_user = db.query(User).filter(User.username == auth_username).first()
-            if auth_user and verify_session_token(token, auth_user):
-                authenticated_username = auth_user.username
-        else:
-            hashed_token = hashlib.sha256(token.encode('utf-8')).hexdigest()  # codeql[py/weak-cryptographic-algorithm]
-            auth_user = db.query(User).filter(User.api_key == hashed_token).first()
-            if auth_user:
-                authenticated_username = auth_user.username
+    authenticated_username = _get_ws_authenticated_username(websocket, db)
 
     # Check privacy: if private, only the owner can connect
     if user and user.profile.is_private:
@@ -127,12 +130,8 @@ async def websocket_route(
     try:
         while True:
             data = await websocket.receive_json()
-            if data.get("type") == "SYNC_REQUEST":
-                # Only authenticated users can send sync requests
-                if not authenticated_username:
-                    continue
-                target = data.get("target")
-                await manager.broadcast_to_user(target, {
+            if data.get("type") == "SYNC_REQUEST" and authenticated_username:
+                await manager.broadcast_to_user(data.get("target"), {
                     "type": "SYNC_INVITE",
                     "from": authenticated_username
                 })
