@@ -10,6 +10,21 @@ from app.core.security import get_current_user, get_current_user_optional
 from app.services.scrobble_processor import process_scrobble, format_history_item
 from typing import Optional
 from app.core.redis import redis_lock
+from sqlalchemy import func
+
+
+def get_scrobble_counters(db: Session, s_ids: list) -> dict:
+    likes = db.query(ScrobbleLike.scrobble_id, func.count(ScrobbleLike.id)).filter(
+        ScrobbleLike.scrobble_id.in_(s_ids)).group_by(ScrobbleLike.scrobble_id).all()
+    comments = db.query(ScrobbleComment.scrobble_id, func.count(ScrobbleComment.id)).filter(
+        ScrobbleComment.scrobble_id.in_(s_ids)).group_by(ScrobbleComment.scrobble_id).all()
+    counters = {sid: {"likes": 0, "comments": 0} for sid in s_ids}
+    for sid, count in likes:
+        counters[sid]["likes"] = count
+    for sid, count in comments:
+        counters[sid]["comments"] = count
+    return counters
+
 
 router = APIRouter(prefix="/api", tags=["scrobbling"])
 
@@ -100,25 +115,7 @@ def get_history(username: str,
             Scrobble.id.desc()).limit(10).all()
 
     s_ids = [s.id for s, t in scrobbles]
-    from sqlalchemy import func
-    likes = db.query(
-        ScrobbleLike.scrobble_id,
-        func.count(
-            ScrobbleLike.id)).filter(
-        ScrobbleLike.scrobble_id.in_(s_ids)).group_by(
-                ScrobbleLike.scrobble_id).all()
-    comments = db.query(
-        ScrobbleComment.scrobble_id,
-        func.count(
-            ScrobbleComment.id)).filter(
-        ScrobbleComment.scrobble_id.in_(s_ids)).group_by(
-                ScrobbleComment.scrobble_id).all()
-
-    counters = {sid: {"likes": 0, "comments": 0} for sid in s_ids}
-    for sid, count in likes:
-        counters[sid]["likes"] = count
-    for sid, count in comments:
-        counters[sid]["comments"] = count
+    counters = get_scrobble_counters(db, s_ids)
 
     return {
         "user": username,
@@ -143,25 +140,7 @@ def get_global_history(db: Annotated[Session, Depends(get_db)]):
                     Scrobble.id.desc()).limit(20).all()
 
     s_ids = [s.id for s, t in scrobbles]
-    from sqlalchemy import func
-    likes = db.query(
-        ScrobbleLike.scrobble_id,
-        func.count(
-            ScrobbleLike.id)).filter(
-        ScrobbleLike.scrobble_id.in_(s_ids)).group_by(
-                ScrobbleLike.scrobble_id).all()
-    comments = db.query(
-        ScrobbleComment.scrobble_id,
-        func.count(
-            ScrobbleComment.id)).filter(
-        ScrobbleComment.scrobble_id.in_(s_ids)).group_by(
-                ScrobbleComment.scrobble_id).all()
-
-    counters = {sid: {"likes": 0, "comments": 0} for sid in s_ids}
-    for sid, count in likes:
-        counters[sid]["likes"] = count
-    for sid, count in comments:
-        counters[sid]["comments"] = count
+    counters = get_scrobble_counters(db, s_ids)
 
     return [format_history_item(s, t, counters=counters) for s, t in scrobbles]
 
@@ -198,25 +177,7 @@ def get_friends_history(username: str,
             Scrobble.id.desc()).limit(20).all()
 
     s_ids = [s.id for s, t in scrobbles]
-    from sqlalchemy import func
-    likes = db.query(
-        ScrobbleLike.scrobble_id,
-        func.count(
-            ScrobbleLike.id)).filter(
-        ScrobbleLike.scrobble_id.in_(s_ids)).group_by(
-                ScrobbleLike.scrobble_id).all()
-    comments = db.query(
-        ScrobbleComment.scrobble_id,
-        func.count(
-            ScrobbleComment.id)).filter(
-        ScrobbleComment.scrobble_id.in_(s_ids)).group_by(
-                ScrobbleComment.scrobble_id).all()
-
-    counters = {sid: {"likes": 0, "comments": 0} for sid in s_ids}
-    for sid, count in likes:
-        counters[sid]["likes"] = count
-    for sid, count in comments:
-        counters[sid]["comments"] = count
+    counters = get_scrobble_counters(db, s_ids)
 
     return [format_history_item(s, t, counters=counters) for s, t in scrobbles]
 
