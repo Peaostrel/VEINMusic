@@ -647,74 +647,63 @@ def get_notifications(username: str, db: Annotated[Session, Depends(get_db)]):
             ua in new_achs]
 
 
+def _calc_specific_track(db: Session, user: User, a: Achievement) -> int:
+    if a.rule_target.startswith("http"):
+        if hasattr(a, 'rule_meta') and a.rule_meta:
+            parts = [p.strip() for p in a.rule_meta.replace('—', '-').split('-')]
+            if len(parts) < 2:
+                parts = a.rule_meta.split()
+            if len(parts) >= 2:
+                from sqlalchemy import and_, or_
+                word_filters = [or_(Track.title.ilike(f"%{w.strip()}%"), Track.artist.ilike(
+                    f"%{w.strip()}%")) for w in parts if w.strip()]
+                return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, and_(*word_filters)).count()
+            return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.title.ilike(f"%{a.rule_meta}%")) | (Track.artist.ilike(f"%{a.rule_meta}%"))).count()
+        target_str = a.rule_target.split('?')[0]
+        if "yandex.ru" in target_str and TRACK_PATH in target_str:
+            track_id = target_str.split(TRACK_PATH)[1].strip("/")
+            return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.track_url.like(f"%/track/{track_id}%")).count()
+        return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.track_url.like(f"%/track/{target_str}%")).count()
+    parts = [p.strip() for p in a.rule_target.replace('—', '-').split('-')]
+    if len(parts) >= 2:
+        return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.artist.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%")) | (Track.title.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%"))).count()
+    return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.title.ilike(f"%{a.rule_target}%")) | (Track.artist.ilike(f'%{a.rule_target.split("||")[0] if "||" in a.rule_target else a.rule_target}%'))).count()
+
+
+def _calc_specific_album(db: Session, user: User, a: Achievement) -> int:
+    current_val_img = 0
+    if a.target_image:
+        current_val_img = db.query(func.count(func.distinct(Scrobble.track_id))).join(Track).filter(
+            Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.cover_url == a.target_image).scalar() or 0
+    current_val_text = 0
+    album_name = a.rule_meta if a.rule_meta else a.rule_target
+    if "||" in a.rule_target:
+        album_name = a.rule_target.split("||")[0]
+    if album_name and not album_name.startswith("http"):
+        parts = [p.strip() for p in album_name.replace('—', '-').split('-')]
+        if len(parts) >= 2:
+            current_val_text = db.query(func.count(func.distinct(Scrobble.track_id))).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec *
+                                                                                                         100 >= Track.duration * 85, Track.artist.ilike(f"%{parts[0].strip()}%"), Track.album.ilike(f"%{parts[-1].strip()}%")).scalar() or 0
+        else:
+            current_val_text = db.query(func.count(func.distinct(Scrobble.track_id))).join(Track).filter(
+                Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.album.ilike(f"%{album_name.strip()}%")).scalar() or 0
+    return max(current_val_img, current_val_text)
+
+
 def _calculate_achievement_progress(db: Session, user: User, a: Achievement) -> int:
-    current_val = 0
     if a.rule_type == "total_scrobbles":
-        current_val = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id,
-                                                            Scrobble.listened_sec * 100 >= Track.duration * 85).count()
+        return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85).count()
     elif a.rule_type == "night_scrobbles":
         valid_times = db.query(Scrobble.played_at).join(Track).filter(
             Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85).all()
-        current_val = sum(1 for (dt,) in valid_times if dt.replace(
-            tzinfo=timezone.utc).astimezone().strftime('%H') in ['00', '01', '02', '03', '04', '05'])
+        return sum(1 for (dt,) in valid_times if dt.replace(tzinfo=timezone.utc).astimezone().strftime('%H') in ['00', '01', '02', '03', '04', '05'])
     elif a.rule_type == "specific_track" and a.rule_target:
-        if a.rule_target.startswith("http"):
-            if hasattr(a, 'rule_meta') and a.rule_meta:
-                parts = [p.strip() for p in a.rule_meta.replace('—', '-').split('-')]
-                if len(parts) < 2:
-                    parts = a.rule_meta.split()
-
-                if len(parts) >= 2:
-                    from sqlalchemy import and_, or_
-                    word_filters = []
-                    for w in parts:
-                        if w.strip():
-                            word_filters.append(or_(Track.title.ilike(
-                                f"%{w.strip()}%"), Track.artist.ilike(f"%{w.strip()}%")))
-                    current_val = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id,
-                                                                        Scrobble.listened_sec * 100 >= Track.duration * 85, and_(*word_filters)).count()
-                else:
-                    current_val = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >=
-                                                                        Track.duration * 85, (Track.title.ilike(f"%{a.rule_meta}%")) | (Track.artist.ilike(f"%{a.rule_meta}%"))).count()
-            else:
-                target_str = a.rule_target.split('?')[0]
-                if "yandex.ru" in target_str and TRACK_PATH in target_str:
-                    track_id = target_str.split(TRACK_PATH)[1].strip("/")
-                    current_val = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec *
-                                                                        100 >= Track.duration * 85, Track.track_url.like(f"%/track/{track_id}%")).count()
-                else:
-                    current_val = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec *
-                                                                        100 >= Track.duration * 85, Track.track_url.like(f"%/track/{target_str}%")).count()
-        else:
-            parts = [p.strip() for p in a.rule_target.replace('—', '-').split('-')]
-            if len(parts) >= 2:
-                current_val = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.artist.ilike(
-                    f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%")) | (Track.title.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%"))).count()
-            else:
-                current_val = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.title.ilike(
-                    f"%{a.rule_target}%")) | (Track.artist.ilike(f'%{a.rule_target.split("||")[0] if "||" in a.rule_target else a.rule_target}%'))).count()
+        return _calc_specific_track(db, user, a)
     elif a.rule_type == "specific_album" and a.rule_target:
-        current_val_img = 0
-        if a.target_image:
-            current_val_img = db.query(func.count(func.distinct(Scrobble.track_id))).join(Track).filter(
-                Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.cover_url == a.target_image).scalar() or 0
-        current_val_text = 0
-        album_name = a.rule_meta if a.rule_meta else a.rule_target
-        if "||" in a.rule_target:
-            album_name = a.rule_target.split("||")[0]
-        if album_name and not album_name.startswith("http"):
-            parts = [p.strip() for p in album_name.replace('—', '-').split('-')]
-            if len(parts) >= 2:
-                current_val_text = db.query(func.count(func.distinct(Scrobble.track_id))).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec *
-                                                                                                             100 >= Track.duration * 85, Track.artist.ilike(f"%{parts[0].strip()}%"), Track.album.ilike(f"%{parts[-1].strip()}%")).scalar() or 0
-            else:
-                current_val_text = db.query(func.count(func.distinct(Scrobble.track_id))).join(Track).filter(
-                    Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.album.ilike(f"%{album_name.strip()}%")).scalar() or 0
-        current_val = max(current_val_img, current_val_text)
+        return _calc_specific_album(db, user, a)
     elif a.rule_type == "specific_artist" and a.rule_target:
-        current_val = db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration *
-                                                            85, Track.artist.ilike(f'%{a.rule_target.split("||")[0] if "||" in a.rule_target else a.rule_target}%')).count()
-    return current_val
+        return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.artist.ilike(f'%{a.rule_target.split("||")[0] if "||" in a.rule_target else a.rule_target}%')).count()
+    return 0
 
 
 # --- /api/achievements/all/{username} ---
@@ -1658,21 +1647,31 @@ def toggle_follow(target_username: str,
 
 
 async def _enrich_achievement_data(rule_type: str, target_val: str, val: int, t_img: str, meta_text: str):
-    if rule_type in ["specific_track", "specific_album", "specific_artist"] and target_val and target_val.startswith("http"):
-        if YANDEX_AVATARS not in target_val and SCDN_CO not in target_val:
-            title, img = await parse_og_meta(target_val)
-            if img:
-                t_img = img
-            if title and rule_type in ["specific_track", "specific_artist"] and not meta_text:
-                meta_text = title
-            if title and rule_type == "specific_artist":
-                target_val = f"{title}||{target_val}"
-            if rule_type == "specific_album":
-                track_count = await get_album_track_count(target_val)
-                if track_count > 0:
-                    val = track_count
-        else:
-            t_img = target_val
+    is_valid_type = rule_type in ["specific_track", "specific_album", "specific_artist"]
+    is_http_target = target_val and target_val.startswith("http")
+
+    if not is_valid_type or not is_http_target:
+        return target_val, val, t_img, meta_text
+
+    is_internal_image = YANDEX_AVATARS in target_val or SCDN_CO in target_val
+    if is_internal_image:
+        return target_val, val, target_val, meta_text
+
+    title, img = await parse_og_meta(target_val)
+    if img:
+        t_img = img
+
+    if title:
+        if rule_type in ["specific_track", "specific_artist"] and not meta_text:
+            meta_text = title
+        if rule_type == "specific_artist":
+            target_val = f"{title}||{target_val}"
+
+    if rule_type == "specific_album":
+        track_count = await get_album_track_count(target_val)
+        if track_count > 0:
+            val = track_count
+
     return target_val, val, t_img, meta_text
 
 # --- POST /api/admin/achievements ---
