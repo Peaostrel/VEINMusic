@@ -51,7 +51,7 @@ jobs:
         env:
           DATABASE_URL: 'sqlite:///:memory:'
           REDIS_URL: 'redis://localhost:6379'
-        run: pytest tests/
+        run: python -m pytest tests/
 
   frontend-build:
     name: Frontend Tests & Lint
