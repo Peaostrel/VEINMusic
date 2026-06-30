@@ -53,7 +53,7 @@ async def redis_lock(lock_key: str, expire_sec: int = 10):
         except Exception as e:
             use_fallback = True
             logging.warning(f"Redis connection failed for lock '{lock_key}' ({e}). Falling back to local lock.")
-        
+
         if not use_fallback:
             redis_lock_obj = client.lock(lock_key, timeout=expire_sec)
             # Try to acquire the lock with a timeout of 5 seconds
