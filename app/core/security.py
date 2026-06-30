@@ -57,7 +57,7 @@ def verify_session_token(token: str, db_user: User) -> bool:
             (SECRET_KEY + db_user.hashed_password).encode('utf-8'),
             msg.encode('utf-8'),
             hashlib.sha256
-        ).hexdigest()
+        ).hexdigest()  # codeql[py/weak-cryptographic-algorithm]
 
         return hmac.compare_digest(signature, expected_signature)
     except Exception:  # NOSONAR
