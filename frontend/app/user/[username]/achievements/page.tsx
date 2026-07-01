@@ -31,8 +31,9 @@ function parseMarkdownForNode(node: any, nodeIdx: number) {
       <a
         key={`md-${nodeIdx}-${link.startBracket}`}
         href={link.linkUrl}
-        target="_blank" rel="noopener noreferrer"
-        
+        target="_blank"
+        rel="noopener noreferrer"
+
         className="text-[var(--accent)] hover:underline font-bold"
       >
         {link.linkText}
@@ -126,8 +127,9 @@ function renderDescriptionWithLinks(
           <a
             key={`meta-${idx}-${nodeIdx}-${idxOf}`}
             href={linkUrl}
-            target="_blank" rel="noopener noreferrer"
-            
+            target="_blank"
+            rel="noopener noreferrer"
+
             className="text-[var(--accent)] hover:underline font-bold"
           >
             {matchedWord}

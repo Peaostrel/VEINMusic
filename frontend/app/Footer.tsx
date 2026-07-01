@@ -78,8 +78,9 @@ export default function Footer() {
               <li>
                 <a
                   href="https://github.com/Peaostrel/VEINMusic"
-                  target="_blank" rel="noopener noreferrer"
-                  
+                  target="_blank"
+                  rel="noopener noreferrer"
+
                   className="hover:text-[var(--accent-text)] transition-colors"
                 >
                   GitHub

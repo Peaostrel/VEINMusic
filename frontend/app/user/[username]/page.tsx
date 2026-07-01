@@ -993,8 +993,9 @@ export default function Profile() {
                       </div>
                       <a
                         href={getTrackUrl(item)}
-                        target="_blank" rel="noopener noreferrer"
-                        
+                        target="_blank"
+                        rel="noopener noreferrer"
+
                         className="font-bold text-sm text-white hover:text-[var(--accent-text)] hover:underline transition-colors whitespace-nowrap pointer-events-auto pr-4"
                       >
                         {item.title}
@@ -1006,8 +1007,9 @@ export default function Profile() {
                         <span key={a.trim()}>
                           <a
                             href={getArtistUrl(a.trim(), item.source)}
-                            target="_blank" rel="noopener noreferrer"
-                            
+                            target="_blank"
+                            rel="noopener noreferrer"
+
                             className="hover:text-[var(--accent-text)] hover:underline cursor-pointer transition-colors relative z-10 font-medium"
                           >
                             {a.trim()}
@@ -1043,8 +1045,9 @@ export default function Profile() {
                         <span key={a.trim()}>
                           <a
                             href={getArtistUrl(a.trim(), item.source)}
-                            target="_blank" rel="noopener noreferrer"
-                            
+                            target="_blank"
+                            rel="noopener noreferrer"
+
                             className="hover:text-[var(--accent-text)] hover:underline cursor-pointer transition-colors relative z-10"
                           >
                             {a.trim()}
@@ -1191,8 +1194,9 @@ function HistoryItem({
             <div className="shrink-0">{getPlatformIcon(item.source)}</div>
             <a
               href={getTrackUrl(item)}
-              target="_blank" rel="noopener noreferrer"
-              
+              target="_blank"
+              rel="noopener noreferrer"
+
               className={`font-bold text-lg whitespace-nowrap hover:underline hover:text-[var(--accent-text)] transition-colors pointer-events-auto pr-4 ${isLatest ? "text-[var(--accent-text)]" : "text-white"}`}
             >
               {item.title}
@@ -1204,8 +1208,9 @@ function HistoryItem({
               <span key={a.trim()}>
                 <a
                   href={getArtistUrl(a.trim(), item.source)}
-                  target="_blank" rel="noopener noreferrer"
-                  
+                  target="_blank"
+                  rel="noopener noreferrer"
+
                   className="hover:text-[var(--accent-text)] hover:underline cursor-pointer transition-colors relative z-10 font-medium"
                 >
                   {a.trim()}
@@ -1614,8 +1619,9 @@ function ProfileHeaderSection({
                   {a.rule_target?.startsWith("http") ? (
                     <a
                       href={a.rule_target}
-                      target="_blank" rel="noopener noreferrer"
-                      
+                      target="_blank"
+                      rel="noopener noreferrer"
+
                       className="flex items-center gap-3 group/link"
                     >
                       {a.target_image && (
@@ -1785,8 +1791,9 @@ function ProfileStatsSection({
                     ? `https://t.me/${link.username}`
                     : `https://${link.network}.com/${link.username}`
                 }
-                target="_blank" rel="noopener noreferrer"
-                
+                target="_blank"
+                rel="noopener noreferrer"
+
                 className="flex items-center gap-2 bg-[#121212]/50 hover:bg-[var(--accent)] hover:text-[var(--text-on-accent)] text-white px-4 py-2 rounded-lg text-sm transition-all border border-white/5 hover:border-transparent backdrop-blur-sm shadow-md group"
               >
                 {SocialIcons[link.network as keyof typeof SocialIcons]}
@@ -1897,8 +1904,9 @@ function ProfileStatsSection({
                           ? u.favorite_artist_url
                           : getArtistUrl(u.favorite_artist, "yandex")
                       }
-                      target="_blank" rel="noopener noreferrer"
-                      
+                      target="_blank"
+                      rel="noopener noreferrer"
+
                       className="block font-black text-white hover:text-[var(--accent-text)] text-base leading-tight truncate"
                     >
                       {u.favorite_artist}
@@ -1960,8 +1968,9 @@ function ProfileStatsSection({
                               source: "yandex",
                             })
                       }
-                      target="_blank" rel="noopener noreferrer"
-                      
+                      target="_blank"
+                      rel="noopener noreferrer"
+
                       className="block font-black text-white hover:text-[var(--accent-text)] text-base leading-tight truncate"
                     >
                       {u.favorite_track}
@@ -2015,8 +2024,9 @@ function ProfileStatsSection({
                     </span>
                     <a
                       href={favoriteAlbumRedirectUrl}
-                      target="_blank" rel="noopener noreferrer"
-                      
+                      target="_blank"
+                      rel="noopener noreferrer"
+
                       className="block font-black text-white hover:text-[var(--accent-text)] text-base leading-tight truncate"
                     >
                       {u.favorite_album}
