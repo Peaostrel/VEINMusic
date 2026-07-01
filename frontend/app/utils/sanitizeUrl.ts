@@ -8,10 +8,11 @@ export function sanitizeUrl(
   const lowerUrl = url.toLowerCase().trim();
 
   if (
-    lowerUrl.startsWith("javascript:") ||
-    lowerUrl.startsWith("data:text/html")
+    lowerUrl.startsWith('javascript:') || 
+    lowerUrl.startsWith('data:') || 
+    lowerUrl.startsWith('vbscript:')
   ) {
-    return "about:blank";
+    return 'about:blank';
   }
 
   return url;
