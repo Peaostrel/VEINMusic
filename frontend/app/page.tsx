@@ -4,7 +4,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Heart, MessageCircle, Users } from "lucide-react";
 
-import { getPlatformIcon } from "../../utils/formatters";
+import { getPlatformIcon } from "../utils/formatters";
 
 import About from "./about/page";
 

@@ -34,9 +34,12 @@ async def lifespan(app: FastAPI):
     try:
         users = db.query(User).all()
         for user in users:
-            if user.api_key and len(user.api_key) != 64:
-                user.api_key = hashlib.sha256( # type: ignore[assignment]
-                    str(user.api_key).encode('utf-8')).hexdigest()
+            if user.api_key and not str(user.api_key).startswith("pbkdf2") and len(str(user.api_key)) != 64:
+                import os
+                iterations = 600_000
+                salt = os.urandom(16)
+                dk = hashlib.pbkdf2_hmac("sha256", str(user.api_key).encode("utf-8"), salt, iterations)
+                user.api_key = f"pbkdf2_sha256${iterations}${salt.hex()}${dk.hex()}" # type: ignore[assignment]
         db.commit()
     except Exception as e:
         print(f"Startup migration failed: {e}")

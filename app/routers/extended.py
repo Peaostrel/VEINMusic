@@ -638,7 +638,7 @@ def get_notifications(username: str, db: Annotated[Session, Depends(get_db)]):
     if not user:
         return []
     new_achs = db.query(Achievement, UserAchievement).join(UserAchievement).filter(
-        UserAchievement.user_id == user.id, UserAchievement.notified == False).all()
+        UserAchievement.user_id == user.id, UserAchievement.notified.is_(False)).all()
     return [{"ua_id": ua.id,
              "name": a.name,
              "icon": a.icon,
@@ -867,7 +867,7 @@ def search_by_taste(my_username: str, db: Annotated[Session, Depends(get_db)]):
 def get_global_feed(db: Annotated[Session, Depends(get_db)]):
     # Latest scrobbles from public users
     scrobbles = db.query(Scrobble).join(User).join(UserProfile).filter(
-        UserProfile.is_private == False).order_by(
+        UserProfile.is_private.is_(False)).order_by(
         Scrobble.id.desc()).limit(20).all()
     return {"feed": [format_history_item(s, s.track) for s in scrobbles]}
 
