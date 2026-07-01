@@ -31,7 +31,7 @@ export default function Footer() {
     };
 
     fetchStats();
-    const interval = setInterval(fetchStats, 10000); // Полллинг каждые 10 секунд
+    const interval = setInterval(fetchStats, 10000); // Поллинг каждые 10 секунд
     return () => clearInterval(interval);
   }, []);
 
@@ -52,7 +52,7 @@ export default function Footer() {
                 V
               </div>
               <span>
-                VEIN<span style={{ color: "var(--accent)" }}>Music</span>
+                VEIN <span style={{ color: "var(--accent)" }}>Music</span>
               </span>
             </Link>
             <p className="text-gray-500 text-xs mt-1 leading-relaxed max-w-xs">

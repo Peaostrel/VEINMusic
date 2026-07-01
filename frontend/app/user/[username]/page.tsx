@@ -1260,7 +1260,7 @@ function FollowModalContent({
               onClose();
               router.push(`/user/${followerUser.username}`);
             }}
-            className="w-full flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl cursor-pointer transition-colors group border border-transparent hover:border-white/5 text-left font-normal bg-transparent border-none outline-none block"
+            className="w-full flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl cursor-pointer transition-colors group border border-transparent hover:border-white/5 text-left font-normal bg-transparent outline-none block"
           >
             <img
               src={
