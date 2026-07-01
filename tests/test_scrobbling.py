@@ -249,3 +249,56 @@ def test_add_comment(auth_client, db, test_user):
         user_id=test_user.id, scrobble_id=s.id).first()
     assert comment is not None
     assert comment.content == "Nice song"  # HTML tags stripped
+
+
+def test_random_scrobbling_direct(db, test_user):
+    import secrets
+    import string
+    import asyncio
+    from unittest.mock import AsyncMock, patch
+    from app.services.scrobble_processor import process_scrobble
+    
+    def random_string(length=10):
+        return ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(length))
+        
+    with patch("app.core.redis.get_arq_pool") as mock_arq, \
+         patch("app.services.scrobble_processor.get_track_duration", new_callable=AsyncMock) as mock_td, \
+         patch("app.services.scrobble_processor.get_track_genre", new_callable=AsyncMock) as mock_tg:
+        
+        mock_arq.return_value = AsyncMock()
+        mock_td.return_value = 0
+        mock_tg.return_value = "Rock"
+        
+        for _ in range(5):
+            title = f"Song {random_string(5)}"
+            artist = f"Artist {random_string(5)}"
+            album = f"Album {random_string(5)}"
+            duration = 120 + secrets.randbelow(181)
+            progress = 10 + secrets.randbelow(duration - 9)
+            source = secrets.choice(["yandex", "spotify", "lastfm"])
+            
+            asyncio.run(process_scrobble(
+                db=db,
+                user=test_user,
+                title=title,
+                artist=artist,
+                cover_url="",
+                track_url="",
+                source=source,
+                progress_sec=progress,
+                is_playing=False,
+                duration=duration,
+                album=album
+            ))
+            
+            db.commit()
+            
+            track = db.query(Track).filter_by(title=title, artist=artist).first()
+            assert track is not None
+            assert track.album == album
+            assert track.duration == duration
+            
+            scrobble = db.query(Scrobble).filter_by(user_id=test_user.id, track_id=track.id).order_by(Scrobble.id.desc()).first()
+            assert scrobble is not None
+            assert scrobble.source == source
+            assert scrobble.listened_sec == 0
