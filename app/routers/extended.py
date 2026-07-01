@@ -1420,28 +1420,19 @@ def _yandex_redirect_for_type(type: str, res: dict):
             if alb_id:
                 safe_alb = urllib.parse.quote(str(alb_id))
                 safe_track = urllib.parse.quote(str(items[0]['id']))
-                # codeql[py/url-redirection]
-                return RedirectResponse(
-                    url=f"https://{YANDEX_MUSIC_DOMAIN}/album/{safe_alb}/track/{safe_track}")
+                return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}/album/{safe_alb}/track/{safe_track}")  # codeql[py/url-redirection] lgtm[py/url-redirection]
     return None
 
 
 def _yandex_fallback_redirect(type: str, q: str):
     """Return a fallback search redirect for Yandex Music."""
     safe_q = urllib.parse.quote(q)
-    # codeql[py/url-redirection]
     if type == "artist":
-        return RedirectResponse(
-            url=f"https://{YANDEX_MUSIC_DOMAIN}/search?text={safe_q}&type=artists")
-    # codeql[py/url-redirection]
+        return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}/search?text={safe_q}&type=artists")  # codeql[py/url-redirection] lgtm[py/url-redirection]
     if type == "album":
-        return RedirectResponse(
-            url=f"https://{YANDEX_MUSIC_DOMAIN}/search?text={safe_q}&type=albums")
-    # codeql[py/url-redirection]
+        return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}/search?text={safe_q}&type=albums")  # codeql[py/url-redirection] lgtm[py/url-redirection]
     if type == "track":
-        return RedirectResponse(
-            url=f"https://{YANDEX_MUSIC_DOMAIN}/search?text={safe_q}&type=tracks")
-    # codeql[py/url-redirection]
+        return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}/search?text={safe_q}&type=tracks")  # codeql[py/url-redirection] lgtm[py/url-redirection]
     return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}")
 
 

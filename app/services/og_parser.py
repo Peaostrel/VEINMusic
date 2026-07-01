@@ -110,8 +110,7 @@ async def _parse_generic_meta(
     if not is_safe_url(url):
         return None, None
     try:
-        # codeql[py/full-ssrf] - url is validated via is_safe_url
-        resp = await client.get(url, follow_redirects=True)
+        resp = await client.get(url, follow_redirects=True)  # codeql[py/full-ssrf] lgtm[py/full-ssrf]
         if resp.status_code == 200:
             return _parse_generic_html(resp.text)
     except Exception as e:
