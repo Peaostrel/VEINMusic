@@ -1,19 +1,17 @@
-export function sanitizeUrl(
-  url: string | null | undefined,
-): string | undefined {
+export function sanitizeUrl(url: string | null | undefined): string | undefined {
   if (!url) return undefined;
-
-  // Create a safe anchor element to parse the URL natively (optional, but good practice)
-  // Or just rely on string matching for the scheme to prevent javascript: and data: text/html
+  
   const lowerUrl = url.toLowerCase().trim();
 
+  // Strict allowlist to satisfy CodeQL's Client-side URL redirect and XSS
   if (
-    lowerUrl.startsWith("javascript:") ||
-    lowerUrl.startsWith("data:") ||
-    lowerUrl.startsWith("vbscript:")
+    lowerUrl.startsWith('http://') || 
+    lowerUrl.startsWith('https://') || 
+    lowerUrl.startsWith('/') ||
+    lowerUrl.startsWith('mailto:')
   ) {
-    return "about:blank";
+    return url;
   }
 
-  return url;
+  return 'about:blank';
 }

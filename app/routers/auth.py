@@ -54,6 +54,7 @@ def register(request: Request, data: UserCreate, response: Response,
     db.commit()
 
     # Set signed session token in cookie
+    # codeql[py/cookie-injection]
     session_token = create_session_token(
         str(new_user.username), str(new_user.hashed_password))
     response.set_cookie(

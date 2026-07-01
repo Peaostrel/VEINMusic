@@ -1,4 +1,3 @@
-import re
 import urllib.parse
 import ipaddress
 
@@ -6,8 +5,14 @@ import ipaddress
 def sanitize_text(text_val: str) -> str:
     if not text_val:
         return text_val
-    # Remove HTML tags (fixed ReDoS)
-    text_val = re.sub(r'<[^>]*>', '', text_val)
+    # Remove HTML tags without regex
+    while '<' in text_val and '>' in text_val:
+        start = text_val.find('<')
+        end = text_val.find('>', start)
+        if end != -1:
+            text_val = text_val[:start] + text_val[end+1:]
+        else:
+            break
     # Escape quotes and brackets
     return text_val.replace(
         '"',
