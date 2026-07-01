@@ -136,7 +136,7 @@ def get_global_history(db: Annotated[Session, Depends(get_db)]):
         Scrobble.user_id == User.id).join(
             UserProfile,
             User.id == UserProfile.user_id).filter(
-                not UserProfile.is_private).order_by(
+                UserProfile.is_private == False).order_by(
                     Scrobble.id.desc()).limit(20).all()
 
     s_ids = [s.id for s, t in scrobbles]
@@ -172,8 +172,9 @@ def get_friends_history(username: str,
 
     scrobbles = db.query(
         Scrobble,
-        Track).join(Track).filter(
-        Scrobble.user_id.in_(following_ids)).order_by(
+        Track).join(Track).join(User, Scrobble.user_id == User.id).join(UserProfile, User.id == UserProfile.user_id).filter(
+        Scrobble.user_id.in_(following_ids),
+        UserProfile.is_private == False).order_by(
             Scrobble.id.desc()).limit(20).all()
 
     s_ids = [s.id for s, t in scrobbles]
@@ -198,6 +199,11 @@ def toggle_like(scrobble_id: int, db: Annotated[Session, Depends(
     scrobble = db.query(Scrobble).filter(Scrobble.id == scrobble_id).first()
     if not scrobble:
         raise HTTPException(status_code=404, detail="Скроббл не найден")
+
+    if scrobble.user_id != user.id:
+        scrobble_owner_profile = db.query(UserProfile).filter(UserProfile.user_id == scrobble.user_id).first()
+        if scrobble_owner_profile and scrobble_owner_profile.is_private:
+            raise HTTPException(status_code=403, detail="Доступ запрещен (приватный профиль)")
 
     like = db.query(ScrobbleLike).filter_by(
         user_id=user.id, scrobble_id=scrobble_id).first()
@@ -225,6 +231,11 @@ def add_comment(scrobble_id: int,
     scrobble = db.query(Scrobble).filter(Scrobble.id == scrobble_id).first()
     if not scrobble:
         raise HTTPException(status_code=404, detail="Скроббл не найден")
+
+    if scrobble.user_id != user.id:
+        scrobble_owner_profile = db.query(UserProfile).filter(UserProfile.user_id == scrobble.user_id).first()
+        if scrobble_owner_profile and scrobble_owner_profile.is_private:
+            raise HTTPException(status_code=403, detail="Доступ запрещен (приватный профиль)")
 
     clean_content = sanitize_text(data.content)
     db.add(
