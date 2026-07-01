@@ -228,6 +228,11 @@ function SettingsContent() {
       ),
     ])
       .then(async ([userRes, statsRes]) => {
+        if (!userRes.ok || !statsRes.ok) {
+          localStorage.removeItem("username");
+          router.push("/auth");
+          return;
+        }
         const u = await userRes.json();
         const s = await statsRes.json();
         setUserProfile(u);

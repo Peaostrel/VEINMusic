@@ -11,6 +11,7 @@ from app.database import get_db
 from app.models import User, UserProfile, UserIntegration
 from app.schemas import UserCreate
 from app.core.security import get_password_hash, verify_password, get_current_user, create_session_token
+from app.core.rate_limit import limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -23,7 +24,8 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 
 @router.post("/register", responses={400: {"description": "Bad Request"}})
-def register(data: UserCreate, response: Response,
+@limiter.limit("3/minute")
+def register(request: Request, data: UserCreate, response: Response,
              db: Annotated[Session, Depends(get_db)]):
     data.username = data.username.lower()
     if len(data.username) < 3:
@@ -66,7 +68,8 @@ def register(data: UserCreate, response: Response,
 
 
 @router.post("/login", responses={400: {"description": "Bad Request"}})
-def login(data: UserCreate, response: Response,
+@limiter.limit("5/minute")
+def login(request: Request, data: UserCreate, response: Response,
           db: Annotated[Session, Depends(get_db)]):
     data.username = data.username.lower()
     user = db.query(User).filter(User.username == data.username).first()

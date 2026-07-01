@@ -213,7 +213,7 @@ def _handle_streak(db: Session, user: User):
     scrobbles_today = db.query(Scrobble).join(Track).filter(
         Scrobble.user_id == user.id,
         Scrobble.played_at >= today_start,
-        Scrobble.listened_sec * 100 >= Track.duration * 85).count()
+        Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85).count()
     if scrobbles_today >= 5:
         today_str = today_start.strftime("%Y-%m-%d")
         yesterday_str = (today_start - timedelta(days=1)).strftime("%Y-%m-%d")

@@ -18,6 +18,8 @@ from app.models import User, UserProfile, UserIntegration, Track, Scrobble, Achi
 from app.main import app  # noqa: E402
 from app.database import Base, get_db, engine, SessionLocal  # noqa: E402, F401
 from fastapi.testclient import TestClient  # noqa: E402
+from app.core.rate_limit import limiter  # noqa: E402
+limiter.enabled = False
 
 
 @pytest.fixture(scope="session", autouse=True)

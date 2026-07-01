@@ -63,7 +63,7 @@ export default function GlobalFeed() {
           <button
             key={s.id}
             type="button"
-            className="w-full bg-[#121212]/50 backdrop-blur-md p-4 rounded-xl border border-white/5 flex items-center gap-4 hover:border-[var(--accent)] transition-all group cursor-pointer text-left font-normal bg-transparent border-none outline-none block"
+            className="w-full bg-[#121212]/50 backdrop-blur-md p-4 rounded-xl border border-white/5 flex items-center gap-4 hover:border-[var(--accent)] transition-all group cursor-pointer text-left font-normal bg-transparent outline-none block"
             onClick={() => router.push(`/user/${s.username}`)}
           >
             <div className="relative shrink-0">

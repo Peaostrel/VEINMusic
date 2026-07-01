@@ -33,6 +33,7 @@ function parseMarkdownForNode(node: any, nodeIdx: number) {
         href={link.linkUrl}
         target="_blank"
         rel="noopener noreferrer"
+
         className="text-[var(--accent)] hover:underline font-bold"
       >
         {link.linkText}
@@ -128,6 +129,7 @@ function renderDescriptionWithLinks(
             href={linkUrl}
             target="_blank"
             rel="noopener noreferrer"
+
             className="text-[var(--accent)] hover:underline font-bold"
           >
             {matchedWord}

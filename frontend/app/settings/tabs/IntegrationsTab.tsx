@@ -94,7 +94,8 @@ export default function IntegrationsTab({
                 <a
                   href="https://oauth.yandex.ru/authorize?response_type=token&client_id=23cabbbdc6cd418abb4b39c32c41195d"
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
+
                   className="text-[#ffcc00] hover:underline font-bold ml-1"
                 >
                   Получить токен
