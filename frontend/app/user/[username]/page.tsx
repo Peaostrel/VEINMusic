@@ -8,6 +8,8 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+
+import { sanitizeUrl } from "../../utils/sanitizeUrl";
 import {
   getRankInfo,
   getNextRankInfo,
@@ -1179,7 +1181,7 @@ function HistoryItem({
         <div className="w-12 h-12 rounded bg-black shrink-0 overflow-hidden shadow z-10 pointer-events-auto relative">
           {item.cover_url ? (
             <img
-              src={item.cover_url}
+              src={sanitizeUrl(item.cover_url)}
               className="w-full h-full object-cover"
               alt={item.title}
             />
@@ -1193,7 +1195,7 @@ function HistoryItem({
           <div className="flex items-center gap-1.5 mb-0.5 w-max">
             <div className="shrink-0">{getPlatformIcon(item.source)}</div>
             <a
-              href={getTrackUrl(item)}
+              href={sanitizeUrl(getTrackUrl(item))}
               target="_blank"
               rel="noopener noreferrer"
 

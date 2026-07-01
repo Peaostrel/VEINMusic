@@ -100,7 +100,7 @@ def _authenticate_user(token: str, db: Session) -> Optional[User]:
         except Exception:  # NOSONAR
             pass
     else:
-        hashed_token = hashlib.sha256(token.encode('utf-8')).hexdigest()
+        hashed_token = hashlib.pbkdf2_hmac('sha256', token.encode('utf-8'), SECRET_KEY.encode(), 100000).hex()
         return db.query(User).filter(User.api_key == hashed_token).first()
     return None
 

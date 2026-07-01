@@ -3,15 +3,16 @@ from sqlalchemy.orm import Session
 from typing import Annotated
 import secrets
 import hashlib
-from fastapi.responses import RedirectResponse
-import os
-import httpx
+
 
 from app.database import get_db
 from app.models import User, UserProfile, UserIntegration
 from app.schemas import UserCreate
-from app.core.security import get_password_hash, verify_password, get_current_user, create_session_token
+from app.core.security import get_password_hash, verify_password, get_current_user, create_session_token, SECRET_KEY
 from app.core.rate_limit import limiter
+from fastapi.responses import RedirectResponse
+import os
+import httpx
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -37,7 +38,7 @@ def register(request: Request, data: UserCreate, response: Response,
 
     # Generate API Key, compute SHA-256 and store in DB
     raw_api_key = secrets.token_hex(16)
-    hashed_api_key = hashlib.sha256(raw_api_key.encode('utf-8')).hexdigest()
+    hashed_api_key = hashlib.pbkdf2_hmac('sha256', raw_api_key.encode('utf-8'), SECRET_KEY.encode(), 100000).hex()
 
     new_user = User(
         username=data.username,
