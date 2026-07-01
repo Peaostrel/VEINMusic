@@ -170,8 +170,7 @@ def _check_total_scrobbles(user, ach, db: Session) -> bool:
     return db.query(Scrobble).join(Track).filter(
         Scrobble.user_id == user.id,
         Scrobble.listened_sec *
-        100 >= Track.duration *
-        85).count() >= ach.rule_value
+        100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85).count() >= ach.rule_value
 
 
 def _check_night_scrobbles(user, ach, db: Session) -> bool:
@@ -179,8 +178,7 @@ def _check_night_scrobbles(user, ach, db: Session) -> bool:
         Scrobble.played_at).join(Track).filter(
         Scrobble.user_id == user.id,
         Scrobble.listened_sec *
-        100 >= Track.duration *
-        85).all()
+        100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85).all()
     offset = get_user_timezone_offset(
         str(user.profile.location) if (user.profile and user.profile.location) else "")
     night_count = sum(
@@ -203,13 +201,13 @@ def _scrobble_count_for_parts(db, user_id, parts):
     if len(parts) >= 2:
         return db.query(Scrobble).join(Track).filter(
             Scrobble.user_id == user_id,
-            Scrobble.listened_sec * 100 >= Track.duration * 85,
+            Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,
             (Track.artist.ilike(f"%{parts[0]}%") & Track.title.ilike(f"%{parts[-1]}%"))
             | (Track.title.ilike(f"%{parts[0]}%") & Track.title.ilike(f"%{parts[-1]}%"))
         ).count()
     return db.query(Scrobble).join(Track).filter(
         Scrobble.user_id == user_id,
-        Scrobble.listened_sec * 100 >= Track.duration * 85,
+        Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,
         (Track.title.ilike(f"%{parts[0]}%")) | (
             Track.artist.ilike(f"%{parts[0]}%"))).count()
 
@@ -219,12 +217,12 @@ def _count_by_url(db, user_id, target_str):
         track_id = target_str.split(TRACK_PATH)[1].strip("/")
         return db.query(Scrobble).join(Track).filter(
             Scrobble.user_id == user_id,
-            Scrobble.listened_sec * 100 >= Track.duration * 85,
+            Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,
             Track.track_url.like(f"%/track/{track_id}%")
         ).count()
     return db.query(Scrobble).join(Track).filter(
         Scrobble.user_id == user_id,
-        Scrobble.listened_sec * 100 >= Track.duration * 85,
+        Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,
         Track.track_url.like(f"%{target_str}%")
     ).count()
 
@@ -250,7 +248,7 @@ def _check_specific_track(user, ach, db: Session) -> bool:
         else:
             count = db.query(Scrobble).join(Track).filter(
                 Scrobble.user_id == user.id,
-                Scrobble.listened_sec * 100 >= Track.duration * 85,
+                Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,
                 (Track.title.ilike(f"%{ach.rule_target}%")) | (
                     Track.artist.ilike(f'%{target0}%'))).count()
     return count >= ach.rule_value
@@ -267,8 +265,7 @@ def _check_specific_album(user, ach, db: Session) -> bool:
                     Scrobble.track_id))).join(Track).filter(
             Scrobble.user_id == user.id,
             Scrobble.listened_sec *
-            100 >= Track.duration *
-            85,
+            100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,
             Track.cover_url == ach.target_image).scalar() or 0
     else:
         clean_target = ach.rule_target.split('?')[0]
@@ -278,8 +275,7 @@ def _check_specific_album(user, ach, db: Session) -> bool:
                     Scrobble.track_id))).join(Track).filter(
             Scrobble.user_id == user.id,
             Scrobble.listened_sec *
-            100 >= Track.duration *
-            85,
+            100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,
             Track.track_url.like(f"%{clean_target}%")).scalar() or 0
     return count >= ach.rule_value
 
@@ -291,7 +287,7 @@ def _check_specific_artist(user, ach, db: Session) -> bool:
         "||")[0] if "||" in ach.rule_target else ach.rule_target
     count = db.query(Scrobble).join(Track).filter(
         Scrobble.user_id == user.id,
-        Scrobble.listened_sec * 100 >= Track.duration * 85,
+        Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,
         Track.artist.ilike(f'%{target}%')).count()
     return count >= ach.rule_value
 
@@ -340,8 +336,7 @@ def get_user_level_info(user: User, db: Session):
             Scrobble.xp_earned)).join(Track).filter(
         Scrobble.user_id == user.id,
         Scrobble.listened_sec *
-        100 >= Track.duration *
-        85).scalar() or 0
+        100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85).scalar() or 0
     base_xp = scrobbles_xp + (user.integration.bonus_xp or 0)
     total_xp = int(base_xp * 1.1) if streak >= 7 else base_xp
     level = (total_xp // 100) + 1
@@ -430,8 +425,7 @@ def get_taste_twins(username: str, db: Session):
                 Track.artist))).join(Scrobble).filter(
         Scrobble.user_id == me.id,
         Scrobble.listened_sec *
-        100 >= Track.duration *
-        85).scalar() or 1
+        100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85).scalar() or 1
 
     results = []
     for row in rows:
@@ -657,24 +651,24 @@ def _calc_specific_track(db: Session, user: User, a: Achievement) -> int:
                 from sqlalchemy import and_, or_
                 word_filters = [or_(Track.title.ilike(f"%{w.strip()}%"), Track.artist.ilike(
                     f"%{w.strip()}%")) for w in parts if w.strip()]
-                return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, and_(*word_filters)).count()
-            return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.title.ilike(f"%{a.rule_meta}%")) | (Track.artist.ilike(f"%{a.rule_meta}%"))).count()
+                return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85, and_(*word_filters)).count()
+            return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85, (Track.title.ilike(f"%{a.rule_meta}%")) | (Track.artist.ilike(f"%{a.rule_meta}%"))).count()
         target_str = a.rule_target.split('?')[0]
         if "yandex.ru" in target_str and TRACK_PATH in target_str:
             track_id = target_str.split(TRACK_PATH)[1].strip("/")
-            return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.track_url.like(f"%/track/{track_id}%")).count()
-        return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.track_url.like(f"%/track/{target_str}%")).count()
+            return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85, Track.track_url.like(f"%/track/{track_id}%")).count()
+        return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85, Track.track_url.like(f"%/track/{target_str}%")).count()
     parts = [p.strip() for p in a.rule_target.replace('—', '-').split('-')]
     if len(parts) >= 2:
-        return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.artist.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%")) | (Track.title.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%"))).count()
-    return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, (Track.title.ilike(f"%{a.rule_target}%")) | (Track.artist.ilike(f'%{a.rule_target.split("||")[0] if "||" in a.rule_target else a.rule_target}%'))).count()
+        return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85, (Track.artist.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%")) | (Track.title.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%"))).count()
+    return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85, (Track.title.ilike(f"%{a.rule_target}%")) | (Track.artist.ilike(f'%{a.rule_target.split("||")[0] if "||" in a.rule_target else a.rule_target}%'))).count()
 
 
 def _calc_specific_album(db: Session, user: User, a: Achievement) -> int:
     current_val_img = 0
     if a.target_image:
         current_val_img = db.query(func.count(func.distinct(Scrobble.track_id))).join(Track).filter(
-            Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.cover_url == a.target_image).scalar() or 0
+            Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85, Track.cover_url == a.target_image).scalar() or 0
     current_val_text = 0
     album_name = a.rule_meta if a.rule_meta else a.rule_target
     if "||" in a.rule_target:
@@ -683,26 +677,26 @@ def _calc_specific_album(db: Session, user: User, a: Achievement) -> int:
         parts = [p.strip() for p in album_name.replace('—', '-').split('-')]
         if len(parts) >= 2:
             current_val_text = db.query(func.count(func.distinct(Scrobble.track_id))).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec *
-                                                                                                         100 >= Track.duration * 85, Track.artist.ilike(f"%{parts[0].strip()}%"), Track.album.ilike(f"%{parts[-1].strip()}%")).scalar() or 0
+                                                                                                         100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85, Track.artist.ilike(f"%{parts[0].strip()}%"), Track.album.ilike(f"%{parts[-1].strip()}%")).scalar() or 0
         else:
             current_val_text = db.query(func.count(func.distinct(Scrobble.track_id))).join(Track).filter(
-                Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.album.ilike(f"%{album_name.strip()}%")).scalar() or 0
+                Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85, Track.album.ilike(f"%{album_name.strip()}%")).scalar() or 0
     return max(current_val_img, current_val_text)
 
 
 def _calculate_achievement_progress(db: Session, user: User, a: Achievement) -> int:
     if a.rule_type == "total_scrobbles":
-        return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85).count()
+        return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85).count()
     elif a.rule_type == "night_scrobbles":
         valid_times = db.query(Scrobble.played_at).join(Track).filter(
-            Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85).all()
+            Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85).all()
         return sum(1 for (dt,) in valid_times if dt.replace(tzinfo=timezone.utc).astimezone().strftime('%H') in ['00', '01', '02', '03', '04', '05'])
     elif a.rule_type == "specific_track" and a.rule_target:
         return _calc_specific_track(db, user, a)
     elif a.rule_type == "specific_album" and a.rule_target:
         return _calc_specific_album(db, user, a)
     elif a.rule_type == "specific_artist" and a.rule_target:
-        return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= Track.duration * 85, Track.artist.ilike(f'%{a.rule_target.split("||")[0] if "||" in a.rule_target else a.rule_target}%')).count()
+        return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85, Track.artist.ilike(f'%{a.rule_target.split("||")[0] if "||" in a.rule_target else a.rule_target}%')).count()
     return 0
 
 
@@ -821,8 +815,7 @@ def get_wrapped_stats(username: str, db: Annotated[Session, Depends(get_db)]):
         Scrobble.user_id == user.id,
         Scrobble.played_at >= last_month,
         Scrobble.listened_sec *
-        100 >= Track.duration *
-        85]
+        100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85]
     top_artist = db.query(
         Track.artist,
         func.count(
@@ -996,8 +989,7 @@ def get_detailed_stats(username: str,
     base_filter = [
         Scrobble.user_id == user.id,
         Scrobble.listened_sec *
-        100 >= Track.duration *
-        85]
+        100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85]
     if period == "7d":
         base_filter.append(
             Scrobble.played_at >= datetime.now(
@@ -1140,7 +1132,7 @@ def get_stats(username: str, db: Annotated[Session, Depends(get_db)]):
 
     scrobbles = db.query(Scrobble, Track).join(Track).filter(
         Scrobble.user_id == user.id,
-        Scrobble.listened_sec * 100 >= Track.duration * 85
+        Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85
     ).all()
 
     total_scrobbles = len(scrobbles)
@@ -1217,7 +1209,7 @@ def get_activity(username: str, db: Annotated[Session, Depends(get_db)]):
 
     scrobbles = db.query(Scrobble.played_at).join(Track).filter(
         Scrobble.user_id == user.id,
-        Scrobble.listened_sec * 100 >= Track.duration * 85
+        Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85
     ).all()
 
     activity_dict: dict[str, int] = {}
@@ -1490,7 +1482,7 @@ def search_users(q: str, db: Annotated[Session, Depends(get_db)]):
 def get_public_stats(db: Annotated[Session, Depends(get_db)]):
     total_users = db.query(User).count()
     total_scrobbles = db.query(Scrobble).join(Track).filter(
-        Scrobble.listened_sec * 100 >= Track.duration * 85).count()
+        Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85).count()
     total_tracks = db.query(Track).count()
 
     # Считаем онлайн за последние 5 минут
@@ -1820,7 +1812,7 @@ def update_user_level(target_username: str,
                             detail="Уровень должен быть от 1 до 10000")
     count_scrobbles = db.query(Scrobble).join(Track).filter(
         Scrobble.user_id == target.id,
-        Scrobble.listened_sec * 100 >= Track.duration * 85).count()
+        Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85).count()
     target.integration.bonus_xp = max(
         0, ((data.new_level - 1) * 100) - count_scrobbles)
     db.commit()
