@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 import asyncio
 import os
 import logging
@@ -13,10 +12,10 @@ redis_client = None
 arq_pool = None
 
 # A set to keep a reference to background tasks to prevent garbage collection
-_BACKGROUND_TASKS = set()
+_BACKGROUND_TASKS: set[asyncio.Task] = set()
 
 # A dictionary to hold local locks as fallback
-_LOCAL_LOCKS = {}
+_LOCAL_LOCKS: dict[str, asyncio.Lock] = {}
 _LOCAL_LOCKS_LOCK = asyncio.Lock()
 
 
@@ -76,7 +75,8 @@ async def redis_lock(lock_key: str, expire_sec: int = 10):
             yield
         finally:
             try:
-                await redis_lock_obj.release()
+                if redis_lock_obj is not None:
+                    await redis_lock_obj.release()
             except Exception:
                 logging.exception(f"Failed to release Redis lock '{lock_key}'")
 

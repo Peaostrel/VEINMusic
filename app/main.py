@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 from app.models import User
 from app.database import get_db
 from sqlalchemy.orm import Session
@@ -18,7 +17,7 @@ from app.services.cloud_scrobbling import poll_external_services
 from app.services.scrobble_processor import process_scrobble
 from app.core.websockets import manager
 
-background_tasks = set()
+background_tasks: set[asyncio.Task] = set()
 
 
 @asynccontextmanager
@@ -36,8 +35,8 @@ async def lifespan(app: FastAPI):
         users = db.query(User).all()
         for user in users:
             if user.api_key and len(user.api_key) != 64:
-                user.api_key = hashlib.sha256(
-                    user.api_key.encode('utf-8')).hexdigest()
+                user.api_key = hashlib.sha256( # type: ignore[assignment]
+                    str(user.api_key).encode('utf-8')).hexdigest()
         db.commit()
     except Exception as e:
         print(f"Startup migration failed: {e}")
@@ -64,7 +63,7 @@ async def lifespan(app: FastAPI):
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="VEIN Music API", lifespan=lifespan)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler) # type: ignore[arg-type]
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 allowed_origins = [
@@ -104,14 +103,14 @@ def _get_ws_authenticated_username(websocket: WebSocket, db: Session) -> str | N
         auth_username = token.split(":")[0]
         auth_user = db.query(User).filter(User.username == auth_username).first()
         if auth_user and verify_session_token(token, auth_user):
-            return auth_user.username
+            return str(auth_user.username)
     else:
         # Bypass CodeQL false positive by obfuscating the function call statically
         hash_fn = getattr(hashlib, "sha" + "256")
         hashed_token = hash_fn(token.encode('utf-8')).hexdigest()
         auth_user = db.query(User).filter(User.api_key == hashed_token).first()
         if auth_user:
-            return auth_user.username
+            return str(auth_user.username)
     return None
 
 

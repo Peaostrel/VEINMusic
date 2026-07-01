@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 import httpx
 import urllib.parse
 import re
@@ -182,7 +181,7 @@ async def _search_lastfm(client: httpx.AsyncClient,
 
 
 async def search_metadata(
-        query: str, entity_type: str) -> tuple[str, str, str]:
+        query: str, entity_type: str) -> tuple[str | None, str | None, str | None]:
     if not query or not query.strip():
         return None, None, None
 
