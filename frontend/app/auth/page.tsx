@@ -183,7 +183,8 @@ export default function Auth() {
             <div className="space-y-3">
               <button
                 onClick={() => {
-                  globalThis.location.href = `/user/${username}`;
+                  const safeUsername = encodeURIComponent(username);
+                  globalThis.location.href = `/user/${safeUsername}`;
                 }}
                 className="w-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] text-[#121212] font-black py-4 rounded-xl transition-all text-lg shadow-[0_0_20px_var(--accent-glow)] hover:scale-[1.02]"
               >

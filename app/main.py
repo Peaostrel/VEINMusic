@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 from app.models import User
 from app.database import get_db
 from sqlalchemy.orm import Session

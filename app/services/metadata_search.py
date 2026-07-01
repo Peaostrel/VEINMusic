@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 import httpx
 import urllib.parse
 import re

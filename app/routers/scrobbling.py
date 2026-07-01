@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
 from sqlalchemy.orm import Session

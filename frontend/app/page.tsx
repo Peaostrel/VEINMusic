@@ -4,72 +4,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Heart, MessageCircle, Users } from "lucide-react";
 
-const getPlatformIcon = (source: string) => {
-  switch (source) {
-    case "spotify":
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          fill="#1DB954"
-          className="w-4 h-4 shrink-0 drop-shadow-[0_0_5px_rgba(29,185,84,0.5)]"
-        >
-          <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.54.66.3 1.02zm1.44-3.3c-.301.42-.84.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.02.6-1.14 4.32-1.38 9.72-.72 13.44 1.56.42.24.6.84.3 1.26zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.18-1.2-.18-1.38-.781-.18-.6.18-1.2.78-1.38 4.2-1.26 11.28-1.02 15.72 1.62.539.3.719 1.02.419 1.56-.239.54-.959.72-1.619.36z" />
-        </svg>
-      );
-    case "youtube_music":
-      return (
-        <img
-          src="https://img.icons8.com/?size=100&id=V1cbDThDpbRc&format=png&color=FF0000"
-          alt="YouTube Music"
-          className="w-4 h-4 shrink-0 object-contain drop-shadow-[0_0_5px_rgba(255,0,0,0.5)]"
-        />
-      );
-    case "vk":
-      return (
-        <svg
-          viewBox="5.5 3 18 18"
-          fill="#0077FF"
-          className="w-4 h-4 shrink-0 drop-shadow-[0_0_5px_rgba(0,119,255,0.5)]"
-        >
-          <path d="M15.5 17c-5.5 0-8.6-3.8-8.7-10h2.7c.1 4.5 2.1 6.4 3.7 6.8V7h2.5v3.9c1.5-.2 3.1-1.9 3.6-3.9h2.5c-.4 2.5-2.2 4.2-3.5 5 1.3.6 3.4 2 4.2 5h-2.8c-.6-2-2.2-3.5-4.2-3.7V17h-2z" />
-        </svg>
-      );
-    case "soundcloud":
-      return (
-        <img
-          src="https://img.icons8.com/?size=100&id=13669&format=png&color=FF5500"
-          alt="SoundCloud"
-          className="w-4 h-4 shrink-0 object-contain drop-shadow-[0_0_5px_rgba(255,85,0,0.5)]"
-        />
-      );
-    case "apple_music":
-      return (
-        <img
-          src="https://img.icons8.com/?size=100&id=81TSi6Gqk0tm&format=png&color=FA243C"
-          alt="Apple Music"
-          className="w-4 h-4 shrink-0 object-contain drop-shadow-[0_0_5px_rgba(250,36,60,0.5)]"
-        />
-      );
-    case "yandex":
-      return (
-        <img
-          src="/yandex.png"
-          alt="Яндекс"
-          className="w-4 h-4 shrink-0 object-contain drop-shadow-[0_0_5px_var(--accent-glow)]"
-        />
-      );
-    default:
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          className="w-4 h-4 shrink-0 text-gray-400 drop-shadow-[0_0_5px_rgba(156,163,175,0.5)]"
-        >
-          <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-        </svg>
-      );
-  }
-};
+import { getPlatformIcon } from "../../utils/formatters";
 
 import About from "./about/page";
 
