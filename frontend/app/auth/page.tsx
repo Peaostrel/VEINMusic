@@ -1,65 +1,72 @@
-'use client';
-import { useState, useEffect } from 'react';
+"use client";
+import { useState, useEffect } from "react";
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [step, setStep] = useState('form'); 
-  const [apiKey, setApiKey] = useState('');
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [step, setStep] = useState("form");
+  const [apiKey, setApiKey] = useState("");
   const [loading, setLoading] = useState(false);
   useEffect(() => {
-    const storedUser = localStorage.getItem('username');
+    const storedUser = localStorage.getItem("username");
     if (storedUser) {
       setUsername(storedUser);
-      setStep('success');
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-      fetch(`${API_URL}/api/user/${storedUser}`, { credentials: 'include' })
-        .then(r => r.json())
-        .then(d => { if (d.api_key) setApiKey(d.api_key); })
+      setStep("success");
+      const API_URL =
+        process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+      fetch(`${API_URL}/api/user/${storedUser}`, { credentials: "include" })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.api_key) setApiKey(d.api_key);
+        })
         .catch(console.error);
     }
   }, []);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setLoading(true);
 
-    const endpoint = isLogin ? '/auth/login' : '/auth/register';
+    const endpoint = isLogin ? "/auth/login" : "/auth/register";
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+      const API_URL =
+        process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
       const res = await fetch(`${API_URL}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ username, password })
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ username, password }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.detail || 'Ошибка. Проверь данные.');
+        setError(data.detail || "Ошибка. Проверь данные.");
         setLoading(false);
         return;
       }
 
-      localStorage.setItem('username', data.username);
-      globalThis.dispatchEvent(new Event('themeChanged'));
+      localStorage.setItem("username", data.username);
+      globalThis.dispatchEvent(new Event("themeChanged"));
 
       // Fetch api_key from user profile (returned only to the owner via cookie)
       try {
-        const profileRes = await fetch(`${API_URL}/api/user/${data.username}`, { credentials: 'include' });
+        const profileRes = await fetch(`${API_URL}/api/user/${data.username}`, {
+          credentials: "include",
+        });
         const profileData = await profileRes.json();
         if (profileData.api_key) setApiKey(profileData.api_key);
-      } catch (error) { console.error(error); }
+      } catch (error) {
+        console.error(error);
+      }
 
-      setStep('success');
-      
+      setStep("success");
     } catch (err) {
       console.error(err);
-      setError('Ошибка сети. Бэкенд не отвечает.');
+      setError("Ошибка сети. Бэкенд не отвечает.");
       setLoading(false);
     }
   };
@@ -67,23 +74,30 @@ export default function Auth() {
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <main className="w-full max-w-md">
-        {step === 'form' ? (
+        {step === "form" ? (
           <div className="bg-[#1a1a1a] border border-white/5 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-50"></div>
-            
+
             <h1 className="text-3xl font-black text-white text-center mb-2 tracking-tight">
-              {isLogin ? 'С ВОЗВРАЩЕНИЕМ' : 'НОВАЯ КРОВЬ'}
+              {isLogin ? "С ВОЗВРАЩЕНИЕМ" : "НОВАЯ КРОВЬ"}
             </h1>
             <p className="text-gray-400 text-center text-sm mb-8 font-medium">
-              {isLogin ? 'Введи свои данные для входа в систему' : 'Зарегистрируйся, чтобы начать отслеживать музыку'}
+              {isLogin
+                ? "Введи свои данные для входа в систему"
+                : "Зарегистрируйся, чтобы начать отслеживать музыку"}
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label htmlFor="auth-username" className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Логин</label>
-                <input 
+                <label
+                  htmlFor="auth-username"
+                  className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2"
+                >
+                  Логин
+                </label>
+                <input
                   id="auth-username"
-                  type="text" 
+                  type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--accent)] transition-colors"
@@ -91,12 +105,17 @@ export default function Auth() {
                   required
                 />
               </div>
-              
+
               <div>
-                <label htmlFor="auth-password" className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Пароль</label>
-                <input 
+                <label
+                  htmlFor="auth-password"
+                  className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2"
+                >
+                  Пароль
+                </label>
+                <input
                   id="auth-password"
-                  type="password" 
+                  type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--accent)] transition-colors"
@@ -111,45 +130,61 @@ export default function Auth() {
                 </div>
               )}
 
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 disabled={loading}
                 className="w-full bg-[var(--accent)] text-[#121212] font-black py-4 rounded-xl hover:scale-[1.02] transition-transform shadow-[0_0_15px_var(--accent-glow)] disabled:opacity-50 disabled:hover:scale-100 mt-4 text-lg"
               >
                 {(() => {
-                  if (loading) return 'ПОДОЖДИ...';
-                  if (isLogin) return 'ВОЙТИ';
-                  return 'СОЗДАТЬ АККАУНТ';
+                  if (loading) return "ПОДОЖДИ...";
+                  if (isLogin) return "ВОЙТИ";
+                  return "СОЗДАТЬ АККАУНТ";
                 })()}
               </button>
             </form>
 
             <div className="mt-8 text-center">
-              <button 
-                onClick={() => { setIsLogin(!isLogin); setError(''); }}
+              <button
+                onClick={() => {
+                  setIsLogin(!isLogin);
+                  setError("");
+                }}
                 className="text-sm text-gray-400 hover:text-white transition-colors font-medium"
               >
-                {isLogin ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти'}
+                {isLogin
+                  ? "Нет аккаунта? Зарегистрироваться"
+                  : "Уже есть аккаунт? Войти"}
               </button>
             </div>
           </div>
         ) : (
           <div className="bg-[#1a1a1a] border border-white/5 rounded-2xl p-8 shadow-2xl text-center">
-            <h2 className="text-2xl font-black text-white mb-2">ПРОВЕРКА СВЯЗИ</h2>
-            <p className="text-gray-400 text-sm mb-6">Твой личный API ключ для работы:</p>
-            
-            <div className="bg-[#121212] border border-white/10 font-mono text-sm p-4 rounded-xl mb-6 select-all overflow-x-auto shadow-inner" style={{color: 'var(--accent)'}}>
+            <h2 className="text-2xl font-black text-white mb-2">
+              ПРОВЕРКА СВЯЗИ
+            </h2>
+            <p className="text-gray-400 text-sm mb-6">
+              Твой личный API ключ для работы:
+            </p>
+
+            <div
+              className="bg-[#121212] border border-white/10 font-mono text-sm p-4 rounded-xl mb-6 select-all overflow-x-auto shadow-inner"
+              style={{ color: "var(--accent)" }}
+            >
               {apiKey}
             </div>
-            
+
             <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-5 mb-8 flex items-center justify-center gap-3">
               <span className="text-2xl">⚡</span>
-              <span className="text-green-400 font-bold">Система готова к работе!</span>
+              <span className="text-green-400 font-bold">
+                Система готова к работе!
+              </span>
             </div>
 
             <div className="space-y-3">
-              <button 
-                onClick={() => { globalThis.location.href = `/user/${username}`; }}
+              <button
+                onClick={() => {
+                  globalThis.location.href = `/user/${username}`;
+                }}
                 className="w-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] text-[#121212] font-black py-4 rounded-xl transition-all text-lg shadow-[0_0_20px_var(--accent-glow)] hover:scale-[1.02]"
               >
                 ВОЙТИ В СИСТЕМУ
