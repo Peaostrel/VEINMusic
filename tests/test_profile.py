@@ -107,7 +107,8 @@ def test_generate_api_key(auth_client, db, auth_user):
     updated_user = db.query(User).filter(
         User.username == auth_user.username).first()
     import hashlib
-    expected_hash = hashlib.pbkdf2_hmac('sha256', raw_key.encode('utf-8'), b'vein_api_salt', 100000).hex()
+    from app.core.security import SECRET_KEY
+    expected_hash = hashlib.pbkdf2_hmac('sha256', raw_key.encode('utf-8'), SECRET_KEY.encode(), 100000).hex()
     assert updated_user.api_key == expected_hash
 
 

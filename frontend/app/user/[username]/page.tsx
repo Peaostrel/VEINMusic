@@ -8,9 +8,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Sidebar from "../../components/Sidebar";
-import ErrorMessage from "../../components/ErrorMessage";
-import { getPlatformIcon, getTrackUrl, getArtistUrl, getAlbumUrl } from "../../utils/platformIcons";
+
 import { sanitizeUrl } from "../../utils/sanitizeUrl";
 import {
   getRankInfo,

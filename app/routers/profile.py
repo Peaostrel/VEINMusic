@@ -5,10 +5,11 @@ import json
 import secrets
 import hashlib
 
+
 from app.database import get_db
 from app.models import User
 from app.schemas import ProfileUpdate
-from app.core.security import get_current_user
+from app.core.security import get_current_user, SECRET_KEY
 from app.services.metadata_search import search_metadata
 from app.utils import sanitize_text
 
@@ -126,7 +127,7 @@ def update_privacy(data: dict, db: Annotated[Session, Depends(
 def generate_api_key(db: Annotated[Session, Depends(
         get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     raw_key = secrets.token_hex(16)
-    hashed_key = hashlib.pbkdf2_hmac('sha256', raw_key.encode('utf-8'), b'vein_api_salt', 100000).hex()
+    hashed_key = hashlib.pbkdf2_hmac('sha256', raw_key.encode('utf-8'), SECRET_KEY.encode(), 100000).hex()
     current_user.api_key = hashed_key  # type: ignore[assignment]
     db.commit()
     return {"api_key": raw_key}
