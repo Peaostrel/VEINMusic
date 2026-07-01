@@ -1934,11 +1934,11 @@ async def get_album_track_count(url: str) -> int:
     import urllib.parse
     if not is_safe_url(url, allowed_domains=[YANDEX_MUSIC_DOMAIN, "open.spotify.com"]):
         return 0
-        
+
     parsed_url = urllib.parse.urlparse(url)
     host = (parsed_url.hostname or "").lower()
     path = parsed_url.path or ""
-    
+
     headers = {'User-Agent': USER_AGENT_MOZILLA}
     try:
         async with httpx.AsyncClient(headers=headers, timeout=5.0) as client:
