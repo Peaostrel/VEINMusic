@@ -1,6 +1,6 @@
-import './globals.css';
-import Navbar from './Navbar';
-import Footer from './Footer';
+import "./globals.css";
+import Navbar from "./Navbar";
+import Footer from "./Footer";
 
 /**
  * Root Layout
@@ -12,29 +12,35 @@ import Footer from './Footer';
 import type { Metadata, Viewport } from "next";
 
 export const viewport: Viewport = {
-  themeColor: '#ffcc00',
-  width: 'device-width',
+  themeColor: "#ffcc00",
+  width: "device-width",
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
 };
 
 export const metadata: Metadata = {
-  title: 'VEIN Music',
-  description: 'Твой музыкальный профиль',
-  manifest: '/manifest.json',
+  title: "VEIN Music",
+  description: "Твой музыкальный профиль",
+  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
-    title: 'VEIN Music',
+    statusBarStyle: "default",
+    title: "VEIN Music",
   },
 };
 
-export default function RootLayout({ children }: { readonly children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  readonly children: React.ReactNode;
+}) {
   return (
     <html lang="ru" suppressHydrationWarning>
-      <body suppressHydrationWarning className="min-h-screen flex flex-col relative bg-[#0a0a0a] text-white font-sans overflow-x-hidden">
-        
+      <body
+        suppressHydrationWarning
+        className="min-h-screen flex flex-col relative bg-[#0a0a0a] text-white font-sans overflow-x-hidden"
+      >
         {/* Атмосферный фон (световые пятна) теперь тоже меняют цвет под тему! */}
         <div className="fixed top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-[var(--accent)] rounded-full mix-blend-screen filter blur-[150px] opacity-[0.06] animate-blob z-0 pointer-events-none transition-colors duration-1000"></div>
         <div className="fixed bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-[var(--accent-hover)] rounded-full mix-blend-screen filter blur-[150px] opacity-[0.04] animate-blob animation-delay-2000 z-0 pointer-events-none transition-colors duration-1000"></div>
@@ -44,7 +50,7 @@ export default function RootLayout({ children }: { readonly children: React.Reac
         <main className="flex-grow pt-32 pb-12 px-4 z-10 relative">
           {children}
         </main>
-        
+
         <Footer />
       </body>
     </html>

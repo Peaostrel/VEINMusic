@@ -57,8 +57,8 @@ async def get_track_genre(url: str) -> Optional[str]:
 def format_history_item(
         scrobble,
         track,
-        db: Session = None,
-        counters: dict = None):
+        db: Session | None = None,
+        counters: dict | None = None):
     upd_time = scrobble.updated_at or scrobble.played_at
     if upd_time.tzinfo is None:
         upd_time = upd_time.replace(tzinfo=timezone.utc)
@@ -119,20 +119,20 @@ def _update_existing_track(
     """Update mutable fields on an existing track and commit if anything changed."""
     updated = False
     if cover_url and not track.cover_url:
-        track.cover_url = cover_url
+        track.cover_url = cover_url  # type: ignore[assignment]
         updated = True
     if track_url and TRACK_PATH in track_url:
         if not track.track_url or TRACK_PATH not in track.track_url:
-            track.track_url = track_url
+            track.track_url = track_url  # type: ignore[assignment]
             updated = True
     if album and not track.album:
-        track.album = album
+        track.album = album  # type: ignore[assignment]
         updated = True
     if duration and duration > 0:
         needs_update = track.duration == 0 or track.duration == 180 or abs(
             track.duration - duration) > 5
         if needs_update:
-            track.duration = duration
+            track.duration = duration  # type: ignore[assignment]
             updated = True
     if updated:
         db.commit()
@@ -172,11 +172,11 @@ async def _get_or_create_track(
             album)
 
     if track.duration == 0 and track.track_url:
-        track.duration = await get_track_duration(track.track_url)
+        track.duration = await get_track_duration(str(track.track_url))  # type: ignore[assignment]
         db.commit()
 
     if not track.genre and track.track_url:
-        track.genre = await get_track_genre(track.track_url)
+        track.genre = await get_track_genre(str(track.track_url))  # type: ignore[assignment]
         db.commit()
 
     return track
@@ -295,7 +295,7 @@ async def process_scrobble(
         progress_sec: int,
         is_playing: bool,
         duration: int,
-        album: str = None):
+        album: str = ""):
     track = await _get_or_create_track(db, title, artist, cover_url, track_url, duration, album)
 
     now = datetime.now(timezone.utc)
@@ -328,7 +328,7 @@ async def process_scrobble(
             updated_at=now)
         db.add(new_s)
         db.commit()
-        await manager.broadcast_to_user(user.username, {
+        await manager.broadcast_to_user(str(user.username), {
             "type": "NEW_SCROBBLE",
             "track": format_history_item(new_s, track)
         })

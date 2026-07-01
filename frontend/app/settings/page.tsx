@@ -3,88 +3,98 @@
  * -------------
  * Страница настроек профиля и интеграций.
  */
-'use client';
-import { useState, useEffect, Suspense } from 'react';
-import dynamic from 'next/dynamic';
-import { useRouter, useSearchParams } from 'next/navigation';
-const Cropper = dynamic(() => import('react-easy-crop'), { ssr: false }) as any;
-import { getCroppedImg, fixImageUrl } from './utils';
+"use client";
+import { useState, useEffect, Suspense } from "react";
+import dynamic from "next/dynamic";
+import { useRouter, useSearchParams } from "next/navigation";
+const Cropper = dynamic(() => import("react-easy-crop"), { ssr: false }) as any;
+import { getCroppedImg, fixImageUrl } from "./utils";
 
 // Import Tabs
-import GeneralTab from './tabs/GeneralTab';
-import ShowcaseTab from './tabs/ShowcaseTab';
-import ThemeTab from './tabs/ThemeTab';
-import PrivacyTab from './tabs/PrivacyTab';
-import IntegrationsTab from './tabs/IntegrationsTab';
+import GeneralTab from "./tabs/GeneralTab";
+import ShowcaseTab from "./tabs/ShowcaseTab";
+import ThemeTab from "./tabs/ThemeTab";
+import PrivacyTab from "./tabs/PrivacyTab";
+import IntegrationsTab from "./tabs/IntegrationsTab";
 
 const parseSplit = (val: string) => {
-    if (!val) return ['', ''];
-    const parts = val.split('—').map(s => s.trim());
-    if (parts.length < 2) {
-        const parts2 = val.split('-').map(s => s.trim());
-        if (parts2.length >= 2) return [parts2[0], parts2.slice(1).join('-')];
-        return ['', val];
-    }
-    return [parts[0], parts.slice(1).join('—')];
+  if (!val) return ["", ""];
+  const parts = val.split("—").map((s) => s.trim());
+  if (parts.length < 2) {
+    const parts2 = val.split("-").map((s) => s.trim());
+    if (parts2.length >= 2) return [parts2[0], parts2.slice(1).join("-")];
+    return ["", val];
+  }
+  return [parts[0], parts.slice(1).join("—")];
 };
 
 const LOCAL_COUNTRIES = [
-  { name: 'Россия', code: 'RU', flag: '🇷🇺' },
-  { name: 'Беларусь', code: 'BY', flag: '🇧🇾' },
-  { name: 'Казахстан', code: 'KZ', flag: '🇰🇿' },
-  { name: 'Украина', code: 'UA', flag: '🇺🇦' },
-  { name: 'Германия', code: 'DE', flag: '🇩🇪' },
-  { name: 'США', code: 'US', flag: '🇺🇸' },
-  { name: 'Великобритания', code: 'GB', flag: '🇬🇧' },
-  { name: 'Франция', code: 'FR', flag: '🇫🇷' },
-  { name: 'Италия', code: 'IT', flag: '🇮🇹' },
-  { name: 'Испания', code: 'ES', flag: '🇪🇸' },
-  { name: 'Нидерланды', code: 'NL', flag: '🇳🇱' },
-  { name: 'Польша', code: 'PL', flag: '🇵🇱' },
-  { name: 'Финляндия', code: 'FI', flag: '🇫🇮' },
-  { name: 'Швеция', code: 'SE', flag: '🇸🇪' },
-  { name: 'Норвегия', code: 'NO', flag: '🇳🇴' },
-  { name: 'Грузия', code: 'GE', flag: '🇬🇪' },
-  { name: 'Армения', code: 'AM', flag: '🇦🇲' },
-  { name: 'Азербайджан', code: 'AZ', flag: '🇦🇿' },
-  { name: 'Латвия', code: 'LV', flag: '🇱🇻' },
-  { name: 'Литва', code: 'LT', flag: '🇱🇹' },
-  { name: 'Эстония', code: 'EE', flag: '🇪🇪' },
-  { name: 'Молдова', code: 'MD', flag: '🇲🇩' },
-  { name: 'Узбекистан', code: 'UZ', flag: '🇺🇿' },
-  { name: 'Киргизия', code: 'KG', flag: '🇰🇬' },
-  { name: 'Таджикистан', code: 'TJ', flag: '🇹🇯' },
-  { name: 'Туркменистан', code: 'TM', flag: '🇹🇲' },
-  { name: 'Турция', code: 'TR', flag: '🇹🇷' },
-  { name: 'Китай', code: 'CN', flag: '🇨🇳' },
-  { name: 'Япония', code: 'JP', flag: '🇯🇵' },
-  { name: 'Южная Корея', code: 'KR', flag: '🇰🇷' },
-  { name: 'Канада', code: 'CA', flag: '🇨🇦' },
-  { name: 'Австралия', code: 'AU', flag: '🇦🇺' }
+  { name: "Россия", code: "RU", flag: "🇷🇺" },
+  { name: "Беларусь", code: "BY", flag: "🇧🇾" },
+  { name: "Казахстан", code: "KZ", flag: "🇰🇿" },
+  { name: "Украина", code: "UA", flag: "🇺🇦" },
+  { name: "Германия", code: "DE", flag: "🇩🇪" },
+  { name: "США", code: "US", flag: "🇺🇸" },
+  { name: "Великобритания", code: "GB", flag: "🇬🇧" },
+  { name: "Франция", code: "FR", flag: "🇫🇷" },
+  { name: "Италия", code: "IT", flag: "🇮🇹" },
+  { name: "Испания", code: "ES", flag: "🇪🇸" },
+  { name: "Нидерланды", code: "NL", flag: "🇳🇱" },
+  { name: "Польша", code: "PL", flag: "🇵🇱" },
+  { name: "Финляндия", code: "FI", flag: "🇫🇮" },
+  { name: "Швеция", code: "SE", flag: "🇸🇪" },
+  { name: "Норвегия", code: "NO", flag: "🇳🇴" },
+  { name: "Грузия", code: "GE", flag: "🇬🇪" },
+  { name: "Армения", code: "AM", flag: "🇦🇲" },
+  { name: "Азербайджан", code: "AZ", flag: "🇦🇿" },
+  { name: "Латвия", code: "LV", flag: "🇱🇻" },
+  { name: "Литва", code: "LT", flag: "🇱🇹" },
+  { name: "Эстония", code: "EE", flag: "🇪🇪" },
+  { name: "Молдова", code: "MD", flag: "🇲🇩" },
+  { name: "Узбекистан", code: "UZ", flag: "🇺🇿" },
+  { name: "Киргизия", code: "KG", flag: "🇰🇬" },
+  { name: "Таджикистан", code: "TJ", flag: "🇹🇯" },
+  { name: "Туркменистан", code: "TM", flag: "🇹🇲" },
+  { name: "Турция", code: "TR", flag: "🇹🇷" },
+  { name: "Китай", code: "CN", flag: "🇨🇳" },
+  { name: "Япония", code: "JP", flag: "🇯🇵" },
+  { name: "Южная Корея", code: "KR", flag: "🇰🇷" },
+  { name: "Канада", code: "CA", flag: "🇨🇦" },
+  { name: "Австралия", code: "AU", flag: "🇦🇺" },
 ];
 
 // Helper: extract city name from nominatim address item
 function extractCityName(item: any): string {
-    const addr = item.address || {};
-    const name = addr.city || addr.town || addr.village || item.name || '';
-    return name.split(',')[0].replace(/(сельсовет|городское поселение|муниципальное образование|район|станция|платформа|парк)/gi, '').trim();
+  const addr = item.address || {};
+  const name = addr.city || addr.town || addr.village || item.name || "";
+  return name
+    .split(",")[0]
+    .replace(
+      /(сельсовет|городское поселение|муниципальное образование|район|станция|платформа|парк)/gi,
+      "",
+    )
+    .trim();
 }
 
 // Helper: filter city names by query
 function filterCityName(n: string, cityQuery: string): boolean {
-    if (!n || n.length < 2) return false;
-    const q = cityQuery.toLowerCase();
-    const res = n.toLowerCase();
-    return res.includes(q) || q.includes(res);
+  if (!n || n.length < 2) return false;
+  const q = cityQuery.toLowerCase();
+  const res = n.toLowerCase();
+  return res.includes(q) || q.includes(res);
 }
 
 function processCities(d: any[], query: string): string[] {
-    const sorted = [...d].toSorted((a,b) => (b.importance || 0) - (a.importance || 0));
-    return Array.from(new Set(
-        sorted
-            .map((item: any) => extractCityName(item))
-            .filter((n: string) => filterCityName(n, query))
-    )).slice(0, 10);
+  const sorted = [...d].toSorted(
+    (a, b) => (b.importance || 0) - (a.importance || 0),
+  );
+  return Array.from(
+    new Set(
+      sorted
+        .map((item: any) => extractCityName(item))
+        .filter((n: string) => filterCityName(n, query)),
+    ),
+  ).slice(0, 10);
 }
 
 function SettingsContent() {
@@ -96,174 +106,259 @@ function SettingsContent() {
   const [generatedApiKey, setGeneratedApiKey] = useState<string | null>(null);
 
   const [data, setData] = useState({
-      displayName: '', bio: '', avatarUrl: '', coverUrl: '', location: '', favoriteGenre: '', equipment: '',
-      favArtist: '', favArtistReview: '', favArtistRating: 0,
-      favTrackArtist: '', favTrackName: '', favTrackReview: '', favTrackRating: 0,
-      favAlbumArtist: '', favAlbumName: '', favAlbumReview: '', favAlbumRating: 0,
-      avatarFrame: '', theme: 'classic',
-      country: '', city: '', isPrivate: false, hiddenArtists: '', yandexToken: '', lastfmUsername: ''
+    displayName: "",
+    bio: "",
+    avatarUrl: "",
+    coverUrl: "",
+    location: "",
+    favoriteGenre: "",
+    equipment: "",
+    favArtist: "",
+    favArtistReview: "",
+    favArtistRating: 0,
+    favTrackArtist: "",
+    favTrackName: "",
+    favTrackReview: "",
+    favTrackRating: 0,
+    favAlbumArtist: "",
+    favAlbumName: "",
+    favAlbumReview: "",
+    favAlbumRating: 0,
+    avatarFrame: "",
+    theme: "classic",
+    country: "",
+    city: "",
+    isPrivate: false,
+    hiddenArtists: "",
+    yandexToken: "",
+    lastfmUsername: "",
   });
 
-  const [countries, setCountries] = useState<{name: string, code: string, flag: string}[]>(LOCAL_COUNTRIES);
+  const [countries, setCountries] =
+    useState<{ name: string; code: string; flag: string }[]>(LOCAL_COUNTRIES);
   const [cities, setCities] = useState<string[]>([]);
-  const [countryCode, setCountryCode] = useState('');
+  const [countryCode, setCountryCode] = useState("");
   const [isCityInputFocused, setIsCityInputFocused] = useState(false);
 
   useEffect(() => {
-    fetch('https://restcountries.com/v3.1/all?fields=name,translations,cca2,flag')
-      .then(r => r.json())
-      .then(d => { 
-          if (Array.isArray(d)) {
-              const list = d.map((c: any) => ({
-                  name: c.translations?.rus?.common || c.name.common,
-                  code: c.cca2,
-                  flag: c.flag
-              })).sort((a,b) => a.name.localeCompare(b.name));
-              setCountries(list as any);
-          }
+    fetch(
+      "https://restcountries.com/v3.1/all?fields=name,translations,cca2,flag",
+    )
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d)) {
+          const list = d
+            .map((c: any) => ({
+              name: c.translations?.rus?.common || c.name.common,
+              code: c.cca2,
+              flag: c.flag,
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+          setCountries(list as any);
+        }
       })
       .catch(() => {});
   }, []);
 
   useEffect(() => {
     if (!data.country || countries.length === 0) return;
-    const found = countries.find(c => c.name.toLowerCase().trim() === data.country.toLowerCase().trim());
+    const found = countries.find(
+      (c) => c.name.toLowerCase().trim() === data.country.toLowerCase().trim(),
+    );
     if (found) setCountryCode(found.code);
   }, [data.country, countries]);
 
   useEffect(() => {
-    if (!countryCode || data.city.length < 2) { setCities([]); return; }
-    let active = true; 
+    if (!countryCode || data.city.length < 2) {
+      setCities([]);
+      return;
+    }
+    let active = true;
     setCities([]);
     const delay = setTimeout(() => {
-        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(data.city)}&format=json&accept-language=ru&addressdetails=1&countrycodes=${countryCode.toLowerCase()}&limit=20`;
-        fetch(url)
-          .then(r => r.json())
-          .then(d => { 
-              if (!active) return;
-              if (Array.isArray(d)) {
-                  setCities(processCities(d, data.city));
-              }
-          })
-          .catch(() => { if (active) setCities([]); });
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(data.city)}&format=json&accept-language=ru&addressdetails=1&countrycodes=${countryCode.toLowerCase()}&limit=20`;
+      fetch(url)
+        .then((r) => r.json())
+        .then((d) => {
+          if (!active) return;
+          if (Array.isArray(d)) {
+            setCities(processCities(d, data.city));
+          }
+        })
+        .catch(() => {
+          if (active) setCities([]);
+        });
     }, 500);
-    return () => { active = false; clearTimeout(delay); };
+    return () => {
+      active = false;
+      clearTimeout(delay);
+    };
   }, [data.city, countryCode]);
 
   const [socialLinks, setSocialLinks] = useState<any[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [level, setLevel] = useState(1);
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('general');
+  const [activeTab, setActiveTab] = useState("general");
   const [copied, setCopied] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    if (searchParams.get('spotify') === 'success') { 
-        setStatus('✅ Spotify успешно привязан!'); 
-        setActiveTab('integrations'); 
+    if (searchParams.get("spotify") === "success") {
+      setStatus("✅ Spotify успешно привязан!");
+      setActiveTab("integrations");
     }
 
-    const username = localStorage.getItem('username');
-    if (!username) { router.push('/auth'); return; }
+    const username = localStorage.getItem("username");
+    if (!username) {
+      router.push("/auth");
+      return;
+    }
 
     Promise.all([
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/user/${username}`, { credentials: 'include' }), 
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/stats/${username}`, { credentials: 'include' })
+      fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/user/${username}`,
+        { credentials: "include" },
+      ),
+      fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/stats/${username}`,
+        { credentials: "include" },
+      ),
     ])
       .then(async ([userRes, statsRes]) => {
         const u = await userRes.json();
         const s = await statsRes.json();
         setUserProfile(u);
         setLevel(Math.floor((s.total_xp || s.total_scrobbles || 0) / 100) + 1);
-        const loc = u.location || '';
-        const locParts = loc.split(',').map((s: string) => s.trim());
+        const loc = u.location || "";
+        const locParts = loc.split(",").map((s: string) => s.trim());
 
         const [favTrackArtist, favTrackName] = parseSplit(u.favorite_track);
         const [favAlbumArtist, favAlbumName] = parseSplit(u.favorite_album);
 
         setData({
-            displayName: u.display_name === u.username ? '' : u.display_name, 
-            bio: u.bio === "Этот пользователь пока ничего о себе не рассказал." ? '' : u.bio,
-            avatarUrl: u.avatar_url || '', coverUrl: u.cover_url || '', location: loc, 
-            country: locParts[0] || '', city: locParts[1] || '', favoriteGenre: u.favorite_genre || '', equipment: u.equipment || '',
-            favArtist: u.favorite_artist || '',
-            favArtistReview: u.favorite_artist_review || '',
-            favArtistRating: u.favorite_artist_rating || 0,
-            favTrackArtist: favTrackArtist, favTrackName: favTrackName, 
-            favTrackReview: u.favorite_track_review || '',
-            favTrackRating: u.favorite_track_rating || 0,
-            favAlbumArtist: favAlbumArtist, favAlbumName: favAlbumName, 
-            favAlbumReview: u.favorite_album_review || '',
-            favAlbumRating: u.favorite_album_rating || 0,
-            avatarFrame: u.avatar_frame || '',
-            theme: u.theme || 'classic', isPrivate: u.is_private || false, hiddenArtists: u.hidden_artists || '',
-            yandexToken: u.yandex_token || '', lastfmUsername: u.lastfm_username || ''
+          displayName: u.display_name === u.username ? "" : u.display_name,
+          bio:
+            u.bio === "Этот пользователь пока ничего о себе не рассказал."
+              ? ""
+              : u.bio,
+          avatarUrl: u.avatar_url || "",
+          coverUrl: u.cover_url || "",
+          location: loc,
+          country: locParts[0] || "",
+          city: locParts[1] || "",
+          favoriteGenre: u.favorite_genre || "",
+          equipment: u.equipment || "",
+          favArtist: u.favorite_artist || "",
+          favArtistReview: u.favorite_artist_review || "",
+          favArtistRating: u.favorite_artist_rating || 0,
+          favTrackArtist: favTrackArtist,
+          favTrackName: favTrackName,
+          favTrackReview: u.favorite_track_review || "",
+          favTrackRating: u.favorite_track_rating || 0,
+          favAlbumArtist: favAlbumArtist,
+          favAlbumName: favAlbumName,
+          favAlbumReview: u.favorite_album_review || "",
+          favAlbumRating: u.favorite_album_rating || 0,
+          avatarFrame: u.avatar_frame || "",
+          theme: u.theme || "classic",
+          isPrivate: u.is_private || false,
+          hiddenArtists: u.hidden_artists || "",
+          yandexToken: u.yandex_token || "",
+          lastfmUsername: u.lastfm_username || "",
         });
-        try { setSocialLinks(JSON.parse(u.social_links || "[]")); } catch(e) { console.error(e); }
+        try {
+          setSocialLinks(JSON.parse(u.social_links || "[]"));
+        } catch (e) {
+          console.error(e);
+        }
         setLoading(false);
-      }).catch(() => setLoading(false));
+      })
+      .catch(() => setLoading(false));
   }, [router, searchParams]);
 
-  const updateData = (k: string, v: any) => setData(prev => ({ ...prev, [k]: v }));
+  const updateData = (k: string, v: any) =>
+    setData((prev) => ({ ...prev, [k]: v }));
 
   const onSelectFile = (event: any, field: string) => {
     const file = event.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.addEventListener('load', () => {
+    reader.addEventListener("load", () => {
       setCropImageSrc((reader.result as string) ?? null);
       setCropFieldTarget(field);
     });
     reader.readAsDataURL(file);
-    event.target.value = '';
+    event.target.value = "";
   };
 
   const handleCropSave = async () => {
     if (!cropImageSrc || !croppedAreaPixels || !cropFieldTarget) return;
-    setStatus('Обрезаем...');
+    setStatus("Обрезаем...");
     try {
       const croppedFile = await getCroppedImg(cropImageSrc, croppedAreaPixels);
       if (croppedFile) {
         const formData = new FormData();
-        formData.append('file', croppedFile);
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/upload`, { credentials: 'include',  method: 'POST', body: formData });
+        formData.append("file", croppedFile);
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/upload`,
+          { credentials: "include", method: "POST", body: formData },
+        );
         if (res.ok) {
           const { url } = await res.json();
           updateData(cropFieldTarget, url);
-          setStatus('✅ Картинка успешно загружена!');
-          setTimeout(() => setStatus(''), 2000);
-        } else setStatus('❌ Ошибка на сервере');
+          setStatus("✅ Картинка успешно загружена!");
+          setTimeout(() => setStatus(""), 2000);
+        } else setStatus("❌ Ошибка на сервере");
       }
-    } catch (e: any) { console.error(e); setStatus('❌ Ошибка сети'); }
+    } catch (e: any) {
+      console.error(e);
+      setStatus("❌ Ошибка сети");
+    }
     setCropImageSrc(null);
   };
-  
-  const addSocialLink = () => setSocialLinks([...socialLinks, { id: Date.now(), network: 'telegram', username: '' }]);
-  const updateSocialLink = (id: number, field: string, value: string) => setSocialLinks(socialLinks.map(l => l.id === id ? { ...l, [field]: value } : l));
-  const removeSocialLink = (id: number) => setSocialLinks(socialLinks.filter(l => l.id !== id));
+
+  const addSocialLink = () =>
+    setSocialLinks([
+      ...socialLinks,
+      { id: Date.now(), network: "telegram", username: "" },
+    ]);
+  const updateSocialLink = (id: number, field: string, value: string) =>
+    setSocialLinks(
+      socialLinks.map((l) => (l.id === id ? { ...l, [field]: value } : l)),
+    );
+  const removeSocialLink = (id: number) =>
+    setSocialLinks(socialLinks.filter((l) => l.id !== id));
 
   const handleGenerateApiKey = async () => {
-    if (!confirm("Вы уверены, что хотите сбросить текущий API ключ? Все ваши сторонние приложения/расширения перестанут работать, пока вы не обновите в них ключ.")) return;
-    setStatus('Генерация...');
+    if (
+      !confirm(
+        "Вы уверены, что хотите сбросить текущий API ключ? Все ваши сторонние приложения/расширения перестанут работать, пока вы не обновите в них ключ.",
+      )
+    )
+      return;
+    setStatus("Генерация...");
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/profile/apikey/generate`, {
-        credentials: 'include',
-        method: 'POST'
-      });
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/profile/apikey/generate`,
+        {
+          credentials: "include",
+          method: "POST",
+        },
+      );
       if (res.ok) {
         const d = await res.json();
         setGeneratedApiKey(d.api_key);
-        setStatus('✅ Новый API ключ успешно сгенерирован!');
-        setTimeout(() => setStatus(''), 5000);
+        setStatus("✅ Новый API ключ успешно сгенерирован!");
+        setTimeout(() => setStatus(""), 5000);
       } else {
-        setStatus('❌ Ошибка при генерации');
+        setStatus("❌ Ошибка при генерации");
       }
     } catch (e) {
-      console.error('API key generation failed:', e);
-      setStatus('❌ Ошибка сети');
+      console.error("API key generation failed:", e);
+      setStatus("❌ Ошибка сети");
     }
   };
 
@@ -273,191 +368,302 @@ function SettingsContent() {
       navigator.clipboard.writeText(keyToCopy);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-      setStatus('✅ API ключ скопирован в буфер обмена');
-      setTimeout(() => setStatus(''), 3000);
+      setStatus("✅ API ключ скопирован в буфер обмена");
+      setTimeout(() => setStatus(""), 3000);
     } else {
-      setStatus('⚠️ API ключ не найден!');
-      setTimeout(() => setStatus(''), 2000);
+      setStatus("⚠️ API ключ не найден!");
+      setTimeout(() => setStatus(""), 2000);
     }
   };
 
   const handleSubmit = async (e: any) => {
     e.preventDefault();
-    setStatus('Сохраняем...');
+    setStatus("Сохраняем...");
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/profile/update`, { credentials: 'include', 
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          display_name: data.displayName || localStorage.getItem('username'), bio: data.bio,
-          avatar_url: fixImageUrl(data.avatarUrl), cover_url: fixImageUrl(data.coverUrl), 
-          location: data.country && data.city ? `${data.country}, ${data.city}` : data.country || data.city || '', 
-          favorite_genre: data.favoriteGenre, equipment: data.equipment, theme: data.theme,
-          favorite_artist: data.favArtist,
-          favorite_artist_review: data.favArtistReview,
-          favorite_artist_rating: data.favArtistRating,
-          favorite_track: (data.favTrackArtist && data.favTrackName) ? `${data.favTrackArtist} — ${data.favTrackName}` : '', 
-          favorite_track_review: data.favTrackReview,
-          favorite_track_rating: data.favTrackRating,
-          favorite_album: (data.favAlbumArtist && data.favAlbumName) ? `${data.favAlbumArtist} — ${data.favAlbumName}` : '',
-          favorite_album_review: data.favAlbumReview,
-          favorite_album_rating: data.favAlbumRating,
-          avatar_frame: data.avatarFrame,
-          is_private: data.isPrivate,
-          hidden_artists: data.hiddenArtists, lastfm_username: data.lastfmUsername,
-          social_links: JSON.stringify(socialLinks.filter(l => l.username.trim() !== ''))
-        })
-      });
-      if (!res.ok) throw new Error('Ошибка при сохранении');
-      localStorage.setItem('site_theme', data.theme);
-      globalThis.dispatchEvent(new Event('theme_update'));
-      setStatus('✅ Успешно!'); 
-      setTimeout(() => setStatus(''), 2000);
-    } catch (err: any) { setStatus('❌ ' + err.message); }
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/profile/update`,
+        {
+          credentials: "include",
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            display_name: data.displayName || localStorage.getItem("username"),
+            bio: data.bio,
+            avatar_url: fixImageUrl(data.avatarUrl),
+            cover_url: fixImageUrl(data.coverUrl),
+            location:
+              data.country && data.city
+                ? `${data.country}, ${data.city}`
+                : data.country || data.city || "",
+            favorite_genre: data.favoriteGenre,
+            equipment: data.equipment,
+            theme: data.theme,
+            favorite_artist: data.favArtist,
+            favorite_artist_review: data.favArtistReview,
+            favorite_artist_rating: data.favArtistRating,
+            favorite_track:
+              data.favTrackArtist && data.favTrackName
+                ? `${data.favTrackArtist} — ${data.favTrackName}`
+                : "",
+            favorite_track_review: data.favTrackReview,
+            favorite_track_rating: data.favTrackRating,
+            favorite_album:
+              data.favAlbumArtist && data.favAlbumName
+                ? `${data.favAlbumArtist} — ${data.favAlbumName}`
+                : "",
+            favorite_album_review: data.favAlbumReview,
+            favorite_album_rating: data.favAlbumRating,
+            avatar_frame: data.avatarFrame,
+            is_private: data.isPrivate,
+            hidden_artists: data.hiddenArtists,
+            lastfm_username: data.lastfmUsername,
+            social_links: JSON.stringify(
+              socialLinks.filter((l) => l.username.trim() !== ""),
+            ),
+          }),
+        },
+      );
+      if (!res.ok) throw new Error("Ошибка при сохранении");
+      localStorage.setItem("site_theme", data.theme);
+      globalThis.dispatchEvent(new Event("theme_update"));
+      setStatus("✅ Успешно!");
+      setTimeout(() => setStatus(""), 2000);
+    } catch (err: any) {
+      setStatus("❌ " + err.message);
+    }
   };
 
   const saveYandexToken = async () => {
-    setStatus('Сохраняем токен Яндекса...');
+    setStatus("Сохраняем токен Яндекса...");
     try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/integrations/yandex`, { credentials: 'include', 
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: data.yandexToken })
-        });
-        if (res.ok) { setStatus('✅ Токен Яндекса сохранен!'); setUserProfile({...userProfile, yandex_linked: true}); }
-        else setStatus('❌ Ошибка сохранения');
-    } catch (e) { console.error(e); setStatus('❌ Ошибка сети'); }
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/integrations/yandex`,
+        {
+          credentials: "include",
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: data.yandexToken }),
+        },
+      );
+      if (res.ok) {
+        setStatus("✅ Токен Яндекса сохранен!");
+        setUserProfile({ ...userProfile, yandex_linked: true });
+      } else setStatus("❌ Ошибка сохранения");
+    } catch (e) {
+      console.error(e);
+      setStatus("❌ Ошибка сети");
+    }
   };
 
   const handleDisconnect = async (service: string) => {
     if (!confirm(`Отключить ${service}?`)) return;
     setStatus(`Отключаем ${service}...`);
     try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/integrations/${service}/disconnect`, { credentials: 'include', 
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ })
-        });
-        if (res.ok) {
-            setStatus(`✅ ${service} отключен`);
-            if (service === 'spotify') setUserProfile({ ...userProfile, spotify_linked: false });
-            if (service === 'yandex') { setUserProfile({ ...userProfile, yandex_linked: false }); updateData('yandexToken', ''); }
-            if (service === 'lastfm') updateData('lastfmUsername', '');
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/integrations/${service}/disconnect`,
+        {
+          credentials: "include",
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        },
+      );
+      if (res.ok) {
+        setStatus(`✅ ${service} отключен`);
+        if (service === "spotify")
+          setUserProfile({ ...userProfile, spotify_linked: false });
+        if (service === "yandex") {
+          setUserProfile({ ...userProfile, yandex_linked: false });
+          updateData("yandexToken", "");
         }
-    } catch (e) { console.error(e); setStatus('❌ Ошибка сети'); }
+        if (service === "lastfm") updateData("lastfmUsername", "");
+      }
+    } catch (e) {
+      console.error(e);
+      setStatus("❌ Ошибка сети");
+    }
   };
 
   const startLastfmImport = async () => {
-    if (!data.lastfmUsername) return alert('Введите никнейм Last.fm');
-    setStatus('Запускаем импорт...');
+    if (!data.lastfmUsername) return alert("Введите никнейм Last.fm");
+    setStatus("Запускаем импорт...");
     try {
-        const updateRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/profile/update`, { credentials: 'include', 
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lastfm_username: data.lastfmUsername })
-        });
-        
-        if (!updateRes.ok) {
-            setStatus('❌ Ошибка сохранения профиля');
-            return;
-        }
+      const updateRes = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/profile/update`,
+        {
+          credentials: "include",
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lastfm_username: data.lastfmUsername }),
+        },
+      );
 
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/import/lastfm`, { credentials: 'include', 
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ })
-        });
-        
-        if (res.ok) {
-            setStatus('🚀 Импорт запущен!');
-        } else {
-            let errorMessage = 'Не удалось запустить импорт';
-            try {
-                const errData = await res.json();
-                errorMessage = errData.detail || errorMessage;
-            } catch (e) {
-                console.error(e);
-                errorMessage = `Ошибка сервера (${res.status})`;
-            }
-            setStatus(`❌ Ошибка: ${errorMessage}`);
+      if (!updateRes.ok) {
+        setStatus("❌ Ошибка сохранения профиля");
+        return;
+      }
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/import/lastfm`,
+        {
+          credentials: "include",
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        },
+      );
+
+      if (res.ok) {
+        setStatus("🚀 Импорт запущен!");
+      } else {
+        let errorMessage = "Не удалось запустить импорт";
+        try {
+          const errData = await res.json();
+          errorMessage = errData.detail || errorMessage;
+        } catch (e) {
+          console.error(e);
+          errorMessage = `Ошибка сервера (${res.status})`;
         }
-    } catch (e) { 
-        console.error(e);
-        setStatus('❌ Ошибка сети'); 
+        setStatus(`❌ Ошибка: ${errorMessage}`);
+      }
+    } catch (e) {
+      console.error(e);
+      setStatus("❌ Ошибка сети");
     }
   };
 
   const tabLabel = (tab: string) => {
-    if (tab === 'general') return 'Общие данные';
-    if (tab === 'showcase') return 'Витрина профиля';
-    if (tab === 'theme') return 'Оформление';
-    if (tab === 'privacy') return 'Приватность';
-    return 'Интеграции';
+    if (tab === "general") return "Общие данные";
+    if (tab === "showcase") return "Витрина профиля";
+    if (tab === "theme") return "Оформление";
+    if (tab === "privacy") return "Приватность";
+    return "Интеграции";
   };
 
-  if (loading) return <div className="min-h-screen text-[var(--accent-text)] flex items-center justify-center font-bold text-xl">Загрузка...</div>;
+  if (loading)
+    return (
+      <div className="min-h-screen text-[var(--accent-text)] flex items-center justify-center font-bold text-xl">
+        Загрузка...
+      </div>
+    );
 
   return (
     <>
       {cropImageSrc && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-4">
           <div className="relative w-full max-w-4xl h-[50vh] md:h-[70vh] bg-[#121212] rounded-xl overflow-hidden shadow-2xl border border-white/10">
-            <Cropper image={cropImageSrc} crop={crop} zoom={zoom} aspect={cropFieldTarget === 'coverUrl' ? 3 : 1} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={(_: any, cp: any) => setCroppedAreaPixels(cp)} />
+            <Cropper
+              image={cropImageSrc}
+              crop={crop}
+              zoom={zoom}
+              aspect={cropFieldTarget === "coverUrl" ? 3 : 1}
+              onCropChange={setCrop}
+              onZoomChange={setZoom}
+              onCropComplete={(_: any, cp: any) => setCroppedAreaPixels(cp)}
+            />
           </div>
           <div className="flex gap-4 mt-6">
-            <button type="button" onClick={() => setCropImageSrc(null)} className="px-6 py-3 rounded-lg font-bold text-white bg-white/10 hover:bg-white/20 transition-all border border-white/10">Отмена</button>
-            <button type="button" onClick={handleCropSave} className="px-8 py-3 rounded-lg font-bold text-white bg-[var(--accent)] hover:bg-[var(--accent-hover)] transition-all drop-shadow-[0_0_15px_var(--accent-glow)]">Сохранить</button>
+            <button
+              type="button"
+              onClick={() => setCropImageSrc(null)}
+              className="px-6 py-3 rounded-lg font-bold text-white bg-white/10 hover:bg-white/20 transition-all border border-white/10"
+            >
+              Отмена
+            </button>
+            <button
+              type="button"
+              onClick={handleCropSave}
+              className="px-8 py-3 rounded-lg font-bold text-white bg-[var(--accent)] hover:bg-[var(--accent-hover)] transition-all drop-shadow-[0_0_15px_var(--accent-glow)]"
+            >
+              Сохранить
+            </button>
           </div>
         </div>
       )}
       <div className="min-h-screen text-white p-4 md:p-8 max-w-6xl mx-auto flex flex-col md:flex-row gap-8 pt-24">
-          <aside className="w-full md:w-64 shrink-0 flex flex-col gap-2">
-              <a href="/feed" className="text-sm font-bold text-gray-400 hover:text-white mb-4 block px-4">← Глобальная лента</a>
-              {['general', 'showcase', 'theme', 'privacy', 'integrations'].map(tab => (
-                  <button key={tab} onClick={() => setActiveTab(tab)} className={`text-left px-4 py-3 rounded-lg font-bold transition-all ${activeTab === tab ? 'bg-[var(--accent)] text-[var(--text-on-accent)]' : 'text-gray-400 hover:bg-[#1e1e1e]'}`}>
-                      {tabLabel(tab)}
-                  </button>
-              ))}
-          </aside>
+        <aside className="w-full md:w-64 shrink-0 flex flex-col gap-2">
+          <a
+            href="/feed"
+            className="text-sm font-bold text-gray-400 hover:text-white mb-4 block px-4"
+          >
+            ← Глобальная лента
+          </a>
+          {["general", "showcase", "theme", "privacy", "integrations"].map(
+            (tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`text-left px-4 py-3 rounded-lg font-bold transition-all ${activeTab === tab ? "bg-[var(--accent)] text-[var(--text-on-accent)]" : "text-gray-400 hover:bg-[#1e1e1e]"}`}
+              >
+                {tabLabel(tab)}
+              </button>
+            ),
+          )}
+        </aside>
 
-          <main className="flex-grow bg-[#1e1e1e]/60 backdrop-blur-md rounded-xl border border-white/5 shadow-lg relative overflow-hidden mb-20">
-              {activeTab === 'integrations' ? (
-                  <IntegrationsTab 
-                      data={data} updateData={updateData} userProfile={userProfile} 
-                      handleDisconnect={handleDisconnect} saveYandexToken={saveYandexToken} 
-                      startLastfmImport={startLastfmImport} userApiKey={userProfile?.api_key || ""} 
-                      generatedApiKey={generatedApiKey} handleGenerateApiKey={handleGenerateApiKey}
-                      handleCopyKey={handleCopyKey} copied={copied} API_URL={process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"} 
-                  />
-              ) : (
-                  <form onSubmit={handleSubmit}>
-                      {activeTab === 'general' && (
-                          <GeneralTab 
-                              data={data} updateData={updateData} 
-                              countries={countries} cities={cities} 
-                              isCityInputFocused={isCityInputFocused} setIsCityInputFocused={setIsCityInputFocused} 
-                              onSelectFile={onSelectFile} 
-                              username={userProfile?.username || ""}
-                              socialLinks={socialLinks}
-                              addSocialLink={addSocialLink}
-                              updateSocialLink={updateSocialLink}
-                              removeSocialLink={removeSocialLink}
-                          />
-                      )}
+        <main className="flex-grow bg-[#1e1e1e]/60 backdrop-blur-md rounded-xl border border-white/5 shadow-lg relative overflow-hidden mb-20">
+          {activeTab === "integrations" ? (
+            <IntegrationsTab
+              data={data}
+              updateData={updateData}
+              userProfile={userProfile}
+              handleDisconnect={handleDisconnect}
+              saveYandexToken={saveYandexToken}
+              startLastfmImport={startLastfmImport}
+              userApiKey={userProfile?.api_key || ""}
+              generatedApiKey={generatedApiKey}
+              handleGenerateApiKey={handleGenerateApiKey}
+              handleCopyKey={handleCopyKey}
+              copied={copied}
+              API_URL={
+                process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+              }
+            />
+          ) : (
+            <form onSubmit={handleSubmit}>
+              {activeTab === "general" && (
+                <GeneralTab
+                  data={data}
+                  updateData={updateData}
+                  countries={countries}
+                  cities={cities}
+                  isCityInputFocused={isCityInputFocused}
+                  setIsCityInputFocused={setIsCityInputFocused}
+                  onSelectFile={onSelectFile}
+                  username={userProfile?.username || ""}
+                  socialLinks={socialLinks}
+                  addSocialLink={addSocialLink}
+                  updateSocialLink={updateSocialLink}
+                  removeSocialLink={removeSocialLink}
+                />
+              )}
 
-                      {activeTab === 'showcase' && (
-                          <ShowcaseTab data={data} updateData={updateData} />
-                      )}
+              {activeTab === "showcase" && (
+                <ShowcaseTab data={data} updateData={updateData} />
+              )}
 
-                      {activeTab === 'theme' && (
-                          <ThemeTab data={data} updateData={updateData} level={level} />
-                      )}
+              {activeTab === "theme" && (
+                <ThemeTab data={data} updateData={updateData} level={level} />
+              )}
 
-                      {activeTab === 'privacy' && (
-                          <PrivacyTab data={data} updateData={updateData} />
-                      )}
+              {activeTab === "privacy" && (
+                <PrivacyTab data={data} updateData={updateData} />
+              )}
 
-                      <div className="p-6 bg-black/20 flex justify-between items-center border-t border-white/5">
-                          <span className="text-[var(--accent-text)] font-bold">{status}</span>
-                          <button type="submit" className="bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] text-[var(--text-on-accent)] font-black px-8 py-3 rounded-lg hover:scale-105 transition-all">Сохранить всё</button>
-                      </div>
-                  </form>
-              )}</main>
+              <div className="p-6 bg-black/20 flex justify-between items-center border-t border-white/5">
+                <span className="text-[var(--accent-text)] font-bold">
+                  {status}
+                </span>
+                <button
+                  type="submit"
+                  className="bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] text-[var(--text-on-accent)] font-black px-8 py-3 rounded-lg hover:scale-105 transition-all"
+                >
+                  Сохранить всё
+                </button>
+              </div>
+            </form>
+          )}
+        </main>
       </div>
     </>
   );
@@ -465,7 +671,13 @@ function SettingsContent() {
 
 export default function Settings() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">Загрузка...</div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center text-white">
+          Загрузка...
+        </div>
+      }
+    >
       <SettingsContent />
     </Suspense>
   );

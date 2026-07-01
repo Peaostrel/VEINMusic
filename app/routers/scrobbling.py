@@ -72,7 +72,7 @@ async def add_scrobble(data: ScrobbleData,
                         "status": "rate_limited",
                         "message": "Слишком частые скробблы"}
 
-            res = await process_scrobble(db, user, data.title, data.artist, data.cover_url, data.track_url, data.source, data.progress_sec, data.is_playing, data.duration, data.album)
+            res = await process_scrobble(db, user, data.title, data.artist, data.cover_url or "", data.track_url or "", data.source, data.progress_sec or 0, bool(data.is_playing), data.duration or 0, data.album or "")
 
             from app.core.redis import enqueue_background_task
             await enqueue_background_task('check_achievements', user.id, background_tasks=background_tasks)

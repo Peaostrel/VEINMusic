@@ -52,7 +52,7 @@ def register(data: UserCreate, response: Response,
 
     # Set signed session token in cookie
     session_token = create_session_token(
-        new_user.username, new_user.hashed_password)
+        str(new_user.username), str(new_user.hashed_password))
     response.set_cookie(
         key="api_key",
         value=session_token,
@@ -70,11 +70,11 @@ def login(data: UserCreate, response: Response,
           db: Annotated[Session, Depends(get_db)]):
     data.username = data.username.lower()
     user = db.query(User).filter(User.username == data.username).first()
-    if not user or not verify_password(data.password, user.hashed_password):
+    if not user or not verify_password(data.password, str(user.hashed_password)):
         raise HTTPException(400, "Неверный логин/пароль")
 
     # Set signed session token in cookie
-    session_token = create_session_token(user.username, user.hashed_password)
+    session_token = create_session_token(str(user.username), str(user.hashed_password))
     response.set_cookie(
         key="api_key",
         value=session_token,

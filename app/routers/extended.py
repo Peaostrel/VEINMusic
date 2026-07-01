@@ -13,7 +13,7 @@ import time
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from fastapi.responses import RedirectResponse, JSONResponse
-from typing import Annotated
+from typing import Annotated, Any
 from fastapi import UploadFile, File
 from fastapi.responses import FileResponse
 
@@ -41,7 +41,7 @@ USER_AGENT_MOZILLA = "Mozilla/5.0"
 LASTFM_API_KEY = os.getenv("LASTFM_API_KEY")
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 LASTFM_BASE_URL = "https://ws.audioscrobbler.com/2.0/"
-IMPORTING_USERS = set()
+IMPORTING_USERS: set[str] = set()
 
 BASE_DIR = os.path.dirname(
     os.path.dirname(
@@ -65,7 +65,7 @@ except Exception as e:
         f"Redis is not available, falling back to in-memory cache: {e}")
     redis_client = None
 
-CACHE = {}
+CACHE: dict[str, Any] = {}
 MAX_CACHE_SIZE = 500
 
 
@@ -75,7 +75,7 @@ def _get_from_redis(key: str, ttl: int):
     try:
         val = redis_client.get(key)
         if val is not None:
-            entry = json.loads(val)
+            entry = json.loads(str(val))
             if time.time() - entry.get('ts', 0) < ttl:
                 return entry.get('data')
             else:
@@ -105,7 +105,7 @@ def get_from_cache(key: str, ttl: int = 300):
     return None
 
 
-def set_to_cache(key: str, data: any):
+def set_to_cache(key: str, data: Any):
     now = time.time()
     entry = {'data': data, 'ts': now}
     if redis_client:
@@ -182,7 +182,7 @@ def _check_night_scrobbles(user, ach, db: Session) -> bool:
         100 >= Track.duration *
         85).all()
     offset = get_user_timezone_offset(
-        user.profile.location if user.profile else None)
+        str(user.profile.location) if (user.profile and user.profile.location) else "")
     night_count = sum(
         1 for (
             dt,
@@ -315,7 +315,7 @@ def check_auto_achievements(user, db: Session):
     for ach in auto_achs:
         if ach.id in user_ach_ids:
             continue
-        checker = checkers.get(ach.rule_type)
+        checker = checkers.get(str(ach.rule_type))
         if checker and checker(user, ach, db):
             db.add(UserAchievement(user_id=user.id, achievement_id=ach.id))
             user.integration.bonus_xp = (
@@ -638,7 +638,7 @@ def get_notifications(username: str, db: Annotated[Session, Depends(get_db)]):
     if not user:
         return []
     new_achs = db.query(Achievement, UserAchievement).join(UserAchievement).filter(
-        UserAchievement.user_id == user.id, not UserAchievement.notified).all()
+        UserAchievement.user_id == user.id, UserAchievement.notified.is_(False)).all()
     return [{"ua_id": ua.id,
              "name": a.name,
              "icon": a.icon,
@@ -706,10 +706,39 @@ def _calculate_achievement_progress(db: Session, user: User, a: Achievement) -> 
     return 0
 
 
+def _format_achievement_data(db: Session, user: User, a: Achievement, ua: UserAchievement | None, total_users: int) -> dict:
+    earned_count = db.query(UserAchievement).filter_by(achievement_id=a.id).count()
+    rarity = round((earned_count / total_users * 100), 1) if total_users > 0 else 0
+    current_val = 0
+    target_val = a.rule_value
+
+    if not ua and a.rule_type != "manual":
+        current_val = _calculate_achievement_progress(db, user, a)
+    if ua:
+        current_val = int(target_val) if target_val else 0
+
+    return {
+        "id": a.id,
+        "name": a.name,
+        "description": a.description,
+        "icon": a.icon,
+        "target_image": a.target_image,
+        "reward_xp": a.reward_xp,
+        "is_earned": bool(ua),
+        "earned_at": ua.earned_at if ua else None,
+        "is_displayed": ua.is_displayed if ua else False,
+        "rarity": rarity,
+        "current_progress": current_val,
+        "target_value": target_val,
+        "rule_type": a.rule_type,
+        "rule_target": a.rule_target,
+        "rule_meta": a.rule_meta
+    }
+
+
 # --- /api/achievements/all/{username} ---
 @router.get("/api/achievements/all/{username}",
             responses={404: {"description": "User not found"}})
-# NOSONAR
 def get_all_achievements(
         username: str, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
@@ -725,35 +754,7 @@ def get_all_achievements(
     res = []
 
     for a in all_achs:
-        earned_count = db.query(UserAchievement).filter_by(
-            achievement_id=a.id).count()
-        rarity = round(
-            (earned_count / total_users * 100),
-            1) if total_users > 0 else 0
-        ua = user_achs.get(a.id)
-        current_val = 0
-        target_val = a.rule_value
-
-        if not ua and a.rule_type != "manual":
-            current_val = _calculate_achievement_progress(db, user, a)
-        if ua:
-            current_val = target_val
-
-        res.append({"id": a.id,
-                    "name": a.name,
-                    "description": a.description,
-                    "icon": a.icon,
-                    "target_image": a.target_image,
-                    "reward_xp": a.reward_xp,
-                    "is_earned": bool(ua),
-                    "earned_at": ua.earned_at if ua else None,
-                    "is_displayed": ua.is_displayed if ua else False,
-                    "rarity": rarity,
-                    "current_progress": current_val,
-                    "target_value": target_val,
-                    "rule_type": a.rule_type,
-                    "rule_target": a.rule_target,
-                    "rule_meta": a.rule_meta})
+        res.append(_format_achievement_data(db, user, a, user_achs.get(a.id), total_users))
 
     earned = [x for x in res if x["is_earned"]]
     unearned = [x for x in res if not x["is_earned"]]
@@ -867,7 +868,7 @@ def search_by_taste(my_username: str, db: Annotated[Session, Depends(get_db)]):
 def get_global_feed(db: Annotated[Session, Depends(get_db)]):
     # Latest scrobbles from public users
     scrobbles = db.query(Scrobble).join(User).join(UserProfile).filter(
-        not UserProfile.is_private).order_by(
+        UserProfile.is_private.is_(False)).order_by(
         Scrobble.id.desc()).limit(20).all()
     return {"feed": [format_history_item(s, s.track) for s in scrobbles]}
 
@@ -1072,7 +1073,7 @@ def get_detailed_stats(username: str,
             Scrobble.source).label('source')) .join(Scrobble).filter(
                 *
                 base_filter,
-                Track.album is not None) .group_by(
+                Track.album.isnot(None)) .group_by(
                     Track.album,
                     Track.artist,
                     Track.cover_url) .order_by(
@@ -1085,7 +1086,7 @@ def get_detailed_stats(username: str,
             Scrobble.id)).join(Scrobble).filter(
         *
         base_filter,
-        Track.genre is not None).group_by(
+        Track.genre.isnot(None)).group_by(
                 Track.genre).all()
     sources = db.query(
         Scrobble.source,
@@ -1120,8 +1121,8 @@ def get_detailed_stats(username: str,
                             "cover_url": r[2],
                             "plays": r[3],
                             "source": r[4]} for r in top_albums_raw],
-            "genre_counts": dict(genres),
-            "source_counts": dict(sources),
+            "genre_counts": dict(tuple(r) for r in genres),
+            "source_counts": dict(tuple(r) for r in sources),
             "activity_graph": activity_graph,
             "hours_activity": hours_activity,
             "days_activity": days_activity}
@@ -1147,9 +1148,9 @@ def get_stats(username: str, db: Annotated[Session, Depends(get_db)]):
     base_xp = scrobbles_xp + (user.integration.bonus_xp or 0)
     total_xp = int(base_xp * 1.1) if streak >= 7 else base_xp
 
-    artist_counts = {}
-    track_counts = {}
-    track_meta = {}
+    artist_counts: dict[str, dict[str, Any]] = {}
+    track_counts: dict[str, dict[str, Any]] = {}
+    track_meta: dict[str, dict[str, Any]] = {}
 
     for s, t in scrobbles:
         for a in t.artist.split(','):
@@ -1219,7 +1220,7 @@ def get_activity(username: str, db: Annotated[Session, Depends(get_db)]):
         Scrobble.listened_sec * 100 >= Track.duration * 85
     ).all()
 
-    activity_dict = {}
+    activity_dict: dict[str, int] = {}
     for (played_at,) in scrobbles:
         local_dt = played_at.replace(tzinfo=timezone.utc).astimezone()
         date_str = local_dt.strftime('%Y-%m-%d')
@@ -1527,8 +1528,8 @@ async def start_lastfm_import(data: LikeRequest,
     if not LASTFM_API_KEY:
         raise HTTPException(500, "Last.fm API key not configured on server")
 
-    IMPORTING_USERS.add(user.id)
-    background_tasks.add_task(import_lastfm_history, user.id, SessionLocal)
+    IMPORTING_USERS.add(str(user.id))
+    background_tasks.add_task(import_lastfm_history, int(user.id), SessionLocal)
     return {"status": "import_started"}
 
 
@@ -1681,10 +1682,10 @@ async def _enrich_achievement_data(rule_type: str, target_val: str, val: int, t_
 # NOSONAR
 async def create_achievement(data: AchCreate, db: Annotated[Session, Depends(
         get_db)], admin: Annotated[User, Depends(get_admin_user)]):
-    target_val = data.rule_target
+    target_val = data.rule_target or ""
     val = data.rule_value
-    t_img = data.target_image
-    meta_text = data.rule_meta
+    t_img = data.target_image or ""
+    meta_text = data.rule_meta or ""
     target_val, val, t_img, meta_text = await _enrich_achievement_data(
         data.rule_type, target_val, val, t_img, meta_text
     )
@@ -1704,7 +1705,8 @@ async def create_achievement(data: AchCreate, db: Annotated[Session, Depends(
 
 
 # --- PUT /api/admin/achievements/{ach_id} ---
-@router.put("/api/admin/achievements/{ach_id}")
+@router.put("/api/admin/achievements/{ach_id}",
+            responses={404: {"description": "Achievement not found"}})
 # NOSONAR
 async def update_achievement(ach_id: int,
                              data: AchUpdate,
@@ -1713,14 +1715,16 @@ async def update_achievement(ach_id: int,
                              admin: Annotated[User,
                                               Depends(get_admin_user)]):
     ach = db.query(Achievement).filter(Achievement.id == ach_id).first()
-    target_val = data.rule_target
+    if not ach:
+        raise HTTPException(404)
+    target_val = data.rule_target or ""
     val = data.rule_value
-    t_img = data.target_image
-    meta_text = data.rule_meta
+    t_img = data.target_image or ""
+    meta_text = data.rule_meta or ""
     target_val, val, t_img, meta_text = await _enrich_achievement_data(
         data.rule_type, target_val, val, t_img, meta_text
     )
-    ach.name, ach.description, ach.icon, ach.rule_type, ach.rule_value, ach.rule_target, ach.target_image, ach.reward_xp, ach.rule_meta = data.name, data.description, data.icon, data.rule_type, val, target_val, t_img, data.reward_xp, meta_text
+    ach.name, ach.description, ach.icon, ach.rule_type, ach.rule_value, ach.rule_target, ach.target_image, ach.reward_xp, ach.rule_meta = data.name, data.description, data.icon, data.rule_type, val, target_val, t_img, data.reward_xp, meta_text  # type: ignore[assignment]
     db.commit()
     return {"status": "ok"}
 
@@ -1747,7 +1751,8 @@ def delete_track(track_id: int, db: Annotated[Session, Depends(
 
 
 # --- POST /api/admin/users/{target_username}/achievements ---
-@router.post("/api/admin/users/{target_username}/achievements")
+@router.post("/api/admin/users/{target_username}/achievements",
+             responses={404: {"description": "User not found"}})
 def assign_achievement(target_username: str,
                        data: AchAssign,
                        db: Annotated[Session,
@@ -1755,6 +1760,8 @@ def assign_achievement(target_username: str,
                        admin: Annotated[User,
                                         Depends(get_admin_user)]):
     user = db.query(User).filter(User.username == target_username).first()
+    if not user:
+        raise HTTPException(404, USER_NOT_FOUND)
     if not db.query(UserAchievement).filter_by(user_id=user.id,
                                                achievement_id=data.achievement_id).first():
         ach = db.query(Achievement).filter_by(id=data.achievement_id).first()
@@ -1763,7 +1770,7 @@ def assign_achievement(target_username: str,
                 user_id=user.id,
                 achievement_id=data.achievement_id))
         user.integration.bonus_xp = (
-            user.integration.bonus_xp or 0) + (ach.reward_xp or 0)
+            user.integration.bonus_xp or 0) + (ach.reward_xp if ach and ach.reward_xp else 0)
         db.commit()
     return {"status": "ok"}
 
@@ -1871,7 +1878,7 @@ def toggle_achievement(data: ToggleAch, db: Annotated[Session, Depends(
         user_id=user.id, achievement_id=data.achievement_id).first()
     if not ua:
         raise HTTPException(404)
-    ua.is_displayed = not ua.is_displayed
+    ua.is_displayed = not ua.is_displayed  # type: ignore[assignment]
     db.commit()
     return {"status": "ok", "is_displayed": ua.is_displayed}
 
