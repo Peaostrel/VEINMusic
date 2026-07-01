@@ -107,7 +107,7 @@ export default function Home() {
         <div className="flex items-center gap-3 shrink-0">
           <Link
             href={`/user/${username}`}
-            className="bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] text-[var(--text-on-accent)] font-bold px-5 py-2.5 rounded-xl hover:scale-105 transition-all shadow-[0_0_15px_var(--accent-glow)] text-sm flex items-center justify-center"
+            className="bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] text-white font-bold px-5 py-2.5 rounded-xl hover:scale-105 transition-all shadow-[0_0_15px_var(--accent-glow)] text-sm flex items-center justify-center"
           >
             Мой Профиль
           </Link>

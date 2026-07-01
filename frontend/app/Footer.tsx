@@ -137,7 +137,7 @@ export default function Footer() {
             <span>🎵 {stats.uniqueTracks} в базе</span>
           </div>
           <div className="tracking-widest uppercase text-[10px] opacity-70 flex items-center gap-1">
-            VEIN Music © {new Date().getFullYear()}{" "}
+            VEIN © {new Date().getFullYear()}{" "}
             <span className="opacity-40">|</span> Разработано с{" "}
             <span className="text-red-500 animate-pulse text-xs">❤️</span>
           </div>
