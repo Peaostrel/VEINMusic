@@ -1930,7 +1930,8 @@ async def get_upload(filename: str,
 
 
 async def get_album_track_count(url: str) -> int:
-    if not url or not url.startswith("http"):
+    from app.utils import is_safe_url
+    if not is_safe_url(url, allowed_domains=[YANDEX_MUSIC_DOMAIN, "open.spotify.com"]):
         return 0
     headers = {'User-Agent': USER_AGENT_MOZILLA}
     try:
@@ -1939,7 +1940,7 @@ async def get_album_track_count(url: str) -> int:
                 album_id = url.split(ALBUM_PATH)[1].split('/')[0].split('?')[0]
                 res = (await client.get(f"https://{YANDEX_MUSIC_DOMAIN}/handlers/album.jsx?album={album_id}")).json()
                 return res.get("trackCount", 0)
-            elif "spotify.com" in url and ALBUM_PATH in url:
+            elif "open.spotify.com" in url and ALBUM_PATH in url:
                 resp = await client.get(url)
                 match = re.search(
                     r'music:song_count["\']\s+content=["\'](\d+)["\']',

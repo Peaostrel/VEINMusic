@@ -126,7 +126,7 @@ def update_privacy(data: dict, db: Annotated[Session, Depends(
 def generate_api_key(db: Annotated[Session, Depends(
         get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     raw_key = secrets.token_hex(16)
-    hashed_key = hashlib.sha256(raw_key.encode('utf-8')).hexdigest()
+    hashed_key = hashlib.pbkdf2_hmac('sha256', raw_key.encode('utf-8'), b'vein_api_salt', 100000).hex()
     current_user.api_key = hashed_key  # type: ignore[assignment]
     db.commit()
     return {"api_key": raw_key}

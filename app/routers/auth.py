@@ -37,7 +37,7 @@ def register(request: Request, data: UserCreate, response: Response,
 
     # Generate API Key, compute SHA-256 and store in DB
     raw_api_key = secrets.token_hex(16)
-    hashed_api_key = hashlib.sha256(raw_api_key.encode('utf-8')).hexdigest()
+    hashed_api_key = hashlib.pbkdf2_hmac('sha256', raw_api_key.encode('utf-8'), b'vein_api_salt', 100000).hex()
 
     new_user = User(
         username=data.username,

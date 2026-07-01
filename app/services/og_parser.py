@@ -106,6 +106,9 @@ async def _parse_yandex_meta(
 async def _parse_generic_meta(
         client, url: str) -> tuple[Optional[str], Optional[str]]:
     """Fetch the page and extract OG meta tags from HTML."""
+    from app.utils import is_safe_url
+    if not is_safe_url(url):
+        return None, None
     try:
         resp = await client.get(url)
         if resp.status_code == 200:

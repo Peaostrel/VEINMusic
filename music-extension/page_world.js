@@ -21,17 +21,17 @@ if (!globalThis.__VEIN_AUDIO_HOOK) {
 }
 
 function getPlatformSource(hostname) {
-    if (hostname.includes('music.yandex')) return 'yandex';
-    if (hostname.includes('spotify.com')) return 'spotify';
-    if (hostname.includes('music.youtube.com')) return 'youtube_music';
-    if (hostname.includes('soundcloud.com')) {
+    if (hostname.endsWith('music.yandex.ru') || hostname.endsWith('music.yandex.com') || hostname === 'music.yandex.ru') return 'yandex';
+    if (hostname.endsWith('spotify.com') || hostname === 'spotify.com') return 'spotify';
+    if (hostname.endsWith('music.youtube.com') || hostname === 'music.youtube.com') return 'youtube_music';
+    if (hostname.endsWith('soundcloud.com') || hostname === 'soundcloud.com') {
         const adBadge = document.querySelector('.sc-snippet-ad, .adOverlay, [aria-label="Advertisement"]');
         const titleEl = document.querySelector('.playbackSoundBadge__titleLink');
         if (adBadge || titleEl?.href?.includes('/ads/')) return null; 
         return 'soundcloud';
     }
-    if (hostname.includes('music.apple.com')) return 'apple_music';
-    if (hostname.includes('vk.com')) {
+    if (hostname.endsWith('music.apple.com') || hostname === 'music.apple.com') return 'apple_music';
+    if (hostname.endsWith('vk.com') || hostname === 'vk.com') {
         const isVideoPlaying = Array.from(document.querySelectorAll('video')).some(v => !v.paused && v.offsetHeight > 150 && v.offsetWidth > 150);
         if (!isVideoPlaying) return 'vk';
     }
