@@ -93,8 +93,8 @@ export default function IntegrationsTab({
                 Требуется OAuth токен.{" "}
                 <a
                   href="https://oauth.yandex.ru/authorize?response_type=token&client_id=23cabbbdc6cd418abb4b39c32c41195d"
-                  target="_blank"
-                  rel="noreferrer"
+                  target="_blank" rel="noopener noreferrer"
+                  
                   className="text-[#ffcc00] hover:underline font-bold ml-1"
                 >
                   Получить токен

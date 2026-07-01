@@ -382,8 +382,8 @@ export default function DetailedStats() {
                           </div>
                           <a
                             href={getTrackUrl(t)}
-                            target="_blank"
-                            rel="noreferrer"
+                            target="_blank" rel="noopener noreferrer"
+                            
                             className="font-bold text-white text-sm hover:text-[var(--accent-text)] hover:underline transition-colors break-words leading-tight"
                           >
                             {t.title}
@@ -396,8 +396,8 @@ export default function DetailedStats() {
                               <span key={a.trim()}>
                                 <a
                                   href={getArtistUrl(a.trim(), t.source)}
-                                  target="_blank"
-                                  rel="noreferrer"
+                                  target="_blank" rel="noopener noreferrer"
+                                  
                                   className="hover:text-[var(--accent-text)] hover:underline transition-colors font-medium"
                                 >
                                   {a.trim()}
@@ -445,8 +445,8 @@ export default function DetailedStats() {
                           </div>
                           <a
                             href={getArtistUrl(a.name, topSource)}
-                            target="_blank"
-                            rel="noreferrer"
+                            target="_blank" rel="noopener noreferrer"
+                            
                             className="font-bold text-white text-sm hover:text-[var(--accent-text)] hover:underline transition-colors break-words"
                           >
                             {a.name}
@@ -509,8 +509,8 @@ export default function DetailedStats() {
                               album.artist,
                               album.source,
                             )}
-                            target="_blank"
-                            rel="noreferrer"
+                            target="_blank" rel="noopener noreferrer"
+                            
                             className="font-bold text-white text-sm hover:text-[var(--accent-text)] hover:underline transition-colors break-words leading-tight"
                           >
                             {album.album || album.title || album.name}
@@ -524,8 +524,8 @@ export default function DetailedStats() {
                                 <span key={a.trim()}>
                                   <a
                                     href={getArtistUrl(a.trim(), album.source)}
-                                    target="_blank"
-                                    rel="noreferrer"
+                                    target="_blank" rel="noopener noreferrer"
+                                    
                                     className="hover:text-[var(--accent-text)] hover:underline transition-colors font-medium"
                                   >
                                     {a.trim()}
