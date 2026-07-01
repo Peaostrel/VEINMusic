@@ -39,7 +39,7 @@ async def lifespan(app: FastAPI):
                 iterations = 600_000
                 salt = os.urandom(16)
                 dk = hashlib.pbkdf2_hmac("sha256", str(user.api_key).encode("utf-8"), salt, iterations)
-                user.api_key = f"pbkdf2_sha256${iterations}${salt.hex()}${dk.hex()}" # type: ignore[assignment]
+                user.api_key = f"pbkdf2_sha256${iterations}${salt.hex()}${dk.hex()}"  # type: ignore[assignment]
         db.commit()
     except Exception as e:
         print(f"Startup migration failed: {e}")
@@ -66,7 +66,7 @@ async def lifespan(app: FastAPI):
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="VEIN Music API", lifespan=lifespan)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler) # type: ignore[arg-type]
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 allowed_origins = [

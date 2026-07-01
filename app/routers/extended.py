@@ -706,10 +706,39 @@ def _calculate_achievement_progress(db: Session, user: User, a: Achievement) -> 
     return 0
 
 
+def _format_achievement_data(db: Session, user: User, a: Achievement, ua: UserAchievement | None, total_users: int) -> dict:
+    earned_count = db.query(UserAchievement).filter_by(achievement_id=a.id).count()
+    rarity = round((earned_count / total_users * 100), 1) if total_users > 0 else 0
+    current_val = 0
+    target_val = a.rule_value
+
+    if not ua and a.rule_type != "manual":
+        current_val = _calculate_achievement_progress(db, user, a)
+    if ua:
+        current_val = int(target_val) if target_val else 0
+
+    return {
+        "id": a.id,
+        "name": a.name,
+        "description": a.description,
+        "icon": a.icon,
+        "target_image": a.target_image,
+        "reward_xp": a.reward_xp,
+        "is_earned": bool(ua),
+        "earned_at": ua.earned_at if ua else None,
+        "is_displayed": ua.is_displayed if ua else False,
+        "rarity": rarity,
+        "current_progress": current_val,
+        "target_value": target_val,
+        "rule_type": a.rule_type,
+        "rule_target": a.rule_target,
+        "rule_meta": a.rule_meta
+    }
+
+
 # --- /api/achievements/all/{username} ---
 @router.get("/api/achievements/all/{username}",
             responses={404: {"description": "User not found"}})
-# NOSONAR
 def get_all_achievements(
         username: str, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
@@ -725,35 +754,7 @@ def get_all_achievements(
     res = []
 
     for a in all_achs:
-        earned_count = db.query(UserAchievement).filter_by(
-            achievement_id=a.id).count()
-        rarity = round(
-            (earned_count / total_users * 100),
-            1) if total_users > 0 else 0
-        ua = user_achs.get(a.id)
-        current_val = 0
-        target_val = a.rule_value
-
-        if not ua and a.rule_type != "manual":
-            current_val = _calculate_achievement_progress(db, user, a)
-        if ua:
-            current_val = int(target_val) if target_val else 0
-
-        res.append({"id": a.id,
-                    "name": a.name,
-                    "description": a.description,
-                    "icon": a.icon,
-                    "target_image": a.target_image,
-                    "reward_xp": a.reward_xp,
-                    "is_earned": bool(ua),
-                    "earned_at": ua.earned_at if ua else None,
-                    "is_displayed": ua.is_displayed if ua else False,
-                    "rarity": rarity,
-                    "current_progress": current_val,
-                    "target_value": target_val,
-                    "rule_type": a.rule_type,
-                    "rule_target": a.rule_target,
-                    "rule_meta": a.rule_meta})
+        res.append(_format_achievement_data(db, user, a, user_achs.get(a.id), total_users))
 
     earned = [x for x in res if x["is_earned"]]
     unearned = [x for x in res if not x["is_earned"]]
@@ -1704,7 +1705,8 @@ async def create_achievement(data: AchCreate, db: Annotated[Session, Depends(
 
 
 # --- PUT /api/admin/achievements/{ach_id} ---
-@router.put("/api/admin/achievements/{ach_id}")
+@router.put("/api/admin/achievements/{ach_id}",
+            responses={404: {"description": "Achievement not found"}})
 # NOSONAR
 async def update_achievement(ach_id: int,
                              data: AchUpdate,
@@ -1722,7 +1724,7 @@ async def update_achievement(ach_id: int,
     target_val, val, t_img, meta_text = await _enrich_achievement_data(
         data.rule_type, target_val, val, t_img, meta_text
     )
-    ach.name, ach.description, ach.icon, ach.rule_type, ach.rule_value, ach.rule_target, ach.target_image, ach.reward_xp, ach.rule_meta = data.name, data.description, data.icon, data.rule_type, val, target_val, t_img, data.reward_xp, meta_text # type: ignore[assignment]
+    ach.name, ach.description, ach.icon, ach.rule_type, ach.rule_value, ach.rule_target, ach.target_image, ach.reward_xp, ach.rule_meta = data.name, data.description, data.icon, data.rule_type, val, target_val, t_img, data.reward_xp, meta_text  # type: ignore[assignment]
     db.commit()
     return {"status": "ok"}
 
@@ -1749,7 +1751,8 @@ def delete_track(track_id: int, db: Annotated[Session, Depends(
 
 
 # --- POST /api/admin/users/{target_username}/achievements ---
-@router.post("/api/admin/users/{target_username}/achievements")
+@router.post("/api/admin/users/{target_username}/achievements",
+             responses={404: {"description": "User not found"}})
 def assign_achievement(target_username: str,
                        data: AchAssign,
                        db: Annotated[Session,
@@ -1875,7 +1878,7 @@ def toggle_achievement(data: ToggleAch, db: Annotated[Session, Depends(
         user_id=user.id, achievement_id=data.achievement_id).first()
     if not ua:
         raise HTTPException(404)
-    ua.is_displayed = not ua.is_displayed # type: ignore[assignment]
+    ua.is_displayed = not ua.is_displayed  # type: ignore[assignment]
     db.commit()
     return {"status": "ok", "is_displayed": ua.is_displayed}
 

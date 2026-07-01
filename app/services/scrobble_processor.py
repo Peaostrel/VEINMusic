@@ -119,20 +119,20 @@ def _update_existing_track(
     """Update mutable fields on an existing track and commit if anything changed."""
     updated = False
     if cover_url and not track.cover_url:
-        track.cover_url = cover_url # type: ignore[assignment]
+        track.cover_url = cover_url  # type: ignore[assignment]
         updated = True
     if track_url and TRACK_PATH in track_url:
         if not track.track_url or TRACK_PATH not in track.track_url:
-            track.track_url = track_url # type: ignore[assignment]
+            track.track_url = track_url  # type: ignore[assignment]
             updated = True
     if album and not track.album:
-        track.album = album # type: ignore[assignment]
+        track.album = album  # type: ignore[assignment]
         updated = True
     if duration and duration > 0:
         needs_update = track.duration == 0 or track.duration == 180 or abs(
             track.duration - duration) > 5
         if needs_update:
-            track.duration = duration # type: ignore[assignment]
+            track.duration = duration  # type: ignore[assignment]
             updated = True
     if updated:
         db.commit()
@@ -172,11 +172,11 @@ async def _get_or_create_track(
             album)
 
     if track.duration == 0 and track.track_url:
-        track.duration = await get_track_duration(str(track.track_url)) # type: ignore[assignment]
+        track.duration = await get_track_duration(str(track.track_url))  # type: ignore[assignment]
         db.commit()
 
     if not track.genre and track.track_url:
-        track.genre = await get_track_genre(str(track.track_url)) # type: ignore[assignment]
+        track.genre = await get_track_genre(str(track.track_url))  # type: ignore[assignment]
         db.commit()
 
     return track
