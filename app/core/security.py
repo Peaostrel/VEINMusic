@@ -1,4 +1,5 @@
 from typing import Optional
+import urllib.parse
 import bcrypt
 import hmac
 import hashlib
@@ -68,7 +69,7 @@ def _extract_token(request: Request) -> tuple[Optional[str], bool]:
     # 1. Try to get token from cookies
     token = request.cookies.get("api_key")
     if token:
-        return token, True
+        return urllib.parse.unquote(token), True
 
     # 2. Fallback for Bearer auth header
     auth_header = request.headers.get("Authorization")

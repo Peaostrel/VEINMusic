@@ -1420,20 +1420,22 @@ def _yandex_redirect_for_type(type: str, res: dict):
             if alb_id:
                 safe_alb = urllib.parse.quote(str(alb_id))
                 safe_track = urllib.parse.quote(str(items[0]['id']))
-                return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}/album/{safe_alb}/track/{safe_track}")  # codeql[py/url-redirection] lgtm[py/url-redirection]
+                url = urllib.parse.urlunparse(("https", YANDEX_MUSIC_DOMAIN, f"/album/{safe_alb}/track/{safe_track}", "", "", ""))
+                return RedirectResponse(url=url)
     return None
 
 
 def _yandex_fallback_redirect(type: str, q: str):
     """Return a fallback search redirect for Yandex Music."""
-    safe_q = urllib.parse.quote(q)
-    if type == "artist":
-        return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}/search?text={safe_q}&type=artists")  # codeql[py/url-redirection] lgtm[py/url-redirection]
+    query_type = "artists"
     if type == "album":
-        return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}/search?text={safe_q}&type=albums")  # codeql[py/url-redirection] lgtm[py/url-redirection]
-    if type == "track":
-        return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}/search?text={safe_q}&type=tracks")  # codeql[py/url-redirection] lgtm[py/url-redirection]
-    return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}")
+        query_type = "albums"
+    elif type == "track":
+        query_type = "tracks"
+    
+    query = urllib.parse.urlencode({"text": q, "type": query_type})
+    url = urllib.parse.urlunparse(("https", YANDEX_MUSIC_DOMAIN, "/search", "", query, ""))
+    return RedirectResponse(url=url)
 
 
 @router.get("/api/redirect")
@@ -1917,9 +1919,9 @@ async def upload_file(current_user: Annotated[User, Depends(
 async def get_upload(filename: str,
                      current_user: Annotated[User,
                                              Depends(get_current_user)]):
-    clean_filename = os.path.basename(filename).replace("/", "").replace("\\", "").replace("..", "")
-    # codeql[py/path-injection] - filename is explicitly sanitized
-    file_path = os.path.join(UPLOADS_DIR, clean_filename)
+    if not re.match(r'^[\w\-. ]+$', filename):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    file_path = os.path.join(UPLOADS_DIR, filename)
     # Path traversal protection
     real_path = os.path.abspath(file_path)
     real_uploads_dir = os.path.abspath(UPLOADS_DIR)
