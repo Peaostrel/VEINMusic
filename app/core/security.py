@@ -27,10 +27,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         hashed_password.encode('utf-8'))
 
 
-def create_session_token(username: str, hashed_password: str) -> str:
+def create_session_token(user_id: str, hashed_password: str) -> str:
     # Set session lifespan to 30 days
     expires_at = int(time.time()) + 30 * 24 * 3600
-    msg = f"{username}:{expires_at}"
+    msg = f"{user_id}:{expires_at}"
     # Bind signature to user password hash so changing password invalidates
     # all sessions
     signature = hmac.new(
@@ -46,13 +46,13 @@ def verify_session_token(token: str, db_user: User) -> bool:
         parts = token.split(":")
         if len(parts) != 3:
             return False
-        username, expires_at_str, signature = parts
+        user_id_str, expires_at_str, signature = parts
         expires_at = int(expires_at_str)
 
         if time.time() > expires_at:
             return False
 
-        msg = f"{username}:{expires_at_str}"
+        msg = f"{user_id_str}:{expires_at_str}"
         expected_signature = hmac.new(
             (SECRET_KEY + db_user.hashed_password).encode('utf-8'),
             msg.encode('utf-8'),
@@ -93,8 +93,8 @@ def _extract_token(request: Request) -> tuple[Optional[str], bool]:
 def _authenticate_user(token: str, db: Session) -> Optional[User]:
     if ":" in token:
         try:
-            username = token.split(":")[0]
-            user = db.query(User).filter(User.username == username).first()
+            user_id_str = token.split(":")[0]
+            user = db.query(User).filter(User.id == int(user_id_str)).first()
             if user and verify_session_token(token, user):
                 return user
         except Exception:  # NOSONAR

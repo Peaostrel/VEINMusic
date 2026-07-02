@@ -3,15 +3,20 @@ export function sanitizeUrl(
 ): string | undefined {
   if (!url) return undefined;
 
-  const lowerUrl = url.toLowerCase().trim();
+  try {
+    const parsed = new URL(url, "http://localhost");
+    if (
+      parsed.protocol === "http:" ||
+      parsed.protocol === "https:" ||
+      parsed.protocol === "mailto:"
+    ) {
+      return url;
+    }
+  } catch {
+    console.warn("Invalid URL format:", url);
+  }
 
-  // Strict allowlist to satisfy CodeQL's Client-side URL redirect and XSS
-  if (
-    lowerUrl.startsWith("http://") ||
-    lowerUrl.startsWith("https://") ||
-    lowerUrl.startsWith("/") ||
-    lowerUrl.startsWith("mailto:")
-  ) {
+  if (url.startsWith("/")) {
     return url;
   }
 

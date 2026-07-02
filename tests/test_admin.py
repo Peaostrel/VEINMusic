@@ -14,7 +14,7 @@ def test_admin_client(client, db):
     admin = db.query(User).filter(User.username == "testadmin").first()
     admin.role = "admin"
     db.commit()
-    token = create_session_token(admin.username, admin.hashed_password)
+    token = create_session_token(str(admin.id), str(admin.hashed_password))
     client.cookies.set("api_key", token)
     client.headers["Origin"] = "http://localhost:3000"
     return client
