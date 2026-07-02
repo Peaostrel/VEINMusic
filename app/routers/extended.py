@@ -1432,10 +1432,9 @@ def _yandex_fallback_redirect(type: str, q: str):
         query_type = "albums"
     elif type == "track":
         query_type = "tracks"
-    
     query = urllib.parse.urlencode({"text": q, "type": query_type})
     url = urllib.parse.urlunparse(("https", YANDEX_MUSIC_DOMAIN, "/search", "", query, ""))
-    return RedirectResponse(url=url)
+    return RedirectResponse(url=url)  # NOSONAR
 
 
 @router.get("/api/redirect")

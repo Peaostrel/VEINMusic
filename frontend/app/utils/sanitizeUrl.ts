@@ -13,7 +13,7 @@ export function sanitizeUrl(
       return url;
     }
   } catch (e) {
-    // Ignore invalid URLs
+    console.warn("Invalid URL format:", url);
   }
 
   if (url.startsWith("/")) {

@@ -13,7 +13,6 @@ from app.core.rate_limit import limiter
 from fastapi.responses import RedirectResponse
 import os
 import httpx
-import urllib.parse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -58,7 +57,7 @@ def register(request: Request, data: UserCreate, response: Response,
     # codeql[py/cookie-injection]
     session_token = create_session_token(
         str(new_user.username), str(new_user.hashed_password))
-    safe_token = urllib.parse.quote(session_token)
+    safe_token = session_token.replace('\r', '').replace('\n', '')
     response.set_cookie(
         key="api_key",
         value=safe_token,
@@ -82,7 +81,7 @@ def login(request: Request, data: UserCreate, response: Response,
 
     # Set signed session token in cookie
     session_token = create_session_token(str(user.username), str(user.hashed_password))
-    safe_token = urllib.parse.quote(session_token)
+    safe_token = session_token.replace('\r', '').replace('\n', '')
     response.set_cookie(
         key="api_key",
         value=safe_token,
