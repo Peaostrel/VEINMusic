@@ -153,7 +153,7 @@ def test_history_privacy(client, db, test_user):
 
     # Check private history (owner authorized via cookie)
     from app.core.security import create_session_token
-    token = create_session_token(test_user.username, test_user.hashed_password)
+    token = create_session_token(str(test_user.id), str(test_user.hashed_password))
     client.cookies.set("api_key", token)
     resp = client.get(f"/api/history/{test_user.username}")
     assert resp.status_code == 200

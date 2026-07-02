@@ -54,9 +54,8 @@ def register(request: Request, data: UserCreate, response: Response,
     db.commit()
 
     # Set signed session token in cookie
-    # codeql[py/cookie-injection]
     session_token = create_session_token(
-        str(new_user.username), str(new_user.hashed_password))
+        str(new_user.id), str(new_user.hashed_password))
     safe_token = session_token.replace('\r', '').replace('\n', '')
     response.set_cookie(
         key="api_key",
@@ -80,7 +79,7 @@ def login(request: Request, data: UserCreate, response: Response,
         raise HTTPException(400, "Неверный логин/пароль")
 
     # Set signed session token in cookie
-    session_token = create_session_token(str(user.username), str(user.hashed_password))
+    session_token = create_session_token(str(user.id), str(user.hashed_password))
     safe_token = session_token.replace('\r', '').replace('\n', '')
     response.set_cookie(
         key="api_key",

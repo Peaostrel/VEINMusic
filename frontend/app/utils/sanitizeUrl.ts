@@ -12,7 +12,7 @@ export function sanitizeUrl(
     ) {
       return url;
     }
-  } catch (e) {
+  } catch {
     console.warn("Invalid URL format:", url);
   }
 

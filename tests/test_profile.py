@@ -119,7 +119,7 @@ def test_csrf_check(client, db):
         "password": "password123"
     })
     user = db.query(User).filter(User.username == "csrfuser").first()
-    token = create_session_token(user.username, user.hashed_password)
+    token = create_session_token(str(user.id), str(user.hashed_password))
     client.cookies.set("api_key", token)
 
     # Mutating POST without Origin/Referer should return 403
@@ -172,7 +172,7 @@ def test_admin_restrictions(client, db):
 
     # Regular User Access -> 403
     regular_token = create_session_token(
-        regular.username, regular.hashed_password)
+        str(regular.id), str(regular.hashed_password))
     client.cookies.set("api_key", regular_token)
     resp = client.get("/api/admin/stats")
     assert resp.status_code == 403
@@ -180,7 +180,7 @@ def test_admin_restrictions(client, db):
     # Admin User Access -> 200
     client.cookies.clear()
     admin_token = create_session_token(
-        admin_user.username, admin_user.hashed_password)
+        str(admin_user.id), str(admin_user.hashed_password))
     client.cookies.set("api_key", admin_token)
     resp = client.get("/api/admin/stats")
     assert resp.status_code == 200
