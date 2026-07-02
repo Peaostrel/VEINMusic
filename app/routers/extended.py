@@ -1920,14 +1920,19 @@ async def get_upload(filename: str,
                                              Depends(get_current_user)]):
     if not re.match(r'^[\w\-. ]+$', filename):
         raise HTTPException(status_code=400, detail="Invalid filename")
-    file_path = os.path.join(UPLOADS_DIR, filename)
-    # Path traversal protection
+
+    # Use basename to completely defeat path traversal
+    safe_filename = os.path.basename(filename)
+    file_path = os.path.join(UPLOADS_DIR, safe_filename)
+
+    # Path traversal protection (double check)
     real_path = os.path.abspath(file_path)
     real_uploads_dir = os.path.abspath(UPLOADS_DIR)
     if not real_path.startswith(real_uploads_dir):
         raise HTTPException(status_code=400, detail="Invalid path")
-    if os.path.exists(file_path):
-        return FileResponse(file_path)
+
+    if os.path.exists(real_path):
+        return FileResponse(real_path)
     raise HTTPException(status_code=404, detail="Файл не найден")
 
 
