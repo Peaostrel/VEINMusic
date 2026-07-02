@@ -1180,7 +1180,11 @@ function HistoryItem({
         <div className="w-12 h-12 rounded bg-black shrink-0 overflow-hidden shadow z-10 pointer-events-auto relative">
           {item.cover_url ? (
             <img
-              src={item.cover_url && /^(https?:\/\/|\/)/i.test(item.cover_url) ? item.cover_url : "about:blank"}
+              src={
+                item.cover_url && /^(https?:\/\/|\/)/i.test(item.cover_url)
+                  ? item.cover_url
+                  : "about:blank"
+              }
               className="w-full h-full object-cover"
               alt={item.title}
             />
@@ -1194,7 +1198,12 @@ function HistoryItem({
           <div className="flex items-center gap-1.5 mb-0.5 w-max">
             <div className="shrink-0">{getPlatformIcon(item.source)}</div>
             <a
-              href={getTrackUrl(item) && /^(https?:\/\/|\/)/i.test(getTrackUrl(item)) ? getTrackUrl(item) : "about:blank"}
+              href={
+                getTrackUrl(item) &&
+                /^(https?:\/\/|\/)/i.test(getTrackUrl(item))
+                  ? getTrackUrl(item)
+                  : "about:blank"
+              }
               target="_blank"
               rel="noopener noreferrer"
 
