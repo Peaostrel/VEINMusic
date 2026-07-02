@@ -14,7 +14,9 @@ const getSafeUrl = (url: string | null | undefined): string => {
   if (!url || typeof url !== "string") return "about:blank";
   if (!/^(https?:\/\/|\/)/i.test(url)) return "about:blank";
   try {
-    return String.fromCharCode(...url.split("").map((c) => c.charCodeAt(0)));
+    return String.fromCodePoint(
+      ...Array.from(url).map((c) => c.codePointAt(0) as number),
+    );
   } catch {
     return "about:blank";
   }
