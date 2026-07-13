@@ -63,7 +63,7 @@ jobs:
         run: mypy app/
 
       - name: Upload Coverage Report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-coverage
@@ -167,7 +167,7 @@ jobs:
           npx playwright test
 
       - name: Upload Playwright Report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-report
@@ -175,7 +175,7 @@ jobs:
           retention-days: 7
 
       - name: Upload Backend Logs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: e2e-backend-logs
