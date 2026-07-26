@@ -1,11 +1,12 @@
 import asyncio
-import os
 import logging
+import os
 from contextlib import asynccontextmanager
+
 import redis.asyncio as aioredis
-from fastapi import HTTPException
 from arq import create_pool
 from arq.connections import RedisSettings
+from fastapi import HTTPException
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 redis_client = None

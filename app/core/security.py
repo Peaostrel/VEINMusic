@@ -1,14 +1,15 @@
-from typing import Optional
-import bcrypt
-import hmac
 import hashlib
-import time
+import hmac
 import os
-from fastapi import Request, HTTPException, Depends
-from sqlalchemy.orm import Session
+import time
 from typing import Annotated
-from app.models import User
+
+import bcrypt
+from fastapi import Depends, HTTPException, Request
+from sqlalchemy.orm import Session
+
 from app.database import get_db
+from app.models import User
 
 SECRET_KEY = os.getenv(
     "SECRET_KEY",
@@ -64,7 +65,7 @@ def verify_session_token(token: str, db_user: User) -> bool:
         return False
 
 
-def _extract_token(request: Request) -> tuple[Optional[str], bool]:
+def _extract_token(request: Request) -> tuple[str | None, bool]:
     # 1. Try to get token from cookies
     token = request.cookies.get("api_key")
     if token:
@@ -90,7 +91,7 @@ def _extract_token(request: Request) -> tuple[Optional[str], bool]:
     return None, False
 
 
-def _authenticate_user(token: str, db: Session) -> Optional[User]:
+def _authenticate_user(token: str, db: Session) -> User | None:
     if ":" in token:
         try:
             user_id_str = token.split(":")[0]
@@ -157,7 +158,7 @@ def get_admin_user(current_user: Annotated[User, Depends(get_current_user)]):
 
 
 def get_current_user_optional(request: Request,
-                              db: Session = Depends(get_db)) -> Optional[User]:
+                              db: Session = Depends(get_db)) -> User | None:
     try:
         from app.main import app
         if get_current_user in app.dependency_overrides:

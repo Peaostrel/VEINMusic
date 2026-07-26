@@ -1,15 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from typing import Annotated, Optional
+import hashlib
 import json
 import secrets
-import hashlib
+from typing import Annotated
 
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
+from app.core.security import SECRET_KEY, get_current_user
 from app.database import get_db
 from app.models import User
 from app.schemas import ProfileUpdate
-from app.core.security import get_current_user, SECRET_KEY
 from app.services.metadata_search import search_metadata
 from app.utils import sanitize_text
 
@@ -40,12 +40,12 @@ async def _update_favorite(user_profile, field_value, field_name, entity_type):
                 f"{field_name}_url"))
 
 
-def _validate_url(url: Optional[str]):
+def _validate_url(url: str | None):
     if url and not url.startswith(("http:", "https:")):
         raise HTTPException(400, "Invalid URL")
 
 
-def _validate_and_set_social(profile, social_links: Optional[str]):
+def _validate_and_set_social(profile, social_links: str | None):
     if social_links is not None:
         try:
             json.loads(social_links)

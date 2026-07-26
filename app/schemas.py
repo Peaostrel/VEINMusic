@@ -1,5 +1,5 @@
+
 from pydantic import BaseModel, Field
-from typing import Optional, List
 
 
 class UserCreate(BaseModel):
@@ -10,117 +10,117 @@ class UserCreate(BaseModel):
 class ScrobbleData(BaseModel):
     # api_key parameter is removed since we use cookies now, but we'll keep it
     # optional for extension compatibility if needed
-    api_key: Optional[str] = None
+    api_key: str | None = None
     title: str
     artist: str
-    cover_url: Optional[str] = None
-    track_url: Optional[str] = None
-    album: Optional[str] = None
+    cover_url: str | None = None
+    track_url: str | None = None
+    album: str | None = None
     source: str
-    progress_sec: Optional[int] = 0
-    is_playing: Optional[bool] = True
-    duration: Optional[int] = 0
+    progress_sec: int | None = 0
+    is_playing: bool | None = True
+    duration: int | None = 0
 
 
 class ProfileUpdate(BaseModel):
     # api_key optional for compatibility, but we rely on cookies
-    api_key: Optional[str] = None
-    display_name: Optional[str] = None
-    bio: Optional[str] = None
-    avatar_url: Optional[str] = None
-    cover_url: Optional[str] = None
-    location: Optional[str] = None
-    favorite_genre: Optional[str] = None
-    equipment: Optional[str] = None
-    social_links: Optional[str] = None
-    theme: Optional[str] = None
-    favorite_artist: Optional[str] = None
-    favorite_artist_url: Optional[str] = None
-    favorite_artist_review: Optional[str] = None
-    favorite_artist_rating: Optional[int] = None
-    favorite_track: Optional[str] = None
-    favorite_track_url: Optional[str] = None
-    favorite_track_review: Optional[str] = None
-    favorite_track_rating: Optional[int] = None
-    favorite_album: Optional[str] = None
-    favorite_album_url: Optional[str] = None
-    favorite_album_review: Optional[str] = None
-    favorite_album_rating: Optional[int] = None
-    avatar_frame: Optional[str] = None
-    is_private: Optional[bool] = False
-    hidden_artists: Optional[str] = ""
-    lastfm_username: Optional[str] = None
+    api_key: str | None = None
+    display_name: str | None = None
+    bio: str | None = None
+    avatar_url: str | None = None
+    cover_url: str | None = None
+    location: str | None = None
+    favorite_genre: str | None = None
+    equipment: str | None = None
+    social_links: str | None = None
+    theme: str | None = None
+    favorite_artist: str | None = None
+    favorite_artist_url: str | None = None
+    favorite_artist_review: str | None = None
+    favorite_artist_rating: int | None = None
+    favorite_track: str | None = None
+    favorite_track_url: str | None = None
+    favorite_track_review: str | None = None
+    favorite_track_rating: int | None = None
+    favorite_album: str | None = None
+    favorite_album_url: str | None = None
+    favorite_album_review: str | None = None
+    favorite_album_rating: int | None = None
+    avatar_frame: str | None = None
+    is_private: bool | None = False
+    hidden_artists: str | None = ""
+    lastfm_username: str | None = None
 
 
 class LevelUpdate(BaseModel):
-    api_key: Optional[str] = None
+    api_key: str | None = None
     new_level: int
 
 
 class AchCreate(BaseModel):
-    api_key: Optional[str] = None
+    api_key: str | None = None
     name: str
     description: str
     icon: str
     rule_type: str = "manual"
     rule_value: int = 0
-    rule_target: Optional[str] = None
-    rule_meta: Optional[str] = None
-    target_image: Optional[str] = None
+    rule_target: str | None = None
+    rule_meta: str | None = None
+    target_image: str | None = None
     reward_xp: int = 0
 
 
 class AchUpdate(BaseModel):
-    api_key: Optional[str] = None
+    api_key: str | None = None
     name: str
     description: str
     icon: str
     rule_type: str = "manual"
     rule_value: int = 0
-    rule_target: Optional[str] = None
-    rule_meta: Optional[str] = None
-    target_image: Optional[str] = None
+    rule_target: str | None = None
+    rule_meta: str | None = None
+    target_image: str | None = None
     reward_xp: int = 0
 
 
 class AchAssign(BaseModel):
-    api_key: Optional[str] = None
+    api_key: str | None = None
     achievement_id: int
 
 
 class ToggleAch(BaseModel):
-    api_key: Optional[str] = None
+    api_key: str | None = None
     achievement_id: int
 
 
 class FollowAction(BaseModel):
-    api_key: Optional[str] = None
+    api_key: str | None = None
 
 
 class VerifyUserRequest(BaseModel):
-    api_key: Optional[str] = None
+    api_key: str | None = None
     is_verified: bool
 
 
 class MarkRead(BaseModel):
-    ua_ids: List[int]
+    ua_ids: list[int]
 
 
 class LikeRequest(BaseModel):
-    api_key: Optional[str] = None
+    api_key: str | None = None
 
 
 class CommentRequest(BaseModel):
-    api_key: Optional[str] = None
+    api_key: str | None = None
     content: str = Field(..., max_length=1000)
 
 
 class AdminUserUpdate(BaseModel):
-    api_key: Optional[str] = None
-    display_name: Optional[str] = None
-    bio: Optional[str] = None
-    avatar_url: Optional[str] = None
+    api_key: str | None = None
+    display_name: str | None = None
+    bio: str | None = None
+    avatar_url: str | None = None
 
 
 class ApiKeyRequest(BaseModel):
-    api_key: Optional[str] = None
+    api_key: str | None = None
