@@ -1,9 +1,9 @@
-import urllib.parse
-import re
-import httpx
 import ipaddress
+import re
 import socket
-from typing import Optional
+import urllib.parse
+
+import httpx
 
 HTTPS_PREFIX = "https://"
 
@@ -32,21 +32,21 @@ def is_safe_url(url: str) -> bool:
         return False
 
 
-def _parse_yandex_artist(res: dict) -> tuple[Optional[str], Optional[str]]:
+def _parse_yandex_artist(res: dict) -> tuple[str | None, str | None]:
     title = res.get("artist", {}).get("name")
     uri = res.get("artist", {}).get("cover", {}).get("uri")
     img = HTTPS_PREFIX + uri.replace("%%", "400x400") if uri else None
     return title, img
 
 
-def _parse_yandex_album(res: dict) -> tuple[Optional[str], Optional[str]]:
+def _parse_yandex_album(res: dict) -> tuple[str | None, str | None]:
     title = res.get("title")
     uri = res.get("coverUri")
     img = HTTPS_PREFIX + uri.replace("%%", "400x400") if uri else None
     return title, img
 
 
-def _parse_yandex_track(res: dict) -> tuple[Optional[str], Optional[str]]:
+def _parse_yandex_track(res: dict) -> tuple[str | None, str | None]:
     t_data = res.get("track", {})
     title = f"{t_data.get('artists', [{}])[0].get('name')} — {t_data.get('title')}" if t_data.get(
         'artists') else t_data.get('title')
@@ -55,7 +55,7 @@ def _parse_yandex_track(res: dict) -> tuple[Optional[str], Optional[str]]:
     return title, img
 
 
-def _parse_generic_html(html_text: str) -> tuple[Optional[str], Optional[str]]:
+def _parse_generic_html(html_text: str) -> tuple[str | None, str | None]:
     title, img = None, None
     t_m = re.search(
         r'<meta\s+(?:property|name)=["\']og:title["\']\s+content=["\']([^"\']+)["\']',
@@ -83,7 +83,7 @@ def _parse_generic_html(html_text: str) -> tuple[Optional[str], Optional[str]]:
 
 
 async def _parse_yandex_meta(
-        client, url: str) -> tuple[Optional[str], Optional[str]]:
+        client, url: str) -> tuple[str | None, str | None]:
     """Parse title and image from Yandex Music URL using their internal API."""
     try:
         if "/artist/" in url:
@@ -104,7 +104,7 @@ async def _parse_yandex_meta(
 
 
 async def _parse_generic_meta(
-        client, url: str) -> tuple[Optional[str], Optional[str]]:
+        client, url: str) -> tuple[str | None, str | None]:
     """Fetch the page and extract OG meta tags from HTML."""
     from app.utils import is_safe_url
     if not is_safe_url(url):

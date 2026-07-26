@@ -1,5 +1,6 @@
-import os
 import asyncio
+import os
+
 from arq.connections import RedisSettings
 
 from app.database import SessionLocal

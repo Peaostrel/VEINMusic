@@ -1,11 +1,13 @@
-import httpx
 import asyncio
-from datetime import datetime, timezone
-from sqlalchemy.orm import Session
 import os
+from datetime import datetime, timezone
+
+import httpx
+from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import User
+
 # We will import process_scrobble locally or pass it as a callback to
 # avoid circular imports.
 

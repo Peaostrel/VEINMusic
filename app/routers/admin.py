@@ -1,14 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from sqlalchemy import func
 from typing import Annotated
 
-from app.database import get_db
-from app.models import User, Scrobble, Track, Achievement, Follow
-from app.schemas import VerifyUserRequest
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
 from app.core.security import get_admin_user
 from app.core.websockets import manager
-
+from app.database import get_db
+from app.models import Achievement, Follow, Scrobble, Track, User
+from app.schemas import VerifyUserRequest
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 

@@ -1,11 +1,11 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import func
-from datetime import datetime, timezone, timedelta
-import httpx
-from typing import Optional
+from datetime import datetime, timedelta, timezone
 
-from app.models import User, Track, Scrobble, ScrobbleLike, ScrobbleComment
+import httpx
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
 from app.core.websockets import manager
+from app.models import Scrobble, ScrobbleComment, ScrobbleLike, Track, User
 
 TRACK_PATH = "/track/"
 
@@ -30,7 +30,7 @@ async def get_track_duration(url: str) -> int:
     return 180
 
 
-async def get_track_genre(url: str) -> Optional[str]:
+async def get_track_genre(url: str) -> str | None:
     if not url or not url.startswith("http"):
         return None
     headers = {'User-Agent': 'Mozilla/5.0'}

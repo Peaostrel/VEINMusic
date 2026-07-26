@@ -1,30 +1,56 @@
 import json
-import redis
 import os
-from app.utils import sanitize_text
+import re
+import time
+import urllib.parse
+import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Annotated, Any
+
+import httpx
+import redis
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Request,
+    UploadFile,
+)
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from sqlalchemy import func, text
+from sqlalchemy.orm import Session
+
+from app.core.security import get_admin_user, get_current_user
+from app.core.websockets import manager
+from app.database import SessionLocal, get_db
+from app.models import (
+    Achievement,
+    Follow,
+    Scrobble,
+    ScrobbleComment,
+    ScrobbleLike,
+    Track,
+    User,
+    UserAchievement,
+    UserProfile,
+)
+from app.schemas import (
+    AchAssign,
+    AchCreate,
+    AchUpdate,
+    CommentRequest,
+    FollowAction,
+    LevelUpdate,
+    LikeRequest,
+    MarkRead,
+    ToggleAch,
+)
 from app.services.og_parser import parse_og_meta
 from app.services.scrobble_processor import format_history_item
-from app.schemas import FollowAction, LikeRequest, CommentRequest
-from app.models import User, Achievement, UserAchievement, Follow, Scrobble, Track, ScrobbleLike, ScrobbleComment, UserProfile
-from app.database import get_db, SessionLocal
-from app.core.websockets import manager
-import uuid
-import time
-import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
-from fastapi.responses import RedirectResponse, JSONResponse
-from typing import Annotated, Any
-from fastapi import UploadFile, File
-from fastapi.responses import FileResponse
+from app.utils import sanitize_text
 
-from app.schemas import AchCreate, AchUpdate, AchAssign, ToggleAch, MarkRead, LevelUpdate
-
-from sqlalchemy.orm import Session
-from app.core.security import get_current_user, get_admin_user
-from sqlalchemy import text, func
-from datetime import datetime, timedelta, timezone
-import re
-import urllib.parse
 TRACK_PATH = "/track/"
 ALBUM_PATH = "/album/"
 YANDEX_MUSIC_DOMAIN = "music.yandex.ru"
@@ -1937,8 +1963,9 @@ async def get_upload(filename: str,
 
 
 async def get_album_track_count(url: str) -> int:
-    from app.utils import is_safe_url
     import urllib.parse
+
+    from app.utils import is_safe_url
     if not is_safe_url(url, allowed_domains=[YANDEX_MUSIC_DOMAIN, "open.spotify.com"]):
         return 0
 

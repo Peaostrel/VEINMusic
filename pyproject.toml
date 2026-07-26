@@ -1,0 +1,15 @@
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+ignore = [
+    "BLE001",  # Do not catch blind exception: Exception
+    "RUF012",  # Mutable default value for class attribute
+    "SIM102",  # Use a single if statement instead of nested if statements
+    "SIM103",  # Return the condition directly
+    "B008",    # Do not perform function call in argument defaults (fastapi.Depends)
+    "RUF046",  # Value being cast to int is already an integer
+    "LOG015",  # exception() call on root logger
+    "UP017",   # Use datetime.UTC alias
+    "S110",    # try-except-pass detected
+]

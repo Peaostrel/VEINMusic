@@ -1,16 +1,16 @@
-import httpx
-import urllib.parse
 import re
-from typing import Optional
+import urllib.parse
+
+import httpx
 
 TEXT_KEY = "#text"
 
 
 async def _search_itunes(client: httpx.AsyncClient,
                          query: str,
-                         itunes_entity: str) -> tuple[Optional[str],
-                                                      Optional[str],
-                                                      Optional[str]]:
+                         itunes_entity: str) -> tuple[str | None,
+                                                      str | None,
+                                                      str | None]:
     url = f"https://itunes.apple.com/search?term={urllib.parse.quote(query.strip())}&entity={itunes_entity}&limit=1"
     try:
         r = await client.get(url)
@@ -39,9 +39,9 @@ async def _search_itunes(client: httpx.AsyncClient,
 
 def _apply_genius_hit(result: dict,
                       entity_type: str,
-                      title: Optional[str],
-                      cover: Optional[str]) -> tuple[Optional[str],
-                                                     Optional[str]]:
+                      title: str | None,
+                      cover: str | None) -> tuple[str | None,
+                                                     str | None]:
     """Apply a Genius search hit to update title/cover based on entity type."""
     if entity_type == 'artist':
         cover = cover or result.get('image_url')
@@ -68,9 +68,9 @@ def _apply_genius_hit(result: dict,
 async def _search_genius(client: httpx.AsyncClient,
                          query: str,
                          entity_type: str,
-                         title: Optional[str],
-                         cover: Optional[str]) -> tuple[Optional[str],
-                                                        Optional[str]]:
+                         title: str | None,
+                         cover: str | None) -> tuple[str | None,
+                                                        str | None]:
     try:
         genius_url = f"https://genius.com/api/search/multi?per_page=1&q={urllib.parse.quote(query.strip())}"
         r_genius = await client.get(genius_url)
@@ -96,7 +96,7 @@ async def _search_genius(client: httpx.AsyncClient,
     return title, cover
 
 
-def _get_lastfm_extralarge(images: list) -> Optional[str]:
+def _get_lastfm_extralarge(images: list) -> str | None:
     """Extract extralarge image URL from a Last.fm image list."""
     return next((img[TEXT_KEY] for img in images if img.get(
         'size') == 'extralarge' and img.get(TEXT_KEY)), None)
@@ -105,11 +105,11 @@ def _get_lastfm_extralarge(images: list) -> Optional[str]:
 async def _fetch_lastfm_album(client: httpx.AsyncClient,
                               artist: str,
                               item_name: str,
-                              title: Optional[str],
-                              cover: Optional[str],
-                              lastfm_key: str) -> tuple[Optional[str],
-                                                        Optional[str],
-                                                        Optional[str]]:
+                              title: str | None,
+                              cover: str | None,
+                              lastfm_key: str) -> tuple[str | None,
+                                                        str | None,
+                                                        str | None]:
     l_url = (
         f"https://ws.audioscrobbler.com/2.0/?method=album.getinfo"
         f"&api_key={lastfm_key}&artist={urllib.parse.quote(artist)}"
@@ -131,11 +131,11 @@ async def _fetch_lastfm_album(client: httpx.AsyncClient,
 async def _fetch_lastfm_track(client: httpx.AsyncClient,
                               artist: str,
                               item_name: str,
-                              title: Optional[str],
-                              cover: Optional[str],
-                              lastfm_key: str) -> tuple[Optional[str],
-                                                        Optional[str],
-                                                        Optional[str]]:
+                              title: str | None,
+                              cover: str | None,
+                              lastfm_key: str) -> tuple[str | None,
+                                                        str | None,
+                                                        str | None]:
     l_url = (
         f"https://ws.audioscrobbler.com/2.0/?method=track.getinfo"
         f"&api_key={lastfm_key}&artist={urllib.parse.quote(artist)}"
@@ -160,11 +160,11 @@ async def _fetch_lastfm_track(client: httpx.AsyncClient,
 async def _search_lastfm(client: httpx.AsyncClient,
                          query: str,
                          entity_type: str,
-                         title: Optional[str],
-                         cover: Optional[str],
-                         lastfm_key: str) -> tuple[Optional[str],
-                                                   Optional[str],
-                                                   Optional[str]]:
+                         title: str | None,
+                         cover: str | None,
+                         lastfm_key: str) -> tuple[str | None,
+                                                   str | None,
+                                                   str | None]:
     try:
         parts = [p.strip() for p in query.strip().replace('—', '-').split('-')]
         if len(parts) < 2:

@@ -1,22 +1,20 @@
-from app.models import User
-from app.database import get_db
-from sqlalchemy.orm import Session
-from fastapi import WebSocket, WebSocketDisconnect, Depends
-import os
 import asyncio
+import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+
+from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy.orm import Session
 
 from app.core.rate_limit import limiter
-
-from app.database import engine, Base
-from app.routers import auth, profile, scrobbling, admin, extended
+from app.core.websockets import manager
+from app.database import Base, engine, get_db
+from app.models import User
+from app.routers import admin, auth, extended, profile, scrobbling
 from app.services.cloud_scrobbling import poll_external_services
 from app.services.scrobble_processor import process_scrobble
-from app.core.websockets import manager
 
 background_tasks: set[asyncio.Task] = set()
 
@@ -28,8 +26,9 @@ async def lifespan(app: FastAPI):
 
     # Run API key migration for existing users (hash plain-text API keys of
     # length != 64)
-    from app.database import SessionLocal
     import hashlib
+
+    from app.database import SessionLocal
     from app.models import User
     db = SessionLocal()
     try:
@@ -100,6 +99,7 @@ def _get_ws_authenticated_username(websocket: WebSocket, db: Session) -> str | N
         return None
 
     import hashlib
+
     from app.core.security import verify_session_token
 
     if ":" in token:
