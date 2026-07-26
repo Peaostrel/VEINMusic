@@ -1,5 +1,5 @@
-import urllib.parse
 import ipaddress
+import urllib.parse
 
 
 def sanitize_text(text_val: str) -> str:

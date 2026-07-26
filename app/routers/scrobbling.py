@@ -1,16 +1,24 @@
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
-from sqlalchemy.orm import Session
-from datetime import datetime, timezone, timedelta
 
-from app.database import get_db
-from app.models import User, UserProfile, Scrobble, Track, ScrobbleLike, ScrobbleComment, Follow
-from app.schemas import ScrobbleData, CommentRequest
-from app.core.security import get_current_user, get_current_user_optional
-from app.services.scrobble_processor import process_scrobble, format_history_item
-from typing import Optional
-from app.core.redis import redis_lock
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from app.core.redis import redis_lock
+from app.core.security import get_current_user, get_current_user_optional
+from app.database import get_db
+from app.models import (
+    Follow,
+    Scrobble,
+    ScrobbleComment,
+    ScrobbleLike,
+    Track,
+    User,
+    UserProfile,
+)
+from app.schemas import CommentRequest, ScrobbleData
+from app.services.scrobble_processor import format_history_item, process_scrobble
 
 
 def get_scrobble_counters(db: Session, s_ids: list) -> dict:
@@ -42,7 +50,7 @@ async def add_scrobble(data: ScrobbleData,
     async with redis_lock(f"scrobble_lock:{user.id}", expire_sec=10):
         try:
             # Anti-Cheat: Max 40 scrobbles per hour
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             hour_ago = now - timedelta(hours=1)
             scrobbles_h = db.query(Scrobble).filter(
                 Scrobble.user_id == user.id,
@@ -80,7 +88,8 @@ async def add_scrobble(data: ScrobbleData,
             return {"status": res}
         except Exception:
             import logging
-            logging.exception("Scrobble error")
+            logger = logging.getLogger(__name__)
+            logger.exception("Scrobble error")
             raise HTTPException(
                 status_code=500,
                 detail="Internal Server Error")
@@ -93,7 +102,7 @@ def get_history(username: str,
                 request: Request,
                 db: Annotated[Session,
                               Depends(get_db)],
-                current_user: Annotated[Optional[User],
+                current_user: Annotated[User | None,
                                         Depends(get_current_user_optional)] = None):
     user = db.query(User).filter(User.username == username).first()
     if not user:

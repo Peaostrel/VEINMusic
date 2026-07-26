@@ -1,30 +1,56 @@
 import json
-import redis
 import os
-from app.utils import sanitize_text
+import re
+import time
+import urllib.parse
+import uuid
+from datetime import UTC, datetime, timedelta
+from typing import Annotated, Any
+
+import httpx
+import redis
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Request,
+    UploadFile,
+)
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from sqlalchemy import func, text
+from sqlalchemy.orm import Session
+
+from app.core.security import get_admin_user, get_current_user
+from app.core.websockets import manager
+from app.database import SessionLocal, get_db
+from app.models import (
+    Achievement,
+    Follow,
+    Scrobble,
+    ScrobbleComment,
+    ScrobbleLike,
+    Track,
+    User,
+    UserAchievement,
+    UserProfile,
+)
+from app.schemas import (
+    AchAssign,
+    AchCreate,
+    AchUpdate,
+    CommentRequest,
+    FollowAction,
+    LevelUpdate,
+    LikeRequest,
+    MarkRead,
+    ToggleAch,
+)
 from app.services.og_parser import parse_og_meta
 from app.services.scrobble_processor import format_history_item
-from app.schemas import FollowAction, LikeRequest, CommentRequest
-from app.models import User, Achievement, UserAchievement, Follow, Scrobble, Track, ScrobbleLike, ScrobbleComment, UserProfile
-from app.database import get_db, SessionLocal
-from app.core.websockets import manager
-import uuid
-import time
-import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
-from fastapi.responses import RedirectResponse, JSONResponse
-from typing import Annotated, Any
-from fastapi import UploadFile, File
-from fastapi.responses import FileResponse
+from app.utils import sanitize_text
 
-from app.schemas import AchCreate, AchUpdate, AchAssign, ToggleAch, MarkRead, LevelUpdate
-
-from sqlalchemy.orm import Session
-from app.core.security import get_current_user, get_admin_user
-from sqlalchemy import text, func
-from datetime import datetime, timedelta, timezone
-import re
-import urllib.parse
 TRACK_PATH = "/track/"
 ALBUM_PATH = "/album/"
 YANDEX_MUSIC_DOMAIN = "music.yandex.ru"
@@ -130,10 +156,10 @@ def set_to_cache(key: str, data: Any):
 def get_active_streak(user: User):
     if not user.integration.last_streak_date:
         return 0
-    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today_str = datetime.now(UTC).strftime("%Y-%m-%d")
     yesterday_str = (
         datetime.now(
-            timezone.utc) -
+            UTC) -
         timedelta(
             days=1)).strftime("%Y-%m-%d")
     if user.integration.last_streak_date in [today_str, yesterday_str]:
@@ -690,7 +716,7 @@ def _calculate_achievement_progress(db: Session, user: User, a: Achievement) -> 
     elif a.rule_type == "night_scrobbles":
         valid_times = db.query(Scrobble.played_at).join(Track).filter(
             Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85).all()
-        return sum(1 for (dt,) in valid_times if dt.replace(tzinfo=timezone.utc).astimezone().strftime('%H') in ['00', '01', '02', '03', '04', '05'])
+        return sum(1 for (dt,) in valid_times if dt.replace(tzinfo=UTC).astimezone().strftime('%H') in ['00', '01', '02', '03', '04', '05'])
     elif a.rule_type == "specific_track" and a.rule_target:
         return _calc_specific_track(db, user, a)
     elif a.rule_type == "specific_album" and a.rule_target:
@@ -810,7 +836,7 @@ def get_wrapped_stats(username: str, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
     if not user:
         raise HTTPException(404)
-    last_month = datetime.now(timezone.utc) - timedelta(days=30)
+    last_month = datetime.now(UTC) - timedelta(days=30)
     base_filter = [
         Scrobble.user_id == user.id,
         Scrobble.played_at >= last_month,
@@ -993,13 +1019,13 @@ def get_detailed_stats(username: str,
     if period == "7d":
         base_filter.append(
             Scrobble.played_at >= datetime.now(
-                timezone.utc) -
+                UTC) -
             timedelta(
                 days=7))
     elif period == "30d":
         base_filter.append(
             Scrobble.played_at >= datetime.now(
-                timezone.utc) -
+                UTC) -
             timedelta(
                 days=30))
 
@@ -1214,7 +1240,7 @@ def get_activity(username: str, db: Annotated[Session, Depends(get_db)]):
 
     activity_dict: dict[str, int] = {}
     for (played_at,) in scrobbles:
-        local_dt = played_at.replace(tzinfo=timezone.utc).astimezone()
+        local_dt = played_at.replace(tzinfo=UTC).astimezone()
         date_str = local_dt.strftime('%Y-%m-%d')
         activity_dict[date_str] = activity_dict.get(date_str, 0) + 1
 
@@ -1239,7 +1265,7 @@ def get_current_track(username: str, db: Annotated[Session, Depends(get_db)]):
 
     s, t = last_scrobble
     is_active = s.is_playing and (datetime.now(
-        timezone.utc) - (s.updated_at or s.played_at)).total_seconds() < 900
+        UTC) - (s.updated_at or s.played_at)).total_seconds() < 900
 
     if is_active:
         lvl, rank, _, _ = get_user_level_info(user, db)
@@ -1486,7 +1512,7 @@ def get_public_stats(db: Annotated[Session, Depends(get_db)]):
     total_tracks = db.query(Track).count()
 
     # Считаем онлайн за последние 5 минут
-    five_mins_ago = datetime.now(timezone.utc) - timedelta(minutes=5)
+    five_mins_ago = datetime.now(UTC) - timedelta(minutes=5)
     online_count = db.query(
         func.count(
             func.distinct(
@@ -1937,8 +1963,9 @@ async def get_upload(filename: str,
 
 
 async def get_album_track_count(url: str) -> int:
-    from app.utils import is_safe_url
     import urllib.parse
+
+    from app.utils import is_safe_url
     if not is_safe_url(url, allowed_domains=[YANDEX_MUSIC_DOMAIN, "open.spotify.com"]):
         return 0
 
@@ -2043,7 +2070,7 @@ async def _import_lastfm_page(db, client, user, page: int):
         album = t.get("album", {}).get(TEXT_KEY)
         cover = t.get("image", [{}, {}, {}, {TEXT_KEY: ""}])[3].get(TEXT_KEY)
         uts = int(t.get("date", {}).get("uts", 0))
-        dt = datetime.fromtimestamp(uts, tz=timezone.utc)
+        dt = datetime.fromtimestamp(uts, tz=UTC)
 
         existing = db.query(Scrobble).filter(
             Scrobble.user_id == user.id,
