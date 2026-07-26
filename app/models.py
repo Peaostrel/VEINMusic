@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
@@ -133,14 +133,14 @@ class Scrobble(Base):
     played_at = Column(
         DateTime(
             timezone=True), default=lambda: datetime.now(
-            timezone.utc))
+            UTC))
     source = Column(String)
     listened_sec = Column(Integer, default=0)
     is_playing = Column(Boolean, default=True)
     updated_at = Column(
         DateTime(
             timezone=True), default=lambda: datetime.now(
-            timezone.utc))
+            UTC))
     xp_earned = Column(Integer, default=1)
     is_imported = Column(Boolean, default=False)
 
@@ -180,7 +180,7 @@ class UserAchievement(Base):
     earned_at = Column(
         DateTime(
             timezone=True), default=lambda: datetime.now(
-            timezone.utc))
+            UTC))
     is_displayed = Column(Boolean, default=True)
     notified = Column(Boolean, default=False)
 
@@ -206,7 +206,7 @@ class Follow(Base):
     created_at = Column(
         DateTime(
             timezone=True), default=lambda: datetime.now(
-            timezone.utc))
+            UTC))
 
 
 class ScrobbleLike(Base):
@@ -227,7 +227,7 @@ class ScrobbleLike(Base):
     created_at = Column(
         DateTime(
             timezone=True), default=lambda: datetime.now(
-            timezone.utc))
+            UTC))
 
 
 class ScrobbleComment(Base):
@@ -249,4 +249,4 @@ class ScrobbleComment(Base):
     created_at = Column(
         DateTime(
             timezone=True), default=lambda: datetime.now(
-            timezone.utc))
+            UTC))

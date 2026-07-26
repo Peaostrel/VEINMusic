@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import httpx
 from sqlalchemy import func
@@ -61,13 +61,13 @@ def format_history_item(
         counters: dict | None = None):
     upd_time = scrobble.updated_at or scrobble.played_at
     if upd_time.tzinfo is None:
-        upd_time = upd_time.replace(tzinfo=timezone.utc)
+        upd_time = upd_time.replace(tzinfo=UTC)
 
     played_time = scrobble.played_at
     if played_time.tzinfo is None:
-        played_time = played_time.replace(tzinfo=timezone.utc)
+        played_time = played_time.replace(tzinfo=UTC)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     is_playing = scrobble.is_playing and (now - upd_time).total_seconds() < 45
 
     diff = now - played_time
@@ -121,10 +121,9 @@ def _update_existing_track(
     if cover_url and not track.cover_url:
         track.cover_url = cover_url  # type: ignore[assignment]
         updated = True
-    if track_url and TRACK_PATH in track_url:
-        if not track.track_url or TRACK_PATH not in track.track_url:
-            track.track_url = track_url  # type: ignore[assignment]
-            updated = True
+    if track_url and TRACK_PATH in track_url and (not track.track_url or TRACK_PATH not in track.track_url):
+        track.track_url = track_url  # type: ignore[assignment]
+        updated = True
     if album and not track.album:
         track.album = album  # type: ignore[assignment]
         updated = True
@@ -198,14 +197,12 @@ def _check_favorite(track: Track, user: User) -> bool:
         return True
     if fav_trk and (fav_trk in t_title or fav_trk in f"{t_artist} {t_title}"):
         return True
-    if fav_alb and t_album and fav_alb in t_album:
-        return True
-    return False
+    return bool(fav_alb and t_album and fav_alb in t_album)
 
 
 def _handle_streak(db: Session, user: User):
     today_start = datetime.now(
-        timezone.utc).replace(
+        UTC).replace(
         hour=0,
         minute=0,
         second=0,
@@ -270,7 +267,7 @@ def _update_scrobble_progress(
 
     # Use 35s limit to handle player update intervals
     if last_scrobble.is_playing and is_playing and 0 < time_elapsed < 35:
-        last_scrobble.listened_sec = old_listened + int(round(time_elapsed))
+        last_scrobble.listened_sec = old_listened + round(time_elapsed)
 
     last_scrobble.is_playing = is_playing
     last_scrobble.updated_at = now
@@ -298,16 +295,16 @@ async def process_scrobble(
         album: str = ""):
     track = await _get_or_create_track(db, title, artist, cover_url, track_url, duration, album)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     last_scrobble = db.query(Scrobble).filter(
         Scrobble.user_id == user.id).order_by(
         Scrobble.id.desc()).first()
 
     if last_scrobble:
         l_played_at = last_scrobble.played_at.replace(
-            tzinfo=timezone.utc) if last_scrobble.played_at.tzinfo is None else last_scrobble.played_at
+            tzinfo=UTC) if last_scrobble.played_at.tzinfo is None else last_scrobble.played_at
         l_updated_at = last_scrobble.updated_at.replace(
-            tzinfo=timezone.utc) if last_scrobble.updated_at.tzinfo is None else last_scrobble.updated_at
+            tzinfo=UTC) if last_scrobble.updated_at.tzinfo is None else last_scrobble.updated_at
     else:
         l_played_at = None
         l_updated_at = None

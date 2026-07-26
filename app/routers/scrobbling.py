@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
@@ -50,7 +50,7 @@ async def add_scrobble(data: ScrobbleData,
     async with redis_lock(f"scrobble_lock:{user.id}", expire_sec=10):
         try:
             # Anti-Cheat: Max 40 scrobbles per hour
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             hour_ago = now - timedelta(hours=1)
             scrobbles_h = db.query(Scrobble).filter(
                 Scrobble.user_id == user.id,
@@ -88,7 +88,8 @@ async def add_scrobble(data: ScrobbleData,
             return {"status": res}
         except Exception:
             import logging
-            logging.exception("Scrobble error")
+            logger = logging.getLogger(__name__)
+            logger.exception("Scrobble error")
             raise HTTPException(
                 status_code=500,
                 detail="Internal Server Error")

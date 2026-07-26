@@ -1,5 +1,6 @@
 import asyncio
 import os
+from typing import ClassVar
 
 from arq.connections import RedisSettings
 
@@ -41,7 +42,7 @@ async def shutdown(ctx):
 
 
 class WorkerSettings:
-    functions = [check_achievements]
+    functions: ClassVar[list] = [check_achievements]
     redis_settings = RedisSettings.from_dsn(REDIS_URL)
     on_startup = startup
     on_shutdown = shutdown

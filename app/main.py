@@ -126,10 +126,9 @@ async def websocket_route(
     authenticated_username = _get_ws_authenticated_username(websocket, db)
 
     # Check privacy: if private, only the owner can connect
-    if user and user.profile.is_private:
-        if not authenticated_username or authenticated_username != username:
-            await websocket.close(code=4003)
-            return
+    if user and user.profile.is_private and (not authenticated_username or authenticated_username != username):
+        await websocket.close(code=4003)
+        return
 
     await manager.connect(websocket, username)
     try:
