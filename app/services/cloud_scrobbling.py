@@ -1,11 +1,13 @@
-import httpx
 import asyncio
-from datetime import datetime, timezone
-from sqlalchemy.orm import Session
 import os
+from datetime import UTC, datetime
+
+import httpx
+from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import User
+
 # We will import process_scrobble locally or pass it as a callback to
 # avoid circular imports.
 
@@ -160,7 +162,7 @@ async def poll_user(user_id: int, process_func):
         if u.integration.yandex_token:
             await sync_yandex_status(u, local_db, process_func)
 
-        u.integration.last_sync = datetime.now(timezone.utc)
+        u.integration.last_sync = datetime.now(UTC)
         local_db.commit()
     except Exception as e:
         print(f"Error polling user {user_id}: {e}")

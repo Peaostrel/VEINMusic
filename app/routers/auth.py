@@ -1,18 +1,24 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, Request
-from sqlalchemy.orm import Session
-from typing import Annotated
-import secrets
 import hashlib
-
-
-from app.database import get_db
-from app.models import User, UserProfile, UserIntegration
-from app.schemas import UserCreate
-from app.core.security import get_password_hash, verify_password, get_current_user, create_session_token, SECRET_KEY
-from app.core.rate_limit import limiter
-from fastapi.responses import RedirectResponse
 import os
+import secrets
+from typing import Annotated
+
 import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import RedirectResponse
+from sqlalchemy.orm import Session
+
+from app.core.rate_limit import limiter
+from app.core.security import (
+    SECRET_KEY,
+    create_session_token,
+    get_current_user,
+    get_password_hash,
+    verify_password,
+)
+from app.database import get_db
+from app.models import User, UserIntegration, UserProfile
+from app.schemas import UserCreate
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
