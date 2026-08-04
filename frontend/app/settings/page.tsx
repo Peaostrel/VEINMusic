@@ -611,6 +611,7 @@ function SettingsContent() {
             (tab) => (
               <button
                 key={tab}
+                type="button"
                 onClick={() => setActiveTab(tab)}
                 className={`text-left px-4 py-3 rounded-lg font-bold transition-all ${activeTab === tab ? "bg-[var(--accent)] text-[var(--text-on-accent)]" : "text-gray-400 hover:bg-[#1e1e1e]"}`}
               >

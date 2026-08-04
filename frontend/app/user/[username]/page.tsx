@@ -783,12 +783,14 @@ export default function Profile() {
             </p>
             <div className="flex gap-3">
               <button
+                type="button"
                 onClick={() => setShowImportConfirm(false)}
                 className="flex-1 px-4 py-2.5 rounded-xl font-bold text-gray-300 bg-white/5 hover:bg-white/10 transition-colors"
               >
                 Отмена
               </button>
               <button
+                type="button"
                 onClick={executeLastfmImport}
                 className="flex-1 px-4 py-2.5 rounded-xl font-black text-[var(--text-on-accent)] bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] hover:scale-105 transition-transform"
               >

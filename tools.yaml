@@ -1,4 +1,0 @@
-databases:
-  - name: "veinmusic_db"
-    type: "sqlite"
-    connection_url: "sqlite:///tracker.db"
