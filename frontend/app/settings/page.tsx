@@ -7,6 +7,7 @@
 import { useState, useEffect, Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
+import { AlertTriangle } from "lucide-react";
 const Cropper = dynamic(() => import("react-easy-crop"), { ssr: false }) as any;
 import { getCroppedImg, fixImageUrl } from "./utils";
 
@@ -16,17 +17,6 @@ import ShowcaseTab from "./tabs/ShowcaseTab";
 import ThemeTab from "./tabs/ThemeTab";
 import PrivacyTab from "./tabs/PrivacyTab";
 import IntegrationsTab from "./tabs/IntegrationsTab";
-
-const parseSplit = (val: string) => {
-  if (!val) return ["", ""];
-  const parts = val.split("—").map((s) => s.trim());
-  if (parts.length < 2) {
-    const parts2 = val.split("-").map((s) => s.trim());
-    if (parts2.length >= 2) return [parts2[0], parts2.slice(1).join("-")];
-    return ["", val];
-  }
-  return [parts[0], parts.slice(1).join("—")];
-};
 
 const LOCAL_COUNTRIES = [
   { name: "Россия", code: "RU", flag: "🇷🇺" },
@@ -97,6 +87,17 @@ function processCities(d: any[], query: string): string[] {
   ).slice(0, 10);
 }
 
+const processCountries = (d: any) => {
+  if (!Array.isArray(d)) return [];
+  return d
+    .map((c: any) => ({
+      name: c.translations?.rus?.common || c.name.common,
+      code: c.cca2,
+      flag: c.flag,
+    }))
+    .toSorted((a: any, b: any) => a.name.localeCompare(b.name));
+};
+
 function SettingsContent() {
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -114,16 +115,11 @@ function SettingsContent() {
     favoriteGenre: "",
     equipment: "",
     favArtist: "",
-    favArtistReview: "",
-    favArtistRating: 0,
-    favTrackArtist: "",
-    favTrackName: "",
-    favTrackReview: "",
-    favTrackRating: 0,
-    favAlbumArtist: "",
-    favAlbumName: "",
-    favAlbumReview: "",
-    favAlbumRating: 0,
+    favArtistUpdatedAt: null,
+    favTrack: "",
+    favTrackUpdatedAt: null,
+    favAlbum: "",
+    favAlbumUpdatedAt: null,
     avatarFrame: "",
     theme: "classic",
     country: "",
@@ -139,25 +135,16 @@ function SettingsContent() {
   const [cities, setCities] = useState<string[]>([]);
   const [countryCode, setCountryCode] = useState("");
   const [isCityInputFocused, setIsCityInputFocused] = useState(false);
-
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   useEffect(() => {
     fetch(
       "https://restcountries.com/v3.1/all?fields=name,translations,cca2,flag",
     )
       .then((r) => r.json())
       .then((d) => {
-        if (Array.isArray(d)) {
-          const list = d
-            .map((c: any) => ({
-              name: c.translations?.rus?.common || c.name.common,
-              code: c.cca2,
-              flag: c.flag,
-            }))
-            .sort((a, b) => a.name.localeCompare(b.name));
-          setCountries(list as any);
-        }
+        setCountries(processCountries(d));
       })
-      .catch(() => {});
+      .catch((error) => console.error(error));
   }, []);
 
   useEffect(() => {
@@ -185,7 +172,8 @@ function SettingsContent() {
             setCities(processCities(d, data.city));
           }
         })
-        .catch(() => {
+        .catch((error) => {
+          console.error(error);
           if (active) setCities([]);
         });
     }, 500);
@@ -240,8 +228,11 @@ function SettingsContent() {
         const loc = u.location || "";
         const locParts = loc.split(",").map((s: string) => s.trim());
 
-        const [favTrackArtist, favTrackName] = parseSplit(u.favorite_track);
-        const [favAlbumArtist, favAlbumName] = parseSplit(u.favorite_album);
+        try {
+          setSocialLinks(JSON.parse(u.social_links || "[]"));
+        } catch (e) {
+          console.error(e);
+        }
 
         setData({
           displayName: u.display_name === u.username ? "" : u.display_name,
@@ -257,16 +248,11 @@ function SettingsContent() {
           favoriteGenre: u.favorite_genre || "",
           equipment: u.equipment || "",
           favArtist: u.favorite_artist || "",
-          favArtistReview: u.favorite_artist_review || "",
-          favArtistRating: u.favorite_artist_rating || 0,
-          favTrackArtist: favTrackArtist,
-          favTrackName: favTrackName,
-          favTrackReview: u.favorite_track_review || "",
-          favTrackRating: u.favorite_track_rating || 0,
-          favAlbumArtist: favAlbumArtist,
-          favAlbumName: favAlbumName,
-          favAlbumReview: u.favorite_album_review || "",
-          favAlbumRating: u.favorite_album_rating || 0,
+          favArtistUpdatedAt: u.favorite_artist_updated_at || null,
+          favTrack: u.favorite_track || "",
+          favTrackUpdatedAt: u.favorite_track_updated_at || null,
+          favAlbum: u.favorite_album || "",
+          favAlbumUpdatedAt: u.favorite_album_updated_at || null,
           avatarFrame: u.avatar_frame || "",
           theme: u.theme || "classic",
           isPrivate: u.is_private || false,
@@ -281,7 +267,10 @@ function SettingsContent() {
         }
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((error) => {
+        console.error(error);
+        setLoading(false);
+      });
   }, [router, searchParams]);
 
   const updateData = (k: string, v: any) =>
@@ -381,9 +370,14 @@ function SettingsContent() {
     }
   };
 
-  const handleSubmit = async (e: any) => {
-    e.preventDefault();
+  const executeSave = async () => {
     setStatus("Сохраняем...");
+    setShowConfirmModal(false);
+    const finalLocation =
+      data.country && data.city
+        ? `${data.country}, ${data.city}`
+        : data.country || data.city || "";
+
     try {
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/profile/update`,
@@ -396,28 +390,13 @@ function SettingsContent() {
             bio: data.bio,
             avatar_url: fixImageUrl(data.avatarUrl),
             cover_url: fixImageUrl(data.coverUrl),
-            location:
-              data.country && data.city
-                ? `${data.country}, ${data.city}`
-                : data.country || data.city || "",
+            location: finalLocation,
             favorite_genre: data.favoriteGenre,
             equipment: data.equipment,
             theme: data.theme,
             favorite_artist: data.favArtist,
-            favorite_artist_review: data.favArtistReview,
-            favorite_artist_rating: data.favArtistRating,
-            favorite_track:
-              data.favTrackArtist && data.favTrackName
-                ? `${data.favTrackArtist} — ${data.favTrackName}`
-                : "",
-            favorite_track_review: data.favTrackReview,
-            favorite_track_rating: data.favTrackRating,
-            favorite_album:
-              data.favAlbumArtist && data.favAlbumName
-                ? `${data.favAlbumArtist} — ${data.favAlbumName}`
-                : "",
-            favorite_album_review: data.favAlbumReview,
-            favorite_album_rating: data.favAlbumRating,
+            favorite_track: data.favTrack,
+            favorite_album: data.favAlbum,
             avatar_frame: data.avatarFrame,
             is_private: data.isPrivate,
             hidden_artists: data.hiddenArtists,
@@ -432,10 +411,32 @@ function SettingsContent() {
       localStorage.setItem("site_theme", data.theme);
       globalThis.dispatchEvent(new Event("theme_update"));
       setStatus("✅ Успешно!");
-      setTimeout(() => setStatus(""), 2000);
+      setTimeout(() => {
+        setStatus("");
+        window.location.reload();
+      }, 1000);
     } catch (err: any) {
       setStatus("❌ " + err.message);
     }
+  };
+
+  const handleSubmit = async (e: any) => {
+    e.preventDefault();
+
+    // Check if showcase favorites changed
+    const favArtistChanged =
+      data.favArtist !== (userProfile?.favorite_artist || "");
+    const favTrackChanged =
+      data.favTrack !== (userProfile?.favorite_track || "");
+    const favAlbumChanged =
+      data.favAlbum !== (userProfile?.favorite_album || "");
+
+    if (favArtistChanged || favTrackChanged || favAlbumChanged) {
+      setShowConfirmModal(true);
+      return;
+    }
+
+    executeSave();
   };
 
   const saveYandexToken = async () => {
@@ -544,6 +545,19 @@ function SettingsContent() {
     if (tab === "privacy") return "Приватность";
     return "Интеграции";
   };
+
+  const isFieldLocked = (updatedAtStr: string | null) => {
+    if (!updatedAtStr) return false;
+    const unlockDate = new Date(
+      new Date(updatedAtStr).getTime() + 30 * 24 * 60 * 60 * 1000,
+    );
+    return new Date() < unlockDate;
+  };
+  const isShowcaseLocked =
+    isFieldLocked(data.favArtistUpdatedAt) ||
+    isFieldLocked(data.favTrackUpdatedAt) ||
+    isFieldLocked(data.favAlbumUpdatedAt);
+  const isSaveDisabled = activeTab === "showcase" && isShowcaseLocked;
 
   if (loading)
     return (
@@ -661,15 +675,58 @@ function SettingsContent() {
                 </span>
                 <button
                   type="submit"
-                  className="bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] text-[var(--text-on-accent)] font-black px-8 py-3 rounded-lg hover:scale-105 transition-all"
+                  disabled={isSaveDisabled}
+                  className={`font-black px-8 py-3 rounded-lg transition-all ${
+                    isSaveDisabled
+                      ? "bg-white/10 text-gray-500 cursor-not-allowed"
+                      : "bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] text-[var(--text-on-accent)] hover:scale-105"
+                  }`}
                 >
-                  Сохранить всё
+                  {isSaveDisabled ? "Заблокировано" : "Сохранить всё"}
                 </button>
               </div>
             </form>
           )}
         </main>
       </div>
+
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md bg-[#121212] p-8 rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-white/10 text-center space-y-6 transform animate-in fade-in zoom-in duration-200">
+            <div className="w-20 h-20 bg-yellow-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-10 h-10 text-yellow-500" />
+            </div>
+            <h2 className="text-2xl font-black text-white tracking-tight">
+              Подтверждение
+            </h2>
+            <p className="text-gray-400 text-sm leading-relaxed">
+              Вы изменили витрину профиля! Вы точно хотите утвердить этих
+              любимых исполнителей, треки или альбомы? <br />
+              <br />
+              <strong className="text-yellow-500">
+                Они будут заблокированы на 30 дней.
+              </strong>
+            </p>
+            <div className="flex gap-4 pt-4">
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                className="flex-1 px-6 py-3 rounded-xl font-bold text-gray-300 bg-white/5 hover:bg-white/10 transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={executeSave}
+                className="flex-1 px-6 py-3 rounded-xl font-black text-black bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] hover:scale-105 transition-all shadow-lg shadow-[var(--accent)]/20"
+              >
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

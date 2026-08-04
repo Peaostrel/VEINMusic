@@ -258,6 +258,7 @@ function AchievementForm({
           <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-[#1a1010] border border-red-900/50 rounded-lg p-3 shadow-2xl z-50 grid grid-cols-8 gap-2 max-h-[200px] overflow-y-auto scrollbar-thin">
             {EMOJI_LIST.map((emoji) => (
               <button
+                type="button"
                 key={emoji}
                 onClick={() => {
                   patch({ icon: emoji });
@@ -398,12 +399,14 @@ function AchievementForm({
         {editingAch ? (
           <>
             <button
+              type="button"
               onClick={onSave}
               className="flex-1 bg-gradient-to-r from-red-600 to-red-500 text-white font-black tracking-wide py-3 rounded-lg shadow-[0_0_15px_rgba(239,68,68,0.3)] hover:scale-[1.02] transition-transform"
             >
               СОХРАНИТЬ
             </button>
             <button
+              type="button"
               onClick={() => setEditingAch(null)}
               className="flex-1 bg-white/5 border border-white/10 text-white font-bold py-3 rounded-lg hover:bg-white/10 transition"
             >
@@ -412,6 +415,7 @@ function AchievementForm({
           </>
         ) : (
           <button
+            type="button"
             onClick={onCreate}
             className="w-full bg-gradient-to-r from-red-600 to-red-500 text-white font-black tracking-wide py-3 rounded-lg shadow-[0_0_15px_rgba(239,68,68,0.3)] hover:scale-[1.02] transition-transform"
           >
@@ -842,12 +846,14 @@ export default function AdminPanel() {
             </div>
             <div className="flex gap-3">
               <button
+                type="button"
                 onClick={handleSaveUserEdit}
                 className="flex-1 bg-red-600 text-white font-black py-2 rounded shadow-[0_0_15px_rgba(239,68,68,0.4)] hover:bg-red-500 transition"
               >
                 СОХРАНИТЬ
               </button>
               <button
+                type="button"
                 onClick={() => setEditingUser(null)}
                 className="px-6 bg-white/10 text-white font-bold py-2 rounded hover:bg-white/20 transition"
               >
@@ -902,18 +908,21 @@ export default function AdminPanel() {
       {/* Навигация админки */}
       <div className="flex gap-2 mb-6 border-b border-red-900/30 pb-4">
         <button
+          type="button"
           onClick={() => setActiveTab("users")}
           className={`px-5 py-2 font-bold rounded-lg transition-all ${activeTab === "users" ? "bg-red-500/20 text-red-500 border border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.2)]" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
         >
           Пользователи
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab("achievements")}
           className={`px-5 py-2 font-bold rounded-lg transition-all ${activeTab === "achievements" ? "bg-red-500/20 text-red-500 border border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.2)]" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
         >
           Достижения
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab("tracks")}
           className={`px-5 py-2 font-bold rounded-lg transition-all ${activeTab === "tracks" ? "bg-red-500/20 text-red-500 border border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.2)]" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
         >
@@ -981,24 +990,28 @@ export default function AdminPanel() {
                     </td>
                     <td className="p-4 flex flex-wrap gap-2">
                       <button
+                        type="button"
                         onClick={() => setEditingUser(u)}
                         className="px-3 py-1.5 bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded text-xs font-bold hover:bg-blue-500/20 transition"
                       >
                         Профиль
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleEditLevel(u.username, level)}
                         className="px-3 py-1.5 bg-white/5 border border-white/10 text-gray-300 rounded text-xs font-bold hover:bg-white/10 transition"
                       >
                         ЛВЛ
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleGiveAch(u.username)}
                         className="px-3 py-1.5 bg-white/5 border border-white/10 text-gray-300 rounded text-xs font-bold hover:bg-white/10 transition"
                       >
                         Ачивка
                       </button>
                       <button
+                        type="button"
                         onClick={() =>
                           handleToggleVerify(u.username, !!u.is_verified)
                         }
@@ -1009,12 +1022,14 @@ export default function AdminPanel() {
                       {!u.is_dev && (
                         <>
                           <button
+                            type="button"
                             onClick={() => handleWipeScrobbles(u.username)}
                             className="px-3 py-1.5 bg-orange-500/10 border border-orange-500/30 text-orange-500 rounded text-xs font-bold hover:bg-orange-500/20 transition"
                           >
                             Сбросить стату
                           </button>
                           <button
+                            type="button"
                             onClick={() => handleDeleteUser(u.username)}
                             className="px-3 py-1.5 bg-red-600 text-white rounded text-xs font-bold hover:bg-red-500 transition shadow-[0_0_10px_rgba(239,68,68,0.4)]"
                           >
@@ -1072,6 +1087,7 @@ export default function AdminPanel() {
                   </div>
                 </div>
                 <button
+                  type="button"
                   onClick={() => handleDeleteTrack(t.id)}
                   className="px-4 py-2 bg-red-500/10 text-red-500 font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white shrink-0 ml-4"
                 >
@@ -1155,12 +1171,14 @@ export default function AdminPanel() {
                     </div>
                     <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                       <button
+                        type="button"
                         onClick={() => startEditAch(a)}
                         className="text-gray-400 hover:text-white text-xs bg-white/5 hover:bg-white/10 p-2 rounded transition"
                       >
                         ✏️
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleDeleteAch(a.id)}
                         className="text-red-500/70 hover:text-red-50 text-xs bg-red-500/10 hover:bg-red-500/20 p-2 rounded transition"
                       >

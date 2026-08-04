@@ -210,6 +210,7 @@ export default function DetailedStats() {
         <div className="flex bg-[#121212]/80 backdrop-blur-md rounded-xl p-1 border border-white/5 shadow-lg">
           {["7d", "30d", "all"].map((p) => (
             <button
+              type="button"
               key={p}
               onClick={() => setPeriod(p)}
               className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${period === p ? "bg-[var(--accent)] shadow-[0_0_15px_var(--accent-glow)]" : "text-gray-400 hover:text-white"}`}

@@ -32,14 +32,8 @@ def test_update_profile_success(auth_client, db, auth_user):
         "favorite_genre": "Synthwave",
         "equipment": "Sennheiser HD600",
         "favorite_artist": "Король и Шут",
-        "favorite_artist_rating": 5,
-        "favorite_artist_review": "Awesome punk rock band",
         "favorite_track": "Кукла колдуна",
-        "favorite_track_rating": 4,
-        "favorite_track_review": "Amazing track",
         "favorite_album": "Акустический альбом",
-        "favorite_album_rating": 5,
-        "favorite_album_review": "Masterpiece",
         "is_private": True,
         "hidden_artists": "Pop Artist"
     }
@@ -60,8 +54,6 @@ def test_update_profile_success(auth_client, db, auth_user):
     assert updated_user.profile.display_name == "My Nice Name"
     assert updated_user.profile.bio == "Music enthusiast"
     assert updated_user.profile.favorite_artist == "Mock Name"
-    assert updated_user.profile.favorite_artist_rating == 5
-    assert updated_user.profile.favorite_artist_review == "Awesome punk rock band"
     assert updated_user.profile.is_private is True
     assert updated_user.profile.hidden_artists == "Pop Artist"
 

@@ -114,34 +114,62 @@ def _parse_yandex_now_playing(data: dict):
     }
 
 
+async def _fetch_yandex_track_info(client, track_id, headers, process_func, db, user):
+    t_resp = await client.post("https://api.music.yandex.net/tracks", data={"track-ids": [track_id]}, headers=headers, timeout=5.0)
+    t_info = t_resp.json().get("result", [])
+    if not t_info:
+        return
+    t_info = t_info[0]
+
+    title = t_info.get("title")
+    artist = ", ".join([a.get("name") for a in t_info.get("artists", []) if "name" in a])
+    cover_uri = t_info.get("coverUri")
+    cover = "https://" + cover_uri.replace("%%", "400x400") if cover_uri else None
+    duration = int(t_info.get("durationMs", 0) / 1000)
+    track_url = f"https://music.yandex.ru/track/{track_id}"
+
+    albums = t_info.get("albums", [])
+    album = albums[0].get("title") if albums else None
+
+    await process_func(
+        db, user, title, artist, cover,
+        track_url, "yandex", 0, True,
+        duration, album
+    )
+
+
 async def sync_yandex_status(user: User, db: Session, process_func):
     async with httpx.AsyncClient() as client:
         try:
             headers = {
                 "Authorization": f"OAuth {user.integration.yandex_token}",
                 "X-Yandex-Music-Client": "YandexMusicAndroid/2023.12.1",
-                "User-Agent": "Yandex-Music-API"
+                "User-Agent": "Yandex-Music-API",
+                "X-Yandex-Music-Device": "os=unknown; os_version=unknown; manufacturer=unknown; model=unknown; clid=unknown; device_id=unknown; uuid=unknown"
             }
-            resp = await client.get("https://api.music.yandex.net/external-api/status", headers=headers, timeout=5.0)
-            if resp.status_code == 403:
-                print(
-                    f"Yandex OAuth token invalid or expired for user {user.username}")
+            resp = await client.get("https://api.music.yandex.net/queues", headers=headers, timeout=5.0)
+            if resp.status_code == 401 or resp.status_code == 403:
+                print(f"Yandex OAuth token invalid or expired for user {user.username}")
                 return
             if resp.status_code == 200:
-                try:
-                    data = resp.json()
-                except Exception as je:
-                    print(
-                        f"Yandex JSON parse error for user {user.username}: {je}")
-                    return
+                data = resp.json()
+                queues = data.get("result", {}).get("queues", [])
+                if not queues:
+                    return  # Nothing playing
 
-                info = _parse_yandex_now_playing(data)
-                if info:
-                    await process_func(
-                        db, user, info["title"], info["artist"], info["cover"],
-                        info["track_url"], "yandex", info["progress"], True,
-                        info["duration"], info["album"]
-                    )
+                q_id = queues[0].get("id")
+                q_resp = await client.get(f"https://api.music.yandex.net/queues/{q_id}", headers=headers, timeout=5.0)
+                if q_resp.status_code != 200:
+                    return
+                q_result = q_resp.json().get("result", {})
+                current_idx = q_result.get("currentIndex")
+                tracks = q_result.get("tracks", [])
+
+                if current_idx is not None and current_idx < len(tracks):
+                    track_obj = tracks[current_idx]
+                    track_id = track_obj.get("trackId")
+
+                    await _fetch_yandex_track_info(client, track_id, headers, process_func, db, user)
         except Exception as e:
             print(f"Yandex sync error for user {user.username}: {e}")
 

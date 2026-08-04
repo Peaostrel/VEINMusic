@@ -16,14 +16,18 @@
     <h3>VEIN TRACKER</h3>
     
     <div id="unauth-box" class="box">
-        <div class="error">Ожидание авторизации...</div>
-        <div style="font-size: 11px; color: #888; margin-top: 8px;">Войди в аккаунт на сайте VEIN (localhost:3000), и расширение подключится автоматически.</div>
+        <div style="font-size: 11px; color: #888; margin-bottom: 8px;">Вставь API ключ со страницы настроек VEIN:</div>
+        <input type="text" id="api-key-input" aria-label="API Ключ" placeholder="API Ключ" style="width: 100%; box-sizing: border-box; padding: 5px; margin-bottom: 5px; background: #222; color: white; border: 1px solid #444;" />
+        <input type="text" id="username-input" aria-label="Твой никнейм" placeholder="Твой никнейм" style="width: 100%; box-sizing: border-box; padding: 5px; margin-bottom: 5px; background: #222; color: white; border: 1px solid #444;" />
+        <button id="save-btn" style="width: 100%; padding: 6px; background: #ffcc00; border: none; cursor: pointer; font-weight: bold; color: black; border-radius: 4px;">Сохранить</button>
     </div>
 
     <div id="auth-box" class="box" style="display: none;">
-        <div class="success">✓ Подключено</div>
-        <div class="username">@<span id="username-display"></span></div>
-        <div style="font-size: 11px; color: #888; margin-top: 8px;">Скроблер работает в фоновом режиме.</div>
+        <div class="success">Подключено</div>
+        <div style="font-weight: bold; margin-top: 5px; color: #fff;">@<span id="username-display"></span></div>
+        <div style="font-size: 10px; color: #888; margin-top: 5px;">Скробблер работает в фоновом режиме.</div>
+        <button id="test-btn" style="width: 100%; padding: 6px; margin-top: 10px; background: #333; color: white; border: 1px solid #555; cursor: pointer; border-radius: 4px;">Тест связи</button>
+        <div id="log-box" style="margin-top: 10px; font-size: 10px; color: #ffcc00; word-break: break-all;"></div>
     </div>
     
     <script src="popup.js"></script>
