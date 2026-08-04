@@ -242,7 +242,7 @@ export default function Home() {
                             />
                             {item.likes_count || 0}
                           </button>
-                          <button className="flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-[var(--accent)] transition-colors">
+                          <button type="button" className="flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-[var(--accent)] transition-colors">
                             <MessageCircle className="w-4 h-4" />
                             {item.comments_count || 0}
                           </button>
