@@ -273,7 +273,8 @@ def _update_scrobble_progress(
     last_scrobble.updated_at = now
     db.commit()
 
-    threshold = (track.duration if track.duration > 0 else 180) * 0.85
+    track_dur = int(track.duration) if getattr(track, 'duration', None) and track.duration > 0 else 180
+    threshold = track_dur * 0.85
     if last_scrobble.listened_sec >= threshold and old_listened < threshold:
         is_fav = _check_favorite(track, user)
         last_scrobble.xp_earned = 2 if is_fav else 1

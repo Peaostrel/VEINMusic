@@ -497,7 +497,14 @@ export default function Profile() {
   };
 
   const [importLoading, setImportLoading] = useState(false);
-  const handleLastfmImport = async () => {
+  const [showImportConfirm, setShowImportConfirm] = useState(false);
+
+  const handleLastfmImport = () => {
+    setShowImportConfirm(true);
+  };
+
+  const executeLastfmImport = async () => {
+    setShowImportConfirm(false);
     setImportLoading(true);
     try {
       const res = await fetch(
@@ -543,6 +550,7 @@ export default function Profile() {
           нашей базе данных.
         </p>
         <button
+          type="button"
           onClick={() => router.push("/")}
           className="mt-8 bg-white/5 hover:bg-white/10 text-white font-bold px-8 py-3 rounded-xl border border-white/10 transition-all"
         >
@@ -588,6 +596,7 @@ export default function Profile() {
           прослушиваний.
         </p>
         <button
+          type="button"
           onClick={() => router.push("/")}
           className="mt-8 bg-white/5 hover:bg-white/10 text-white font-bold px-8 py-3 rounded-xl border border-white/10 transition-all"
         >
@@ -670,6 +679,7 @@ export default function Profile() {
               )}
             </div>
             <button
+              type="button"
               onClick={() => removeToast(t.id)}
               className="absolute top-2 right-2 text-gray-500 hover:text-white transition-colors"
             >
@@ -757,6 +767,38 @@ export default function Profile() {
         </dialog>
       )}
 
+      {showImportConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="relative w-full max-w-sm bg-[#121212] p-6 rounded-2xl border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)] text-center animate-in fade-in zoom-in duration-200">
+            <h2 className="text-xl font-black text-white mb-4">
+              Подтверждение импорта
+            </h2>
+            <p className="text-gray-400 text-sm mb-6">
+              Внимание! Перенос истории из Last.fm можно сделать{" "}
+              <span className="text-[var(--accent)] font-bold">
+                только один раз
+              </span>
+              {". "}
+              Продолжить?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowImportConfirm(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl font-bold text-gray-300 bg-white/5 hover:bg-white/10 transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={executeLastfmImport}
+                className="flex-1 px-4 py-2.5 rounded-xl font-black text-[var(--text-on-accent)] bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] hover:scale-105 transition-transform"
+              >
+                Перенести
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {followModal.isOpen && (
         <dialog
           open
@@ -821,6 +863,7 @@ export default function Profile() {
         isLogged={isLogged}
         isMyProfile={isMyProfile}
         isFollowing={data.followStats.is_following}
+        hasImportedLastfm={data.has_imported_lastfm}
         username={username as string}
         importLoading={importLoading}
         onFollow={handleFollow}
@@ -1329,7 +1372,9 @@ function useCountries() {
           setCountries(list);
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error("Failed to fetch countries", err);
+      });
   }, []);
   return countries;
 }
@@ -1423,6 +1468,7 @@ interface ProfileActionsProps {
   isLogged: boolean;
   isMyProfile: boolean;
   isFollowing: boolean;
+  hasImportedLastfm: boolean;
   username: string;
   importLoading: boolean;
   onFollow: () => void;
@@ -1435,6 +1481,7 @@ function ProfileActions({
   isLogged,
   isMyProfile,
   isFollowing,
+  hasImportedLastfm,
   username,
   importLoading,
   onFollow,
@@ -1447,6 +1494,7 @@ function ProfileActions({
     <div className="flex flex-wrap justify-end gap-4 mb-4 pt-4">
       {isLogged && !isMyProfile && (
         <button
+          type="button"
           onClick={onFollow}
           className={`px-5 py-2.5 text-sm rounded-lg font-black transition-all flex items-center gap-2 ${isFollowing ? "bg-white/10 text-white hover:bg-white/20" : "bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] text-[var(--text-on-accent)] shadow-[0_0_15px_var(--accent-glow)] hover:scale-105"}`}
         >
@@ -1454,13 +1502,15 @@ function ProfileActions({
         </button>
       )}
       <button
+        type="button"
         onClick={() => router.push(`/user/${username}/stats`)}
         className="bg-white/5 border border-white/10 text-white px-5 py-2.5 text-sm rounded-lg hover:bg-white/10 transition backdrop-blur-sm flex items-center gap-2 font-bold"
       >
         📊 Подробная статистика
       </button>
-      {isMyProfile && (
+      {isMyProfile && !hasImportedLastfm && (
         <button
+          type="button"
           onClick={onImport}
           disabled={importLoading}
           className={`bg-red-500/10 border border-red-500/30 text-red-400 px-5 py-2.5 text-sm rounded-lg hover:bg-red-500/20 transition backdrop-blur-sm flex items-center gap-2 font-bold ${importLoading ? "opacity-50 cursor-not-allowed" : ""}`}
@@ -1478,6 +1528,7 @@ function ProfileActions({
         </button>
       )}
       <button
+        type="button"
         onClick={onShowWrapped}
         className="bg-white/5 border border-white/10 text-white px-5 py-2.5 text-sm rounded-lg hover:bg-white/10 transition backdrop-blur-sm flex items-center gap-2 font-bold"
       >
@@ -1485,6 +1536,7 @@ function ProfileActions({
       </button>
       {!isMyProfile && isLogged && (
         <button
+          type="button"
           onClick={onListenTogether}
           className="bg-[var(--accent)]/10 border border-[var(--accent)]/30 text-[var(--accent-text)] px-5 py-2.5 text-sm rounded-lg hover:bg-[var(--accent)]/20 transition backdrop-blur-sm flex items-center gap-2 font-bold"
         >
@@ -1493,6 +1545,7 @@ function ProfileActions({
       )}
       {isMyProfile && (
         <button
+          type="button"
           onClick={() => router.push("/settings")}
           className="bg-white/5 border border-white/10 text-white px-5 py-2.5 text-sm rounded-lg hover:bg-white/10 transition backdrop-blur-sm flex items-center gap-2 font-bold"
         >
@@ -1696,6 +1749,7 @@ function ProfileHeaderSection({
 
             {u.achievements?.length > 0 && (
               <button
+                type="button"
                 onClick={() => router.push(`/user/${username}/achievements`)}
                 className="bg-[#121212]/80 hover:bg-white/10 text-[10px] font-bold text-gray-400 px-3 py-2 rounded-lg transition-colors border border-white/5 uppercase tracking-widest ml-2"
               >
@@ -1719,6 +1773,14 @@ interface ProfileStatsSectionProps {
   countries: any[];
   favoriteAlbumRedirectUrl: string;
 }
+
+function getNetworkLabel(net: string): string {
+  const lower = net.toLowerCase();
+  if (lower === "vk") return "VK";
+  if (lower === "github") return "GitHub";
+  return net.charAt(0).toUpperCase() + net.slice(1);
+}
+
 function ProfileStatsSection({
   u,
   progressPercent,
@@ -1791,12 +1853,6 @@ function ProfileStatsSection({
       {socialLinks.length > 0 && (
         <div className="flex flex-wrap justify-center md:justify-start gap-3 mb-6">
           {socialLinks.map((link: any) => {
-            const getNetworkLabel = (net: string) => {
-              const lower = net.toLowerCase();
-              if (lower === "vk") return "VK";
-              if (lower === "github") return "GitHub";
-              return net.charAt(0).toUpperCase() + net.slice(1);
-            };
             return (
               <a
                 key={link.id}
@@ -1921,7 +1977,7 @@ function ProfileStatsSection({
                       target="_blank"
                       rel="noopener noreferrer"
 
-                      className="block font-black text-white hover:text-[var(--accent-text)] text-base leading-tight truncate"
+                      className="block font-black text-white hover:text-[var(--accent-text)] text-base leading-tight break-words"
                     >
                       {u.favorite_artist}
                     </a>
@@ -1985,7 +2041,7 @@ function ProfileStatsSection({
                       target="_blank"
                       rel="noopener noreferrer"
 
-                      className="block font-black text-white hover:text-[var(--accent-text)] text-base leading-tight truncate"
+                      className="block font-black text-white hover:text-[var(--accent-text)] text-base leading-tight break-words"
                     >
                       {u.favorite_track}
                     </a>
@@ -2041,7 +2097,7 @@ function ProfileStatsSection({
                       target="_blank"
                       rel="noopener noreferrer"
 
-                      className="block font-black text-white hover:text-[var(--accent-text)] text-base leading-tight truncate"
+                      className="block font-black text-white hover:text-[var(--accent-text)] text-base leading-tight break-words"
                     >
                       {u.favorite_album}
                     </a>

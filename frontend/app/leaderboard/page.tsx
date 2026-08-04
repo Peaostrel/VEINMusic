@@ -68,7 +68,7 @@ const RANK_CLASSES = [
 
 function getGlowColor(theme: string): string {
   if (theme?.startsWith("#")) return theme;
-  return (THEMES as any)[theme]?.main || "#ffcc00";
+  return THEMES[theme as keyof typeof THEMES]?.main || "#ffcc00";
 }
 
 function getLeaderboardItemStyles(u: any, idx: number) {

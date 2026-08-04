@@ -115,8 +115,78 @@ function getMediaProgress(sessionPlaying) {
             durationSec = Math.floor(pausedMedia.duration) || 0;
         }
     }
+    
+    try {
+        if (globalThis.externalAPI) {
+            isPlaying = globalThis.externalAPI.isPlaying();
+            const progressObj = globalThis.externalAPI.getProgress();
+            if (progressObj) {
+                progressSec = Math.floor(progressObj.position || 0);
+                durationSec = Math.floor(progressObj.duration || 0);
+            }
+        }
+    } catch(e) {}
 
     return { isPlaying, progressSec, durationSec };
+}
+
+function getMediaSessionMeta(source) {
+    const metadata = navigator.mediaSession?.metadata;
+    if (!metadata?.title) return null;
+    const trackTitle = metadata.title;
+    const trackArtist = metadata.artist || '';
+    const trackAlbum = metadata.album || '';
+    if (source === 'soundcloud' && (!trackArtist || trackArtist.toLowerCase().includes('advertisement') || trackArtist.toLowerCase().includes('soundcloud'))) return null;
+    const trackCover = getArtworkCover(metadata, source);
+    const trackUrl = getTrackUrlForSource(source, trackTitle);
+    return { trackTitle, trackArtist, trackAlbum, trackCover, trackUrl };
+}
+
+function getYandexMeta() {
+    if (!globalThis.externalAPI) return null;
+    try {
+        const yandexTrack = globalThis.externalAPI.getCurrentTrack();
+        if (yandexTrack) {
+            const trackTitle = yandexTrack.title;
+            const trackArtist = yandexTrack.artists ? yandexTrack.artists.map(a => a.title).join(', ') : '';
+            const trackAlbum = yandexTrack.album ? yandexTrack.album.title : '';
+            const trackCover = yandexTrack.cover ? 'https://' + yandexTrack.cover.replace('%%', '400x400') : '';
+            const trackUrl = yandexTrack.link ? 'https://music.yandex.ru' + yandexTrack.link : globalThis.location.href;
+            return { trackTitle, trackArtist, trackAlbum, trackCover, trackUrl };
+        }
+    } catch(e) {
+        console.debug("VEINMusic: yandex API parse error", e);
+    }
+    return null;
+}
+
+function getVkMetaForWorld() {
+    const vkMeta = getVkMetadata();
+    if (vkMeta) {
+        return {
+            trackTitle: vkMeta.title,
+            trackArtist: vkMeta.artist,
+            trackAlbum: vkMeta.album,
+            trackCover: vkMeta.cover,
+            trackUrl: vkMeta.url
+        };
+    }
+    return null;
+}
+
+function getTrackMetadataForSource(source) {
+    let meta = getMediaSessionMeta(source);
+    if (meta) return meta;
+    
+    if (source === 'yandex') {
+        return getYandexMeta();
+    }
+    
+    if (source === 'vk') {
+        return getVkMetaForWorld();
+    }
+    
+    return null;
 }
 
 setInterval(() => {
@@ -124,36 +194,13 @@ setInterval(() => {
         const source = getPlatformSource(globalThis.location.hostname);
         if (!source) return;
 
-        let trackTitle = '', trackArtist = '', trackCover = '', trackUrl = '', trackAlbum = '';
-        let found = false;
+        let meta = getTrackMetadataForSource(source);
+        if (!meta?.trackTitle) return;
 
-        const metadata = navigator.mediaSession?.metadata;
-        const sessionPlaying = navigator.mediaSession?.playbackState === 'playing';
+        let { trackTitle, trackArtist, trackAlbum, trackCover, trackUrl } = meta;
 
-        if (metadata?.title) {
-            trackTitle = metadata.title;
-            trackArtist = metadata.artist || '';
-            trackAlbum = metadata.album || '';
-
-            if (source === 'soundcloud' && (!trackArtist || trackArtist.toLowerCase().includes('advertisement') || trackArtist.toLowerCase().includes('soundcloud'))) return;
-
-            trackCover = getArtworkCover(metadata, source);
-            trackUrl = getTrackUrlForSource(source, trackTitle);
-            found = true;
-        } 
-        else if (source === 'vk') {
-            const vkMeta = getVkMetadata();
-            if (vkMeta) {
-                trackTitle = vkMeta.title;
-                trackArtist = vkMeta.artist;
-                trackAlbum = vkMeta.album;
-                trackCover = vkMeta.cover;
-                trackUrl = vkMeta.url;
-                found = true;
-            }
-        }
-
-        if (found && trackTitle) {
+        if (trackTitle) {
+            const sessionPlaying = navigator.mediaSession?.playbackState === 'playing';
             const { isPlaying, progressSec, durationSec } = getMediaProgress(sessionPlaying);
             globalThis.postMessage({
                 type: 'VEIN_SCROBBLE',

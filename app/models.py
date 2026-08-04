@@ -62,20 +62,17 @@ class UserProfile(Base):
     favorite_artist = Column(String, nullable=True)
     favorite_artist_url = Column(String, nullable=True)
     favorite_artist_cover = Column(String, nullable=True)
-    favorite_artist_review = Column(String, nullable=True)
-    favorite_artist_rating = Column(Integer, nullable=True)
+    favorite_artist_updated_at = Column(DateTime(timezone=True), nullable=True)
 
     favorite_track = Column(String, nullable=True)
     favorite_track_url = Column(String, nullable=True)
     favorite_track_cover = Column(String, nullable=True)
-    favorite_track_review = Column(String, nullable=True)
-    favorite_track_rating = Column(Integer, nullable=True)
+    favorite_track_updated_at = Column(DateTime(timezone=True), nullable=True)
 
     favorite_album = Column(String, nullable=True)
     favorite_album_url = Column(String, nullable=True)
     favorite_album_cover = Column(String, nullable=True)
-    favorite_album_review = Column(String, nullable=True)
-    favorite_album_rating = Column(Integer, nullable=True)
+    favorite_album_updated_at = Column(DateTime(timezone=True), nullable=True)
 
     avatar_frame = Column(String, default="")
 
@@ -98,6 +95,7 @@ class UserIntegration(Base):
     lastfm_username = Column(String, nullable=True)
     spotify_access_token = Column(String, nullable=True)
     spotify_refresh_token = Column(String, nullable=True)
+    has_imported_lastfm = Column(Boolean, default=False)
     last_sync = Column(DateTime(timezone=True), nullable=True)
 
     user = relationship("User", back_populates="integration")

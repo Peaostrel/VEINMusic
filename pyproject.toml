@@ -6,5 +6,4 @@ ignore = [
     "B008",    # Do not perform function call in argument defaults (fastapi.Depends)
     "BLE001",  # Do not catch blind exception: Exception (Intentional for worker loops)
     "S110",    # try-except-pass detected (Intentional fallback behaviour)
-    "LOG015",  # exception() call on root logger
 ]

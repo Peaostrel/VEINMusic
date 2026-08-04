@@ -57,9 +57,11 @@ export default function ThemeTab({
               backgroundStyle =
                 "linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #8b00ff)";
             } else if (opt.isCustom) {
-              backgroundStyle = isThemeCustom
-                ? data.theme
-                : "linear-gradient(45deg, #ef4444, #3b82f6)";
+              if (isThemeCustom) {
+                backgroundStyle = data.theme;
+              } else {
+                backgroundStyle = "linear-gradient(45deg, #ef4444, #3b82f6)";
+              }
             }
 
             let statusIndicator = null;
