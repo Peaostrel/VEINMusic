@@ -123,6 +123,7 @@ export default function Home() {
       <div className="w-full mt-12 mb-20 px-4">
         <div className="flex items-center gap-6 mb-8 border-b border-white/5 pb-2">
           <button
+            type="button"
             onClick={() => setActiveFeed("global")}
             className={`text-2xl font-black pb-2 border-b-2 transition-all ${activeFeed === "global" ? "border-[var(--accent)] text-white" : "border-transparent text-gray-500 hover:text-gray-300"}`}
           >
@@ -130,6 +131,7 @@ export default function Home() {
           </button>
           {username && (
             <button
+              type="button"
               onClick={() => setActiveFeed("friends")}
               className={`text-2xl font-black pb-2 border-b-2 transition-all flex items-center gap-2 ${activeFeed === "friends" ? "border-[var(--accent)] text-white" : "border-transparent text-gray-500 hover:text-gray-300"}`}
             >
@@ -231,6 +233,7 @@ export default function Home() {
 
                         <div className="flex items-center gap-4 pt-3 border-t border-white/5 mt-1">
                           <button
+                            type="button"
                             onClick={(e) => toggleLike(e, item.id)}
                             className="flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-red-500 transition-colors group/like"
                           >

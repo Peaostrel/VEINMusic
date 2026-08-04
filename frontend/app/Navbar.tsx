@@ -508,6 +508,7 @@ export default function Navbar() {
                   className={`${frameClass} transition-all duration-300 ml-2`}
                 >
                   <button
+                    type="button"
                     onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                     className="w-10 h-10 rounded-full border-2 border-transparent hover:border-[var(--accent)] transition-all overflow-hidden bg-[#1a1a1a] shadow-md flex items-center justify-center shrink-0"
                   >
@@ -590,6 +591,7 @@ export default function Navbar() {
                     </div>
                     <div className="p-2 border-t border-white/5 bg-[#1a1a1a]">
                       <button
+                        type="button"
                         onClick={handleLogout}
                         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors text-left"
                       >

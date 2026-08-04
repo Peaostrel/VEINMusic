@@ -1,6 +1,7 @@
 import hashlib
 import json
 import secrets
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,7 +19,16 @@ router = APIRouter(prefix="/api/profile", tags=["profile"])
 
 async def _update_favorite(user_profile, field_value, field_name, entity_type):
     if field_value is None:
-        return
+        return False
+
+    current_val = getattr(user_profile, field_name)
+    if field_value == current_val:
+        return False
+
+    updated_at = getattr(user_profile, f"{field_name}_updated_at")
+    if updated_at and datetime.now(UTC) < updated_at + timedelta(days=30):
+        raise HTTPException(400, "Вы можете изменить это поле только раз в 30 дней.")
+
     if field_value.strip() == "":
         setattr(user_profile, field_name, None)
         setattr(user_profile, f"{field_name}_cover", None)
@@ -38,6 +48,8 @@ async def _update_favorite(user_profile, field_value, field_name, entity_type):
             url or getattr(
                 user_profile,
                 f"{field_name}_url"))
+
+    return True
 
 
 def _validate_url(url: str | None):
@@ -62,9 +74,6 @@ def _update_profile_fields(profile, data: ProfileUpdate):
         ('location', True),
         ('favorite_genre', True),
         ('equipment', True),
-        ('favorite_artist_review', True),
-        ('favorite_track_review', True),
-        ('favorite_album_review', True),
         ('avatar_frame', True)
     ]
     for field, sanitize in string_fields:
@@ -73,9 +82,6 @@ def _update_profile_fields(profile, data: ProfileUpdate):
             setattr(profile, field, sanitize_text(val) if sanitize else val)
 
     other_fields = [
-        'favorite_artist_rating',
-        'favorite_track_rating',
-        'favorite_album_rating',
         'is_private'
     ]
     for field in other_fields:
@@ -89,9 +95,15 @@ async def update_profile(data: ProfileUpdate, db: Annotated[Session, Depends(
         get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
 
-    await _update_favorite(user.profile, data.favorite_artist, 'favorite_artist', 'artist')
-    await _update_favorite(user.profile, data.favorite_track, 'favorite_track', 'track')
-    await _update_favorite(user.profile, data.favorite_album, 'favorite_album', 'album')
+    changed1 = await _update_favorite(user.profile, data.favorite_artist, 'favorite_artist', 'artist')
+    changed2 = await _update_favorite(user.profile, data.favorite_track, 'favorite_track', 'track')
+    changed3 = await _update_favorite(user.profile, data.favorite_album, 'favorite_album', 'album')
+
+    if changed1 or changed2 or changed3:
+        now = datetime.now(UTC)
+        user.profile.favorite_artist_updated_at = now
+        user.profile.favorite_track_updated_at = now
+        user.profile.favorite_album_updated_at = now
 
     _update_profile_fields(user.profile, data)
 

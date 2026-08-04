@@ -145,6 +145,7 @@ export default function Auth() {
 
             <div className="mt-8 text-center">
               <button
+                type="button"
                 onClick={() => {
                   setIsLogin(!isLogin);
                   setError("");
@@ -182,6 +183,7 @@ export default function Auth() {
 
             <div className="space-y-3">
               <button
+                type="button"
                 onClick={() => {
                   const safeUsername = encodeURIComponent(username);
                   globalThis.location.href = `/user/${safeUsername}`;

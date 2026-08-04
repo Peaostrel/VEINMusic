@@ -5,6 +5,10 @@ import httpx
 
 TEXT_KEY = "#text"
 
+PAREN_RE = re.compile(r' \([^)]*\)')
+END_PAREN_RE = re.compile(r'\([^)]*\)$')
+FEAT_RE = re.compile(r'(?i) feat\.?| ft\.?| &|,| x ')
+
 
 async def _search_itunes(client: httpx.AsyncClient,
                          query: str,
@@ -41,13 +45,13 @@ def _apply_genius_hit(result: dict,
                       entity_type: str,
                       title: str | None,
                       cover: str | None) -> tuple[str | None,
-                                                     str | None]:
+                                                  str | None]:
     """Apply a Genius search hit to update title/cover based on entity type."""
     if entity_type == 'artist':
         cover = cover or result.get('image_url')
         if not title:
             raw_name = result.get('name', '')
-            title = re.sub(r'\([^)]*\)$', '', raw_name).strip()
+            title = END_PAREN_RE.sub('', raw_name).strip()
     elif entity_type == 'album':
         cover = cover or result.get('cover_art_url')
         if not title:
@@ -70,7 +74,7 @@ async def _search_genius(client: httpx.AsyncClient,
                          entity_type: str,
                          title: str | None,
                          cover: str | None) -> tuple[str | None,
-                                                        str | None]:
+                                                     str | None]:
     try:
         genius_url = f"https://genius.com/api/search/multi?per_page=1&q={urllib.parse.quote(query.strip())}"
         r_genius = await client.get(genius_url)
@@ -205,3 +209,191 @@ async def search_metadata(
                 ext_url = ext_url or lastfm_ext
 
     return title, cover, ext_url
+
+
+async def search_suggestions(query: str, entity_type: str) -> list[dict]:  # NOSONAR
+    if not query or not query.strip():
+        return []
+
+    import os
+
+    lastfm_key = os.getenv("LASTFM_API_KEY")
+    genius_token = os.getenv("GENIUS_ACCESS_TOKEN")
+    # Pre-compile regexes to constants to avoid SonarQube complaints about duplication and backtracking
+    # Use possessive or non-backtracking patterns where possible, or just simpler ones
+    # Use possessive or non-backtracking patterns where possible, or just simpler ones
+    results: list[dict] = []
+
+    def get_lf_image(images):
+        if not images or not isinstance(images, list):
+            return ""
+        for img in reversed(images):
+            url = img.get("#text", "")
+            if url and "2a96cbd8b46e442fc41c2b86b821562f" not in url:
+                return url
+        return ""
+
+    async with httpx.AsyncClient(timeout=3.0) as client:
+        # 1. Try Genius API first if available (excellent for artists and tracks)
+        if genius_token:
+            try:
+                url = f"https://api.genius.com/search?q={urllib.parse.quote(query.strip())}"
+                headers = {"Authorization": f"Bearer {genius_token}"}
+                r = await client.get(url, headers=headers)
+                if r.status_code == 200:
+                    hits = r.json().get('response', {}).get('hits', [])
+                    for hit in hits:
+                        if hit.get('type') == 'song':
+                            res = hit.get('result', {})
+
+                            if entity_type == 'artist':
+                                artist = res.get('primary_artist', {})
+                                name = artist.get('name', '')
+                                if name:
+                                    name = PAREN_RE.sub('', name).strip()
+                                img = artist.get('image_url', '')
+                                if name and not any(r['title'].lower() == name.lower() for r in results):
+                                    results.append({"title": name, "image": img or ""})
+                                    if len(results) >= 5:
+                                        break
+
+                            elif entity_type == 'track':
+                                artist = res.get('primary_artist', {}).get('name', '')
+                                if artist:
+                                    artist = PAREN_RE.sub('', artist).strip()
+                                title = res.get('title', '')
+                                if title:
+                                    title = PAREN_RE.sub('', title).strip()
+                                img = res.get('song_art_image_thumbnail_url', '')
+                                full_title = f"{artist} — {title}"
+                                if artist and title and not any(r['title'].lower() == full_title.lower() for r in results):
+                                    results.append({"title": full_title, "image": img or ""})
+                                    if len(results) >= 5:
+                                        break
+            except Exception as e:
+                print(f"Genius Parse Error: {e}")
+
+        # 2. Try Last.fm (if Genius didn't get enough results or for albums)
+        if lastfm_key and len(results) < 5:
+            try:
+                if entity_type == 'artist':
+                    url = f"https://ws.audioscrobbler.com/2.0/?method=artist.search&artist={urllib.parse.quote(query.strip())}&api_key={lastfm_key}&format=json&limit=15"
+                    r = await client.get(url)
+                    if r.status_code == 200:
+                        matches = r.json().get('results', {}).get('artistmatches', {}).get('artist', [])
+
+                        for item in matches:
+                            raw_name = item.get('name')
+                            if not raw_name:
+                                continue
+                            cleaned = FEAT_RE.split(raw_name)[0].strip()
+                            if not any(r['title'].lower() == cleaned.lower() for r in results):
+                                results.append({
+                                    "title": cleaned,
+                                    "image": get_lf_image(item.get('image'))
+                                })
+                                if len(results) >= 5:
+                                    break
+
+                        # Fetch artist images from iTunes concurrently since Last.fm hides them
+                        import asyncio
+
+                        async def fetch_itunes_img(artist_dict):
+                            if artist_dict["image"]:
+                                return artist_dict
+                            try:
+                                url = f"https://itunes.apple.com/search?term={urllib.parse.quote(artist_dict['title'])}&entity=musicArtist&limit=1&country=ru"
+                                r = await client.get(url)
+                                if r.status_code == 200:
+                                    data = r.json().get("results", [])
+                                    if data:
+                                        artist_dict["image"] = data[0].get(
+                                            "artworkUrl100", "") or data[0].get("artworkUrl60", "")
+                            except Exception:
+                                pass
+                            return artist_dict
+
+                        results = await asyncio.gather(*(fetch_itunes_img(r) for r in results))
+                        results = list(results)
+                elif entity_type == 'track' and len(results) < 5:
+                    url = f"https://ws.audioscrobbler.com/2.0/?method=track.search&track={urllib.parse.quote(query.strip())}&api_key={lastfm_key}&format=json&limit=15"
+                    r = await client.get(url)
+                    if r.status_code == 200:
+                        matches = r.json().get('results', {}).get('trackmatches', {}).get('track', [])
+                        for item in matches:
+                            artist = item.get('artist', '')
+                            if artist:
+                                artist = PAREN_RE.sub('', artist).strip()
+                            track_name = item.get('name', '')
+                            if track_name:
+                                track_name = PAREN_RE.sub('', track_name).strip()
+                            title = f"{artist} — {track_name}"
+                            if not any(r['title'].lower() == title.lower() for r in results):
+                                results.append({
+                                    "title": title,
+                                    "image": get_lf_image(item.get('image'))
+                                })
+                                if len(results) >= 5:
+                                    break
+                elif entity_type == 'album' and len(results) < 5:
+                    url = f"https://ws.audioscrobbler.com/2.0/?method=album.search&album={urllib.parse.quote(query.strip())}&api_key={lastfm_key}&format=json&limit=15"
+                    r = await client.get(url)
+                    if r.status_code == 200:
+                        matches = r.json().get('results', {}).get('albummatches', {}).get('album', [])
+                        for item in matches:
+                            artist = item.get('artist', '')
+                            if artist:
+                                artist = PAREN_RE.sub('', artist).strip()
+                            album_name = item.get('name', '')
+                            if album_name:
+                                album_name = PAREN_RE.sub('', album_name).strip()
+                            title = f"{artist} — {album_name}"
+                            if not any(r['title'].lower() == title.lower() for r in results):
+                                results.append({
+                                    "title": title,
+                                    "image": get_lf_image(item.get('image'))
+                                })
+                                if len(results) >= 5:
+                                    break
+            except Exception as e:
+                print(f"Last.fm Suggestion API Error: {e}")
+
+        # 3. Fallback to iTunes API
+        if len(results) < 5:
+            try:
+                itunes_entity = 'musicArtist'
+                if entity_type == 'track':
+                    itunes_entity = 'song'
+                elif entity_type == 'album':
+                    itunes_entity = 'album'
+
+                url = f"https://itunes.apple.com/search?term={urllib.parse.quote(query.strip())}&entity={itunes_entity}&limit={10 if entity_type != 'artist' else 5}&country=ru&lang=ru_ru"
+                r = await client.get(url)
+                if r.status_code == 200:
+                    data = r.json().get('results', [])
+                    for item in data:
+                        if len(results) >= 5:
+                            break
+                        name = item.get('artistName', '')
+                        if not name:
+                            continue
+                        name = PAREN_RE.sub('', name).strip()
+                        if itunes_entity == 'song':
+                            track_name = item.get('trackName', '')
+                            track_name = PAREN_RE.sub('', track_name).strip()
+                            title = f"{name} — {track_name}"
+                        elif itunes_entity == 'album':
+                            col_name = item.get('collectionName', '')
+                            col_name = PAREN_RE.sub('', col_name).strip()
+                            title = f"{name} — {col_name}"
+                        else:
+                            title = name
+                        if not any(r['title'].lower() == title.lower() for r in results):
+                            img = item.get('artworkUrl100', '') or item.get('artworkUrl60', '')
+                            results.append({
+                                "title": title,
+                                "image": img
+                            })
+            except Exception as e:
+                print(f"iTunes Suggestion API Error: {e}")
+    return results

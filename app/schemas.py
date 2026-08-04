@@ -36,16 +36,10 @@ class ProfileUpdate(BaseModel):
     theme: str | None = None
     favorite_artist: str | None = None
     favorite_artist_url: str | None = None
-    favorite_artist_review: str | None = None
-    favorite_artist_rating: int | None = None
     favorite_track: str | None = None
     favorite_track_url: str | None = None
-    favorite_track_review: str | None = None
-    favorite_track_rating: int | None = None
     favorite_album: str | None = None
     favorite_album_url: str | None = None
-    favorite_album_review: str | None = None
-    favorite_album_rating: int | None = None
     avatar_frame: str | None = None
     is_private: bool | None = False
     hidden_artists: str | None = ""

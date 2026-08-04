@@ -518,7 +518,19 @@ def get_user_mood(username: str, db: Annotated[Session, Depends(get_db)]):
     return {"mood": "Меломан", "emoji": "🎧"}
 
 
+def _check_privacy_and_owner(user, request: Request, db: Session) -> tuple[bool, bool]:
+    current_u = None
+    try:
+        current_u = get_current_user(request, db)
+    except Exception:  # NOSONAR
+        pass
+    is_owner = current_u and current_u.id == user.id
+    is_hidden = user.profile.is_private and not is_owner
+    return bool(is_hidden), bool(is_owner)
+
 # --- /api/user/{username} ---
+
+
 @router.get("/api/user/{username}",
             responses={404: {"description": "User not found"}})
 def get_user_info(username: str, request: Request,
@@ -528,15 +540,9 @@ def get_user_info(username: str, request: Request,
         raise HTTPException(404, USER_NOT_FOUND)
     role = user.role or "user"
 
-    # Privacy check for profile data using get_current_user securely
-    current_u = None
-    try:
-        current_u = get_current_user(request, db)
-    except Exception:  # NOSONAR
-        pass
-    is_owner = current_u and current_u.id == user.id
+    is_hidden, is_owner = _check_privacy_and_owner(user, request, db)
 
-    if user.profile.is_private and not is_owner:
+    if is_hidden:
         return {
             "username": user.username,
             "display_name": user.profile.display_name or user.username,
@@ -566,18 +572,15 @@ def get_user_info(username: str, request: Request,
         "favorite_artist": user.profile.favorite_artist,
         "favorite_artist_url": user.profile.favorite_artist_url,
         "favorite_artist_cover": user.profile.favorite_artist_cover,
-        "favorite_artist_review": user.profile.favorite_artist_review,
-        "favorite_artist_rating": user.profile.favorite_artist_rating,
+        "favorite_artist_updated_at": user.profile.favorite_artist_updated_at.isoformat() if user.profile.favorite_artist_updated_at else None,
         "favorite_track": user.profile.favorite_track,
         "favorite_track_url": user.profile.favorite_track_url,
         "favorite_track_cover": user.profile.favorite_track_cover,
-        "favorite_track_review": user.profile.favorite_track_review,
-        "favorite_track_rating": user.profile.favorite_track_rating,
+        "favorite_track_updated_at": user.profile.favorite_track_updated_at.isoformat() if user.profile.favorite_track_updated_at else None,
         "favorite_album": user.profile.favorite_album,
         "favorite_album_url": user.profile.favorite_album_url,
         "favorite_album_cover": user.profile.favorite_album_cover,
-        "favorite_album_review": user.profile.favorite_album_review,
-        "favorite_album_rating": user.profile.favorite_album_rating,
+        "favorite_album_updated_at": user.profile.favorite_album_updated_at.isoformat() if user.profile.favorite_album_updated_at else None,
         "avatar_frame": user.profile.avatar_frame,
         "level": lvl,
         "rank": rnk,
@@ -586,6 +589,7 @@ def get_user_info(username: str, request: Request,
         "yandex_linked": bool(
             user.integration.yandex_token),
         "lastfm_username": user.integration.lastfm_username,
+        "has_imported_lastfm": user.integration.has_imported_lastfm,
         "last_sync": user.integration.last_sync,
         "role": role,
         "achievements": [
@@ -600,8 +604,8 @@ def get_user_info(username: str, request: Request,
                 "earned_at": ua.earned_at} for a,
             ua in ach_data],
         "streak": get_active_streak(user),
-        "has_api_key": bool(
-            user.api_key) if is_owner else False}
+        "has_api_key": bool(user.api_key) if is_owner else False,
+        "api_key": user.api_key if is_owner else None}
 
 
 # --- /api/taste-match/{viewer}/{profile} ---
@@ -1446,7 +1450,8 @@ def _yandex_redirect_for_type(type: str, res: dict):
             if alb_id:
                 safe_alb = urllib.parse.quote(str(alb_id))
                 safe_track = urllib.parse.quote(str(items[0]['id']))
-                url = urllib.parse.urlunparse(("https", YANDEX_MUSIC_DOMAIN, f"/album/{safe_alb}/track/{safe_track}", "", "", ""))
+                url = urllib.parse.urlunparse(
+                    ("https", YANDEX_MUSIC_DOMAIN, f"/album/{safe_alb}/track/{safe_track}", "", "", ""))
                 return RedirectResponse(url=url)
     return None
 
@@ -1539,14 +1544,18 @@ async def start_lastfm_import(data: LikeRequest,
                                                       Depends(get_current_user)]):
     user = current_user
 
-    if user.id in IMPORTING_USERS:
+    if str(user.id) in IMPORTING_USERS:
         raise HTTPException(429, "Импорт уже запущен")
     if not user.integration.lastfm_username:
         raise HTTPException(400, "Last.fm username not set in profile")
+    if user.integration.has_imported_lastfm:
+        raise HTTPException(400, "Импорт из Last.fm можно сделать только один раз")
     if not LASTFM_API_KEY:
         raise HTTPException(500, "Last.fm API key not configured on server")
 
     IMPORTING_USERS.add(str(user.id))
+    user.integration.has_imported_lastfm = True
+    db.commit()
     background_tasks.add_task(import_lastfm_history, int(user.id), SessionLocal)
     return {"status": "import_started"}
 
@@ -1787,8 +1796,8 @@ def assign_achievement(target_username: str,
             UserAchievement(
                 user_id=user.id,
                 achievement_id=data.achievement_id))
-        user.integration.bonus_xp = (
-            user.integration.bonus_xp or 0) + (ach.reward_xp if ach and ach.reward_xp else 0)
+        user.integration.bonus_xp = int(
+            user.integration.bonus_xp or 0) + int(ach.reward_xp if ach and ach.reward_xp else 0)
         db.commit()
     return {"status": "ok"}
 
@@ -2125,5 +2134,12 @@ async def import_lastfm_history(user_id: int, db_session_factory):
     except Exception as e:
         print(f"Last.fm Import Logic Error: {e}")
     finally:
-        IMPORTING_USERS.discard(user_id)
+        IMPORTING_USERS.discard(str(user_id))
         db.close()
+
+
+@router.get("/api/search-suggestions")
+async def get_search_suggestions(q: str, type: str):
+    from app.services.metadata_search import search_suggestions
+    suggestions = await search_suggestions(q, type)
+    return {"results": suggestions}

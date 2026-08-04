@@ -38,6 +38,7 @@ function CodeBlock({
           {label}
         </span>
         <button
+          type="button"
           onClick={() => onCopy(code, id)}
           className="text-xs text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
         >
