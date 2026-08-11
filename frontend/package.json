@@ -33,7 +33,7 @@
     "eslint-config-next": "16.2.12",
     "prettier": "^3.9.5",
     "tailwindcss": "^4",
-    "typescript": "^5.9.3"
+    "typescript": "^7.0.2"
   },
   "overrides": {
     "postcss": "^8.5.10"
