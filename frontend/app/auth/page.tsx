@@ -133,8 +133,11 @@ export default function Auth() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-[var(--accent)] text-[#121212] font-black py-4 rounded-xl hover:scale-[1.02] transition-transform shadow-[0_0_15px_var(--accent-glow)] disabled:opacity-50 disabled:hover:scale-100 mt-4 text-lg"
+                className="w-full bg-[var(--accent)] text-[#121212] font-black py-4 rounded-xl hover:scale-[1.02] transition-transform shadow-[0_0_15px_var(--accent-glow)] disabled:opacity-50 disabled:hover:scale-100 mt-4 text-lg flex items-center justify-center gap-3"
               >
+                {loading && (
+                  <div className="animate-spin border-3 border-[#121212] border-t-transparent rounded-full w-5 h-5"></div>
+                )}
                 {(() => {
                   if (loading) return "ПОДОЖДИ...";
                   if (isLogin) return "ВОЙТИ";

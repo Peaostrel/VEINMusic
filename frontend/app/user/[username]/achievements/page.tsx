@@ -184,7 +184,8 @@ export default function AchievementsPage() {
 
   if (loading)
     return (
-      <div className="min-h-screen text-[var(--accent)] flex items-center justify-center font-bold text-2xl animate-pulse">
+      <div className="min-h-screen text-[var(--accent)] flex flex-col items-center justify-center gap-4 font-bold text-2xl animate-pulse">
+        <div className="animate-spin border-4 border-[var(--accent)] border-t-transparent rounded-full w-12 h-12"></div>
         Загрузка достижений...
       </div>
     );

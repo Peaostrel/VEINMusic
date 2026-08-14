@@ -72,7 +72,7 @@ def register(request: Request, data: UserCreate, response: Response,
         samesite="strict",
         max_age=30 * 24 * 3600
     )
-    return {"message": "Успешная регистрация", "username": new_user.username}
+    return {"message": "Успешная регистрация", "username": new_user.username, "api_key": raw_api_key}
 
 
 @router.post("/login", responses={400: {"description": "Bad Request"}})

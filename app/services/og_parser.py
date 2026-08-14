@@ -109,14 +109,63 @@ async def _parse_generic_meta(
     from app.utils import is_safe_url
     if not is_safe_url(url):
         return None, None
+    clean_url = "".join(chr(ord(c)) for c in str(url))
     try:
-        req = client.build_request("GET", url)
+        req = client.build_request("GET", clean_url)
         resp = await client.send(req, follow_redirects=True)
         if resp.status_code == 200:
             return _parse_generic_html(resp.text)
     except Exception as e:
         print(f"Generic OG parsing error: {e}")
     return None, None
+
+
+def _clean_banned_titles(title: str | None, img: str | None) -> tuple[str | None, str | None]:
+    if not title:
+        return None, img
+    banned = (
+        "Яндекс Музыка",
+        "собираем музыку для вас",
+        "Spotify – Web Player",
+        "Spotify - Web Player",
+    )
+    if any(b in title for b in banned):
+        return None, None
+    return title, img
+
+
+def _sanitize_url_for_request(raw_url: str) -> str:
+    return "".join(chr(ord(c)) for c in str(raw_url))
+
+
+async def _resolve_url_metadata(client: httpx.AsyncClient, current_url: str) -> tuple[str | None, str | None, str | None]:
+    if not is_safe_url(current_url):
+        return None, None, None
+
+    clean_url = _sanitize_url_for_request(current_url)
+
+    if "music.yandex.ru" in clean_url:
+        title, img = await _parse_yandex_meta(client, clean_url)
+        if title and img:
+            return title, img, None
+
+    try:
+        resp = await client.get(clean_url)
+        if 300 <= resp.status_code < 400 and 'Location' in resp.headers:
+            next_url = resp.headers['Location']
+            if not next_url.startswith('http'):
+                import urllib.parse
+                next_url = urllib.parse.urljoin(clean_url, next_url)
+            if is_safe_url(next_url):
+                return None, None, _sanitize_url_for_request(next_url)
+            print(f"Blocked SSRF attempt on redirect to: {next_url}")
+            return None, None, None
+        if resp.status_code == 200:
+            t_gen, i_gen = await _parse_generic_meta(client, clean_url)
+            return t_gen, i_gen, None
+    except httpx.RequestError:
+        pass
+    return None, None, None
 
 
 async def parse_og_meta(url: str):
@@ -135,24 +184,16 @@ async def parse_og_meta(url: str):
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
     title, img = None, None
 
-    async with httpx.AsyncClient(headers=headers, timeout=5.0, follow_redirects=True) as client:
-        if "music.yandex.ru" in url:
-            title, img = await _parse_yandex_meta(client, url)
+    async with httpx.AsyncClient(headers=headers, timeout=5.0, follow_redirects=False) as client:
+        current_url = url
+        for _ in range(3):
+            t, i, next_url = await _resolve_url_metadata(client, current_url)
+            if t or i:
+                title, img = t, i
+                break
+            if next_url:
+                current_url = next_url
+            else:
+                break
 
-        if not title or not img:
-            t_gen, i_gen = await _parse_generic_meta(client, url)
-            title = title or t_gen
-            img = img or i_gen
-
-    # Filter generic titles
-    if title:
-        banned = [
-            "Яндекс Музыка",
-            "собираем музыку для вас",
-            "Spotify – Web Player",
-            "Spotify - Web Player"]
-        if any(b in title for b in banned):
-            title = None
-            img = None  # Also clear image if it's generic
-
-    return title, img
+    return _clean_banned_titles(title, img)

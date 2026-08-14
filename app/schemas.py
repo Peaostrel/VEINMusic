@@ -43,6 +43,7 @@ class ProfileUpdate(BaseModel):
     avatar_frame: str | None = None
     is_private: bool | None = False
     hidden_artists: str | None = ""
+    sync_privacy: str | None = "all"
     lastfm_username: str | None = None
 
 
@@ -118,3 +119,9 @@ class AdminUserUpdate(BaseModel):
 
 class ApiKeyRequest(BaseModel):
     api_key: str | None = None
+
+
+class PrivacyUpdate(BaseModel):
+    is_private: bool | None = None
+    hidden_artists: str | None = None
+    sync_privacy: str | None = None

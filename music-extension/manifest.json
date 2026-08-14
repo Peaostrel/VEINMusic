@@ -43,6 +43,15 @@
       "js": ["content.js"],
       "run_at": "document_start",
       "all_frames": false
+    },
+    {
+      "matches": [
+        "*://localhost/*",
+        "*://127.0.0.1/*",
+        "*://music.vein.guru/*"
+      ],
+      "js": ["sync-key.js"],
+      "run_at": "document_end"
     }
   ],
 

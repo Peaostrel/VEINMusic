@@ -1,32 +1,38 @@
+from html.parser import HTMLParser
 import ipaddress
 import urllib.parse
+
+
+class _HTMLStripper(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.reset()
+        self.strict = False
+        self.convert_charrefs = False
+        self.text = []
+
+    def handle_data(self, d):
+        self.text.append(d)
+
+    def get_data(self):
+        return "".join(self.text)
 
 
 def sanitize_text(text_val: str) -> str:
     if not text_val:
         return text_val
-    # Remove HTML tags without regex
-    while '<' in text_val and '>' in text_val:
-        start = text_val.find('<')
-        end = text_val.find('>', start)
-        if end != -1:
-            text_val = text_val[:start] + text_val[end+1:]
-        else:
-            break
-    # Escape quotes and brackets
-    return text_val.replace(
-        '"',
-        '&quot;').replace(
-        "'",
-        '&#39;').replace(
-            '<',
-            '&lt;').replace(
-                '>',
-                '&gt;')
+    stripper = _HTMLStripper()
+    try:
+        stripper.feed(text_val)
+        clean = stripper.get_data()
+    except Exception:
+        clean = text_val
+    return clean.replace('"', '&quot;').replace("'", '&#39;').replace('<', '&lt;').replace('>', '&gt;')
 
 
 def is_safe_url(url: str, allowed_domains: list[str] | None = None) -> bool:
-    """Validate URL to prevent SSRF by checking scheme, hostname, and private IPs."""
+    """Validate URL to prevent SSRF by checking scheme, hostname, and resolving DNS to block private IPs."""
+    import socket
     if not url:
         return False
     try:
@@ -44,13 +50,14 @@ def is_safe_url(url: str, allowed_domains: list[str] | None = None) -> bool:
         if hostname == 'localhost' or hostname.endswith('.localhost'):
             return False
 
-        # If hostname is an IP, check if it's private
+        # Resolve hostname to IP and check if it's private
         try:
-            ip = ipaddress.ip_address(hostname)
+            ip_str = socket.gethostbyname(hostname)
+            ip = ipaddress.ip_address(ip_str)
             if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast:
                 return False
-        except ValueError:
-            pass  # It's a domain name, not an IP
+        except (socket.gaierror, ValueError):
+            return False  # DNS resolution failed or invalid IP
 
         return True
     except Exception:
