@@ -2,7 +2,7 @@ import asyncio
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -24,22 +24,25 @@ async def lifespan(app: FastAPI):
     # Initialize DB (creates tables if they don't exist)
     Base.metadata.create_all(bind=engine)
 
+    from app.core.security import SECRET_KEY
+    if os.getenv("ENVIRONMENT") == "production" and SECRET_KEY == "super-secret-vein-key-change-it-in-production":
+        raise RuntimeError("CRITICAL SECURITY ERROR: Using default SECRET_KEY in production!")
+
     # Run API key migration for existing users (hash plain-text API keys of
     # length != 64)
     import hashlib
 
     from app.database import SessionLocal
-    from app.models import User
     db = SessionLocal()
     try:
         users = db.query(User).all()
+        from app.core.security import SECRET_KEY
         for user in users:
-            if user.api_key and not str(user.api_key).startswith("pbkdf2") and len(str(user.api_key)) != 64:
-                import os
-                iterations = 600_000
-                salt = os.urandom(16)
-                dk = hashlib.pbkdf2_hmac("sha256", str(user.api_key).encode("utf-8"), salt, iterations)
-                user.api_key = f"pbkdf2_sha256${iterations}${salt.hex()}${dk.hex()}"  # type: ignore[assignment]
+            if user.api_key and len(str(user.api_key)) != 64:
+                # Hash plain-text API keys correctly using the deterministic format
+                if not str(user.api_key).startswith("pbkdf2"):
+                    dk = hashlib.pbkdf2_hmac('sha256', str(user.api_key).encode('utf-8'), SECRET_KEY.encode(), 100000)
+                    user.api_key = dk.hex()  # type: ignore[assignment]
         db.commit()
     except Exception as e:
         print(f"Startup migration failed: {e}")
@@ -98,23 +101,39 @@ def _get_ws_authenticated_username(websocket: WebSocket, db: Session) -> str | N
     if not token:
         return None
 
-    import hashlib
+    from app.core.security import _authenticate_user
 
-    from app.core.security import verify_session_token
-
-    if ":" in token:
-        auth_username = token.split(":")[0]
-        auth_user = db.query(User).filter(User.username == auth_username).first()
-        if auth_user and verify_session_token(token, auth_user):
-            return str(auth_user.username)
-    else:
-        # Bypass CodeQL false positive by obfuscating the function call statically
-        hash_fn = getattr(hashlib, "sha" + "256")
-        hashed_token = hash_fn(token.encode('utf-8')).hexdigest()
-        auth_user = db.query(User).filter(User.api_key == hashed_token).first()
-        if auth_user:
-            return str(auth_user.username)
+    auth_user = _authenticate_user(token, db)
+    if auth_user:
+        return str(auth_user.username)
     return None
+
+
+def _is_sync_allowed(target_user, sender_username: str, db: Session) -> bool:
+    if not target_user.profile:
+        return False
+    sp = target_user.profile.sync_privacy
+    if sp == "all" or sp is None:
+        return True
+    if sp == "followers":
+        from app.models import Follow, User
+        sender_user = db.query(User).filter(User.username == sender_username).first()
+        if sender_user:
+            return db.query(Follow).filter(
+                Follow.follower_id == target_user.id,
+                Follow.following_id == sender_user.id
+            ).first() is not None
+    return False
+
+
+async def _handle_sync_request(target: str, sender_username: str, db: Session):
+    from app.models import User
+    target_user = db.query(User).filter(User.username == target).first()
+    if target_user and _is_sync_allowed(target_user, sender_username, db):
+        await manager.broadcast_to_user(target, {
+            "type": "SYNC_INVITE",
+            "from": sender_username
+        })
 
 
 @app.websocket("/ws/{username}")
@@ -122,22 +141,29 @@ async def websocket_route(
         websocket: WebSocket,
         username: str,
         db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == username).first()
     authenticated_username = _get_ws_authenticated_username(websocket, db)
 
-    # Check privacy: if private, only the owner can connect
-    if user and user.profile.is_private and (not authenticated_username or authenticated_username != username):
+    # Enforce authentication: only the owner can connect to their own websocket
+    if not authenticated_username or authenticated_username != username:
         await websocket.close(code=4003)
         return
+
+    import time
+    last_sync_request = 0.0
 
     await manager.connect(websocket, username)
     try:
         while True:
             data = await websocket.receive_json()
             if data.get("type") == "SYNC_REQUEST" and authenticated_username:
-                await manager.broadcast_to_user(data.get("target"), {
-                    "type": "SYNC_INVITE",
-                    "from": authenticated_username
-                })
-    except WebSocketDisconnect:
+                now = time.time()
+                if now - last_sync_request < 10.0:
+                    continue  # Rate limit: 1 request per 10 seconds
+                last_sync_request = now
+                target = data.get("target")
+                if target:
+                    await _handle_sync_request(target, authenticated_username, db)
+    except Exception:
+        pass
+    finally:
         manager.disconnect(websocket, username)

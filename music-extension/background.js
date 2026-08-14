@@ -1,4 +1,27 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    // Security: Verify sender domain to prevent API key theft from malicious sites
+    const senderUrl = sender.tab ? new URL(sender.tab.url) : null;
+    const isTrusted = senderUrl && (
+        senderUrl.hostname === "music.vein.guru" || 
+        senderUrl.hostname === "localhost" || 
+        senderUrl.hostname === "127.0.0.1"
+    );
+
+    // 1. Принимаем ключи с сайта
+    if (request.type === 'SYNC_KEYS' && isTrusted) {
+        chrome.storage.local.set({
+            username: request.data.username,
+            apiKey: request.data.apiKey
+        });
+        console.log('[VEIN] Ключи синхронизированы с сайтом.');
+    }
+
+    // 2. Стираем ключи, если вышли
+    if (request.type === 'LOGOUT' && isTrusted) {
+        chrome.storage.local.remove(['username', 'apiKey']);
+        console.log('[VEIN] Ключи стерты по запросу с сайта.');
+    }
+
     // 3. Отправляем трек на сервер
     if (request.type === 'SCROBBLE') {
         chrome.storage.local.get(['apiUrl', 'apiKey'], (settings) => {
