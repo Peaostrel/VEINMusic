@@ -760,7 +760,8 @@ export default function AdminPanel() {
 
   if (loading)
     return (
-      <div className="min-h-screen text-red-500 flex items-center justify-center font-bold text-xl">
+      <div className="min-h-screen text-red-500 flex flex-col items-center justify-center gap-4 font-bold text-xl">
+        <div className="animate-spin border-4 border-red-500 border-t-transparent rounded-full w-12 h-12"></div>
         Подключение к ядру...
       </div>
     );

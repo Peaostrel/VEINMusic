@@ -114,7 +114,7 @@ def _parse_yandex_now_playing(data: dict):
     }
 
 
-async def _fetch_yandex_track_info(client, track_id, headers, process_func, db, user):
+async def _fetch_yandex_track_info(client, track_id, headers, process_func, db, user, is_playing=True):
     t_resp = await client.post("https://api.music.yandex.net/tracks", data={"track-ids": [track_id]}, headers=headers, timeout=5.0)
     t_info = t_resp.json().get("result", [])
     if not t_info:
@@ -133,9 +133,39 @@ async def _fetch_yandex_track_info(client, track_id, headers, process_func, db, 
 
     await process_func(
         db, user, title, artist, cover,
-        track_url, "yandex", 0, True,
+        track_url, "yandex", 0, is_playing,
         duration, album
     )
+
+
+def _is_queue_playing(active_queue: dict) -> bool:
+    modified_str = active_queue.get("modified")
+    if not modified_str:
+        return True
+    try:
+        modified_dt = datetime.fromisoformat(modified_str.replace("Z", "+00:00"))
+        return (datetime.now(UTC) - modified_dt).total_seconds() < 60
+    except Exception:
+        return True
+
+
+async def _handle_active_yandex_queue(client: httpx.AsyncClient, active_queue: dict, headers: dict, process_func, db: Session, user: User):
+    q_id = active_queue.get("id")
+    if not q_id:
+        return
+    is_playing = _is_queue_playing(active_queue)
+    q_resp = await client.get(f"https://api.music.yandex.net/queues/{q_id}", headers=headers, timeout=5.0)
+    if q_resp.status_code != 200:
+        return
+    q_result = q_resp.json().get("result", {})
+    current_idx = q_result.get("currentIndex")
+    tracks = q_result.get("tracks", [])
+
+    if current_idx is not None and current_idx < len(tracks):
+        track_obj = tracks[current_idx]
+        track_id = track_obj.get("trackId")
+        if track_id:
+            await _fetch_yandex_track_info(client, track_id, headers, process_func, db, user, is_playing)
 
 
 async def sync_yandex_status(user: User, db: Session, process_func):
@@ -148,28 +178,14 @@ async def sync_yandex_status(user: User, db: Session, process_func):
                 "X-Yandex-Music-Device": "os=unknown; os_version=unknown; manufacturer=unknown; model=unknown; clid=unknown; device_id=unknown; uuid=unknown"
             }
             resp = await client.get("https://api.music.yandex.net/queues", headers=headers, timeout=5.0)
-            if resp.status_code == 401 or resp.status_code == 403:
+            if resp.status_code in (401, 403):
                 print(f"Yandex OAuth token invalid or expired for user {user.username}")
                 return
             if resp.status_code == 200:
-                data = resp.json()
-                queues = data.get("result", {}).get("queues", [])
-                if not queues:
-                    return  # Nothing playing
-
-                q_id = queues[0].get("id")
-                q_resp = await client.get(f"https://api.music.yandex.net/queues/{q_id}", headers=headers, timeout=5.0)
-                if q_resp.status_code != 200:
-                    return
-                q_result = q_resp.json().get("result", {})
-                current_idx = q_result.get("currentIndex")
-                tracks = q_result.get("tracks", [])
-
-                if current_idx is not None and current_idx < len(tracks):
-                    track_obj = tracks[current_idx]
-                    track_id = track_obj.get("trackId")
-
-                    await _fetch_yandex_track_info(client, track_id, headers, process_func, db, user)
+                queues = resp.json().get("result", {}).get("queues", [])
+                if queues:
+                    queues.sort(key=lambda x: x.get("modified", ""), reverse=True)
+                    await _handle_active_yandex_queue(client, queues[0], headers, process_func, db, user)
         except Exception as e:
             print(f"Yandex sync error for user {user.username}: {e}")
 

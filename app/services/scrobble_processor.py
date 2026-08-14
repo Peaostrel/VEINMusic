@@ -226,11 +226,18 @@ def _handle_streak(db: Session, user: User):
             db.commit()
 
 
+def _should_clean_previous_scrobble(last_scrobble) -> bool:
+    if not last_scrobble:
+        return False
+    old_track_dur = getattr(last_scrobble.track, 'duration', 180) or 180
+    min_listen_time = min(15, old_track_dur * 0.1)
+    return (last_scrobble.listened_sec or 0) < min_listen_time
+
+
 def _determine_is_new(db: Session,
                       track: Track,
                       last_scrobble,
                       now,
-                      l_played_at,
                       l_updated_at,
                       progress_sec: int) -> tuple[bool,
                                                   str | None]:
@@ -240,15 +247,18 @@ def _determine_is_new(db: Session,
                 now - l_updated_at).total_seconds() < 1.0:
             return False, "ignored_spam_protection"
 
-        # Support skipping tracks quickly by deleting bare-listened tracks
-        if last_scrobble and (
-                now - l_played_at).total_seconds() < 15 and last_scrobble.listened_sec < 10:
+        if _should_clean_previous_scrobble(last_scrobble):
             db.delete(last_scrobble)
             db.commit()
 
         return True, None
-    elif progress_sec < 5 and (last_scrobble.listened_sec or 0) > 30:
-        return True, None
+
+    # Check for track loops. Only count as a new scrobble if they actually
+    # listened to most of the track before the progress reset.
+    if progress_sec < 5:
+        track_dur = getattr(track, 'duration', 180) or 180
+        if (last_scrobble.listened_sec or 0) > (track_dur * 0.8):
+            return True, None
 
     return False, None
 
@@ -265,12 +275,18 @@ def _update_scrobble_progress(
     time_elapsed = (now - l_updated_at).total_seconds()
     old_listened = last_scrobble.listened_sec or 0
 
-    # Use 35s limit to handle player update intervals
+    # Accumulate integer seconds cleanly to avoid drifting and rounding errors.
     if last_scrobble.is_playing and is_playing and 0 < time_elapsed < 35:
-        last_scrobble.listened_sec = old_listened + round(time_elapsed)
+        increment = int(time_elapsed)
+        if increment > 0:
+            last_scrobble.listened_sec = old_listened + increment
+            # Keep fractional precision by only advancing updated_at by the integer increment
+            last_scrobble.updated_at = l_updated_at + timedelta(seconds=increment)
+    else:
+        # If paused or elapsed time is too large, just update the ping timestamp
+        last_scrobble.updated_at = now
 
     last_scrobble.is_playing = is_playing
-    last_scrobble.updated_at = now
     db.commit()
 
     track_dur = int(track.duration) if getattr(track, 'duration', None) and track.duration > 0 else 180
@@ -302,16 +318,13 @@ async def process_scrobble(
         Scrobble.id.desc()).first()
 
     if last_scrobble:
-        l_played_at = last_scrobble.played_at.replace(
-            tzinfo=UTC) if last_scrobble.played_at.tzinfo is None else last_scrobble.played_at
         l_updated_at = last_scrobble.updated_at.replace(
             tzinfo=UTC) if last_scrobble.updated_at.tzinfo is None else last_scrobble.updated_at
     else:
-        l_played_at = None
         l_updated_at = None
 
     is_new, early_return = _determine_is_new(
-        db, track, last_scrobble, now, l_played_at, l_updated_at, progress_sec)
+        db, track, last_scrobble, now, l_updated_at, progress_sec)
     if early_return:
         return early_return
 

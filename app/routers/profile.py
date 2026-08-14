@@ -4,13 +4,14 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from app.core.rate_limit import limiter
 from app.core.security import SECRET_KEY, get_current_user
 from app.database import get_db
 from app.models import User
-from app.schemas import ProfileUpdate
+from app.schemas import PrivacyUpdate, ProfileUpdate
 from app.services.metadata_search import search_metadata
 from app.utils import sanitize_text
 
@@ -82,7 +83,8 @@ def _update_profile_fields(profile, data: ProfileUpdate):
             setattr(profile, field, sanitize_text(val) if sanitize else val)
 
     other_fields = [
-        'is_private'
+        'is_private',
+        'sync_privacy'
     ]
     for field in other_fields:
         val = getattr(data, field)
@@ -91,7 +93,8 @@ def _update_profile_fields(profile, data: ProfileUpdate):
 
 
 @router.post("/update", responses={400: {"description": "Bad Request"}})
-async def update_profile(data: ProfileUpdate, db: Annotated[Session, Depends(
+@limiter.limit("20/minute")
+async def update_profile(request: Request, data: ProfileUpdate, db: Annotated[Session, Depends(
         get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
 
@@ -125,12 +128,15 @@ async def update_profile(data: ProfileUpdate, db: Annotated[Session, Depends(
 
 
 @router.post("/privacy")
-def update_privacy(data: dict, db: Annotated[Session, Depends(
+@limiter.limit("20/minute")
+def update_privacy(request: Request, data: PrivacyUpdate, db: Annotated[Session, Depends(
         get_db)], current_user: Annotated[User, Depends(get_current_user)]):
-    if "is_private" in data:
-        current_user.profile.is_private = bool(data["is_private"])
-    if "hidden_artists" in data:
-        current_user.profile.hidden_artists = str(data["hidden_artists"])
+    if data.is_private is not None:
+        current_user.profile.is_private = data.is_private
+    if data.hidden_artists is not None:
+        current_user.profile.hidden_artists = str(data.hidden_artists)
+    if data.sync_privacy is not None:
+        current_user.profile.sync_privacy = data.sync_privacy
     db.commit()
     return {"status": "ok"}
 

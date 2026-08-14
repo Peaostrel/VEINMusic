@@ -77,7 +77,8 @@ export default function AutocompleteInput({
       {isFocused && (suggestions.length > 0 || isLoading) && (
         <ul className="absolute z-50 w-full mt-1 max-h-60 overflow-y-auto bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl shadow-black/50 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
           {isLoading && suggestions.length === 0 ? (
-            <li className="px-4 py-3 text-sm text-gray-500 text-center">
+            <li className="px-4 py-3 text-sm text-gray-400 text-center flex items-center justify-center gap-2">
+              <div className="animate-spin border-2 border-[var(--accent)] border-t-transparent rounded-full w-4 h-4"></div>
               Загрузка...
             </li>
           ) : (

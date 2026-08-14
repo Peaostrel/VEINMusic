@@ -37,6 +37,24 @@ class User(Base):
         "UserAchievement",
         back_populates="user",
         cascade=CASCADE_ALL_DELETE)
+    following = relationship(
+        "Follow",
+        foreign_keys="[Follow.follower_id]",
+        backref="follower_user",
+        cascade=CASCADE_ALL_DELETE)
+    followers = relationship(
+        "Follow",
+        foreign_keys="[Follow.following_id]",
+        backref="following_user",
+        cascade=CASCADE_ALL_DELETE)
+    likes = relationship(
+        "ScrobbleLike",
+        backref="user_ref",
+        cascade=CASCADE_ALL_DELETE)
+    comments = relationship(
+        "ScrobbleComment",
+        backref="user_ref",
+        cascade=CASCADE_ALL_DELETE)
 
 
 class UserProfile(Base):
@@ -58,6 +76,7 @@ class UserProfile(Base):
     theme = Column(String, default="classic")
     is_private = Column(Boolean, default=False)
     hidden_artists = Column(String, default="")
+    sync_privacy = Column(String, default="all")
 
     favorite_artist = Column(String, nullable=True)
     favorite_artist_url = Column(String, nullable=True)
