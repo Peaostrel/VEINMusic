@@ -22,6 +22,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
+from app.core.rate_limit import limiter
 from app.core.security import get_admin_user, get_current_user
 from app.core.websockets import manager
 from app.database import SessionLocal, get_db
@@ -568,6 +569,9 @@ def get_user_info(username: str, request: Request,
         "equipment": user.profile.equipment,
         "social_links": user.profile.social_links or "[]",
         "theme": user.profile.theme or "classic",
+        "is_private": user.profile.is_private,
+        "hidden_artists": user.profile.hidden_artists,
+        "sync_privacy": user.profile.sync_privacy or "all",
         "is_verified": user.integration.is_verified,
         "favorite_artist": user.profile.favorite_artist,
         "favorite_artist_url": user.profile.favorite_artist_url,
@@ -1285,8 +1289,18 @@ def get_current_track(username: str, db: Annotated[Session, Depends(get_db)]):
 
 
 # --- /api/scrobble/{scrobble_id}/comments ---
-@router.get("/api/scrobble/{scrobble_id}/comments")
-def get_comments(scrobble_id: int, db: Annotated[Session, Depends(get_db)]):
+@router.get("/api/scrobble/{scrobble_id}/comments",
+            responses={404: {"description": "Скроббл не найден"},
+                       403: {"description": "Доступ запрещен (приватный профиль)"}})
+def get_comments(scrobble_id: int, request: Request, db: Annotated[Session, Depends(get_db)]):
+    scrobble = db.query(Scrobble).filter(Scrobble.id == scrobble_id).first()
+    if not scrobble:
+        raise HTTPException(404, "Скроббл не найден")
+
+    is_hidden, _ = _check_privacy_and_owner(scrobble.user, request, db)
+    if is_hidden:
+        raise HTTPException(403, "Доступ запрещен (приватный профиль)")
+
     comments = db.query(
         ScrobbleComment,
         User.username,
@@ -1607,7 +1621,9 @@ def disconnect_lastfm(data: LikeRequest, db: Annotated[Session, Depends(
 
 # --- /api/scrobble/{scrobble_id}/like ---
 @router.post("/api/scrobble/{scrobble_id}/like")
+@limiter.limit("30/minute")
 def toggle_like(scrobble_id: int,
+                request: Request,
                 data: LikeRequest,
                 db: Annotated[Session,
                               Depends(get_db)],
@@ -1629,7 +1645,9 @@ def toggle_like(scrobble_id: int,
 
 # --- /api/scrobble/{scrobble_id}/comment ---
 @router.post("/api/scrobble/{scrobble_id}/comment")
+@limiter.limit("20/minute")
 def add_comment(scrobble_id: int,
+                request: Request,
                 data: CommentRequest,
                 db: Annotated[Session,
                               Depends(get_db)],
@@ -1651,7 +1669,9 @@ def add_comment(scrobble_id: int,
 # --- /api/follow/{target_username} ---
 @router.post("/api/follow/{target_username}",
              responses={400: {"description": "Bad request"}})
+@limiter.limit("30/minute")
 def toggle_follow(target_username: str,
+                  request: Request,
                   data: FollowAction,
                   db: Annotated[Session,
                                 Depends(get_db)],
@@ -1910,6 +1930,24 @@ def toggle_achievement(data: ToggleAch, db: Annotated[Session, Depends(
     return {"status": "ok", "is_displayed": ua.is_displayed}
 
 
+MIME_IMAGE_JPEG = "image/jpeg"
+MIME_IMAGE_PNG = "image/png"
+MIME_IMAGE_GIF = "image/gif"
+MIME_IMAGE_WEBP = "image/webp"
+
+
+def _is_valid_image_bytes(content: bytes, content_type: str) -> bool:
+    if content_type == MIME_IMAGE_JPEG:
+        return content.startswith(b"\xFF\xD8\xFF")
+    if content_type == MIME_IMAGE_PNG:
+        return content.startswith(b"\x89PNG\r\n\x1A\n")
+    if content_type == MIME_IMAGE_GIF:
+        return content.startswith((b"GIF87a", b"GIF89a"))
+    if content_type == MIME_IMAGE_WEBP:
+        return len(content) >= 12 and content.startswith(b"RIFF") and content[8:12] == b"WEBP"
+    return False
+
+
 def _save_file_sync(file_path: str, content: bytes):
     with open(file_path, "wb") as buffer:
         buffer.write(content)
@@ -1922,7 +1960,7 @@ async def upload_file(current_user: Annotated[User, Depends(
         get_current_user)], file: Annotated[UploadFile, File()]):
     import anyio
     # Security: Validate file type
-    allowed_types = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+    allowed_types = [MIME_IMAGE_JPEG, MIME_IMAGE_PNG, MIME_IMAGE_WEBP, MIME_IMAGE_GIF]
     if file.content_type not in allowed_types:
         raise HTTPException(400, "Только изображения (JPG, PNG, WEBP, GIF)")
 
@@ -1932,11 +1970,14 @@ async def upload_file(current_user: Annotated[User, Depends(
     if len(content) > MAX_SIZE:
         raise HTTPException(400, "Файл слишком большой (макс. 5МБ)")
 
+    if not _is_valid_image_bytes(content, file.content_type):
+        raise HTTPException(400, "Некорректный формат или поврежденный файл изображения")
+
     mime_to_ext = {
-        "image/jpeg": "jpg",
-        "image/png": "png",
-        "image/webp": "webp",
-        "image/gif": "gif"
+        MIME_IMAGE_JPEG: "jpg",
+        MIME_IMAGE_PNG: "png",
+        MIME_IMAGE_WEBP: "webp",
+        MIME_IMAGE_GIF: "gif"
     }
     ext = mime_to_ext.get(file.content_type, "jpg")
     filename = f"{uuid.uuid4().hex}.{ext}"
@@ -1950,9 +1991,7 @@ async def upload_file(current_user: Annotated[User, Depends(
 @router.get("/uploads/{filename}",
             responses={400: {"description": "Invalid path"},
                        404: {"description": "File not found"}})
-async def get_upload(filename: str,
-                     current_user: Annotated[User,
-                                             Depends(get_current_user)]):
+async def get_upload(filename: str):
     if not re.match(r'^[\w\-. ]+$', filename):
         raise HTTPException(status_code=400, detail="Invalid filename")
 
@@ -1967,7 +2006,7 @@ async def get_upload(filename: str,
         raise HTTPException(status_code=400, detail="Invalid path")
 
     if os.path.exists(real_path):
-        return FileResponse(real_path)
+        return FileResponse(real_path, headers={"X-Content-Type-Options": "nosniff"})
     raise HTTPException(status_code=404, detail="Файл не найден")
 
 

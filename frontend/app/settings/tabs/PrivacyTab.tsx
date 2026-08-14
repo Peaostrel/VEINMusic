@@ -21,6 +21,24 @@ export default function PrivacyTab({ data, updateData }: any) {
           />
         </button>
       </div>
+
+      <div className="bg-[#121212]/50 p-6 rounded-xl border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <p className="font-bold text-white">Совместное прослушивание</p>
+          <p className="text-xs text-gray-400">
+            Кто может приглашать вас слушать музыку вместе.
+          </p>
+        </div>
+        <select
+          value={data.syncPrivacy || "all"}
+          onChange={(e) => updateData("syncPrivacy", e.target.value)}
+          className="bg-[#1e1e1e] border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent)]"
+        >
+          <option value="all">Все пользователи</option>
+          <option value="followers">Только те, на кого я подписан</option>
+          <option value="none">Никто</option>
+        </select>
+      </div>
     </div>
   );
 }

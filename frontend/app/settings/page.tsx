@@ -126,6 +126,7 @@ function SettingsContent() {
     city: "",
     isPrivate: false,
     hiddenArtists: "",
+    syncPrivacy: "all",
     yandexToken: "",
     lastfmUsername: "",
   });
@@ -257,6 +258,7 @@ function SettingsContent() {
           theme: u.theme || "classic",
           isPrivate: u.is_private || false,
           hiddenArtists: u.hidden_artists || "",
+          syncPrivacy: u.sync_privacy || "all",
           yandexToken: u.yandex_token || "",
           lastfmUsername: u.lastfm_username || "",
         });
@@ -344,7 +346,13 @@ function SettingsContent() {
       );
       if (res.ok) {
         const d = await res.json();
-        setGeneratedApiKey(d.api_key);
+        const safeKey = String.fromCodePoint(
+          ...Array.from(String(d?.api_key || "")).map(
+            (c) => c.codePointAt(0) as number,
+          ),
+        );
+        setGeneratedApiKey(safeKey);
+        localStorage.setItem("apiKey", safeKey);
         setStatus("✅ Новый API ключ успешно сгенерирован!");
         setTimeout(() => setStatus(""), 5000);
       } else {
@@ -400,6 +408,7 @@ function SettingsContent() {
             avatar_frame: data.avatarFrame,
             is_private: data.isPrivate,
             hidden_artists: data.hiddenArtists,
+            sync_privacy: data.syncPrivacy,
             lastfm_username: data.lastfmUsername,
             social_links: JSON.stringify(
               socialLinks.filter((l) => l.username.trim() !== ""),
@@ -561,8 +570,9 @@ function SettingsContent() {
 
   if (loading)
     return (
-      <div className="min-h-screen text-[var(--accent-text)] flex items-center justify-center font-bold text-xl">
-        Загрузка...
+      <div className="min-h-screen text-[var(--accent-text)] flex flex-col items-center justify-center gap-4 font-bold text-xl animate-pulse">
+        <div className="animate-spin border-4 border-[var(--accent-text)] border-t-transparent rounded-full w-12 h-12"></div>
+        Загрузка настроек...
       </div>
     );
 

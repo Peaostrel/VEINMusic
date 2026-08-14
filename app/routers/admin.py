@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.security import get_admin_user
 from app.core.websockets import manager
 from app.database import get_db
-from app.models import Achievement, Follow, Scrobble, Track, User
+from app.models import Achievement, Scrobble, Track, User
 from app.schemas import VerifyUserRequest
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -106,9 +106,6 @@ def delete_user(target_username: str, db: Annotated[Session, Depends(
         raise HTTPException(404, "Юзер не найден")
     if target.role == "admin":
         raise HTTPException(400, "Нельзя удалить разработчика")
-    db.query(Follow).filter(
-        (Follow.follower_id == target.id) | (
-            Follow.following_id == target.id)).delete()
     db.delete(target)
     db.commit()
     return {"status": "ok"}

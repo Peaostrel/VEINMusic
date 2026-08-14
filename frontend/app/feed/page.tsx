@@ -43,7 +43,8 @@ export default function GlobalFeed() {
 
   if (loading)
     return (
-      <div className="min-h-screen flex items-center justify-center text-white font-black text-2xl animate-pulse">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-white font-black text-2xl animate-pulse">
+        <div className="animate-spin border-4 border-[var(--accent)] border-t-transparent rounded-full w-12 h-12"></div>
         📡 ПОДКЛЮЧЕНИЕ К ПОТОКУ...
       </div>
     );

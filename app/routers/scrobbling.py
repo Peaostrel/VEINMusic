@@ -6,6 +6,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.redis import redis_lock
+from app.core.rate_limit import limiter
 from app.core.security import get_current_user, get_current_user_optional
 from app.database import get_db
 from app.models import (
@@ -60,25 +61,15 @@ async def add_scrobble(data: ScrobbleData,
                     "status": "flagged",
                     "message": "Слишком много прослушиваний за час (Anti-Cheat)"}
 
-            # Anti-Spam: Max 1 new scrobble per 2 seconds (allows quick skips
-            # which are handled by process_scrobble)
+            # Anti-Spam: Max 1 ping per 2 seconds. `process_scrobble` handles
+            # debouncing and fast skipping logic. We just prevent endpoint abuse here.
             last_s = db.query(Scrobble).filter(
                 Scrobble.user_id == user.id).order_by(
                 Scrobble.id.desc()).first()
             if last_s and (now - last_s.updated_at).total_seconds() < 2:
-                # Case-insensitive track query for spam check
-                from sqlalchemy import func
-                track = db.query(Track).filter(
-                    func.lower(
-                        Track.title) == func.lower(
-                        data.title),
-                    func.lower(
-                        Track.artist) == func.lower(
-                        data.artist)).first()
-                if not track or last_s.track_id != track.id:
-                    return {
-                        "status": "rate_limited",
-                        "message": "Слишком частые скробблы"}
+                return {
+                    "status": "rate_limited",
+                    "message": "Слишком частые скробблы"}
 
             res = await process_scrobble(db, user, data.title, data.artist, data.cover_url or "", data.track_url or "", data.source, data.progress_sec or 0, bool(data.is_playing), data.duration or 0, data.album or "")
 
@@ -117,10 +108,19 @@ def get_history(username: str,
                 status_code=403,
                 detail="Это приватный профиль")
 
+    # A scrobble is valid if it was listened to for >= 15 seconds, OR if it's currently playing
+    # (updated_at within the last 45 seconds and is_playing is True)
+    now = datetime.now(UTC)
+    active_threshold = now - timedelta(seconds=45)
+
     scrobbles = db.query(
         Scrobble,
         Track).join(Track).filter(
-        Scrobble.user_id == user.id).order_by(
+        Scrobble.user_id == user.id,
+        (Scrobble.listened_sec >= 15) | (
+            Scrobble.is_playing.is_(True) & (Scrobble.updated_at >= active_threshold)
+        )
+    ).order_by(
             Scrobble.id.desc()).limit(10).all()
 
     s_ids = [s.id for s, t in scrobbles]
@@ -138,6 +138,9 @@ def get_history(username: str,
 
 @router.get("/global-history")
 def get_global_history(db: Annotated[Session, Depends(get_db)]):
+    now = datetime.now(UTC)
+    active_threshold = now - timedelta(seconds=45)
+
     scrobbles = db.query(
         Scrobble,
         Track).join(Track).join(
@@ -145,7 +148,11 @@ def get_global_history(db: Annotated[Session, Depends(get_db)]):
         Scrobble.user_id == User.id).join(
             UserProfile,
             User.id == UserProfile.user_id).filter(
-                UserProfile.is_private.is_(False)).order_by(
+                UserProfile.is_private.is_(False),
+                (Scrobble.listened_sec >= 15) | (
+                    Scrobble.is_playing.is_(True) & (Scrobble.updated_at >= active_threshold)
+                )
+            ).order_by(
                     Scrobble.id.desc()).limit(20).all()
 
     s_ids = [s.id for s, t in scrobbles]
@@ -179,11 +186,18 @@ def get_friends_history(username: str,
     if not following_ids:
         return []
 
+    now = datetime.now(UTC)
+    active_threshold = now - timedelta(seconds=45)
+
     scrobbles = db.query(
         Scrobble,
         Track).join(Track).join(User, Scrobble.user_id == User.id).join(UserProfile, User.id == UserProfile.user_id).filter(
         Scrobble.user_id.in_(following_ids),
-        UserProfile.is_private.is_(False)).order_by(
+        UserProfile.is_private.is_(False),
+        (Scrobble.listened_sec >= 15) | (
+            Scrobble.is_playing.is_(True) & (Scrobble.updated_at >= active_threshold)
+        )
+    ).order_by(
             Scrobble.id.desc()).limit(20).all()
 
     s_ids = [s.id for s, t in scrobbles]
@@ -202,7 +216,8 @@ def api_get_taste_twins(
 @router.post("/scrobble/{scrobble_id}/like",
              responses={404: {"description": "Scrobble not found"},
                         403: {"description": "Access denied (private profile)"}})
-def toggle_like(scrobble_id: int, db: Annotated[Session, Depends(
+@limiter.limit("30/minute")
+def toggle_like(scrobble_id: int, request: Request, db: Annotated[Session, Depends(
         get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
     # Verify scrobble exists
@@ -230,7 +245,9 @@ def toggle_like(scrobble_id: int, db: Annotated[Session, Depends(
 @router.post("/scrobble/{scrobble_id}/comment",
              responses={404: {"description": "Scrobble not found"},
                         403: {"description": "Access denied (private profile)"}})
+@limiter.limit("20/minute")
 def add_comment(scrobble_id: int,
+                request: Request,
                 data: CommentRequest,
                 db: Annotated[Session,
                               Depends(get_db)],
