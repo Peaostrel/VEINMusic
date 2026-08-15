@@ -388,7 +388,7 @@ async def process_scrobble(
             track_id=track.id,
             source=source,
             played_at=now,
-            listened_sec=0,
+            listened_sec=progress_sec or (duration if not is_playing else 0),
             is_playing=is_playing,
             updated_at=now)
         db.add(new_s)

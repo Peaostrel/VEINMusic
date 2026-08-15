@@ -12,9 +12,26 @@ import sys
 import time
 from typing import Optional
 
+import io
+
+if sys.stdout is None:
+    sys.stdout = io.StringIO()
+if sys.stderr is None:
+    sys.stderr = io.StringIO()
+
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from desktop_client.config import load_config, save_config
 from desktop_client.discord_rpc import DiscordRPCManager
 from desktop_client.media_listener import CompositeMediaListener, MediaTrackInfo
+from desktop_client.meta_search import enrich_track_meta
 from desktop_client.scrobbler import DesktopScrobbler
 
 
@@ -71,13 +88,16 @@ class DesktopClientApp:
         min_duration = self.config.get("min_track_duration_sec", 20)
 
         if not self.has_scrobbled_current and duration >= min_duration and self.listened_seconds >= req_time:
+            meta = enrich_track_meta(self.current_track.title, self.current_track.artist)
             self.scrobbler.scrobble(
-                title=self.current_track.title,
-                artist=self.current_track.artist,
-                album=self.current_track.album,
+                title=meta.get("title") or self.current_track.title,
+                artist=meta.get("artist") or self.current_track.artist,
+                album=meta.get("album") or self.current_track.album,
                 duration=duration,
-                source="desktop",
+                source="yandex" if "yandex" in (self.current_track.player_name or "").lower() or "308046" in (self.current_track.player_name or "") else "desktop",
                 listened_sec=int(self.listened_seconds),
+                cover_url=meta.get("cover_url") or "",
+                track_url=meta.get("track_url") or "",
             )
             self.has_scrobbled_current = True
 
@@ -89,13 +109,16 @@ class DesktopClientApp:
         duration = self.current_track.duration_sec or 180
         req_time = min(duration * 0.5, 240.0)
         if self.listened_seconds >= req_time and duration >= self.config.get("min_track_duration_sec", 20):
+            meta = enrich_track_meta(self.current_track.title, self.current_track.artist)
             self.scrobbler.scrobble(
-                title=self.current_track.title,
-                artist=self.current_track.artist,
-                album=self.current_track.album,
+                title=meta.get("title") or self.current_track.title,
+                artist=meta.get("artist") or self.current_track.artist,
+                album=meta.get("album") or self.current_track.album,
                 duration=duration,
-                source="desktop",
+                source="yandex" if "yandex" in (self.current_track.player_name or "").lower() or "308046" in (self.current_track.player_name or "") else "desktop",
                 listened_sec=int(self.listened_seconds),
+                cover_url=meta.get("cover_url") or "",
+                track_url=meta.get("track_url") or "",
             )
 
     def _start_new_track(self, new_track: MediaTrackInfo) -> None:
@@ -105,21 +128,31 @@ class DesktopClientApp:
         self.listened_seconds = 0.0
         self.has_scrobbled_current = False
 
-        print(f"[Desktop] 🎧 Playing: {new_track.artist} - {new_track.title} ({new_track.player_name})")
+        meta = enrich_track_meta(new_track.title, new_track.artist)
+        title = meta.get("title") or new_track.title
+        artist = meta.get("artist") or new_track.artist
+        album = meta.get("album") or new_track.album
+        cover_url = meta.get("cover_url") or ""
+        track_url = meta.get("track_url") or ""
+        source = "yandex" if "yandex" in (new_track.player_name or "").lower() or "308046" in (new_track.player_name or "") else "desktop"
+
+        print(f"[Desktop] 🎧 Playing: {artist} - {title} ({new_track.player_name})")
 
         self.scrobbler.send_now_playing(
-            title=new_track.title,
-            artist=new_track.artist,
-            album=new_track.album,
+            title=title,
+            artist=artist,
+            album=album,
             duration=new_track.duration_sec,
-            source="desktop",
+            source=source,
+            cover_url=cover_url,
+            track_url=track_url,
         )
 
         if self.discord:
             self.discord.update_presence(
-                title=new_track.title,
-                artist=new_track.artist,
-                album=new_track.album,
+                title=title,
+                artist=artist,
+                album=album,
                 username=self.config.get("username", ""),
                 duration_sec=new_track.duration_sec,
                 is_playing=True,
@@ -186,8 +219,8 @@ class DesktopClientApp:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="VEINMusic Desktop Client")
-    parser.add_argument("--api-key", help="VEINMusic API Key")
-    parser.add_argument("--api-url", default="https://music.vein.guru", help="VEINMusic API URL")
+    parser.add_argument("--api-key", default=None, help="VEINMusic API Key")
+    parser.add_argument("--api-url", default=None, help="VEINMusic API URL")
     parser.add_argument("--no-discord", action="store_true", help="Disable Discord Rich Presence")
     args = parser.parse_args()
 
@@ -196,6 +229,8 @@ def main() -> None:
         config["api_key"] = args.api_key
     if args.api_url:
         config["api_url"] = args.api_url
+    if not config.get("api_url"):
+        config["api_url"] = "http://localhost:8000"
     if args.no_discord:
         config["discord_rpc_enabled"] = False
     save_config(config)

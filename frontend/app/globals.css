@@ -1,27 +1,116 @@
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap");
 @import "tailwindcss";
 
-body {
-  background-color: #0a0a0a;
-  color: #ffffff;
-  overflow-x: hidden;
+:root {
+  --bg-base: #08090d;
+  --bg-surface: #0f1118;
+  --bg-surface-elevated: #161822;
+  --bg-surface-glass: rgba(15, 17, 24, 0.75);
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-hover: rgba(255, 255, 255, 0.16);
+  --text-primary: #ffffff;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent: #f43f5e;
+  --accent-hover: #e11d48;
+  --accent-glow: rgba(244, 63, 94, 0.3);
+  --accent-glow-strong: rgba(244, 63, 94, 0.6);
+  --text-on-accent: #ffffff;
+  --accent-text: #f43f5e;
 }
 
-/* Элитный скроллбар */
+body {
+  font-family:
+    "Plus Jakarta Sans",
+    system-ui,
+    -apple-system,
+    sans-serif;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  overflow-x: hidden;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Эстетичный скроллбар */
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #0a0a0a;
+  background: #08090d;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2a2a2a;
-  border-radius: 5px;
+  background: #1e2230;
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #ffcc00;
+  background: #333a4f;
 }
 
-/* Анимация фоновых пятен */
+/* Glassmorphism Panels */
+.glass-panel {
+  background: rgba(15, 17, 24, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+}
+
+.glass-card {
+  background: rgba(18, 20, 29, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  background: rgba(25, 28, 40, 0.8);
+  border-color: var(--border-hover);
+  transform: translateY(-2px);
+}
+
+/* Equalizer Bars Animation */
+@keyframes music-bar-1 {
+  0%,
+  100% {
+    height: 4px;
+  }
+  50% {
+    height: 16px;
+  }
+}
+@keyframes music-bar-2 {
+  0%,
+  100% {
+    height: 14px;
+  }
+  50% {
+    height: 6px;
+  }
+}
+@keyframes music-bar-3 {
+  0%,
+  100% {
+    height: 8px;
+  }
+  50% {
+    height: 18px;
+  }
+}
+
+.animate-eq-1 {
+  animation: music-bar-1 1s ease-in-out infinite;
+}
+.animate-eq-2 {
+  animation: music-bar-2 1.2s ease-in-out infinite 0.2s;
+}
+.animate-eq-3 {
+  animation: music-bar-3 0.8s ease-in-out infinite 0.4s;
+}
+
+/* Subtle Ambient Blobs */
 @keyframes blob {
   0% {
     transform: translate(0px, 0px) scale(1);
@@ -38,21 +127,10 @@ body {
 }
 
 .animate-blob {
-  animation: blob 20s infinite ease-in-out alternate;
+  animation: blob 25s infinite ease-in-out alternate;
 }
-
 .animation-delay-2000 {
   animation-delay: 2s;
-}
-
-@keyframes music-bar {
-  0%,
-  100% {
-    height: 4px;
-  }
-  50% {
-    height: 12px;
-  }
 }
 
 /* Avatar Frames Styling */
@@ -84,61 +162,61 @@ body {
 
 /* 1. Meloman Frame (Level 5+) - Cyan Pulse */
 .avatar-frame-meloman {
-  box-shadow: 0 0 10px rgba(0, 242, 254, 0.4);
-  border: 2px solid #00f2fe;
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.45);
+  border: 2px solid #06b6d4;
   animation: meloman-pulse 2s infinite alternate;
 }
 @keyframes meloman-pulse {
   0% {
-    box-shadow: 0 0 5px rgba(0, 242, 254, 0.3);
+    box-shadow: 0 0 6px rgba(6, 182, 212, 0.3);
   }
   100% {
-    box-shadow: 0 0 15px rgba(0, 242, 254, 0.7);
+    box-shadow: 0 0 16px rgba(6, 182, 212, 0.7);
   }
 }
 
 /* 2. Audiophile Frame (Level 15+) - Purple Aura */
 .avatar-frame-audiophile {
-  border: 2px solid #b92b27;
-  box-shadow: 0 0 12px rgba(185, 43, 39, 0.5);
+  border: 2px solid #8b5cf6;
+  box-shadow: 0 0 14px rgba(139, 92, 246, 0.5);
   animation: audiophile-glow 3s infinite alternate;
 }
 @keyframes audiophile-glow {
   0% {
-    border-color: #b92b27;
-    box-shadow: 0 0 8px rgba(185, 43, 39, 0.4);
+    border-color: #8b5cf6;
+    box-shadow: 0 0 8px rgba(139, 92, 246, 0.4);
   }
   100% {
-    border-color: #1565c0;
-    box-shadow: 0 0 20px rgba(21, 101, 192, 0.8);
+    border-color: #3b82f6;
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.8);
   }
 }
 
 /* 3. Maniac Frame (Level 30+) - Spinning Lava */
 .avatar-frame-maniac::before {
   opacity: 1;
-  background: conic-gradient(#ff4e50, #f9d423, #ff4e50);
+  background: conic-gradient(#f43f5e, #fb923c, #f43f5e);
   animation: spin 3s linear infinite;
 }
 
 /* 4. Legend Frame (Level 50+) - Gold Spin & Shine */
 .avatar-frame-legend::before {
   opacity: 1;
-  background: conic-gradient(#bf953f, #fcf6ba, #b38728, #fbf5b7, #bf953f);
-  animation: spin 6s linear infinite;
+  background: conic-gradient(#eab308, #fef08a, #ca8a04, #fef08a, #eab308);
+  animation: spin 5s linear infinite;
 }
 .avatar-frame-legend {
-  box-shadow: 0 0 15px rgba(251, 245, 183, 0.4);
+  box-shadow: 0 0 16px rgba(234, 179, 8, 0.4);
 }
 
 /* 5. God Frame (Level 100+) - Cosmic Rainbow Wave */
 .avatar-frame-god::before {
   opacity: 1;
-  background: conic-gradient(#ff007f, #7f00ff, #00f2fe, #00ff7f, #ff007f);
+  background: conic-gradient(#ec4899, #8b5cf6, #06b6d4, #10b981, #ec4899);
   animation: spin 2.5s linear infinite;
 }
 .avatar-frame-god {
-  box-shadow: 0 0 25px rgba(127, 0, 255, 0.6);
+  box-shadow: 0 0 25px rgba(139, 92, 246, 0.6);
   animation: god-hue 6s linear infinite;
 }
 
@@ -147,7 +225,6 @@ body {
     transform: rotate(360deg);
   }
 }
-
 @keyframes god-hue {
   0% {
     filter: hue-rotate(0deg);

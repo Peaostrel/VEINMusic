@@ -1,6 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import {
+  Radio,
+  Sparkles,
+  Trophy,
+  Zap,
+  ArrowRight,
+} from "lucide-react";
 
 export default function About() {
   const [stats, setStats] = useState({
@@ -24,206 +31,153 @@ export default function About() {
   }, []);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 relative flex flex-col items-center">
-      <style>{`
-        @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(30px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes float {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-10px); }
-        }
-        @keyframes rotateGlow {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        .animate-fade-up { animation: fadeInUp 0.8s ease-out forwards; }
-        .delay-100 { animation-delay: 0.1s; }
-        .delay-200 { animation-delay: 0.2s; }
-        .delay-300 { animation-delay: 0.3s; }
-        .animate-float { animation: float 4s ease-in-out infinite; }
-      `}</style>
-
-      {/* Фрагмент заднего фона с крутящимися аурами */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-96 bg-[var(--accent)]/10 rounded-full blur-[120px] filter mix-blend-screen opacity-50 z-0 pointer-events-none animate-pulse"></div>
+    <div className="max-w-6xl mx-auto px-4 pt-10 pb-24 relative flex flex-col items-center">
+      {/* Ambient Lighting */}
+      <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-[var(--accent)]/15 rounded-full blur-[140px] pointer-events-none" />
 
       {/* HERO Section */}
-      <div className="text-center py-20 relative z-10 w-full flex flex-col items-center">
-        <div
-          className="w-20 h-20 bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] rounded-3xl flex items-center justify-center font-black text-4xl shadow-[0_0_40px_var(--accent-glow-strong)] mb-8 animate-float"
-          style={{ color: "var(--text-on-accent)" }}
-        >
-          V
+      <div className="text-center py-16 md:py-24 relative z-10 w-full flex flex-col items-center">
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-xs font-semibold text-gray-300 mb-6 tracking-wide backdrop-blur-md">
+          <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" />
+          Новое поколение музыкального скробблинга
         </div>
 
-        <h1 className="text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-500 tracking-tight mb-4 drop-shadow-2xl animate-fade-up">
-          ТВОЯ МУЗЫКА. <br /> ТВОЯ{" "}
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)]">
-            ИСТОРИЯ.
+        <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold text-white tracking-tight mb-6 leading-[1.1] max-w-4xl">
+          Твоя музыка. <br />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--accent)] via-rose-400 to-amber-400">
+            Единая история и статус.
           </span>
         </h1>
 
-        <p
-          className="text-gray-400 text-lg md:text-xl max-w-xl mx-auto mb-10 font-medium animate-fade-up delay-100 opacity-0"
-          style={{ animationFillMode: "forwards" }}
-        >
-          VEIN Music — это умный скроблер, который собирает твою музыкальную
-          жизнь в один красивый дашборд. Забудь о границах между плеерами.
+        <p className="text-gray-400 text-sm sm:text-lg max-w-2xl mx-auto mb-10 font-normal leading-relaxed">
+          VEIN Music бесшовно объединяет прослушивания из Яндекс Музыки,
+          Spotify, VK, десктопных плееров и браузеров в единый интерактивный
+          профиль с детальной аналитикой и синхронным прослушиванием.
         </p>
 
-        <div
-          className="flex flex-col sm:flex-row items-center gap-4 animate-fade-up delay-200 opacity-0"
-          style={{ animationFillMode: "forwards" }}
-        >
+        <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
           <Link
             href={username ? `/user/${username}` : "/auth"}
-            className="w-full sm:w-auto bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] text-[var(--text-on-accent)] font-black px-8 py-4 rounded-2xl hover:scale-105 transition-all shadow-[0_0_20px_var(--accent-glow-strong)] text-lg flex items-center justify-center"
+            className="w-full sm:w-auto bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] text-white font-bold px-8 py-3.5 rounded-2xl hover:scale-105 transition-all shadow-[0_0_30px_var(--accent-glow)] text-sm sm:text-base flex items-center justify-center gap-2"
           >
-            {username ? "В мой профиль" : "Начать скроблить"}
+            {username ? "Перейти в мой профиль" : "Начать слушать"}
+            <ArrowRight className="w-4 h-4" />
           </Link>
           <a
             href="#features"
-            className="w-full sm:w-auto bg-white/5 border border-white/10 text-white font-bold px-8 py-4 rounded-2xl hover:bg-white/10 hover:border-white/20 transition-all backdrop-blur-sm text-lg flex items-center justify-center"
+            className="w-full sm:w-auto bg-white/[0.05] border border-white/10 text-gray-300 hover:text-white font-bold px-8 py-3.5 rounded-2xl hover:bg-white/10 transition-all text-sm sm:text-base flex items-center justify-center"
           >
-            Узнать больше
+            Возможности платформы
           </a>
         </div>
       </div>
 
       {/* STATS Section */}
-      <div
-        className="w-full grid grid-cols-2 md:grid-cols-4 gap-4 px-4 mb-24 relative z-10 animate-fade-up delay-300 opacity-0"
-        style={{ animationFillMode: "forwards" }}
-      >
+      <div className="w-full grid grid-cols-2 md:grid-cols-4 gap-4 mb-24 relative z-10">
         {[
           {
-            label: "Скроблено",
-            value: (stats?.total_scrobbles || 0).toLocaleString() + " 🎵",
+            label: "Заскробблено треков",
+            value: (stats?.total_scrobbles || 0).toLocaleString(),
+            icon: "🎵",
           },
           {
-            label: "Треков в базе",
-            value: (stats?.total_tracks || 0).toLocaleString() + " 💿",
+            label: "Треков в каталоге",
+            value: (stats?.total_tracks || 0).toLocaleString(),
+            icon: "💿",
           },
           {
             label: "Слушателей",
-            value: (stats?.total_users || 0).toLocaleString() + " 👥",
+            value: (stats?.total_users || 0).toLocaleString(),
+            icon: "👥",
           },
-          { label: "Онлайн", value: (stats?.online || 0) + " 🔥" },
+          {
+            label: "Онлайн сейчас",
+            value: (stats?.online || 0).toLocaleString(),
+            icon: "🔥",
+          },
         ].map((item) => (
           <div
             key={item.label}
-            className="bg-[#121212]/60 backdrop-blur-md border border-white/5 p-6 rounded-2xl text-center shadow-lg hover:border-[var(--accent)]/30 transition-all group"
+            className="glass-card p-6 rounded-3xl text-center flex flex-col items-center justify-center"
           >
-            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1 group-hover:text-[var(--accent)] transition-colors">
-              {item.label}
-            </p>
-            <p className="text-xl md:text-3xl font-black text-white">
+            <div className="text-2xl mb-2">{item.icon}</div>
+            <p className="text-2xl md:text-3xl font-extrabold text-white tracking-tight mb-1">
               {item.value}
+            </p>
+            <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">
+              {item.label}
             </p>
           </div>
         ))}
       </div>
 
       {/* FEATURES Section */}
-      <div id="features" className="w-full mb-24 relative z-10">
-        <h2 className="text-3xl font-black text-center text-white mb-12 flex items-center justify-center gap-2">
-          <span className="w-8 h-1 bg-[var(--accent)] rounded-full"></span>{" "}
-          Возможности{" "}
-          <span className="w-8 h-1 bg-[var(--accent)] rounded-full"></span>
-        </h2>
+      <div id="features" className="w-full mb-28 relative z-10">
+        <div className="text-center mb-12">
+          <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight mb-3">
+            Всё, что нужно настоящему меломану
+          </h2>
+          <p className="text-gray-400 text-xs sm:text-sm max-w-lg mx-auto">
+            Мощные инструменты сбора статистики, геймификации и социального
+            взаимодействия.
+          </p>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {[
             {
-              icon: "⚡",
-              title: "Скроблинг (Почти умный)",
-              desc: "Расширение считывает треки из Яндекс Музыки, Spotify, VK и Soundcloud. Иногда думает пару секунд, пока сохраняет в базу, но забирает всё честно.",
+              icon: <Zap className="w-6 h-6 text-amber-400" />,
+              title: "Мультиплатформенный сбор",
+              desc: "Браузерное расширение с оффлайн-буферизацией и нативный десктопный клиент с поддержкой Windows SMTC, Linux MPRIS и Discord RPC.",
             },
             {
-              icon: "📊",
-              title: "Простая Статистика",
-              desc: "Почасовая история, топы артистов и прослушиваний. Показываем ровно то, что пришло из плеера, без скрытых алгоритмов.",
+              icon: <Radio className="w-6 h-6 text-rose-400" />,
+              title: "Слушать вместе (Together)",
+              desc: "Создавай синхронные музыкальные комнаты в реальном времени, становись DJ для друзей и делись треками в живом чате.",
             },
             {
-              icon: "🏆",
-              title: "Ачивки и LVL (Для фана)",
-              desc: "Получай XP за прослушивание 85% длины трека. Прокачивай LVL и собирай достижения. Стрик сгорает, если пропустить день.",
+              icon: <Trophy className="w-6 h-6 text-emerald-400" />,
+              title: "RPG-геймификация и рамки",
+              desc: "Зарабатывай XP за прослушивания, открывай эксклюзивные анимированные рамки профиля и уникальные достижения.",
             },
           ].map((feat) => (
             <div
               key={feat.title}
-              className="bg-[#1a1a1a]/80 backdrop-blur-md border border-white/5 p-8 rounded-3xl hover:bg-[#1f1f1f] hover:border-[var(--accent)]/40 hover:-translate-y-2 transition-all duration-300 shadow-xl group"
+              className="glass-card p-8 rounded-3xl flex flex-col justify-between"
             >
-              <div className="text-4xl mb-4 bg-[var(--accent)]/10 w-14 h-14 rounded-2xl flex items-center justify-center shadow-[0_0_15px_var(--accent-glow)] group-hover:scale-110 transition-transform">
-                {feat.icon}
-              </div>
-              <h3 className="text-xl font-bold text-white mb-2 group-hover:text-[var(--accent)] transition-colors">
-                {feat.title}
-              </h3>
-              <p className="text-gray-400 text-sm leading-relaxed">
-                {feat.desc}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* HOW IT WORKS Section */}
-      <div className="w-full mb-32 relative z-10 flex flex-col items-center">
-        <h2 className="text-3xl font-black text-center text-white mb-12">
-          Как это работает на самом деле? 🛠️
-        </h2>
-        <div className="max-w-3xl w-full space-y-4">
-          {[
-            {
-              step: "1",
-              title: "Установи Расширение (Обязательно)",
-              desc: "Без него мы считывать музыку не умеем. Расширение зацепит плеер во вкладке в фоне.",
-            },
-            {
-              step: "2",
-              title: "Врубай Музыку и Слушай",
-              desc: "Плееру нужна буквально 1 секунда, чтобы расширение поняло, что трек запустился. Оно следит мгновенно.",
-            },
-            {
-              step: "3",
-              title: "Смотри Стату. Молимся на базу данных",
-              desc: "Каждая сессия сохраняется. Если база не занята — она появится в профиле за пару секунд.",
-            },
-          ].map((item) => (
-            <div
-              key={item.step}
-              className="bg-[#121212]/60 p-5 rounded-2xl border border-white/5 flex items-center gap-4 hover:bg-black/40 transition-colors shadow-md"
-            >
-              <div className="w-12 h-12 bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] text-[var(--text-on-accent)] font-black text-xl rounded-xl flex items-center justify-center shadow-lg shrink-0">
-                {item.step}
-              </div>
               <div>
-                <h4 className="font-bold text-white text-base">{item.title}</h4>
-                <p className="text-gray-400 text-xs">{item.desc}</p>
+                <div className="w-12 h-12 rounded-2xl bg-white/[0.05] border border-white/[0.08] flex items-center justify-center mb-6">
+                  {feat.icon}
+                </div>
+                <h3 className="text-lg font-bold text-white mb-3">
+                  {feat.title}
+                </h3>
+                <p className="text-gray-400 text-xs sm:text-sm leading-relaxed">
+                  {feat.desc}
+                </p>
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* FOOTER CTA */}
-      <div className="w-full bg-[#121212]/80 border border-white/5 rounded-3xl p-12 text-center relative overflow-hidden backdrop-blur-md mb-20">
-        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-[var(--accent)]/10 via-transparent to-transparent z-0"></div>
+      {/* CTA Footer */}
+      <div className="w-full relative rounded-3xl bg-gradient-to-b from-[#141724] to-[#0d0f17] border border-white/[0.08] p-8 md:p-14 text-center overflow-hidden shadow-2xl">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-[var(--accent)]/15 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col items-center">
-          <h2 className="text-3xl md:text-4xl font-black text-white mb-4">
-            Готов увидеть свою музыку?
+          <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight mb-4">
+            Готов собрать всю свою музыку воедино?
           </h2>
-          <p className="text-gray-400 mb-8 max-w-sm">
-            Регистрация займет 10 секунд. Треки полетят в базу (если расширение
-            на месте).
+          <p className="text-gray-400 text-xs sm:text-sm mb-8 max-w-md">
+            Присоединяйся к сообществу VEIN Music. Быстрая регистрация и
+            моментальный старт скроблинга.
           </p>
           <Link
             href={username ? `/user/${username}` : "/auth"}
-            className="bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] text-[var(--text-on-accent)] font-black px-8 py-4 rounded-xl hover:scale-105 transition-all shadow-[0_0_20px_var(--accent-glow-strong)] text-lg"
+            className="bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] text-white font-bold px-8 py-3.5 rounded-2xl hover:scale-105 transition-all shadow-[0_0_25px_var(--accent-glow)] text-sm sm:text-base flex items-center gap-2"
           >
-            {username ? "В мой профиль" : "Создать мой профиль"}
+            {username ? "В мой профиль" : "Создать аккаунт бесплатно"}
+            <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
       </div>

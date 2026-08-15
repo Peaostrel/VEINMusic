@@ -609,7 +609,7 @@ function SettingsContent() {
           </div>
         </div>
       )}
-      <div className="min-h-screen text-white p-4 md:p-8 max-w-6xl mx-auto flex flex-col md:flex-row gap-8 pt-24">
+      <div className="min-h-screen text-white p-4 md:p-8 max-w-6xl mx-auto flex flex-col md:flex-row gap-8 pt-4">
         <aside className="w-full md:w-64 shrink-0 flex flex-col gap-2">
           <a
             href="/feed"

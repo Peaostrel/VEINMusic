@@ -41,7 +41,7 @@ export default function RootLayout({
     <html lang="ru" suppressHydrationWarning>
       <body
         suppressHydrationWarning
-        className="min-h-screen flex flex-col relative bg-[#0a0a0a] text-white font-sans overflow-x-hidden"
+        className="min-h-screen flex flex-col relative bg-[#08090d] text-white font-sans overflow-x-hidden"
       >
         {/* Атмосферный фон (световые пятна) теперь тоже меняют цвет под тему! */}
         <div className="fixed top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-[var(--accent)] rounded-full mix-blend-screen filter blur-[150px] opacity-[0.06] animate-blob z-0 pointer-events-none transition-colors duration-1000"></div>
@@ -50,7 +50,7 @@ export default function RootLayout({
         <GlobalAnnouncementBanner />
         <Navbar />
 
-        <main className="flex-grow pt-32 pb-12 px-4 z-10 relative">
+        <main className="flex-grow pb-12 px-4 z-10 relative">
           {children}
         </main>
 

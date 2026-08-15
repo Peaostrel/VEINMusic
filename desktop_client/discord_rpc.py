@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 from typing import Optional
 
-DISCORD_CLIENT_ID = "120000000000000000"  # Default fallback client ID
+DISCORD_CLIENT_ID = "1503812613052694658"  # VEINMusic Discord App ID
 
 
 class DiscordRPCManager:

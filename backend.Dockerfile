@@ -57,6 +57,8 @@ COPY --chown=appuser:appuser app/ ./app/
 COPY --chown=appuser:appuser alembic/ ./alembic/
 COPY --chown=appuser:appuser alembic.ini .
 
+RUN mkdir -p /app/uploads && chown -R appuser:appuser /app
+
 USER appuser
 
 EXPOSE 8000

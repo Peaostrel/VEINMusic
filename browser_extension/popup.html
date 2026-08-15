@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>VEINMusic</title>
+  <style>
+    body {
+      width: 260px;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0b0d14;
+      color: #fff;
+      margin: 0;
+      padding: 16px;
+    }
+    h3 { margin: 0 0 8px 0; font-size: 15px; color: #ff3366; display: flex; align-items: center; gap: 6px; }
+    label { font-size: 11px; text-transform: uppercase; color: #888; font-weight: bold; margin-bottom: 4px; display: block; }
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      background: #161822;
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #fff;
+      padding: 8px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      font-size: 12px;
+    }
+    input:focus { outline: none; border-color: #ff3366; }
+    button {
+      width: 100%;
+      background: #ff3366;
+      border: none;
+      color: #fff;
+      font-weight: bold;
+      padding: 9px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    button:hover { opacity: 0.9; }
+    #status { font-size: 11px; margin-top: 8px; text-align: center; color: #4ade80; display: none; }
+  </style>
+</head>
+<body>
+  <h3>🎵 VEINMusic Scrobbler</h3>
+  <label for="apikey">VEIN API Key:</label>
+  <input type="password" id="apikey" placeholder="Вставьте API-ключ..." />
+  <label for="apiurl">API Сервер:</label>
+  <input type="text" id="apiurl" value="http://localhost:8000" />
+  <button id="save">Сохранить</button>
+  <div id="status">✅ Настройки сохранены!</div>
+  <script>
+    const saveBtn = document.getElementById('save');
+    const apikeyInput = document.getElementById('apikey');
+    const apiurlInput = document.getElementById('apiurl');
+    const statusEl = document.getElementById('status');
+
+    if (chrome && chrome.storage && chrome.storage.local) {
+      chrome.storage.local.get(['vein_api_key', 'vein_api_url'], (res) => {
+        if (res.vein_api_key) apikeyInput.value = res.vein_api_key;
+        if (res.vein_api_url) apiurlInput.value = res.vein_api_url;
+      });
+    }
+
+    saveBtn.addEventListener('click', () => {
+      const key = apikeyInput.value.trim();
+      const url = apiurlInput.value.trim();
+      if (chrome && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({ vein_api_key: key, vein_api_url: url }, () => {
+          statusEl.style.display = 'block';
+          setTimeout(() => statusEl.style.display = 'none', 2000);
+        });
+      }
+    });
+  </script>
+</body>
+</html>

@@ -30,6 +30,29 @@ class BaseMediaListener:
         raise NotImplementedError
 
 
+def _is_valid_music_session(app_id: str, title: str, artist: str) -> bool:
+    app_low = (app_id or "").lower()
+    title_low = (title or "").strip().lower()
+    artist_low = (artist or "").strip().lower()
+
+    if not title_low:
+        return False
+
+    # Block YouTube video noise in browsers
+    youtube_signals = ["- youtube", "• youtube", "| youtube", "youtube music"]
+    if any(s in title_low for s in youtube_signals) or artist_low.endswith(" - topic"):
+        return False
+
+    # Known music players or browsers
+    is_music_app = any(k in app_low for k in ["yandex", "spotify", "aimp", "foobar", "vlc", "music", "itunes", "winamp", "vk"])
+    is_browser = any(b in app_low for b in ["chrome", "edge", "firefox", "opera", "brave", "browser"]) or "308046b0af4a39cb" in app_low
+
+    if not is_music_app and not is_browser:
+        return False
+
+    return True
+
+
 class WindowsSMTCListener(BaseMediaListener):
     """Windows System Media Transport Controls (SMTC) listener using WinRT / winsdk."""
 
@@ -55,38 +78,58 @@ class WindowsSMTCListener(BaseMediaListener):
             return None
 
         try:
-            sessions = await self._wmc.GlobalSystemMediaTransportControlsSessionManager.request_async()
-            current_session = sessions.get_current_session()
-            if not current_session:
+            mgr = await self._wmc.GlobalSystemMediaTransportControlsSessionManager.request_async()
+            sessions = mgr.get_sessions()
+            if not sessions:
                 return None
 
-            info = current_session.get_playback_info()
-            if not info:
+            candidates = []
+            for session in sessions:
+                props = await session.try_get_media_properties_async()
+                if not props or not props.title:
+                    continue
+
+                player_id = session.source_app_user_model_id or "Windows Media"
+                title = props.title.strip()
+                artist = props.artist.strip() if props.artist else ""
+                album = props.album_title.strip() if props.album_title else ""
+
+                if not _is_valid_music_session(player_id, title, artist):
+                    continue
+
+                info = session.get_playback_info()
+                if not info:
+                    continue
+
+                playback_status = info.playback_status
+                # 4 == Playing, 3 == Paused
+                is_playing = playback_status == 4 or playback_status == 3
+
+                timeline = session.get_timeline_properties()
+                duration = int(timeline.end_time.total_seconds()) if timeline and timeline.end_time else 0
+                position = int(timeline.position.total_seconds()) if timeline and timeline.position else 0
+                updated = timeline.last_updated_time if timeline else None
+
+                candidates.append({
+                    "track": MediaTrackInfo(
+                        title=title,
+                        artist=artist or "Unknown Artist",
+                        album=album,
+                        duration_sec=duration,
+                        position_sec=position,
+                        player_name=player_id,
+                        is_playing=is_playing,
+                    ),
+                    "is_playing": is_playing,
+                    "updated": updated
+                })
+
+            if not candidates:
                 return None
 
-            playback_status = info.playback_status
-            # 4 == Playing, 5 == Paused
-            is_playing = playback_status == 4 or playback_status == 3
-
-            props = await current_session.try_get_media_properties_async()
-            if not props or not props.title:
-                return None
-
-            timeline = current_session.get_timeline_properties()
-            duration = int(timeline.end_time.total_seconds()) if timeline and timeline.end_time else 0
-            position = int(timeline.position.total_seconds()) if timeline and timeline.position else 0
-
-            player_id = current_session.source_app_user_model_id or "Windows Media"
-
-            return MediaTrackInfo(
-                title=props.title.strip(),
-                artist=props.artist.strip() if props.artist else "Unknown Artist",
-                album=props.album_title.strip() if props.album_title else "",
-                duration_sec=duration,
-                position_sec=position,
-                player_name=player_id,
-                is_playing=is_playing,
-            )
+            # Prioritize playing sessions, then recently updated
+            candidates.sort(key=lambda x: (x["is_playing"], x["updated"] or 0), reverse=True)
+            return candidates[0]["track"]
         except Exception:
             return None
 

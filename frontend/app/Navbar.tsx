@@ -5,40 +5,46 @@ import { usePathname, useRouter } from "next/navigation";
 
 export const THEMES = {
   classic: {
-    main: "#ffcc00",
-    hover: "#ffaa00",
-    glow: "rgba(255,204,0,0.3)",
-    glowStrong: "rgba(255,204,0,0.6)",
+    main: "#f43f5e",
+    hover: "#e11d48",
+    glow: "rgba(244,63,94,0.3)",
+    glowStrong: "rgba(244,63,94,0.6)",
+  },
+  crimson: {
+    main: "#f43f5e",
+    hover: "#e11d48",
+    glow: "rgba(244,63,94,0.3)",
+    glowStrong: "rgba(244,63,94,0.6)",
+  },
+  gold: {
+    main: "#eab308",
+    hover: "#ca8a04",
+    glow: "rgba(234,179,8,0.3)",
+    glowStrong: "rgba(234,179,8,0.6)",
   },
   green: {
-    main: "#1DB954",
-    hover: "#16a34a",
-    glow: "rgba(29,185,84,0.3)",
-    glowStrong: "rgba(29,185,84,0.6)",
+    main: "#10b981",
+    hover: "#059669",
+    glow: "rgba(16,185,129,0.3)",
+    glowStrong: "rgba(16,185,129,0.6)",
   },
   orange: {
-    main: "#ff4500",
-    hover: "#dc2626",
-    glow: "rgba(255,69,0,0.3)",
-    glowStrong: "rgba(255,69,0,0.6)",
+    main: "#f97316",
+    hover: "#ea580c",
+    glow: "rgba(249,115,22,0.3)",
+    glowStrong: "rgba(249,115,22,0.6)",
   },
   purple: {
     main: "#a855f7",
-    hover: "#7e22ce",
+    hover: "#9333ea",
     glow: "rgba(168,85,247,0.3)",
     glowStrong: "rgba(168,85,247,0.6)",
   },
-  red: {
-    main: "#ef4444",
-    hover: "#b91c1c",
-    glow: "rgba(239,68,68,0.3)",
-    glowStrong: "rgba(239,68,68,0.6)",
-  },
   cyan: {
-    main: "#00ffff",
-    hover: "#0088ff",
-    glow: "rgba(0,255,255,0.3)",
-    glowStrong: "rgba(0,255,255,0.6)",
+    main: "#06b6d4",
+    hover: "#0891b2",
+    glow: "rgba(6,182,212,0.3)",
+    glowStrong: "rgba(6,182,212,0.6)",
   },
 };
 
@@ -388,14 +394,15 @@ export default function Navbar() {
         .navbar-accent { color: var(--accent) !important; filter: drop-shadow(0 0 10px var(--accent-glow-strong)); }
         ::selection { background-color: var(--accent) !important; color: #000 !important; }
       `}</style>
-      <nav className="fixed top-4 left-1/2 -translate-x-1/2 w-[95%] max-w-6xl z-50">
-        <div className="bg-[#121212]/70 backdrop-blur-xl border border-white/5 rounded-2xl px-4 py-3 flex items-center justify-between shadow-[0_8px_30px_rgb(0,0,0,0.4)] gap-4">
+      <nav className="sticky top-3 z-50 w-[95%] max-w-6xl mx-auto my-3">
+        <div className="bg-[#0b0d14]/80 backdrop-blur-2xl border border-white/[0.08] hover:border-white/[0.14] transition-all rounded-2xl px-4 py-2.5 flex items-center justify-between shadow-[0_8px_32px_rgba(0,0,0,0.5)] gap-4">
           <Link href="/" className="flex items-center gap-3 group shrink-0">
-            <div className="w-10 h-10 bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] rounded-xl flex items-center justify-center text-[var(--text-on-accent)] font-black text-2xl group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shadow-[0_0_15px_var(--accent-glow)]">
-              V
+            <div className="w-9 h-9 bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] rounded-xl flex items-center justify-center text-[var(--text-on-accent)] font-black text-xl group-hover:scale-105 group-hover:rotate-3 transition-all duration-300 shadow-[0_0_16px_var(--accent-glow)] relative overflow-hidden">
+              <span className="relative z-10">V</span>
+              <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
             </div>
             <span
-              className="font-black text-2xl tracking-tight hidden lg:block"
+              className="font-extrabold text-xl tracking-tight hidden sm:flex items-center gap-1"
               style={{ color: "white" }}
             >
               VEIN{" "}
@@ -410,9 +417,21 @@ export default function Navbar() {
             </span>
           </Link>
           <div className="flex-grow max-w-md relative" ref={searchRef}>
-            <div className="relative">
-              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-                🔍
+            <div className="relative group">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-gray-400 group-focus-within:text-[var(--accent)] transition-colors">
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
               </span>
               {/* Dummy inputs to trick Firefox/Chrome autofill */}
               <input type="text" style={{ display: "none" }} tabIndex={-1} />
@@ -426,7 +445,7 @@ export default function Navbar() {
                 type="search"
                 id="vein_music_search_v2"
                 name="vein_music_search_v2"
-                placeholder="Поиск профилей..."
+                placeholder="Поиск профилей, артистов..."
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
@@ -442,11 +461,14 @@ export default function Navbar() {
                 spellCheck="false"
                 autoCorrect="off"
                 autoCapitalize="none"
-                className="w-full bg-[#1a1a1a]/80 border border-white/10 text-white text-sm rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-[var(--accent)] transition-colors backdrop-blur-md"
+                className="w-full bg-[#121520]/90 border border-white/[0.08] text-white text-xs md:text-sm rounded-xl pl-10 pr-12 py-2 focus:outline-none focus:border-[var(--accent)] transition-all placeholder:text-gray-500 font-medium shadow-inner focus:bg-[#161a28]"
               />
+              <span className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-[10px] font-mono text-gray-500 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded my-auto h-4.5">
+                ⌘K
+              </span>
             </div>
             {isSearchOpen && searchResults.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-[#1e1e1e]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
+              <div className="absolute top-full left-0 right-0 mt-2 bg-[#121520]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] overflow-hidden z-50 p-1">
                 {searchResults.map((u) => (
                   <button
                     key={u.username}
@@ -456,9 +478,9 @@ export default function Navbar() {
                       setSearchQuery("");
                       router.push(`/user/${u.username}`);
                     }}
-                    className="w-full flex items-center gap-3 p-3 hover:bg-white/10 cursor-pointer transition-colors border-b border-white/5 last:border-0 text-left font-normal bg-transparent outline-none block"
+                    className="w-full flex items-center gap-3 p-2.5 hover:bg-white/[0.08] rounded-xl cursor-pointer transition-all text-left font-normal bg-transparent outline-none block"
                   >
-                    <div className="w-9 h-9 rounded-full overflow-hidden bg-black shrink-0">
+                    <div className="w-8 h-8 rounded-full overflow-hidden bg-black shrink-0 border border-white/10">
                       <img
                         src={
                           u.avatar_url ||
@@ -469,7 +491,7 @@ export default function Navbar() {
                       />
                     </div>
                     <div className="truncate flex-grow">
-                      <div className="font-bold text-white text-sm truncate flex items-center gap-1">
+                      <div className="font-bold text-white text-xs md:text-sm truncate flex items-center gap-1">
                         {u.display_name}{" "}
                         <VerifiedBadge
                           role={u.role}
@@ -478,7 +500,7 @@ export default function Navbar() {
                         />
                         <LvlBadge level={u.level || 1} />
                       </div>
-                      <div className="text-xs text-gray-500 truncate">
+                      <div className="text-[11px] text-gray-400 truncate">
                         @{u.username}
                       </div>
                     </div>
@@ -487,30 +509,34 @@ export default function Navbar() {
               </div>
             )}
           </div>
-          <div className="flex items-center gap-2 sm:gap-4 font-bold text-sm shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 font-bold text-sm shrink-0">
             <Link
               href="/feed"
-              className="text-gray-400 hover:text-[var(--accent-text)] transition p-2 rounded-lg hover:bg-white/5"
+              className="text-gray-300 hover:text-white transition px-3 py-1.5 rounded-xl hover:bg-white/[0.06] flex items-center gap-1.5 text-xs font-semibold"
             >
-              <span className="text-lg">📡</span>{" "}
-              <span className="hidden md:inline ml-1">Лента</span>
+              <span>📡</span> <span className="hidden md:inline">Лента</span>
+            </Link>
+            <Link
+              href="/together"
+              className="text-gray-300 hover:text-white transition px-3 py-1.5 rounded-xl hover:bg-white/[0.06] flex items-center gap-1.5 text-xs font-semibold"
+            >
+              <span>📻</span> <span className="hidden md:inline">Вместе</span>
             </Link>
             <Link
               href="/leaderboard"
-              className="text-gray-400 hover:text-[var(--accent-text)] transition p-2 rounded-lg hover:bg-white/5"
+              className="text-gray-300 hover:text-white transition px-3 py-1.5 rounded-xl hover:bg-white/[0.06] flex items-center gap-1.5 text-xs font-semibold"
             >
-              <span className="text-lg">🏆</span>{" "}
-              <span className="hidden md:inline ml-1">Топ</span>
+              <span>🏆</span> <span className="hidden md:inline">Топ</span>
             </Link>
             {isValidUser(username) ? (
               <div className="relative" ref={dropdownRef}>
                 <div
-                  className={`${frameClass} transition-all duration-300 ml-2`}
+                  className={`${frameClass} transition-all duration-300 ml-1`}
                 >
                   <button
                     type="button"
                     onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                    className="w-10 h-10 rounded-full border-2 border-transparent hover:border-[var(--accent)] transition-all overflow-hidden bg-[#1a1a1a] shadow-md flex items-center justify-center shrink-0"
+                    className="w-9 h-9 rounded-full border-2 border-transparent hover:border-[var(--accent)] transition-all overflow-hidden bg-[#1a1a1a] shadow-md flex items-center justify-center shrink-0"
                   >
                     <img
                       src={avatar}

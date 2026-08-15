@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "VEINMusic Yandex Scrobbler",
+  "version": "2.0.0",
+  "description": "Автоматический скробблинг из Яндекс.Музыки в VEINMusic прямо из браузера",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://music.yandex.ru/*",
+    "https://music.yandex.by/*",
+    "https://music.yandex.kz/*",
+    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*",
+    "https://music.vein.guru/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://music.yandex.ru/*",
+        "https://music.yandex.by/*",
+        "https://music.yandex.kz/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}

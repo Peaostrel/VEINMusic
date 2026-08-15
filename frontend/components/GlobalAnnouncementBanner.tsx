@@ -31,15 +31,18 @@ export default function GlobalAnnouncementBanner() {
   if (activeItems.length === 0) return null;
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 flex flex-col gap-1 pointer-events-auto">
+    <div className="relative z-50 w-full flex flex-col gap-1 pointer-events-auto">
       {activeItems.map((ann) => {
-        let bgStyle = "bg-red-950/90 border-red-500/50 text-red-200";
+        let borderStyle = "border-rose-500/20 bg-rose-950/40 text-rose-200";
+        let dotStyle = "bg-rose-500";
         let Icon = AlertCircle;
         if (ann.type === "info") {
-          bgStyle = "bg-blue-950/90 border-blue-500/50 text-blue-200";
+          borderStyle = "border-blue-500/20 bg-blue-950/40 text-blue-200";
+          dotStyle = "bg-blue-400";
           Icon = Info;
         } else if (ann.type === "warning") {
-          bgStyle = "bg-amber-950/90 border-amber-500/50 text-amber-200";
+          borderStyle = "border-amber-500/25 bg-amber-950/40 text-amber-200";
+          dotStyle = "bg-amber-400";
           Icon = AlertTriangle;
         }
 
@@ -47,24 +50,29 @@ export default function GlobalAnnouncementBanner() {
           <aside
             key={ann.id}
             aria-label="Системное оповещение"
-            className={`w-full px-4 py-2.5 border-b backdrop-blur-md flex items-center justify-between shadow-lg transition-all ${bgStyle}`}
+            className={`w-full px-4 py-2 border-b backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.3)] transition-all ${borderStyle}`}
           >
-            <div className="flex items-center gap-3 max-w-6xl mx-auto flex-1">
-              <Icon className="w-5 h-5 shrink-0" />
-              <div className="text-xs sm:text-sm font-medium">
-                <strong className="font-bold mr-2">{ann.title}:</strong>
-                {ann.message}
+            <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${dotStyle}`} />
+                <Icon className="w-4 h-4 shrink-0 opacity-80" />
+                <div className="text-xs sm:text-sm truncate">
+                  <strong className="font-bold mr-1.5 uppercase tracking-wide text-[11px] sm:text-xs opacity-90">
+                    {ann.title}:
+                  </strong>
+                  <span className="opacity-95">{ann.message}</span>
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setDismissed((prev) => [...prev, ann.id])}
+                className="p-1 rounded-lg hover:bg-white/10 transition cursor-pointer text-inherit shrink-0 opacity-70 hover:opacity-100"
+                aria-label="Закрыть оповещение"
+                title="Закрыть"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setDismissed((prev) => [...prev, ann.id])}
-              className="p-1 hover:opacity-80 transition cursor-pointer text-inherit"
-              aria-label="Закрыть оповещение"
-              title="Закрыть"
-            >
-              <X className="w-4 h-4" />
-            </button>
           </aside>
         );
       })}

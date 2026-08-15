@@ -114,28 +114,36 @@ def _parse_yandex_now_playing(data: dict):
     }
 
 
-async def _fetch_yandex_track_info(client, track_id, headers, process_func, db, user, is_playing=True):
-    t_resp = await client.post("https://api.music.yandex.net/tracks", data={"track-ids": [track_id]}, headers=headers, timeout=5.0)
-    t_info = t_resp.json().get("result", [])
-    if not t_info:
-        return
-    t_info = t_info[0]
+async def _fetch_yandex_track_info(client: httpx.AsyncClient, track_id, headers: dict, process_func, db: Session, user: User, is_playing: bool = True):
+    try:
+        t_resp = await client.get(f"https://api.music.yandex.net/tracks?trackIds={track_id}", headers=headers, timeout=5.0)
+        if t_resp.status_code != 200:
+            t_resp = await client.post("https://api.music.yandex.net/tracks", data={"track-ids": [str(track_id)]}, headers=headers, timeout=5.0)
+        if t_resp.status_code != 200:
+            return
 
-    title = t_info.get("title")
-    artist = ", ".join([a.get("name") for a in t_info.get("artists", []) if "name" in a])
-    cover_uri = t_info.get("coverUri")
-    cover = "https://" + cover_uri.replace("%%", "400x400") if cover_uri else None
-    duration = int(t_info.get("durationMs", 0) / 1000)
-    track_url = f"https://music.yandex.ru/track/{track_id}"
+        t_info = t_resp.json().get("result", [])
+        if not t_info:
+            return
+        t_info = t_info[0]
 
-    albums = t_info.get("albums", [])
-    album = albums[0].get("title") if albums else None
+        title = t_info.get("title")
+        artist = ", ".join([a.get("name") for a in t_info.get("artists", []) if isinstance(a, dict) and "name" in a]) or "Unknown Artist"
+        cover_uri = t_info.get("coverUri") or (t_info.get("albums", [{}])[0].get("coverUri") if t_info.get("albums") else None)
+        cover = ("https://" + cover_uri.replace("%%", "400x400")) if cover_uri else None
+        duration = int(t_info.get("durationMs", 0) / 1000)
+        track_url = f"https://music.yandex.ru/track/{track_id}"
 
-    await process_func(
-        db, user, title, artist, cover,
-        track_url, "yandex", 0, is_playing,
-        duration, album
-    )
+        albums = t_info.get("albums", [])
+        album = albums[0].get("title") if albums else None
+
+        await process_func(
+            db, user, title, artist, cover,
+            track_url, "yandex", 0, is_playing,
+            duration, album
+        )
+    except Exception as e:
+        print(f"Error fetching Yandex track {track_id}: {e}")
 
 
 def _is_queue_playing(active_queue: dict) -> bool:
@@ -144,7 +152,7 @@ def _is_queue_playing(active_queue: dict) -> bool:
         return True
     try:
         modified_dt = datetime.fromisoformat(modified_str.replace("Z", "+00:00"))
-        return (datetime.now(UTC) - modified_dt).total_seconds() < 60
+        return (datetime.now(UTC) - modified_dt).total_seconds() < 600
     except Exception:
         return True
 
@@ -158,14 +166,89 @@ async def _handle_active_yandex_queue(client: httpx.AsyncClient, active_queue: d
     if q_resp.status_code != 200:
         return
     q_result = q_resp.json().get("result", {})
-    current_idx = q_result.get("currentIndex")
+    current_idx = q_result.get("currentIndex") if q_result.get("currentIndex") is not None else q_result.get("current_index")
     tracks = q_result.get("tracks", [])
 
     if current_idx is not None and current_idx < len(tracks):
         track_obj = tracks[current_idx]
-        track_id = track_obj.get("trackId")
+        track_id = None
+        if isinstance(track_obj, dict):
+            track_id = track_obj.get("trackId") or track_obj.get("id")
+        elif isinstance(track_obj, (str, int)):
+            track_id = str(track_obj).split(":")[0] if ":" in str(track_obj) else str(track_obj)
+            
         if track_id:
             await _fetch_yandex_track_info(client, track_id, headers, process_func, db, user, is_playing)
+
+
+async def _sync_yandex_recent_feed(client: httpx.AsyncClient, headers: dict, process_func, db: Session, user: User):
+    """Fetch user's recent tracks directly from personal Yandex feed without duplicates."""
+    try:
+        from app.models import Scrobble, Track
+        f_resp = await client.get("https://api.music.yandex.net/feed", headers=headers, timeout=5.0)
+        if f_resp.status_code != 200:
+            return
+        feed = f_resp.json()
+        gen_playlists = feed.get("result", {}).get("generatedPlaylists", [])
+        for p in gen_playlists:
+            if p.get("type") == "recentTracks":
+                data = p.get("data", {})
+                kind = data.get("kind")
+                owner = data.get("owner", {}).get("uid")
+                if kind and owner:
+                    p_resp = await client.get(f"https://api.music.yandex.net/users/{owner}/playlists/{kind}", headers=headers, timeout=5.0)
+                    if p_resp.status_code == 200:
+                        tracks = p_resp.json().get("result", {}).get("tracks", [])
+                        if not tracks:
+                            continue
+
+                        # Check the latest recorded scrobble in DB
+                        last_scrobble = (
+                            db.query(Scrobble)
+                            .join(Track)
+                            .filter(Scrobble.user_id == user.id)
+                            .order_by(Scrobble.id.desc())
+                            .first()
+                        )
+
+                        latest_item = tracks[0].get("track", {})
+                        l_title = (latest_item.get("title") or "").strip().lower()
+                        l_artists = ", ".join([a.get("name") for a in latest_item.get("artists", []) if isinstance(a, dict) and "name" in a]).strip().lower()
+
+                        if last_scrobble:
+                            # If user is currently playing a track live (via SMTC or active queue), don't override with cached feed
+                            if last_scrobble.is_playing:
+                                return
+
+                            if last_scrobble.track:
+                                db_title = (last_scrobble.track.title or "").strip().lower()
+                                db_artist = (last_scrobble.track.artist or "").strip().lower()
+                                if db_title == l_title and (db_artist in l_artists or l_artists in db_artist):
+                                    # Already recorded
+                                    return
+
+                        # Process newly detected recent track
+                        t = latest_item
+                        track_id = t.get("id")
+                        if not track_id:
+                            continue
+                        title = t.get("title")
+                        artist = ", ".join([a.get("name") for a in t.get("artists", []) if isinstance(a, dict) and "name" in a]) or "Unknown Artist"
+                        albums = t.get("albums", [])
+                        album = albums[0].get("title") if albums else ""
+                        cover_uri = t.get("coverUri") or (albums[0].get("coverUri") if albums else None)
+                        cover = ("https://" + cover_uri.replace("%%", "400x400")) if cover_uri else None
+                        duration = int(t.get("durationMs", 0) / 1000)
+                        track_url = f"https://music.yandex.ru/track/{track_id}"
+
+                        await process_func(
+                            db, user, title, artist, cover,
+                            track_url, "yandex", duration, False,
+                            duration, album
+                        )
+                break
+    except Exception as e:
+        print(f"Error syncing Yandex feed for {user.username}: {e}")
 
 
 async def sync_yandex_status(user: User, db: Session, process_func):
@@ -177,6 +260,7 @@ async def sync_yandex_status(user: User, db: Session, process_func):
                 "User-Agent": "Yandex-Music-API",
                 "X-Yandex-Music-Device": "os=unknown; os_version=unknown; manufacturer=unknown; model=unknown; clid=unknown; device_id=unknown; uuid=unknown"
             }
+            # 1. Try mobile queues
             resp = await client.get("https://api.music.yandex.net/queues", headers=headers, timeout=5.0)
             if resp.status_code in (401, 403):
                 print(f"Yandex OAuth token invalid or expired for user {user.username}")
@@ -186,6 +270,9 @@ async def sync_yandex_status(user: User, db: Session, process_func):
                 if queues:
                     queues.sort(key=lambda x: x.get("modified", ""), reverse=True)
                     await _handle_active_yandex_queue(client, queues[0], headers, process_func, db, user)
+
+            # 2. Sync recent tracks feed (for web browser, smart speakers, and background plays)
+            await _sync_yandex_recent_feed(client, headers, process_func, db, user)
         except Exception as e:
             print(f"Yandex sync error for user {user.username}: {e}")
 
@@ -193,7 +280,7 @@ async def sync_yandex_status(user: User, db: Session, process_func):
 async def poll_user(user_id: int, process_func):
     import random
     # Add jitter inside the task itself so all tasks run concurrently
-    await asyncio.sleep(random.uniform(0.1, 2.0))
+    await asyncio.sleep(random.uniform(0.1, 1.0))
     local_db = SessionLocal()
     try:
         u = local_db.query(User).filter(User.id == user_id).first()
@@ -223,8 +310,9 @@ async def poll_external_services(process_func):
         try:
             from app.models import UserIntegration
             users = db.query(User).join(UserIntegration).filter(
-                (UserIntegration.spotify_refresh_token is not None) | (
-                    UserIntegration.yandex_token is not None)).all()
+                (UserIntegration.spotify_refresh_token.isnot(None) & (UserIntegration.spotify_refresh_token != "")) |
+                (UserIntegration.yandex_token.isnot(None) & (UserIntegration.yandex_token != ""))
+            ).all()
 
             if users:
                 tasks = [poll_user(u.id, process_func) for u in users]
@@ -234,4 +322,4 @@ async def poll_external_services(process_func):
             print(f"Cloud Worker Global Error: {e}")
         finally:
             db.close()
-        await asyncio.sleep(30)
+        await asyncio.sleep(15)

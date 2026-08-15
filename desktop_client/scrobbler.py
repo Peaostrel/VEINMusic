@@ -53,7 +53,16 @@ class DesktopScrobbler:
             headers["X-API-Key"] = self.api_key
         return headers
 
-    def send_now_playing(self, title: str, artist: str, album: str = "", duration: int = 0, source: str = "desktop") -> bool:
+    def send_now_playing(
+        self,
+        title: str,
+        artist: str,
+        album: str = "",
+        duration: int = 0,
+        source: str = "desktop",
+        cover_url: str = "",
+        track_url: str = "",
+    ) -> bool:
         """Send Now Playing update to VEINMusic API."""
         if not self.api_key:
             return False
@@ -69,12 +78,14 @@ class DesktopScrobbler:
             "album": album,
             "duration": duration,
             "source": source,
+            "cover_url": cover_url,
+            "track_url": track_url,
             "is_playing": True,
             "listened_sec": 0,
         }
 
         try:
-            with httpx.Client(timeout=4.0) as client:
+            with httpx.Client(trust_env=False, timeout=4.0) as client:
                 res = client.post(f"{self.api_url}/api/scrobble", json=payload, headers=self._get_headers())
                 if res.is_success:
                     print(f"[Scrobbler] 🎵 Now Playing: {artist} - {title}")
@@ -83,7 +94,17 @@ class DesktopScrobbler:
             print(f"[Scrobbler] Now Playing network error: {e}")
         return False
 
-    def scrobble(self, title: str, artist: str, album: str = "", duration: int = 0, source: str = "desktop", listened_sec: int = 0) -> bool:
+    def scrobble(
+        self,
+        title: str,
+        artist: str,
+        album: str = "",
+        duration: int = 0,
+        source: str = "desktop",
+        listened_sec: int = 0,
+        cover_url: str = "",
+        track_url: str = "",
+    ) -> bool:
         """Send finalized scrobble to VEINMusic API or buffer to offline queue."""
         if not title or not artist:
             return False
@@ -94,6 +115,8 @@ class DesktopScrobbler:
             "album": album,
             "duration": duration,
             "source": source,
+            "cover_url": cover_url,
+            "track_url": track_url,
             "is_playing": False,
             "listened_sec": listened_sec or duration,
             "timestamp": int(time.time()),
@@ -107,7 +130,7 @@ class DesktopScrobbler:
 
         # Try online scrobble
         try:
-            with httpx.Client(timeout=6.0) as client:
+            with httpx.Client(trust_env=False, timeout=6.0) as client:
                 res = client.post(f"{self.api_url}/api/scrobble", json=payload, headers=self._get_headers())
                 if res.is_success:
                     print(f"[Scrobbler] ✅ Scrobbled: {artist} - {title}")
@@ -136,7 +159,7 @@ class DesktopScrobbler:
         flushed = 0
         remaining: list[dict[str, Any]] = []
 
-        with httpx.Client(timeout=6.0) as client:
+        with httpx.Client(trust_env=False, timeout=6.0) as client:
             for item in self.queue:
                 try:
                     res = client.post(f"{self.api_url}/api/scrobble", json=item, headers=self._get_headers())
