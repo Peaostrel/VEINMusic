@@ -85,7 +85,7 @@ export default function GlobalFeed() {
     );
 
   return (
-    <div className="min-h-screen pt-24 pb-20 px-4 md:px-8 max-w-4xl mx-auto">
+    <div className="min-h-screen pt-4 pb-20 px-4 md:px-8 max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>

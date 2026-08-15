@@ -394,7 +394,7 @@ export default function Navbar() {
         .navbar-accent { color: var(--accent) !important; filter: drop-shadow(0 0 10px var(--accent-glow-strong)); }
         ::selection { background-color: var(--accent) !important; color: #000 !important; }
       `}</style>
-      <nav className="fixed top-3 left-1/2 -translate-x-1/2 w-[95%] max-w-6xl z-50">
+      <nav className="sticky top-3 z-50 w-[95%] max-w-6xl mx-auto my-3">
         <div className="bg-[#0b0d14]/80 backdrop-blur-2xl border border-white/[0.08] hover:border-white/[0.14] transition-all rounded-2xl px-4 py-2.5 flex items-center justify-between shadow-[0_8px_32px_rgba(0,0,0,0.5)] gap-4">
           <Link href="/" className="flex items-center gap-3 group shrink-0">
             <div className="w-9 h-9 bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] rounded-xl flex items-center justify-center text-[var(--text-on-accent)] font-black text-xl group-hover:scale-105 group-hover:rotate-3 transition-all duration-300 shadow-[0_0_16px_var(--accent-glow)] relative overflow-hidden">

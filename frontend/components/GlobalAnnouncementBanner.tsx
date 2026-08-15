@@ -31,15 +31,15 @@ export default function GlobalAnnouncementBanner() {
   if (activeItems.length === 0) return null;
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 flex flex-col gap-1 pointer-events-auto">
+    <div className="relative z-50 w-full flex flex-col gap-1 pointer-events-auto">
       {activeItems.map((ann) => {
-        let bgStyle = "bg-red-950/90 border-red-500/50 text-red-200";
+        let bgStyle = "bg-rose-950/80 border-rose-500/30 text-rose-200";
         let Icon = AlertCircle;
         if (ann.type === "info") {
-          bgStyle = "bg-blue-950/90 border-blue-500/50 text-blue-200";
+          bgStyle = "bg-blue-950/80 border-blue-500/30 text-blue-200";
           Icon = Info;
         } else if (ann.type === "warning") {
-          bgStyle = "bg-amber-950/90 border-amber-500/50 text-amber-200";
+          bgStyle = "bg-amber-950/80 border-amber-500/30 text-amber-200";
           Icon = AlertTriangle;
         }
 
