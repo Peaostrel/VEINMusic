@@ -1,23 +1,20 @@
-const ALLOWED_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
-const ALLOWED_IMAGE_PROTOCOLS = new Set(["http:", "https:"]);
-
 export function sanitizeUrl(
   url: string | null | undefined,
 ): string | undefined {
   if (!url || typeof url !== "string") return undefined;
 
   const trimmed = url.trim();
-  if (
-    trimmed.startsWith("/") &&
-    !trimmed.startsWith("//") &&
-    !trimmed.includes("\\")
-  ) {
-    return encodeURI(trimmed);
+  if (/^\/[a-zA-Z0-9_/.-]*$/.test(trimmed)) {
+    return trimmed;
   }
 
   try {
     const parsed = new URL(trimmed);
-    if (ALLOWED_PROTOCOLS.has(parsed.protocol)) {
+    if (
+      parsed.protocol === "http:" ||
+      parsed.protocol === "https:" ||
+      parsed.protocol === "mailto:"
+    ) {
       return parsed.href;
     }
   } catch {
@@ -33,17 +30,13 @@ export function sanitizeImageUrl(
   if (!url || typeof url !== "string") return undefined;
 
   const trimmed = url.trim();
-  if (
-    trimmed.startsWith("/") &&
-    !trimmed.startsWith("//") &&
-    !trimmed.includes("\\")
-  ) {
-    return encodeURI(trimmed);
+  if (/^\/[a-zA-Z0-9_/.-]*$/.test(trimmed)) {
+    return trimmed;
   }
 
   try {
     const parsed = new URL(trimmed);
-    if (ALLOWED_IMAGE_PROTOCOLS.has(parsed.protocol)) {
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
       return parsed.href;
     }
   } catch {

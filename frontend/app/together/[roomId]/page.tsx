@@ -82,12 +82,22 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
         if (data.type === "ROOM_STATE") {
           setListeners(data.listeners || []);
           setHost(data.host || "");
-          if (data.current_track) setTrack(data.current_track);
+          if (data.current_track) {
+            setTrack({
+              ...data.current_track,
+              cover_url: sanitizeImageUrl(data.current_track.cover_url) || "",
+            });
+          }
           if (data.chat_history) setChatMessages(data.chat_history);
         } else if (data.type === "USER_JOINED" || data.type === "USER_LEFT") {
           setListeners(data.listeners || []);
         } else if (data.type === "TRACK_SYNC") {
-          setTrack(data.track);
+          if (data.track) {
+            setTrack({
+              ...data.track,
+              cover_url: sanitizeImageUrl(data.track.cover_url) || "",
+            });
+          }
         } else if (data.type === "PLAYBACK_CONTROL") {
           setTrack((prev) => ({
             ...prev,

@@ -35,7 +35,17 @@ export default function ListenTogetherLobby() {
       );
       if (res.ok) {
         const data = await res.json();
-        setRooms(data.rooms || []);
+        setRooms(
+          (data.rooms || []).map((r: RoomInfo) => ({
+            ...r,
+            current_track: r.current_track
+              ? {
+                  ...r.current_track,
+                  cover_url: sanitizeImageUrl(r.current_track.cover_url),
+                }
+              : undefined,
+          })),
+        );
       }
     } catch (e) {
       console.warn("Error fetching rooms:", e);
