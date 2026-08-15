@@ -114,28 +114,36 @@ def _parse_yandex_now_playing(data: dict):
     }
 
 
-async def _fetch_yandex_track_info(client, track_id, headers, process_func, db, user, is_playing=True):
-    t_resp = await client.post("https://api.music.yandex.net/tracks", data={"track-ids": [track_id]}, headers=headers, timeout=5.0)
-    t_info = t_resp.json().get("result", [])
-    if not t_info:
-        return
-    t_info = t_info[0]
+async def _fetch_yandex_track_info(client: httpx.AsyncClient, track_id, headers: dict, process_func, db: Session, user: User, is_playing: bool = True):
+    try:
+        t_resp = await client.get(f"https://api.music.yandex.net/tracks?trackIds={track_id}", headers=headers, timeout=5.0)
+        if t_resp.status_code != 200:
+            t_resp = await client.post("https://api.music.yandex.net/tracks", data={"track-ids": [str(track_id)]}, headers=headers, timeout=5.0)
+        if t_resp.status_code != 200:
+            return
 
-    title = t_info.get("title")
-    artist = ", ".join([a.get("name") for a in t_info.get("artists", []) if "name" in a])
-    cover_uri = t_info.get("coverUri")
-    cover = "https://" + cover_uri.replace("%%", "400x400") if cover_uri else None
-    duration = int(t_info.get("durationMs", 0) / 1000)
-    track_url = f"https://music.yandex.ru/track/{track_id}"
+        t_info = t_resp.json().get("result", [])
+        if not t_info:
+            return
+        t_info = t_info[0]
 
-    albums = t_info.get("albums", [])
-    album = albums[0].get("title") if albums else None
+        title = t_info.get("title")
+        artist = ", ".join([a.get("name") for a in t_info.get("artists", []) if isinstance(a, dict) and "name" in a]) or "Unknown Artist"
+        cover_uri = t_info.get("coverUri") or (t_info.get("albums", [{}])[0].get("coverUri") if t_info.get("albums") else None)
+        cover = ("https://" + cover_uri.replace("%%", "400x400")) if cover_uri else None
+        duration = int(t_info.get("durationMs", 0) / 1000)
+        track_url = f"https://music.yandex.ru/track/{track_id}"
 
-    await process_func(
-        db, user, title, artist, cover,
-        track_url, "yandex", 0, is_playing,
-        duration, album
-    )
+        albums = t_info.get("albums", [])
+        album = albums[0].get("title") if albums else None
+
+        await process_func(
+            db, user, title, artist, cover,
+            track_url, "yandex", 0, is_playing,
+            duration, album
+        )
+    except Exception as e:
+        print(f"Error fetching Yandex track {track_id}: {e}")
 
 
 def _is_queue_playing(active_queue: dict) -> bool:
@@ -144,7 +152,7 @@ def _is_queue_playing(active_queue: dict) -> bool:
         return True
     try:
         modified_dt = datetime.fromisoformat(modified_str.replace("Z", "+00:00"))
-        return (datetime.now(UTC) - modified_dt).total_seconds() < 60
+        return (datetime.now(UTC) - modified_dt).total_seconds() < 600
     except Exception:
         return True
 
@@ -158,12 +166,17 @@ async def _handle_active_yandex_queue(client: httpx.AsyncClient, active_queue: d
     if q_resp.status_code != 200:
         return
     q_result = q_resp.json().get("result", {})
-    current_idx = q_result.get("currentIndex")
+    current_idx = q_result.get("currentIndex") if q_result.get("currentIndex") is not None else q_result.get("current_index")
     tracks = q_result.get("tracks", [])
 
     if current_idx is not None and current_idx < len(tracks):
         track_obj = tracks[current_idx]
-        track_id = track_obj.get("trackId")
+        track_id = None
+        if isinstance(track_obj, dict):
+            track_id = track_obj.get("trackId") or track_obj.get("id")
+        elif isinstance(track_obj, (str, int)):
+            track_id = str(track_obj).split(":")[0] if ":" in str(track_obj) else str(track_obj)
+            
         if track_id:
             await _fetch_yandex_track_info(client, track_id, headers, process_func, db, user, is_playing)
 
