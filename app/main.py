@@ -12,7 +12,7 @@ from app.core.rate_limit import limiter
 from app.core.websockets import manager
 from app.database import Base, engine, get_db
 from app.models import User
-from app.routers import admin, auth, extended, profile, scrobbling
+from app.routers import admin, auth, developer, extended, profile, scrobbling, widgets
 from app.services.cloud_scrobbling import poll_external_services
 from app.services.scrobble_processor import process_scrobble
 
@@ -92,6 +92,8 @@ app.include_router(profile.router)
 app.include_router(scrobbling.router)
 app.include_router(admin.router)
 app.include_router(extended.router)
+app.include_router(widgets.router)
+app.include_router(developer.router)
 
 # Setup WebSocket manually at root
 
@@ -167,3 +169,86 @@ async def websocket_route(
         pass
     finally:
         manager.disconnect(websocket, username)
+
+
+@app.websocket("/ws/together/{room_id}")
+async def together_websocket_route(
+    websocket: WebSocket,
+    room_id: str,
+    db: Session = Depends(get_db),
+):
+    import time
+    username = _get_ws_authenticated_username(websocket, db) or f"Guest_{int(time.time()) % 1000}"
+
+    await websocket.accept()
+    room = manager.get_or_create_room(room_id, host_username=username)
+    room.add_listener(username, websocket)
+
+    # Send current room state to newly joined user
+    await websocket.send_json({
+        "type": "ROOM_STATE",
+        "room_id": room_id,
+        "name": room.name,
+        "host": room.host_username,
+        "current_track": room.current_track,
+        "listeners": list(room.listeners.keys()),
+        "chat_history": room.chat_messages[-30:],
+    })
+
+    # Broadcast user joined to other listeners
+    await room.broadcast({
+        "type": "USER_JOINED",
+        "username": username,
+        "listeners": list(room.listeners.keys()),
+    }, exclude_user=username)
+
+    try:
+        while True:
+            data = await websocket.receive_json()
+            msg_type = data.get("type")
+
+            if msg_type == "TRACK_SYNC":
+                track_data = data.get("track", {})
+                room.current_track.update(track_data)
+                room.current_track["updated_at"] = time.time()
+                await room.broadcast({
+                    "type": "TRACK_SYNC",
+                    "track": room.current_track,
+                    "from": username,
+                })
+
+            elif msg_type == "CHAT_MESSAGE":
+                text = str(data.get("text", "")).strip()
+                if text:
+                    msg_obj = {
+                        "from": username,
+                        "text": text[:500],
+                        "timestamp": int(time.time()),
+                    }
+                    room.chat_messages.append(msg_obj)
+                    await room.broadcast({
+                        "type": "CHAT_MESSAGE",
+                        **msg_obj,
+                    })
+
+            elif msg_type == "PLAYBACK_CONTROL":
+                is_playing = bool(data.get("is_playing"))
+                progress_sec = float(data.get("progress_sec", 0))
+                room.current_track["is_playing"] = is_playing
+                room.current_track["progress_sec"] = progress_sec
+                room.current_track["updated_at"] = time.time()
+                await room.broadcast({
+                    "type": "PLAYBACK_CONTROL",
+                    "is_playing": is_playing,
+                    "progress_sec": progress_sec,
+                    "from": username,
+                })
+    except Exception:
+        pass
+    finally:
+        room.remove_listener(username)
+        await room.broadcast({
+            "type": "USER_LEFT",
+            "username": username,
+            "listeners": list(room.listeners.keys()),
+        })

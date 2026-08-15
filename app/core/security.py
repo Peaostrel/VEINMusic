@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 import hashlib
 import hmac
 import os
@@ -66,17 +67,22 @@ def verify_session_token(token: str, db_user: User) -> bool:
 
 
 def _extract_token(request: Request) -> tuple[str | None, bool]:
-    # 1. Try to get token from cookies
+    # 1. Try to get token from X-API-Key header
+    api_key_header = request.headers.get("X-API-Key")
+    if api_key_header:
+        return api_key_header.strip(), False
+
+    # 2. Try to get token from cookies
     token = request.cookies.get("api_key")
     if token:
         return token, True
 
-    # 2. Fallback for Bearer auth header
+    # 3. Fallback for Bearer auth header
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
-        return auth_header.split(" ")[1], False
+        return auth_header.split(" ")[1].strip(), False
 
-    # 3. Fallback to body
+    # 4. Fallback to body
     if request.method in ["POST", "PUT", "DELETE"]:
         try:
             body = request.state.json_body if hasattr(
@@ -84,14 +90,33 @@ def _extract_token(request: Request) -> tuple[str | None, bool]:
             if isinstance(body, dict):
                 val = body.get("api_key")
                 if val:
-                    return val, False
+                    return str(val).strip(), False
         except AttributeError:
             pass
 
     return None, False
 
 
+def hash_developer_key(token: str) -> str:
+    """Hash developer API key securely with PBKDF2-HMAC-SHA256."""
+    return hashlib.pbkdf2_hmac("sha256", token.encode("utf-8"), SECRET_KEY.encode("utf-8"), 100000).hex()
+
+
 def _authenticate_user(token: str, db: Session) -> User | None:
+    # Check if this is a developer API key (prefix 'vm_')
+    if token.startswith("vm_"):
+        from app.models import ApiKey
+        key_hash = hash_developer_key(token)
+        api_key_obj = db.query(ApiKey).filter(
+            ApiKey.key_hash == key_hash,
+            ApiKey.is_active == True,  # noqa: E712
+        ).first()
+        if api_key_obj and (not api_key_obj.expires_at or api_key_obj.expires_at > datetime.now(UTC)):
+            api_key_obj.last_used_at = datetime.now(UTC)  # type: ignore[assignment]
+            db.commit()
+            return db.query(User).filter(User.id == api_key_obj.user_id).first()
+        return None
+
     if ":" in token:
         try:
             user_id_str = token.split(":")[0]

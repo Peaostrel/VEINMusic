@@ -1,0 +1,1 @@
+"""VEINMusic Desktop Client Package."""

@@ -1,5 +1,4 @@
-import pytest
-from app.models import User, UserProfile, UserIntegration
+from app.models import User
 
 
 def test_register_success(client, db):

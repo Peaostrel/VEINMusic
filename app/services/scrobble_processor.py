@@ -1,11 +1,20 @@
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import httpx
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.websockets import manager
-from app.models import Scrobble, ScrobbleComment, ScrobbleLike, Track, User
+from app.models import (
+    Scrobble,
+    ScrobbleComment,
+    ScrobbleLike,
+    Track,
+    TrackAlias,
+    User,
+)
+from app.services.metadata_cleaner import clean_track_metadata
 
 TRACK_PATH = "/track/"
 
@@ -145,15 +154,25 @@ async def _get_or_create_track(
         track_url: str,
         duration: int,
         album: str) -> Track:
+    norm_title, norm_artist = clean_track_metadata(title, artist)
+
+    alias = db.query(TrackAlias).filter(
+        func.lower(TrackAlias.original_title) == func.lower(title),
+        func.lower(TrackAlias.original_artist) == func.lower(artist)
+    ).first()
+
+    if alias and alias.canonical_track:
+        return alias.canonical_track
+
     track = db.query(Track).filter(
-        func.lower(Track.title) == func.lower(title),
-        func.lower(Track.artist) == func.lower(artist)
+        func.lower(Track.title) == func.lower(norm_title),
+        func.lower(Track.artist) == func.lower(norm_artist)
     ).first()
 
     if not track:
         track = Track(
-            title=title,
-            artist=artist,
+            title=norm_title,
+            artist=norm_artist,
             cover_url=cover_url,
             track_url=track_url,
             duration=duration or 0,
@@ -298,6 +317,38 @@ def _update_scrobble_progress(
         _handle_streak(db, user)
 
 
+def _matches_filter(
+    f: Any,
+    title_l: str,
+    artist_l: str,
+    album_l: str,
+    raw_title: str,
+    raw_artist: str,
+) -> bool:
+    pat = str(f.pattern).lower()
+    if f.filter_type == "keyword":
+        return pat in title_l or pat in artist_l or pat in album_l
+    if f.filter_type == "artist":
+        return pat == artist_l
+    if f.filter_type == "regex":
+        import re
+        try:
+            return bool(
+                re.search(str(f.pattern), raw_title, re.IGNORECASE)
+                or re.search(str(f.pattern), raw_artist, re.IGNORECASE)
+            )
+        except Exception:
+            return False
+    return False
+
+
+def _is_blacklisted(title: str, artist: str, album: str, db: Session) -> bool:
+    from app.models import BlacklistFilter
+    filters = db.query(BlacklistFilter).filter(BlacklistFilter.is_active == True).all()  # noqa: E712
+    t_l, a_l, alb_l = title.lower(), artist.lower(), (album or "").lower()
+    return any(_matches_filter(f, t_l, a_l, alb_l, title, artist) for f in filters)
+
+
 async def process_scrobble(
         db: Session,
         user: User,
@@ -310,6 +361,9 @@ async def process_scrobble(
         is_playing: bool,
         duration: int,
         album: str = ""):
+    if _is_blacklisted(title, artist, album, db):
+        return "blacklisted"
+
     track = await _get_or_create_track(db, title, artist, cover_url, track_url, duration, album)
 
     now = datetime.now(UTC)
@@ -339,10 +393,31 @@ async def process_scrobble(
             updated_at=now)
         db.add(new_s)
         db.commit()
+        history_item = format_history_item(new_s, track)
         await manager.broadcast_to_user(str(user.username), {
             "type": "NEW_SCROBBLE",
-            "track": format_history_item(new_s, track)
+            "track": history_item
         })
+
+        # Trigger outbound webhook
+        from app.services.webhooks import dispatch_webhook_event
+        await dispatch_webhook_event(
+            event_name="scrobble.created",
+            data=history_item,
+            user_id=int(user.id),
+            db=db,
+        )
+
+        # Trigger external sync (Last.fm, ListenBrainz, Libre.fm)
+        from app.services.external_sync import dispatch_external_exports
+        await dispatch_external_exports(
+            user_id=int(user.id),
+            artist=str(track.artist),
+            title=str(track.title),
+            album=str(track.album) if track.album else None,
+            timestamp=int(now.timestamp()),
+            db=db,
+        )
     else:
         _update_scrobble_progress(
             db,
