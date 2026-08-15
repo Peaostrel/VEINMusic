@@ -12,10 +12,19 @@ import sys
 import time
 from typing import Optional
 
+import io
+
+if sys.stdout is None:
+    sys.stdout = io.StringIO()
+if sys.stderr is None:
+    sys.stderr = io.StringIO()
+
 if sys.platform == "win32":
     try:
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
         pass
 
@@ -210,8 +219,8 @@ class DesktopClientApp:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="VEINMusic Desktop Client")
-    parser.add_argument("--api-key", help="VEINMusic API Key")
-    parser.add_argument("--api-url", default="https://music.vein.guru", help="VEINMusic API URL")
+    parser.add_argument("--api-key", default=None, help="VEINMusic API Key")
+    parser.add_argument("--api-url", default=None, help="VEINMusic API URL")
     parser.add_argument("--no-discord", action="store_true", help="Disable Discord Rich Presence")
     args = parser.parse_args()
 
@@ -220,6 +229,8 @@ def main() -> None:
         config["api_key"] = args.api_key
     if args.api_url:
         config["api_url"] = args.api_url
+    if not config.get("api_url"):
+        config["api_url"] = "http://localhost:8000"
     if args.no_discord:
         config["discord_rpc_enabled"] = False
     save_config(config)

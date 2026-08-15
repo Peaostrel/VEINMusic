@@ -215,12 +215,17 @@ async def _sync_yandex_recent_feed(client: httpx.AsyncClient, headers: dict, pro
                         l_title = (latest_item.get("title") or "").strip().lower()
                         l_artists = ", ".join([a.get("name") for a in latest_item.get("artists", []) if isinstance(a, dict) and "name" in a]).strip().lower()
 
-                        if last_scrobble and last_scrobble.track:
-                            db_title = (last_scrobble.track.title or "").strip().lower()
-                            db_artist = (last_scrobble.track.artist or "").strip().lower()
-                            if db_title == l_title and (db_artist in l_artists or l_artists in db_artist):
-                                # Already recorded
+                        if last_scrobble:
+                            # If user is currently playing a track live (via SMTC or active queue), don't override with cached feed
+                            if last_scrobble.is_playing:
                                 return
+
+                            if last_scrobble.track:
+                                db_title = (last_scrobble.track.title or "").strip().lower()
+                                db_artist = (last_scrobble.track.artist or "").strip().lower()
+                                if db_title == l_title and (db_artist in l_artists or l_artists in db_artist):
+                                    # Already recorded
+                                    return
 
                         # Process newly detected recent track
                         t = latest_item
