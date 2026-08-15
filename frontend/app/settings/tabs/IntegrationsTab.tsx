@@ -195,65 +195,38 @@ export default function IntegrationsTab({
         </div>
       </div>
 
-      {/* Browser Auto-Scrobbler (Userscript / Extension) */}
-      <div className="bg-[#121212]/50 p-6 rounded-xl border border-white/5 flex flex-col gap-4 relative overflow-hidden shadow-md">
-        <div className="absolute top-0 left-0 w-1 h-full bg-[var(--accent)]"></div>
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div
-              className="w-12 h-12 bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] rounded-xl flex items-center justify-center font-black text-2xl shadow-lg shrink-0"
-              style={{ color: "var(--text-on-accent)" }}
-            >
-              V
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-lg text-white">
-                  Браузерный скробблер (Яндекс Музыка)
-                </h3>
-                <span className="bg-emerald-500/20 text-emerald-400 text-[10px] px-2 py-0.5 rounded font-bold border border-emerald-500/30">
-                  БЕЗ ТЕРМИНАЛА
-                </span>
+      {/* Extension */}
+      {userProfile?.has_api_key && (
+        <div className="bg-[#121212]/50 p-6 rounded-xl border border-white/5 flex flex-col gap-4 relative overflow-hidden shadow-md">
+          <div className="absolute top-0 left-0 w-1 h-full bg-[var(--accent)]"></div>
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div
+                className="w-12 h-12 bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] rounded-xl flex items-center justify-center font-black text-2xl shadow-lg shrink-0"
+                style={{ color: "var(--text-on-accent)" }}
+              >
+                V
               </div>
-              <p className="text-sm text-gray-400">
-                Скробблинг прямо из вкладки Яндекс.Музыки в браузере.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-            <a
-              href="/vein-yandex-scrobbler.user.js"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-emerald-500 hover:bg-emerald-400 text-black px-4 py-2.5 rounded-lg font-black text-xs transition-all shadow-md flex items-center gap-1.5"
-            >
-              ⚡ Установить скрипт в 1 клик (Tampermonkey)
-            </a>
-          </div>
-        </div>
-
-        <div className="bg-black/30 p-4 rounded-xl border border-white/5 flex flex-col gap-3">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-            <div>
-              <span className="text-xs font-bold text-gray-300 block">
-                Ваш персональный API Ключ:
-              </span>
-              <span className="text-[11px] text-gray-500">
-                (Используется скриптом или расширением для отправки треков)
-              </span>
+              <div>
+                <h3 className="font-bold text-lg text-white">
+                  Расширение VEIN
+                </h3>
+                <p className="text-sm text-gray-400">
+                  Ключ для браузерного скробблера.
+                </p>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-lg border border-white/10 flex-1 sm:flex-initial">
-                <code className="text-[var(--accent-text)] font-mono text-xs truncate max-w-[200px]">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+              <div className="flex items-center gap-2 bg-black/30 p-2 rounded-lg border border-white/5">
+                <code className="text-[var(--accent-text)] px-3 font-mono text-sm">
                   {generatedApiKey ?? "••••••••••••••••••••••••••••••••"}
                 </code>
                 {generatedApiKey && (
                   <button
                     type="button"
                     onClick={handleCopyKey}
-                    className="bg-white/10 hover:bg-white/20 text-white px-2.5 py-1 rounded font-bold text-xs transition"
+                    className="bg-white/5 border border-white/10 text-white hover:text-[var(--accent-text)] px-3 py-1.5 rounded font-bold text-xs"
                   >
                     {copied ? "OK!" : "Copy"}
                   </button>
@@ -262,20 +235,23 @@ export default function IntegrationsTab({
               <button
                 type="button"
                 onClick={handleGenerateApiKey}
-                className="bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] px-3 py-2 rounded-lg font-bold text-xs transition-all shrink-0"
+                className="bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] px-4 py-2.5 rounded-lg font-bold text-xs transition-all text-center"
               >
-                {generatedApiKey ? "Обновить ключ" : "Показать API ключ"}
+                {generatedApiKey
+                  ? "Сгенерировать другой"
+                  : "Сбросить и сгенерировать API ключ"}
               </button>
             </div>
           </div>
-
-          <div className="text-[11px] text-gray-400 border-t border-white/5 pt-2 flex flex-col gap-1">
-            <span className="font-semibold text-gray-300">Как это работает в 2 шага:</span>
-            <span>1. Установите расширение <strong>Tampermonkey</strong> или <strong>Violentmonkey</strong> в ваш браузер (Chrome / Яндекс Браузер).</span>
-            <span>2. Нажмите зеленую кнопку <strong>«Установить скрипт в 1 клик»</strong> выше. Откройте <a href="https://music.yandex.ru" target="_blank" rel="noopener noreferrer" className="text-[var(--accent-text)] underline">music.yandex.ru</a> — теперь музыка скробблится на автомате!</span>
-          </div>
+          {generatedApiKey && (
+            <div className="text-xs text-yellow-500 font-semibold border-t border-yellow-500/10 pt-2 mt-1">
+              ⚠️ Внимание: этот ключ показывается только один раз! Обязательно
+              скопируйте его прямо сейчас. При перезагрузке страницы он
+              скроется.
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
 }
