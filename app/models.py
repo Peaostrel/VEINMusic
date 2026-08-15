@@ -16,6 +16,9 @@ class User(Base):
     hashed_password = Column(String)
     api_key = Column(String, unique=True, index=True)
     role = Column(String, default="user")
+    is_banned = Column(Boolean, default=False)
+    is_flagged_antifraud = Column(Boolean, default=False)
+    antifraud_reason = Column(String, nullable=True)
 
     profile = relationship(
         "UserProfile",
@@ -267,3 +270,187 @@ class ScrobbleComment(Base):
         DateTime(
             timezone=True), default=lambda: datetime.now(
             UTC))
+
+
+class AvatarFrame(Base):
+    __tablename__ = "avatar_frames"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    code = Column(String, unique=True, index=True)
+    css_style = Column(String, nullable=True)
+    image_url = Column(String, nullable=True)
+    rarity = Column(String, default="common")
+    required_level = Column(Integer, default=1)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(
+        DateTime(
+            timezone=True), default=lambda: datetime.now(
+            UTC))
+
+
+class SystemAnnouncement(Base):
+    __tablename__ = "system_announcements"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    message = Column(String, nullable=False)
+    type = Column(String, default="info")
+    is_active = Column(Boolean, default=True)
+    created_at = Column(
+        DateTime(
+            timezone=True), default=lambda: datetime.now(
+            UTC))
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class FeatureFlag(Base):
+    __tablename__ = "feature_flags"
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, index=True)
+    description = Column(String, nullable=True)
+    is_enabled = Column(Boolean, default=True)
+    updated_at = Column(
+        DateTime(
+            timezone=True), default=lambda: datetime.now(
+            UTC))
+
+
+class TrackAlias(Base):
+    __tablename__ = "track_aliases"
+    id = Column(Integer, primary_key=True, index=True)
+    original_title = Column(String, index=True)
+    original_artist = Column(String, index=True)
+    canonical_track_id = Column(
+        Integer,
+        ForeignKey(
+            "tracks.id",
+            ondelete="CASCADE"),
+        index=True)
+    created_at = Column(
+        DateTime(
+            timezone=True), default=lambda: datetime.now(
+            UTC))
+
+    canonical_track = relationship("Track")
+
+
+class ApiKey(Base):
+    __tablename__ = "api_keys"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey(
+            FK_USERS_ID,
+            ondelete="CASCADE"),
+        index=True)
+    key_hash = Column(String, unique=True, index=True)
+    prefix = Column(String, index=True)
+    name = Column(String, default="Default API Key")
+    scopes = Column(String, default="scrobble:write,profile:read")
+    is_active = Column(Boolean, default=True)
+    created_at = Column(
+        DateTime(
+            timezone=True), default=lambda: datetime.now(
+            UTC))
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+
+    user = relationship("User")
+
+
+class Webhook(Base):
+    __tablename__ = "webhooks"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey(
+            FK_USERS_ID,
+            ondelete="CASCADE"),
+        index=True)
+    url = Column(String, nullable=False)
+    secret = Column(String, nullable=False)
+    events = Column(String, default="scrobble.created,achievement.unlocked")
+    is_active = Column(Boolean, default=True)
+    created_at = Column(
+        DateTime(
+            timezone=True), default=lambda: datetime.now(
+            UTC))
+
+    user = relationship("User")
+
+
+class ExternalSyncConfig(Base):
+    __tablename__ = "external_sync_configs"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey(
+            FK_USERS_ID,
+            ondelete="CASCADE"),
+        unique=True,
+        index=True)
+    lastfm_session_key = Column(String, nullable=True)
+    listenbrainz_token = Column(String, nullable=True)
+    librefm_session_key = Column(String, nullable=True)
+    is_lastfm_enabled = Column(Boolean, default=False)
+    is_listenbrainz_enabled = Column(Boolean, default=False)
+    is_librefm_enabled = Column(Boolean, default=False)
+    last_synced_at = Column(DateTime(timezone=True), nullable=True)
+
+    user = relationship("User")
+
+
+class BlacklistFilter(Base):
+    __tablename__ = "blacklist_filters"
+    id = Column(Integer, primary_key=True, index=True)
+    pattern = Column(String, nullable=False, index=True)
+    filter_type = Column(String, default="keyword")  # keyword, regex, artist, album
+    reason = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(
+        DateTime(
+            timezone=True), default=lambda: datetime.now(
+            UTC))
+
+
+class LastfmImportJob(Base):
+    __tablename__ = "lastfm_import_jobs"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey(
+            FK_USERS_ID,
+            ondelete="CASCADE"),
+        index=True)
+    lastfm_username = Column(String, nullable=False)
+    status = Column(String, default="pending")  # pending, in_progress, completed, failed
+    progress = Column(Integer, default=0)
+    total_tracks = Column(Integer, default=0)
+    imported_tracks = Column(Integer, default=0)
+    error_log = Column(String, nullable=True)
+    started_at = Column(
+        DateTime(
+            timezone=True), default=lambda: datetime.now(
+            UTC))
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+
+    user = relationship("User")
+
+
+class PushSubscription(Base):
+    __tablename__ = "push_subscriptions"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey(
+            FK_USERS_ID,
+            ondelete="CASCADE"),
+        index=True)
+    endpoint = Column(String, nullable=False, unique=True)
+    p256dh = Column(String, nullable=False)
+    auth = Column(String, nullable=False)
+    created_at = Column(
+        DateTime(
+            timezone=True), default=lambda: datetime.now(
+            UTC))
+
+    user = relationship("User")

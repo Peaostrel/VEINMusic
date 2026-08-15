@@ -1,7 +1,7 @@
 {
   "name": "VEIN Music",
   "short_name": "VEIN",
-  "description": "Premium Music Tracking Platform",
+  "description": "Premium Music Tracking Platform & Live Synchronization",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0a",
@@ -12,6 +12,36 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Live Feed",
+      "short_name": "Feed",
+      "description": "Лента прослушиваний со всего мира",
+      "url": "/feed",
+      "icons": [{ "src": "/icon-512.png", "sizes": "512x512" }]
+    },
+    {
+      "name": "Listen Together",
+      "short_name": "Together",
+      "description": "Комнаты совместного прослушивания",
+      "url": "/together",
+      "icons": [{ "src": "/icon-512.png", "sizes": "512x512" }]
+    },
+    {
+      "name": "Leaderboard",
+      "short_name": "Лидеры",
+      "description": "Топ слушателей недели",
+      "url": "/leaderboard",
+      "icons": [{ "src": "/icon-512.png", "sizes": "512x512" }]
+    },
+    {
+      "name": "Settings",
+      "short_name": "Настройки",
+      "description": "Управление профилем и интеграциями",
+      "url": "/settings",
+      "icons": [{ "src": "/icon-512.png", "sizes": "512x512" }]
     }
   ]
 }

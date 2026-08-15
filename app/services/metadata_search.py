@@ -397,3 +397,32 @@ async def search_suggestions(query: str, entity_type: str) -> list[dict]:  # NOS
             except Exception as e:
                 print(f"iTunes Suggestion API Error: {e}")
     return results
+
+
+async def search_musicbrainz_metadata(artist: str, title: str) -> dict[str, str | None]:
+    """Search MusicBrainz API for MBID, ISRC, and canonical release metadata."""
+    query = f'artist:"{artist}" AND recording:"{title}"'
+    url = f"https://musicbrainz.org/ws/2/recording/?query={urllib.parse.quote(query)}&fmt=json&limit=1"
+    headers = {"User-Agent": "VEINMusic/2.0 ( contact@vein.guru )"}
+
+    try:
+        async with httpx.AsyncClient(timeout=4.0, headers=headers) as client:
+            res = await client.get(url)
+            if res.status_code == 200:
+                recordings = res.json().get("recordings", [])
+                if recordings:
+                    rec = recordings[0]
+                    mbid = rec.get("id")
+                    isrcs = rec.get("isrcs", [])
+                    isrc = isrcs[0] if isrcs else None
+                    releases = rec.get("releases", [])
+                    release_title = releases[0].get("title") if releases else None
+                    return {
+                        "mbid": mbid,
+                        "isrc": isrc,
+                        "canonical_title": rec.get("title"),
+                        "release_title": release_title,
+                    }
+    except Exception as e:
+        print(f"[MusicBrainz] Error: {e}")
+    return {"mbid": None, "isrc": None, "canonical_title": None, "release_title": None}

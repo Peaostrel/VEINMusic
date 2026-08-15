@@ -1,6 +1,8 @@
 import "./globals.css";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
+import GlobalAnnouncementBanner from "../components/GlobalAnnouncementBanner";
+import PWARegistration from "../components/PWARegistration";
 
 /**
  * Root Layout
@@ -45,6 +47,7 @@ export default function RootLayout({
         <div className="fixed top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-[var(--accent)] rounded-full mix-blend-screen filter blur-[150px] opacity-[0.06] animate-blob z-0 pointer-events-none transition-colors duration-1000"></div>
         <div className="fixed bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-[var(--accent-hover)] rounded-full mix-blend-screen filter blur-[150px] opacity-[0.04] animate-blob animation-delay-2000 z-0 pointer-events-none transition-colors duration-1000"></div>
 
+        <GlobalAnnouncementBanner />
         <Navbar />
 
         <main className="flex-grow pt-32 pb-12 px-4 z-10 relative">
@@ -52,6 +55,7 @@ export default function RootLayout({
         </main>
 
         <Footer />
+        <PWARegistration />
       </body>
     </html>
   );

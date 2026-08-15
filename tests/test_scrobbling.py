@@ -1,10 +1,16 @@
-import pytest
 import datetime
 from unittest.mock import patch
-from app.models import User, Scrobble, Track, UserAchievement, Achievement, ScrobbleLike, ScrobbleComment
-from app.core.security import get_current_user, get_current_user_optional
-from app.main import app
+import pytest
 from app.database import SessionLocal
+from app.models import (
+    Achievement,
+    Scrobble,
+    ScrobbleComment,
+    ScrobbleLike,
+    Track,
+    User,
+    UserAchievement,
+)
 
 
 @pytest.fixture
@@ -252,23 +258,23 @@ def test_add_comment(auth_client, db, test_user):
 
 
 def test_random_scrobbling_direct(db, test_user):
+    import asyncio
     import secrets
     import string
-    import asyncio
     from unittest.mock import AsyncMock, patch
     from app.services.scrobble_processor import process_scrobble
-    
+
     def random_string(length=10):
         return ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(length))
-        
+
     with patch("app.core.redis.get_arq_pool") as mock_arq, \
          patch("app.services.scrobble_processor.get_track_duration", new_callable=AsyncMock) as mock_td, \
          patch("app.services.scrobble_processor.get_track_genre", new_callable=AsyncMock) as mock_tg:
-        
+
         mock_arq.return_value = AsyncMock()
         mock_td.return_value = 0
         mock_tg.return_value = "Rock"
-        
+
         for _ in range(5):
             title = f"Song {random_string(5)}"
             artist = f"Artist {random_string(5)}"
@@ -276,7 +282,7 @@ def test_random_scrobbling_direct(db, test_user):
             duration = 120 + secrets.randbelow(181)
             progress = 10 + secrets.randbelow(duration - 9)
             source = secrets.choice(["yandex", "spotify", "lastfm"])
-            
+
             asyncio.run(process_scrobble(
                 db=db,
                 user=test_user,
@@ -290,15 +296,17 @@ def test_random_scrobbling_direct(db, test_user):
                 duration=duration,
                 album=album
             ))
-            
+
             db.commit()
-            
+
             track = db.query(Track).filter_by(title=title, artist=artist).first()
             assert track is not None
             assert track.album == album
             assert track.duration == duration
-            
-            scrobble = db.query(Scrobble).filter_by(user_id=test_user.id, track_id=track.id).order_by(Scrobble.id.desc()).first()
+
+            scrobble = db.query(Scrobble).filter_by(
+                user_id=test_user.id, track_id=track.id
+            ).order_by(Scrobble.id.desc()).first()
             assert scrobble is not None
             assert scrobble.source == source
             assert scrobble.listened_sec == 0

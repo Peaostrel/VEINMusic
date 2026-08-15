@@ -14,7 +14,22 @@ TEST_DB_URL = f"sqlite:///{TEST_DB_FILE}"
 os.environ["DATABASE_URL"] = TEST_DB_URL
 os.environ["REDIS_URL"] = "redis://mock_redis_disabled"
 
-from app.models import User, UserProfile, UserIntegration, Track, Scrobble, Achievement, UserAchievement, Follow, ScrobbleLike, ScrobbleComment  # noqa: E402, F401
+from app.models import (  # noqa: E402, F401
+    Achievement,
+    AvatarFrame,
+    FeatureFlag,
+    Follow,
+    Scrobble,
+    ScrobbleComment,
+    ScrobbleLike,
+    SystemAnnouncement,
+    Track,
+    TrackAlias,
+    User,
+    UserAchievement,
+    UserIntegration,
+    UserProfile,
+)
 from app.main import app  # noqa: E402
 from app.database import Base, get_db, engine, SessionLocal  # noqa: E402, F401
 from fastapi.testclient import TestClient  # noqa: E402

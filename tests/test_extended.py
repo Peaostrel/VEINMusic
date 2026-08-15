@@ -1,9 +1,7 @@
-import pytest
 import datetime
-from unittest.mock import patch
-from app.models import User, Scrobble, Track
-from app.core.security import create_session_token
+import pytest
 from app.database import SessionLocal
+from app.models import Scrobble, Track, User
 
 
 @pytest.fixture

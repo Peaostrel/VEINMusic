@@ -1,9 +1,8 @@
-import pytest
 from unittest.mock import patch
-from app.models import User, UserProfile
-from app.core.security import get_current_user, create_session_token
-from app.main import app
+import pytest
+from app.core.security import create_session_token
 from app.database import SessionLocal
+from app.models import User
 
 
 @pytest.fixture
