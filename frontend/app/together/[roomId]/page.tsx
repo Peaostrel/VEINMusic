@@ -235,7 +235,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
                     track.is_playing ? "shadow-red-600/20" : ""
                   }`}
                 >
-                  {track.cover_url && sanitizeImageUrl(track.cover_url) ? (
+                  {sanitizeImageUrl(track.cover_url) ? (
                     <img
                       src={sanitizeImageUrl(track.cover_url)}
                       alt="Cover"
