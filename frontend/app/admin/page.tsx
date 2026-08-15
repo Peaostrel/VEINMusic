@@ -22,6 +22,7 @@ import {
   Radio,
   RefreshCw,
 } from "lucide-react";
+import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 
 // --- ИНТЕРФЕЙСЫ ---
 interface User {
@@ -927,7 +928,7 @@ export default function AdminPanel() {
                         <div className="flex items-center gap-3">
                           <img
                             src={
-                              u.avatar_url ||
+                              sanitizeImageUrl(u.avatar_url) ||
                               "https://assets.vein.guru/avatars/default.png"
                             }
                             alt={u.username}
@@ -1090,7 +1091,7 @@ export default function AdminPanel() {
                     <div className="flex items-center gap-3">
                       <img
                         src={
-                          su.avatar_url ||
+                          sanitizeImageUrl(su.avatar_url) ||
                           "https://assets.vein.guru/avatars/default.png"
                         }
                         alt={su.username}

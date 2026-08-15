@@ -12,6 +12,7 @@ import {
   Disc,
   Sparkles,
 } from "lucide-react";
+import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 
 interface ChatMessage {
   from: string;
@@ -65,7 +66,8 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
   useEffect(() => {
     const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const hostUrl = process.env.NEXT_PUBLIC_WS_URL || "127.0.0.1:8000";
-    const wsUrl = `${wsProtocol}//${hostUrl}/ws/together/${roomId}`;
+    const safeRoomId = encodeURIComponent(roomId);
+    const wsUrl = `${wsProtocol}//${hostUrl}/ws/together/${safeRoomId}`;
 
     const ws = new WebSocket(wsUrl);
     socketRef.current = ws;
@@ -233,9 +235,9 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
                     track.is_playing ? "shadow-red-600/20" : ""
                   }`}
                 >
-                  {track.cover_url ? (
+                  {track.cover_url && sanitizeImageUrl(track.cover_url) ? (
                     <img
-                      src={track.cover_url}
+                      src={sanitizeImageUrl(track.cover_url)}
                       alt="Cover"
                       className="w-full h-full object-cover"
                     />

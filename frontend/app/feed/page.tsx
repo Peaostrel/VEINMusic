@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Radio, Search, Filter, RefreshCw } from "lucide-react";
+import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 
 interface FeedItem {
   id: number;
@@ -172,9 +173,9 @@ export default function GlobalFeed() {
               onClick={() => router.push(`/user/${s.username}`)}
             >
               <div className="relative shrink-0">
-                {s.cover_url ? (
+                {s.cover_url && sanitizeImageUrl(s.cover_url) ? (
                   <img
-                    src={s.cover_url}
+                    src={sanitizeImageUrl(s.cover_url)}
                     className="w-14 h-14 rounded-xl object-cover shadow-lg group-hover:scale-105 transition-transform"
                     alt="Cover"
                   />
@@ -186,7 +187,7 @@ export default function GlobalFeed() {
                 <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full border-2 border-[#121212] overflow-hidden bg-black">
                   <img
                     src={
-                      s.avatar_url ||
+                      sanitizeImageUrl(s.avatar_url) ||
                       `https://api.dicebear.com/9.x/micah/svg?seed=${s.username}&backgroundColor=transparent`
                     }
                     className="w-full h-full object-cover bg-[#282828]"
