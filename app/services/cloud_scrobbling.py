@@ -236,8 +236,9 @@ async def poll_external_services(process_func):
         try:
             from app.models import UserIntegration
             users = db.query(User).join(UserIntegration).filter(
-                (UserIntegration.spotify_refresh_token is not None) | (
-                    UserIntegration.yandex_token is not None)).all()
+                (UserIntegration.spotify_refresh_token.isnot(None) & (UserIntegration.spotify_refresh_token != "")) |
+                (UserIntegration.yandex_token.isnot(None) & (UserIntegration.yandex_token != ""))
+            ).all()
 
             if users:
                 tasks = [poll_user(u.id, process_func) for u in users]
