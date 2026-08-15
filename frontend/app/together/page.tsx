@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Radio, Users, Plus, Disc, ArrowRight } from "lucide-react";
+import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 
 interface RoomInfo {
   room_id: string;
@@ -116,9 +117,10 @@ export default function ListenTogetherLobby() {
 
             <div className="bg-black/40 border border-white/5 rounded-2xl p-3 flex items-center gap-3 w-full">
               <div className="w-10 h-10 rounded-xl bg-[#222] overflow-hidden shrink-0 flex items-center justify-center">
-                {room.current_track?.cover_url ? (
+                {room.current_track?.cover_url &&
+                sanitizeImageUrl(room.current_track.cover_url) ? (
                   <img
-                    src={room.current_track.cover_url}
+                    src={sanitizeImageUrl(room.current_track.cover_url)}
                     alt="Cover"
                     className="w-full h-full object-cover"
                   />
