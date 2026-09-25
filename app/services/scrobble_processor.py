@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 from sqlalchemy import func
@@ -17,6 +18,45 @@ from app.models import (
 from app.services.metadata_cleaner import clean_track_metadata
 
 TRACK_PATH = "/track/"
+
+# Tracks are a shared catalog, so client-supplied metadata is only accepted
+# within sane bounds / from known music services.
+MIN_CATALOG_DURATION = 30
+MAX_CATALOG_DURATION = 2 * 3600
+PLACEHOLDER_DURATION = 180
+TRACK_URL_HOSTS = (
+    "music.yandex.ru", "music.yandex.com", "music.yandex.by", "music.yandex.kz",
+    "open.spotify.com", "music.youtube.com", "www.youtube.com", "youtube.com",
+    "vk.com", "vk.ru", "soundcloud.com", "music.apple.com",
+)
+
+
+def _safe_http_url(url: str | None) -> str:
+    if not url:
+        return ""
+    try:
+        parsed = urlparse(url.strip())
+    except ValueError:
+        return ""
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return ""
+    return url.strip()[:2048]
+
+
+def _safe_track_url(url: str | None) -> str:
+    url = _safe_http_url(url)
+    if not url:
+        return ""
+    host = (urlparse(url).hostname or "").lower()
+    if host in TRACK_URL_HOSTS or host.endswith(".soundcloud.com"):
+        return url
+    return ""
+
+
+def _valid_duration(duration: int | None) -> int:
+    if duration and MIN_CATALOG_DURATION <= duration <= MAX_CATALOG_DURATION:
+        return int(duration)
+    return 0
 
 
 async def get_track_duration(url: str) -> int:
@@ -136,12 +176,11 @@ def _update_existing_track(
     if album and not track.album:
         track.album = album  # type: ignore[assignment]
         updated = True
-    if duration and duration > 0:
-        needs_update = track.duration == 0 or track.duration == 180 or abs(
-            track.duration - duration) > 5
-        if needs_update:
-            track.duration = duration  # type: ignore[assignment]
-            updated = True
+    # Only fill in an unknown/placeholder duration: a client must not be able
+    # to rewrite the duration of an existing catalog track for everyone.
+    if duration and track.duration in (0, None, PLACEHOLDER_DURATION) and duration != track.duration:
+        track.duration = duration  # type: ignore[assignment]
+        updated = True
     if updated:
         db.commit()
 
@@ -155,6 +194,9 @@ async def _get_or_create_track(
         duration: int,
         album: str) -> Track:
     norm_title, norm_artist = clean_track_metadata(title, artist)
+    cover_url = _safe_http_url(cover_url)
+    track_url = _safe_track_url(track_url)
+    duration = _valid_duration(duration)
 
     alias = db.query(TrackAlias).filter(
         func.lower(TrackAlias.original_title) == func.lower(title),
@@ -289,8 +331,10 @@ def _update_scrobble_progress(
         last_scrobble,
         now,
         l_updated_at,
-        is_playing: bool) -> None:
-    """Update listened_sec, xp, and streak on an existing scrobble."""
+        is_playing: bool) -> bool:
+    """Update listened_sec, xp, and streak on an existing scrobble.
+
+    Returns True when this update made the scrobble count (crossed the listen threshold)."""
     time_elapsed = (now - l_updated_at).total_seconds()
     old_listened = last_scrobble.listened_sec or 0
 
@@ -315,6 +359,8 @@ def _update_scrobble_progress(
         last_scrobble.xp_earned = 2 if is_fav else 1
         db.commit()
         _handle_streak(db, user)
+        return True
+    return False
 
 
 def _matches_filter(
@@ -347,6 +393,27 @@ def _is_blacklisted(title: str, artist: str, album: str, db: Session) -> bool:
     filters = db.query(BlacklistFilter).filter(BlacklistFilter.is_active == True).all()  # noqa: E712
     t_l, a_l, alb_l = title.lower(), artist.lower(), (album or "").lower()
     return any(_matches_filter(f, t_l, a_l, alb_l, title, artist) for f in filters)
+
+
+async def _dispatch_counted_scrobble(user: User, track: Track, scrobble: Scrobble) -> None:
+    """Notify webhooks and external services once a scrobble actually counts.
+
+    Runs in the background (arq worker, or an in-process task as fallback) so
+    that slow third-party endpoints never block the scrobble request."""
+    from app.core.redis import enqueue_background_task
+    history_item = format_history_item(scrobble, track)
+    played_at = scrobble.played_at
+    if played_at.tzinfo is None:
+        played_at = played_at.replace(tzinfo=UTC)
+    await enqueue_background_task(
+        'async_dispatch_webhook', "scrobble.created", history_item, int(user.id))
+    await enqueue_background_task(
+        'async_export_scrobble',
+        int(user.id),
+        str(track.artist),
+        str(track.title),
+        str(track.album) if track.album else None,
+        int(played_at.timestamp()))
 
 
 async def process_scrobble(
@@ -398,28 +465,8 @@ async def process_scrobble(
             "type": "NEW_SCROBBLE",
             "track": history_item
         })
-
-        # Trigger outbound webhook
-        from app.services.webhooks import dispatch_webhook_event
-        await dispatch_webhook_event(
-            event_name="scrobble.created",
-            data=history_item,
-            user_id=int(user.id),
-            db=db,
-        )
-
-        # Trigger external sync (Last.fm, ListenBrainz, Libre.fm)
-        from app.services.external_sync import dispatch_external_exports
-        await dispatch_external_exports(
-            user_id=int(user.id),
-            artist=str(track.artist),
-            title=str(track.title),
-            album=str(track.album) if track.album else None,
-            timestamp=int(now.timestamp()),
-            db=db,
-        )
     else:
-        _update_scrobble_progress(
+        counted = _update_scrobble_progress(
             db,
             user,
             track,
@@ -427,5 +474,7 @@ async def process_scrobble(
             now,
             l_updated_at,
             is_playing)
+        if counted and last_scrobble is not None:
+            await _dispatch_counted_scrobble(user, track, last_scrobble)
 
     return "ok"

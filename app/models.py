@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -184,6 +184,9 @@ class Achievement(Base):
 
 class UserAchievement(Base):
     __tablename__ = "user_achievements"
+    __table_args__ = (
+        Index("uq_user_achievements_user_achievement", "user_id", "achievement_id", unique=True),
+    )
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(
         Integer,
@@ -210,6 +213,9 @@ class UserAchievement(Base):
 
 class Follow(Base):
     __tablename__ = "follows"
+    __table_args__ = (
+        Index("uq_follows_follower_following", "follower_id", "following_id", unique=True),
+    )
     id = Column(Integer, primary_key=True, index=True)
     follower_id = Column(
         Integer,
@@ -231,6 +237,9 @@ class Follow(Base):
 
 class ScrobbleLike(Base):
     __tablename__ = "scrobble_likes"
+    __table_args__ = (
+        Index("uq_scrobble_likes_user_scrobble", "user_id", "scrobble_id", unique=True),
+    )
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(
         Integer,
