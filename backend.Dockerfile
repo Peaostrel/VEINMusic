@@ -62,6 +62,8 @@ USER appuser
 EXPOSE 8000
 
 # Command to run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# --proxy-headers: take the client IP from X-Forwarded-For, but only when the
+# request comes from FORWARDED_ALLOW_IPS (env var read by uvicorn).
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
 
 

@@ -4,7 +4,7 @@ import re
 import time
 import urllib.parse
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Annotated, Any
 
 import httpx
@@ -15,11 +15,13 @@ from fastapi import (
     Depends,
     File,
     HTTPException,
+    Query,
     Request,
     UploadFile,
 )
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from sqlalchemy import func, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.rate_limit import limiter
@@ -31,7 +33,6 @@ from app.models import (
     Follow,
     Scrobble,
     ScrobbleComment,
-    ScrobbleLike,
     Track,
     User,
     UserAchievement,
@@ -41,17 +42,16 @@ from app.schemas import (
     AchAssign,
     AchCreate,
     AchUpdate,
-    CommentRequest,
     FollowAction,
     LevelUpdate,
     LikeRequest,
     MarkRead,
     PushSubscribeRequest,
     ToggleAch,
+    YandexTokenUpdate,
 )
 from app.services.og_parser import parse_og_meta
 from app.services.scrobble_processor import format_history_item
-from app.utils import sanitize_text
 
 TRACK_PATH = "/track/"
 ALBUM_PATH = "/album/"
@@ -188,8 +188,10 @@ def get_user_timezone_offset(location: str) -> int:
         ("лондон", "london", "uk"): 0,
         ("германия", "germany", "берлин", "paris", "франция"): 1
     }
+    words = set(re.findall(r"\w+", loc))
     for keys, offset in mappings.items():
-        if any(k in loc for k in keys):
+        # Short codes like "uk" must match a whole word, not any substring
+        if any((k in words) if len(k) <= 3 else (k in loc) for k in keys):
             return offset
     return 3
 
@@ -344,7 +346,12 @@ def check_auto_achievements(user, db: Session):
             db.add(UserAchievement(user_id=user.id, achievement_id=ach.id))
             user.integration.bonus_xp = (
                 user.integration.bonus_xp or 0) + (ach.reward_xp or 0)
-            db.commit()
+            try:
+                db.commit()
+            except IntegrityError:
+                # Already awarded by a concurrent check (unique constraint):
+                # roll back so the reward XP is not granted twice.
+                db.rollback()
 
 
 def run_check_achievements_bg(user_id: int):
@@ -430,6 +437,8 @@ def get_taste_twins(username: str, db: Session):
         JOIN scrobbles s ON u.id = s.user_id
         JOIN tracks t ON s.track_id = t.id
         WHERE u.id != :my_id
+          AND (p.is_private IS NULL OR p.is_private = :not_private)
+          AND (u.is_banned IS NULL OR u.is_banned = :not_private)
           AND s.listened_sec * 100 >= t.duration * 85
           AND t.artist IN (
               SELECT DISTINCT t2.artist
@@ -443,7 +452,7 @@ def get_taste_twins(username: str, db: Session):
         LIMIT 10
     """)
 
-    rows = db.execute(sql, {"my_id": me.id}).fetchall()
+    rows = db.execute(sql, {"my_id": me.id, "not_private": False}).fetchall()
     if not rows:
         return []
 
@@ -490,11 +499,10 @@ router = APIRouter(tags=["extended"])
 
 # --- /api/user/mood ---
 @router.get("/api/user/mood",
-            responses={404: {"description": "User not found"}})
-def get_user_mood(username: str, db: Annotated[Session, Depends(get_db)]):
-    user = db.query(User).filter(User.username == username).first()
-    if not user:
-        raise HTTPException(404)
+            responses={403: {"description": "Private profile"},
+                       404: {"description": "User not found"}})
+def get_user_mood(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
+    user = _get_visible_user(username, request, db)
 
     # Analyze last 10 tracks
     recent = db.query(
@@ -520,15 +528,30 @@ def get_user_mood(username: str, db: Annotated[Session, Depends(get_db)]):
     return {"mood": "Меломан", "emoji": "🎧"}
 
 
-def _check_privacy_and_owner(user, request: Request, db: Session) -> tuple[bool, bool]:
-    current_u = None
+def _get_request_user(request: Request, db: Session) -> User | None:
     try:
-        current_u = get_current_user(request, db)
+        return get_current_user(request, db)
     except Exception:  # NOSONAR
-        pass
-    is_owner = current_u and current_u.id == user.id
-    is_hidden = user.profile.is_private and not is_owner
+        return None
+
+
+def _check_privacy_and_owner(user, request: Request, db: Session) -> tuple[bool, bool]:
+    current_u = _get_request_user(request, db)
+    is_owner = current_u is not None and current_u.id == user.id
+    is_private = bool(user.profile and user.profile.is_private)
+    is_hidden = is_private and not is_owner
     return bool(is_hidden), bool(is_owner)
+
+
+def _get_visible_user(username: str, request: Request, db: Session) -> User:
+    """Return the user if the requester may see their data, else raise 404/403."""
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(404, USER_NOT_FOUND)
+    is_hidden, _ = _check_privacy_and_owner(user, request, db)
+    if is_hidden:
+        raise HTTPException(403, "Это приватный профиль")
+    return user
 
 # --- /api/user/{username} ---
 
@@ -609,17 +632,20 @@ def get_user_info(username: str, request: Request,
                 "earned_at": ua.earned_at} for a,
             ua in ach_data],
         "streak": get_active_streak(user),
-        "has_api_key": bool(user.api_key) if is_owner else False,
-        "api_key": user.api_key if is_owner else None}
+        "has_api_key": bool(user.api_key) if is_owner else False}
 
 
 # --- /api/taste-match/{viewer}/{profile} ---
 @router.get("/api/taste-match/{viewer}/{profile}")
-def get_taste_match(viewer: str, profile: str,
+def get_taste_match(viewer: str, profile: str, request: Request,
                     db: Annotated[Session, Depends(get_db)]):
     viewer_user = db.query(User).filter(User.username == viewer).first()
     profile_user = db.query(User).filter(User.username == profile).first()
     if not viewer_user or not profile_user or viewer == profile:
+        return {"match": 0, "common_artists": []}
+    # Never reveal listening data of a private profile to other users
+    if (_check_privacy_and_owner(viewer_user, request, db)[0]
+            or _check_privacy_and_owner(profile_user, request, db)[0]):
         return {"match": 0, "common_artists": []}
 
     # SQL-based artist intersection for performance
@@ -661,11 +687,14 @@ def get_taste_match(viewer: str, profile: str,
 
 
 # --- /api/notifications/{username} ---
-@router.get("/api/notifications/{username}")
-def get_notifications(username: str, db: Annotated[Session, Depends(get_db)]):
-    user = db.query(User).filter(User.username == username).first()
-    if not user:
-        return []
+@router.get("/api/notifications/{username}",
+            responses={403: {"description": "Forbidden"}})
+def get_notifications(username: str,
+                      db: Annotated[Session, Depends(get_db)],
+                      current_user: Annotated[User, Depends(get_current_user)]):
+    if current_user.username != username:
+        raise HTTPException(403)
+    user = current_user
     new_achs = db.query(Achievement, UserAchievement).join(UserAchievement).filter(
         UserAchievement.user_id == user.id, UserAchievement.notified.is_(False)).all()
     return [{"ua_id": ua.id,
@@ -767,14 +796,21 @@ def _format_achievement_data(db: Session, user: User, a: Achievement, ua: UserAc
 
 # --- /api/achievements/all/{username} ---
 @router.get("/api/achievements/all/{username}",
-            responses={404: {"description": "User not found"}})
+            responses={403: {"description": "Private profile"},
+                       404: {"description": "User not found"}})
 def get_all_achievements(
-        username: str, db: Annotated[Session, Depends(get_db)]):
+        username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
     if not user:
         raise HTTPException(404, "User not found")
+    is_hidden, is_owner = _check_privacy_and_owner(user, request, db)
+    if is_hidden:
+        raise HTTPException(403, "Это приватный профиль")
 
-    check_auto_achievements(user, db)
+    # Re-checking awards writes to the DB, so only do it for the owner
+    # instead of on every anonymous page view.
+    if is_owner:
+        check_auto_achievements(user, db)
 
     all_achs = db.query(Achievement).all()
     user_achs = {ua.achievement_id: ua for ua in db.query(
@@ -804,15 +840,13 @@ def get_all_achievements(
 @router.get("/api/recommendations",
             responses={404: {"description": "User not found"}})
 def get_recommendations(
-        username: str, db: Annotated[Session, Depends(get_db)]):
+        username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
+    user = _get_visible_user(username, request, db)
+
     cache_key = f"recs_{username}"
     cached = get_from_cache(cache_key, ttl=1800)  # 30 min cache
     if cached:
         return cached
-
-    user = db.query(User).filter(User.username == username).first()
-    if not user:
-        raise HTTPException(404)
     twins = get_taste_twins(username, db)
     if not twins:
         return []
@@ -841,10 +875,8 @@ def get_recommendations(
 # --- /api/stats/wrapped ---
 @router.get("/api/stats/wrapped",
             responses={404: {"description": "User not found"}})
-def get_wrapped_stats(username: str, db: Annotated[Session, Depends(get_db)]):
-    user = db.query(User).filter(User.username == username).first()
-    if not user:
-        raise HTTPException(404)
+def get_wrapped_stats(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
+    user = _get_visible_user(username, request, db)
     last_month = datetime.now(UTC) - timedelta(days=30)
     base_filter = [
         Scrobble.user_id == user.id,
@@ -873,10 +905,13 @@ def get_wrapped_stats(username: str, db: Annotated[Session, Depends(get_db)]):
 
 # --- /api/search/taste ---
 @router.get("/api/search/taste")
-def search_by_taste(my_username: str, db: Annotated[Session, Depends(get_db)]):
-    # Find people with highest taste match
-    all_users = db.query(User).filter(
-        User.username != my_username).limit(50).all()
+@limiter.limit("10/minute")
+def search_by_taste(my_username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
+    _get_visible_user(my_username, request, db)
+    # Find people with highest taste match (private profiles are excluded)
+    all_users = db.query(User).join(UserProfile).filter(
+        User.username != my_username,
+        UserProfile.is_private.isnot(True)).limit(50).all()
     results = []
     for u in all_users:
         match_data = get_taste_match_internal(my_username, u.username, db)
@@ -1014,12 +1049,11 @@ def _get_activity_stats(
 @router.get("/api/detailed-stats/{username}",
             responses={404: {"description": "User not found"}})
 def get_detailed_stats(username: str,
+                       request: Request,
                        db: Annotated[Session,
                                      Depends(get_db)],
                        period: str = "all"):
-    user = db.query(User).filter(User.username == username).first()
-    if not user:
-        raise HTTPException(404)
+    user = _get_visible_user(username, request, db)
 
     base_filter = [
         Scrobble.user_id == user.id,
@@ -1159,19 +1193,26 @@ def get_detailed_stats(username: str,
 
 @router.get("/api/stats/{username}",
             responses={404: {"description": "User not found"}})
-def get_stats(username: str, db: Annotated[Session, Depends(get_db)]):
-    user = db.query(User).filter(User.username == username).first()
-    if not user:
-        raise HTTPException(404)
+def get_stats(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
+    user = _get_visible_user(username, request, db)
     streak = get_active_streak(user)
 
-    scrobbles = db.query(Scrobble, Track).join(Track).filter(
+    # Aggregate in SQL (per track and source) instead of loading every
+    # scrobble of the user into memory.
+    rows = db.query(
+        Track.artist, Track.title, Track.cover_url, Track.track_url,
+        Scrobble.source,
+        func.count(Scrobble.id),
+        func.coalesce(func.sum(Scrobble.xp_earned), 0),
+    ).join(Track).filter(
         Scrobble.user_id == user.id,
         Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85
+    ).group_by(
+        Track.id, Track.artist, Track.title, Track.cover_url, Track.track_url, Scrobble.source
     ).all()
 
-    total_scrobbles = len(scrobbles)
-    scrobbles_xp = sum(s.xp_earned for s, t in scrobbles)
+    total_scrobbles = sum(int(r[5]) for r in rows)
+    scrobbles_xp = sum(int(r[6]) for r in rows)
     base_xp = scrobbles_xp + (user.integration.bonus_xp or 0)
     total_xp = int(base_xp * 1.1) if streak >= 7 else base_xp
 
@@ -1179,28 +1220,31 @@ def get_stats(username: str, db: Annotated[Session, Depends(get_db)]):
     track_counts: dict[str, dict[str, Any]] = {}
     track_meta: dict[str, dict[str, Any]] = {}
 
-    for s, t in scrobbles:
-        for a in t.artist.split(','):
+    for t_artist, t_title, t_cover, t_url, source, plays, _xp in rows:
+        plays = int(plays)
+        t_artist = t_artist or ""
+        t_title = t_title or ""
+        for a in t_artist.split(','):
             a_clean = a.strip()
             if a_clean not in artist_counts:
                 artist_counts[a_clean] = {"plays": 0, "sources": {}}
-            artist_counts[a_clean]["plays"] += 1
-            artist_counts[a_clean]["sources"][s.source] = artist_counts[a_clean]["sources"].get(
-                s.source, 0) + 1
+            artist_counts[a_clean]["plays"] += plays
+            artist_counts[a_clean]["sources"][source] = artist_counts[a_clean]["sources"].get(
+                source, 0) + plays
 
-        track_key = f"{t.artist.strip().lower()} - {t.title.strip().lower()}"
+        track_key = f"{t_artist.strip().lower()} - {t_title.strip().lower()}"
         if track_key not in track_counts:
             track_counts[track_key] = {"plays": 0, "sources": {}}
-        track_counts[track_key]["plays"] += 1
-        track_counts[track_key]["sources"][s.source] = track_counts[track_key]["sources"].get(
-            s.source, 0) + 1
+        track_counts[track_key]["plays"] += plays
+        track_counts[track_key]["sources"][source] = track_counts[track_key]["sources"].get(
+            source, 0) + plays
 
         if track_key not in track_meta:
             track_meta[track_key] = {
-                "title": t.title,
-                "artist": t.artist,
-                "cover_url": t.cover_url,
-                "track_url": t.track_url}
+                "title": t_title,
+                "artist": t_artist,
+                "cover_url": t_cover,
+                "track_url": t_url}
 
     top_artists = sorted(
         artist_counts.items(),
@@ -1237,19 +1281,21 @@ def get_stats(username: str, db: Annotated[Session, Depends(get_db)]):
 # --- /api/activity/{username} ---
 @router.get("/api/activity/{username}",
             responses={404: {"description": "User not found"}})
-def get_activity(username: str, db: Annotated[Session, Depends(get_db)]):
-    user = db.query(User).filter(User.username == username).first()
-    if not user:
-        raise HTTPException(404)
+def get_activity(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
+    user = _get_visible_user(username, request, db)
 
     scrobbles = db.query(Scrobble.played_at).join(Track).filter(
         Scrobble.user_id == user.id,
         Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85
     ).all()
 
+    user_tz = timezone(timedelta(hours=get_user_timezone_offset(
+        user.profile.location if user.profile else "")))
     activity_dict: dict[str, int] = {}
     for (played_at,) in scrobbles:
-        local_dt = played_at.replace(tzinfo=UTC).astimezone()
+        if played_at.tzinfo is None:
+            played_at = played_at.replace(tzinfo=UTC)
+        local_dt = played_at.astimezone(user_tz)
         date_str = local_dt.strftime('%Y-%m-%d')
         activity_dict[date_str] = activity_dict.get(date_str, 0) + 1
 
@@ -1258,9 +1304,9 @@ def get_activity(username: str, db: Annotated[Session, Depends(get_db)]):
 
 # --- /api/current-track/{username} ---
 @router.get("/api/current-track/{username}")
-def get_current_track(username: str, db: Annotated[Session, Depends(get_db)]):
+def get_current_track(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
-    if not user:
+    if not user or _check_privacy_and_owner(user, request, db)[0]:
         return {"playing": False}
 
     last_scrobble = db.query(
@@ -1273,8 +1319,10 @@ def get_current_track(username: str, db: Annotated[Session, Depends(get_db)]):
         return {"playing": False}
 
     s, t = last_scrobble
-    is_active = s.is_playing and (datetime.now(
-        UTC) - (s.updated_at or s.played_at)).total_seconds() < 900
+    last_seen = s.updated_at or s.played_at
+    if last_seen.tzinfo is None:
+        last_seen = last_seen.replace(tzinfo=UTC)
+    is_active = s.is_playing and (datetime.now(UTC) - last_seen).total_seconds() < 900
 
     if is_active:
         lvl, rank, _, _ = get_user_level_info(user, db)
@@ -1359,10 +1407,10 @@ def get_followers(username: str, request: Request,
     if not target:
         raise HTTPException(404)
 
-    # Privacy check
-    api_key = request.query_params.get("api_key")
-    is_owner = api_key and target.api_key == api_key
-    if target.profile.is_private and not is_owner:
+    # Privacy check: the owner (authenticated via session/API key) can
+    # always see their own list
+    is_hidden, _ = _check_privacy_and_owner(target, request, db)
+    if is_hidden:
         return []
 
     followers = db.query(User).join(
@@ -1389,10 +1437,10 @@ def get_following(username: str, request: Request,
     if not target:
         raise HTTPException(404)
 
-    # Privacy check
-    api_key = request.query_params.get("api_key")
-    is_owner = api_key and target.api_key == api_key
-    if target.profile.is_private and not is_owner:
+    # Privacy check: the owner (authenticated via session/API key) can
+    # always see their own list
+    is_hidden, _ = _check_privacy_and_owner(target, request, db)
+    if is_hidden:
         return []
 
     following = db.query(User).join(
@@ -1416,17 +1464,23 @@ def get_leaderboard(db: Annotated[Session, Depends(get_db)]):
     # Calculate XP for all users in one query
     sql = text("""
         SELECT u.username, p.display_name, p.avatar_url, i.is_verified, p.theme,
-               (COALESCE(SUM(s.xp_earned), 0) + i.bonus_xp) as total_xp, u.role
+               (COALESCE(SUM(s.xp_earned), 0) + COALESCE(i.bonus_xp, 0)) as total_xp, u.role
         FROM users u
         JOIN user_profiles p ON u.id = p.user_id
         JOIN user_integrations i ON u.id = i.user_id
-        LEFT JOIN scrobbles s ON u.id = s.user_id
+        LEFT JOIN (
+            SELECT s.user_id, s.xp_earned
+            FROM scrobbles s
+            JOIN tracks t ON s.track_id = t.id
+            WHERE s.listened_sec * 100 >= COALESCE(NULLIF(t.duration, 0), 180) * 85
+        ) s ON u.id = s.user_id
+        WHERE (u.is_banned IS NULL OR u.is_banned = :not_banned)
         GROUP BY u.id, p.display_name, p.avatar_url, i.is_verified, p.theme, i.bonus_xp, u.role
         ORDER BY total_xp DESC
         LIMIT 50
     """)
 
-    rows = db.execute(sql).fetchall()
+    rows = db.execute(sql, {"not_banned": False}).fetchall()
     res = []
     for r in rows:
         uname, dname, avatar, verified, theme, txp, urole = r
@@ -1569,19 +1623,19 @@ async def start_lastfm_import(data: LikeRequest,
         raise HTTPException(500, "Last.fm API key not configured on server")
 
     IMPORTING_USERS.add(str(user.id))
-    user.integration.has_imported_lastfm = True
-    db.commit()
+    # has_imported_lastfm is set by the background job only once the import
+    # actually succeeded, so a failed import can be retried.
     background_tasks.add_task(import_lastfm_history, int(user.id), SessionLocal)
     return {"status": "import_started"}
 
 
 # --- /api/integrations/yandex ---
 @router.post("/api/integrations/yandex")
-def update_yandex_token(data: dict, db: Annotated[Session, Depends(
+def update_yandex_token(data: YandexTokenUpdate, db: Annotated[Session, Depends(
         get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
 
-    user.integration.yandex_token = data.get("token")
+    user.integration.yandex_token = data.token.strip() or None
     db.commit()
     return {"status": "ok"}
 
@@ -1620,51 +1674,9 @@ def disconnect_lastfm(data: LikeRequest, db: Annotated[Session, Depends(
     return {"status": "ok"}
 
 
-# --- /api/scrobble/{scrobble_id}/like ---
-@router.post("/api/scrobble/{scrobble_id}/like")
-@limiter.limit("30/minute")
-def toggle_like(scrobble_id: int,
-                request: Request,
-                data: LikeRequest,
-                db: Annotated[Session,
-                              Depends(get_db)],
-                current_user: Annotated[User,
-                                        Depends(get_current_user)]):
-    user = current_user
-
-    like = db.query(ScrobbleLike).filter_by(
-        user_id=user.id, scrobble_id=scrobble_id).first()
-    if like:
-        db.delete(like)
-        db.commit()
-        return {"status": "unliked"}
-    else:
-        db.add(ScrobbleLike(user_id=user.id, scrobble_id=scrobble_id))
-        db.commit()
-        return {"status": "liked"}
-
-
-# --- /api/scrobble/{scrobble_id}/comment ---
-@router.post("/api/scrobble/{scrobble_id}/comment")
-@limiter.limit("20/minute")
-def add_comment(scrobble_id: int,
-                request: Request,
-                data: CommentRequest,
-                db: Annotated[Session,
-                              Depends(get_db)],
-                current_user: Annotated[User,
-                                        Depends(get_current_user)]):
-    user = current_user
-
-    # Sanitize comment content to prevent XSS
-    clean_content = sanitize_text(data.content)
-    db.add(
-        ScrobbleComment(
-            user_id=user.id,
-            scrobble_id=scrobble_id,
-            content=clean_content))
-    db.commit()
-    return {"status": "ok"}
+# NOTE: POST /api/scrobble/{id}/like and /comment live in app/routers/scrobbling.py
+# (with privacy checks). Duplicates that used to be defined here were shadowed
+# by those routes and have been removed.
 
 
 # --- /api/follow/{target_username} ---
@@ -1691,7 +1703,10 @@ def toggle_follow(target_username: str,
         return {"status": "unfollowed"}
     else:
         db.add(Follow(follower_id=follower.id, following_id=target.id))
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()  # concurrent duplicate request
         return {"status": "followed"}
 
 
@@ -1810,15 +1825,17 @@ def assign_achievement(target_username: str,
     user = db.query(User).filter(User.username == target_username).first()
     if not user:
         raise HTTPException(404, USER_NOT_FOUND)
+    ach = db.query(Achievement).filter_by(id=data.achievement_id).first()
+    if not ach:
+        raise HTTPException(404, "Достижение не найдено")
     if not db.query(UserAchievement).filter_by(user_id=user.id,
                                                achievement_id=data.achievement_id).first():
-        ach = db.query(Achievement).filter_by(id=data.achievement_id).first()
         db.add(
             UserAchievement(
                 user_id=user.id,
                 achievement_id=data.achievement_id))
         user.integration.bonus_xp = int(
-            user.integration.bonus_xp or 0) + int(ach.reward_xp if ach and ach.reward_xp else 0)
+            user.integration.bonus_xp or 0) + int(ach.reward_xp or 0)
         db.commit()
     return {"status": "ok"}
 
@@ -1965,9 +1982,10 @@ async def upload_file(current_user: Annotated[User, Depends(
     if file.content_type not in allowed_types:
         raise HTTPException(400, "Только изображения (JPG, PNG, WEBP, GIF)")
 
-    # Security: Validate file size (max 5MB)
+    # Security: Validate file size (max 5MB) without reading an arbitrarily
+    # large upload into memory
     MAX_SIZE = 5 * 1024 * 1024
-    content = await file.read()
+    content = await file.read(MAX_SIZE + 1)
     if len(content) > MAX_SIZE:
         raise HTTPException(400, "Файл слишком большой (макс. 5МБ)")
 
@@ -2060,8 +2078,8 @@ def _get_or_create_import_track(
         db,
         title: str,
         artist: str,
-        cover: str,
-        album: str) -> Track:
+        cover: str | None,
+        album: str | None) -> Track:
     """Find or create a track during Last.fm import."""
     track = db.query(Track).filter(
         Track.title == title,
@@ -2115,10 +2133,15 @@ async def _import_lastfm_page(db, client, user, page: int):
         if t.get("@attr", {}).get("nowplaying") == "true":
             continue
         title = t.get("name")
-        artist = t.get("artist", {}).get(TEXT_KEY)
-        album = t.get("album", {}).get(TEXT_KEY)
-        cover = t.get("image", [{}, {}, {}, {TEXT_KEY: ""}])[3].get(TEXT_KEY)
-        uts = int(t.get("date", {}).get("uts", 0))
+        artist = (t.get("artist") or {}).get(TEXT_KEY)
+        if not title or not artist:
+            continue
+        album = (t.get("album") or {}).get(TEXT_KEY)
+        images = t.get("image") or []
+        cover = (images[-1] or {}).get(TEXT_KEY) if images else None
+        uts = int((t.get("date") or {}).get("uts", 0))
+        if not uts:
+            continue
         dt = datetime.fromtimestamp(uts, tz=UTC)
 
         existing = db.query(Scrobble).filter(
@@ -2155,7 +2178,8 @@ async def import_lastfm_history(user_id: int, db_session_factory):
             print(error)
             return
 
-        async with httpx.AsyncClient() as client:
+        succeeded = False
+        async with httpx.AsyncClient(timeout=15.0) as client:
             page = 1
             total_pages = 1
             # Limit to 5 pages (1000 tracks) for now
@@ -2163,8 +2187,16 @@ async def import_lastfm_history(user_id: int, db_session_factory):
                 page_count, total_pages = await _import_lastfm_page(db, client, user, page)
                 if page_count is None:
                     break
+                succeeded = True
                 imported_count += page_count
                 page += 1
+
+        if not succeeded:
+            await manager.broadcast_to_user(user.username, {"type": "IMPORT_FINISHED", "message": "❌ Импорт из Last.fm не удался. Попробуйте позже."})
+            return
+
+        user.integration.has_imported_lastfm = True
+        db.commit()
 
         print(
             f"Import Finished: Imported {imported_count} scrobbles for user {user.username}")
@@ -2254,19 +2286,16 @@ def get_public_avatar_frames(db: Annotated[Session, Depends(get_db)]):
 # --- /api/user/{username}/compatibility/{target_username} ---
 @router.get(
     "/api/user/{username}/compatibility/{target_username}",
-    responses={404: {"description": "User Not Found"}}
+    responses={403: {"description": "Private profile"}, 404: {"description": "User Not Found"}}
 )
 def get_user_taste_compatibility(
-    username: str, target_username: str, db: Annotated[Session, Depends(get_db)]
+    username: str, target_username: str, request: Request, db: Annotated[Session, Depends(get_db)]
 ):
     """Calculate musical taste compatibility between two users."""
     from app.services.compatibility import calculate_compatibility
 
-    u1 = db.query(User).filter(User.username == username).first()
-    u2 = db.query(User).filter(User.username == target_username).first()
-
-    if not u1 or not u2:
-        raise HTTPException(404, "Один из пользователей не найден")
+    u1 = _get_visible_user(username, request, db)
+    u2 = _get_visible_user(target_username, request, db)
 
     result = calculate_compatibility(int(u1.id), int(u2.id), db)
     return {
@@ -2283,15 +2312,14 @@ def get_user_taste_compatibility(
 )
 def get_user_recommendations(
     username: str,
+    request: Request,
     db: Annotated[Session, Depends(get_db)],
-    limit: int = 15,
+    limit: Annotated[int, Query(ge=1, le=50)] = 15,
 ):
     """Get smart recommendations for a specific user based on taste profile and vector similarities."""
     from app.services.recommendations import generate_smart_recommendations
 
-    user = db.query(User).filter(User.username == username).first()
-    if not user:
-        raise HTTPException(404, "Пользователь не найден")
+    user = _get_visible_user(username, request, db)
 
     return generate_smart_recommendations(user, db, limit=limit)
 
@@ -2300,7 +2328,7 @@ def get_user_recommendations(
 def get_my_recommendations(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
-    limit: int = 15,
+    limit: Annotated[int, Query(ge=1, le=50)] = 15,
 ):
     """Get personalized smart recommendations for the authenticated user."""
     from app.services.recommendations import generate_smart_recommendations
@@ -2315,20 +2343,26 @@ def get_vapid_key():
     return {"vapid_public_key": VAPID_PUBLIC_KEY}
 
 
-@router.post("/api/push/subscribe")
+@router.post("/api/push/subscribe", responses={400: {"description": "Invalid endpoint"}})
 def subscribe_push(
     payload: PushSubscribeRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
     from app.models import PushSubscription
+    from app.utils import is_safe_url
 
+    if not payload.endpoint.startswith("https://") or not is_safe_url(payload.endpoint):
+        raise HTTPException(400, "Некорректный push endpoint")
+
+    # endpoint is globally unique: a browser re-subscribing under another
+    # account takes the subscription over instead of failing with a 500.
     existing = db.query(PushSubscription).filter(
-        PushSubscription.user_id == current_user.id,
         PushSubscription.endpoint == payload.endpoint,
     ).first()
 
     if existing:
+        existing.user_id = current_user.id  # type: ignore[assignment]
         existing.p256dh = payload.p256dh  # type: ignore[assignment]
         existing.auth = payload.auth  # type: ignore[assignment]
     else:

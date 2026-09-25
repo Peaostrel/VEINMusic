@@ -352,7 +352,16 @@ function SettingsContent() {
           ),
         );
         setGeneratedApiKey(safeKey);
-        localStorage.setItem("apiKey", safeKey);
+        // Send the key to the browser extension (if installed) without
+        // persisting it in localStorage, where any XSS could read it.
+        globalThis.postMessage(
+          {
+            type: "VEIN_EXTENSION_SYNC_KEYS",
+            username: localStorage.getItem("username") || "",
+            apiKey: safeKey,
+          },
+          globalThis.location.origin,
+        );
         setStatus("✅ Новый API ключ успешно сгенерирован!");
         setTimeout(() => setStatus(""), 5000);
       } else {
@@ -365,7 +374,7 @@ function SettingsContent() {
   };
 
   const handleCopyKey = () => {
-    const keyToCopy = generatedApiKey || userProfile?.api_key;
+    const keyToCopy = generatedApiKey;
     if (keyToCopy) {
       navigator.clipboard.writeText(keyToCopy);
       setCopied(true);

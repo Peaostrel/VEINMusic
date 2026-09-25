@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.redis import redis_lock
@@ -101,7 +102,7 @@ def get_history(username: str,
 
     # Privacy check: if user is private, only the user themselves can view
     # their history
-    if user.profile.is_private:
+    if user.profile and user.profile.is_private:
         is_owner = current_user and current_user.id == user.id
         if not is_owner:
             raise HTTPException(
@@ -206,10 +207,13 @@ def get_friends_history(username: str,
     return [format_history_item(s, t, counters=counters) for s, t in scrobbles]
 
 
-@router.get("/discovery/taste-twins")
+@router.get("/discovery/taste-twins",
+            responses={403: {"description": "Private profile"},
+                       404: {"description": "User not found"}})
 def api_get_taste_twins(
-        username: str, db: Annotated[Session, Depends(get_db)]):
-    from app.routers.extended import get_taste_twins
+        username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
+    from app.routers.extended import _get_visible_user, get_taste_twins
+    _get_visible_user(username, request, db)
     return get_taste_twins(username, db)
 
 
@@ -238,7 +242,10 @@ def toggle_like(scrobble_id: int, request: Request, db: Annotated[Session, Depen
         return {"status": "unliked"}
     else:
         db.add(ScrobbleLike(user_id=user.id, scrobble_id=scrobble_id))
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()  # concurrent duplicate like
         return {"status": "liked"}
 
 

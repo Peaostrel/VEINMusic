@@ -190,6 +190,9 @@ async def sync_yandex_status(user: User, db: Session, process_func):
             print(f"Yandex sync error for user {user.username}: {e}")
 
 
+POLL_CONCURRENCY = 5
+
+
 async def poll_user(user_id: int, process_func):
     import random
     # Add jitter inside the task itself so all tasks run concurrently
@@ -200,11 +203,15 @@ async def poll_user(user_id: int, process_func):
         if not u:
             return
 
-        if u.integration.spotify_refresh_token:
-            await sync_spotify_status(u, local_db, process_func)
+        # Same per-user lock as POST /api/scrobble, so cloud polling and
+        # client scrobbles never process concurrently for one user.
+        from app.core.redis import redis_lock
+        async with redis_lock(f"scrobble_lock:{user_id}", expire_sec=30):
+            if u.integration.spotify_refresh_token:
+                await sync_spotify_status(u, local_db, process_func)
 
-        if u.integration.yandex_token:
-            await sync_yandex_status(u, local_db, process_func)
+            if u.integration.yandex_token:
+                await sync_yandex_status(u, local_db, process_func)
 
         u.integration.last_sync = datetime.now(UTC)
         local_db.commit()
@@ -214,6 +221,17 @@ async def poll_user(user_id: int, process_func):
         local_db.close()
 
 
+def get_pollable_user_ids(db: Session) -> list[int]:
+    """IDs of non-banned users with a linked Spotify or Yandex account."""
+    from app.models import UserIntegration
+    # NB: must be SQL expressions (.isnot); a Python `x is not None` on a
+    # Column evaluates to True and would select every user.
+    return [row[0] for row in db.query(User.id).join(UserIntegration).filter(
+        User.is_banned.isnot(True),
+        UserIntegration.spotify_refresh_token.isnot(None)
+        | UserIntegration.yandex_token.isnot(None)).all()]
+
+
 async def poll_external_services(process_func):
     """
     Основной цикл облачного скробблинга.
@@ -221,14 +239,18 @@ async def poll_external_services(process_func):
     while True:
         db = SessionLocal()
         try:
-            from app.models import UserIntegration
-            users = db.query(User).join(UserIntegration).filter(
-                (UserIntegration.spotify_refresh_token is not None) | (
-                    UserIntegration.yandex_token is not None)).all()
+            user_ids = get_pollable_user_ids(db)
+            db.close()
 
-            if users:
-                tasks = [poll_user(u.id, process_func) for u in users]
-                await asyncio.gather(*tasks)
+            if user_ids:
+                # Bound concurrency so polling never exhausts the DB pool
+                semaphore = asyncio.Semaphore(POLL_CONCURRENCY)
+
+                async def _bounded_poll(uid: int):
+                    async with semaphore:
+                        await poll_user(uid, process_func)
+
+                await asyncio.gather(*(_bounded_poll(uid) for uid in user_ids))
 
         except Exception as e:
             print(f"Cloud Worker Global Error: {e}")
