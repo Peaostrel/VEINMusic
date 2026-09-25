@@ -2,16 +2,15 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { THEMES, LvlBadge, VerifiedBadge } from "../Navbar";
+import { API_URL } from "@/app/lib/api";
+import { fallbackOnce } from "@/app/lib/img";
 
 export default function Leaderboard() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/leaderboard`,
-      { credentials: "include" },
-    )
+    fetch(`${API_URL}/api/leaderboard`, { credentials: "include" })
       .then((res) => res.json())
       .then((data) => {
         setUsers(data);
@@ -138,9 +137,9 @@ function LeaderboardItem({ u, idx }: Readonly<{ u: any; idx: number }>) {
             }
             className={`rounded-full object-cover bg-black shadow-md border-2 transition-transform duration-300 group-hover:rotate-6 ${avatarClass}`}
             style={avatarStyle}
-            onError={(e) => {
-              e.currentTarget.src = `https://api.dicebear.com/9.x/micah/svg?seed=${u.username}&backgroundColor=transparent`;
-            }}
+            onError={fallbackOnce(
+              `https://api.dicebear.com/9.x/micah/svg?seed=${u.username}&backgroundColor=transparent`,
+            )}
             alt="avatar"
           />
         </div>

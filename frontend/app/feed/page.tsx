@@ -4,6 +4,8 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Radio, Search, Filter, RefreshCw } from "lucide-react";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
+import { API_URL } from "@/app/lib/api";
+import { fallbackOnce } from "@/app/lib/img";
 
 interface FeedItem {
   id: number;
@@ -45,10 +47,9 @@ export default function GlobalFeed() {
 
   const fetchFeed = async () => {
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/global-history`,
-        { credentials: "include" },
-      );
+      const res = await fetch(`${API_URL}/api/global-history`, {
+        credentials: "include",
+      });
       if (res.ok) {
         const data = await res.json();
         setFeed(data || []);
@@ -191,9 +192,9 @@ export default function GlobalFeed() {
                       `https://api.dicebear.com/9.x/micah/svg?seed=${s.username}&backgroundColor=transparent`
                     }
                     className="w-full h-full object-cover bg-[#282828]"
-                    onError={(e) =>
-                      (e.currentTarget.src = `https://api.dicebear.com/9.x/micah/svg?seed=${s.username}&backgroundColor=transparent`)
-                    }
+                    onError={fallbackOnce(
+                      `https://api.dicebear.com/9.x/micah/svg?seed=${s.username}&backgroundColor=transparent`,
+                    )}
                     alt={`${s.username}'s avatar`}
                   />
                 </div>

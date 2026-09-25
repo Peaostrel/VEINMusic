@@ -1,13 +1,23 @@
 // VEIN Music Extension - Background Service Worker with Offline Buffering
 
+// Chrome loads this file as a service worker; Firefox loads pairing.js via
+// the "scripts" list in the manifest.
+if (typeof veinPollPairing === 'undefined' && typeof importScripts === 'function') {
+    importScripts('pairing.js');
+}
+
 const ALARM_NAME = 'FLUSH_OFFLINE_SCROBBLES';
 
-// Setup periodic alarm to flush offline queue
+// Setup periodic alarm to flush offline queue (and finish device pairing
+// if the popup was closed before the user approved the code)
 if (chrome.alarms) {
     chrome.alarms.create(ALARM_NAME, { periodInMinutes: 1 });
     chrome.alarms.onAlarm.addListener((alarm) => {
         if (alarm.name === ALARM_NAME) {
             flushOfflineQueue();
+            veinPollPairing().then((status) => {
+                if (status === 'approved') flushOfflineQueue();
+            });
         }
     });
 }
@@ -33,7 +43,7 @@ function flushOfflineQueue() {
         const queue = Array.isArray(res.offline_scrobbles) ? res.offline_scrobbles : [];
         if (queue.length === 0 || !res.apiKey) return;
 
-        const API_BASE = res.apiUrl || 'https://music.vein.guru';
+        const API_BASE = veinApiBase(res);
         const apiKey = res.apiKey;
         const remaining = [];
         let flushedCount = 0;
@@ -101,7 +111,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // 3. Отправляем трек на сервер или сохраняем в оффлайн-очередь
     if (request.type === 'SCROBBLE') {
         chrome.storage.local.get(['apiUrl', 'apiKey'], (settings) => {
-            const API_BASE = settings.apiUrl || 'https://music.vein.guru';
+            const API_BASE = veinApiBase(settings);
             const apiKey = settings.apiKey;
             const payload = request.data;
             
