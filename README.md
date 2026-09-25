@@ -169,22 +169,33 @@ git clone https://github.com/Peaostrel/VEINMusic.git
 cd VEINMusic
 ```
 
-### 2. Запуск баз данных (PostgreSQL & Redis)
+### 2. Настройка окружения
 ```bash
-docker-compose up -d
+cp .env.example .env
+# Обязательно задайте SECRET_KEY, POSTGRES_PASSWORD и REDIS_PASSWORD
 ```
 
-### 3. Настройка и запуск бэкенда
+### 3. Запуск всего стека в Docker (продакшен)
 ```bash
-# Установка зависимостей
+docker compose up -d --build
+```
+Поднимаются PostgreSQL, Redis, API (миграции применяются автоматически при старте),
+фоновый воркер arq (достижения, вебхуки, экспорт скробблов, импорт Last.fm,
+опрос Spotify/Яндекса) и фронтенд. Проверка состояния: `GET /health`.
+
+### 3а. Локальная разработка без Docker для кода
+```bash
+# Только базы данных
+docker compose up -d db redis
+
 pip install -r requirements.txt
+python -m app.core.migrate          # миграции (подхватывает и старые базы без истории Alembic)
 
-# Применение миграций БД
-alembic upgrade head
-
-# Запуск сервера разработки
 uvicorn app.main:app --reload --port 8000
+arq app.worker.WorkerSettings       # фоновый воркер (в отдельном терминале)
 ```
+Web Push включается ключами VAPID: `python -m app.services.push_notifications`
+выведет пару ключей для `.env`.
 
 ### 4. Настройка и запуск фронтенда
 ```bash
@@ -205,15 +216,24 @@ python -m desktop_client.main
 1. Откройте любой Chromium-браузер (Chrome, Edge, Яндекс Браузер, Brave).
 2. Перейдите в `chrome://extensions/` и включите **«Режим разработчика»** (Developer Mode).
 3. Нажмите **«Загрузить распакованное расширение»** (Load unpacked) и укажите папку `music-extension`.
-4. Авторизуйтесь на сайте `http://localhost:3000` — расширение автоматически синхронизирует сессию!
+4. В окне расширения нажмите **«Подключить через сайт»** и подтвердите код на странице `/link`.
+   Расширение получит собственный ключ, который можно отозвать в настройках
+   («Безопасность и данные»).
 
 ---
 
 ## 🧪 Тестирование и проверка качества
 
 ```bash
-# Запуск полного набора юнит- и интеграционных тестов бэкенда (48 тестов)
+# Юнит- и интеграционные тесты бэкенда (SQLite)
 pytest
+
+# Те же тесты на PostgreSQL и с реальным Redis (как в CI)
+TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/veinmusic_test \
+TEST_REDIS_URL=redis://localhost:6379 pytest
+
+# Проверка, что миграции совпадают с моделями
+alembic check
 
 # Проверка типизации и линтинга бэкенда
 flake8 app tests desktop_client
