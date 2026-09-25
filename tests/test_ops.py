@@ -32,3 +32,13 @@ def test_poll_once_polls_and_releases_lock():
         asyncio.run(cloud_scrobbling.poll_once(AsyncMock()))
     assert poll_user.await_count == 2
     fake_redis.delete.assert_awaited_once_with(cloud_scrobbling.POLL_LOCK_KEY)
+
+
+def test_together_room_is_removed_after_everyone_leaves(client):
+    origin = {"Origin": "http://localhost:3000"}
+    with client.websocket_connect("/ws/together/cleanup-room", headers=origin) as ws:
+        assert ws.receive_json()["type"] == "ROOM_STATE"
+        rooms = client.get("/api/together/rooms").json()["rooms"]
+        assert any(r["room_id"] == "cleanup-room" for r in rooms)
+    rooms = client.get("/api/together/rooms").json()["rooms"]
+    assert not any(r["room_id"] == "cleanup-room" for r in rooms)

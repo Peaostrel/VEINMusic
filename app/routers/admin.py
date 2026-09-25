@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
@@ -413,14 +414,20 @@ def set_xp_multiplier(data: EconomyMultiplierRequest, admin: Annotated[User, Dep
 # ─── SYSTEM HEALTH & METRICS ──────────────────────────────────────────────────
 
 @router.get("/system/health")
-def get_system_health(db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
-    users_cnt = db.query(User).count()
-    scrobbles_cnt = db.query(Scrobble).count()
-    tracks_cnt = db.query(Track).count()
-    ws_connections = sum(len(c) for c in manager.active_connections.values())
+async def get_system_health(db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
+    def _counts() -> tuple[int, int, int, int, int]:
+        return (
+            db.query(User).count(),
+            db.query(Scrobble).count(),
+            db.query(Track).count(),
+            db.query(UserIntegration).filter(UserIntegration.yandex_token.isnot(None)).count(),
+            db.query(UserIntegration).filter(UserIntegration.spotify_access_token.isnot(None)).count(),
+        )
 
-    yandex_sync_users = db.query(UserIntegration).filter(UserIntegration.yandex_token.isnot(None)).count()
-    spotify_sync_users = db.query(UserIntegration).filter(UserIntegration.spotify_access_token.isnot(None)).count()
+    users_cnt, scrobbles_cnt, tracks_cnt, yandex_sync_users, spotify_sync_users = await asyncio.to_thread(_counts)
+    # WebSockets are held per API process; this is the count for this process
+    ws_connections = sum(len(c) for c in manager.active_connections.values())
+    rooms = await manager.get_active_rooms_info()
 
     return {
         "status": "healthy",
@@ -432,7 +439,7 @@ def get_system_health(db: Annotated[Session, Depends(get_db)], admin: Annotated[
             "pool_status": "active",
         },
         "websockets": {
-            "active_rooms": len(manager.active_connections),
+            "active_rooms": len(rooms),
             "connected_clients": ws_connections,
         },
         "cloud_scrobblers": {
@@ -676,8 +683,8 @@ def retry_lastfm_import_job(
 # ─── LISTEN TOGETHER ROOMS MONITORING ─────────────────────────────────────────
 
 @router.get("/together/rooms")
-def list_admin_together_rooms(
+async def list_admin_together_rooms(
     admin: Annotated[User, Depends(get_admin_user)],
 ):
     """List live Listen Together rooms and metrics."""
-    return {"rooms": manager.get_active_rooms_info()}
+    return {"rooms": await manager.get_active_rooms_info()}

@@ -158,6 +158,6 @@ async def send_test_push(
 
 # --- Listen Together REST API ---
 @router.get("/api/together/rooms")
-def list_together_rooms():
+async def list_together_rooms():
     """List active Listen Together rooms with listener counts and current tracks."""
-    return {"rooms": manager.get_active_rooms_info()}
+    return {"rooms": await manager.get_active_rooms_info()}

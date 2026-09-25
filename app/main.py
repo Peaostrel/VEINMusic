@@ -6,6 +6,7 @@ import secrets
 import time
 from contextlib import asynccontextmanager
 
+import anyio
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
@@ -74,7 +75,12 @@ async def lifespan(app: FastAPI):
         background_tasks.add(task)
         task.add_done_callback(background_tasks.discard)
 
+    # Relay WebSocket events published by other processes (Redis pub/sub)
+    await manager.start()
+
     yield
+
+    await manager.stop()
 
     # Cancel background tasks on shutdown
     for t in set(background_tasks):
@@ -151,7 +157,6 @@ async def health():
 
 # Setup WebSocket manually at root
 
-MAX_CHAT_HISTORY = 100
 MAX_TEXT_FIELD_LENGTH = 300
 _ROOM_ID_RE = re.compile(r"^[\w\-. ]{1,64}$", re.UNICODE)
 
@@ -270,16 +275,20 @@ def _clean_track_update(track_data) -> dict:
     return clean
 
 
-async def _handle_room_message(room, username: str, data: dict, state: dict) -> None:
+async def _handle_room_message(room_id: str, username: str, data: dict, state: dict) -> None:
     msg_type = data.get("type")
-    is_host = username == room.host_username
+    if msg_type in ("TRACK_SYNC", "PLAYBACK_CONTROL"):
+        room = await manager.room_state(room_id)
+        if room is None or room["host"] != username:
+            return  # only the host (DJ) controls playback
 
-    if msg_type == "TRACK_SYNC" and is_host:
-        room.current_track.update(_clean_track_update(data.get("track")))
-        room.current_track["updated_at"] = time.time()
-        await room.broadcast({
+    if msg_type == "TRACK_SYNC":
+        fields = _clean_track_update(data.get("track"))
+        fields["updated_at"] = time.time()
+        track = await manager.update_room_track(room_id, fields)
+        await manager.broadcast_to_room(room_id, {
             "type": "TRACK_SYNC",
-            "track": room.current_track,
+            "track": track,
             "from": username,
         })
 
@@ -295,13 +304,13 @@ async def _handle_room_message(room, username: str, data: dict, state: dict) -> 
                 "text": text[:500],
                 "timestamp": int(now),
             }
-            room.add_chat_message(msg_obj, MAX_CHAT_HISTORY)
-            await room.broadcast({
+            await manager.add_room_chat(room_id, msg_obj)
+            await manager.broadcast_to_room(room_id, {
                 "type": "CHAT_MESSAGE",
                 **msg_obj,
             })
 
-    elif msg_type == "PLAYBACK_CONTROL" and is_host:
+    elif msg_type == "PLAYBACK_CONTROL":
         try:
             progress_sec = float(data.get("progress_sec", 0))
         except (TypeError, ValueError):
@@ -309,10 +318,12 @@ async def _handle_room_message(room, username: str, data: dict, state: dict) -> 
         if not 0 <= progress_sec < 86400:
             return
         is_playing = bool(data.get("is_playing"))
-        room.current_track["is_playing"] = is_playing
-        room.current_track["progress_sec"] = progress_sec
-        room.current_track["updated_at"] = time.time()
-        await room.broadcast({
+        await manager.update_room_track(room_id, {
+            "is_playing": is_playing,
+            "progress_sec": progress_sec,
+            "updated_at": time.time(),
+        })
+        await manager.broadcast_to_room(room_id, {
             "type": "PLAYBACK_CONTROL",
             "is_playing": is_playing,
             "progress_sec": progress_sec,
@@ -328,31 +339,20 @@ async def together_websocket_route(websocket: WebSocket, room_id: str):
 
     username = _get_ws_authenticated_username(websocket) or f"Guest_{secrets.token_hex(3)}"
 
-    room = manager.get_or_create_room(room_id, host_username=username)
-    if room is None or not room.has_capacity():
-        await websocket.close(code=4008)
+    await websocket.accept()
+    room = await manager.join_room(room_id, username, websocket)
+    if room is None:
+        await websocket.close(code=4008)  # room/listener limits reached
         return
 
-    await websocket.accept()
-    room.add_listener(username, websocket)
-
     # Send current room state to newly joined user
-    await websocket.send_json({
-        "type": "ROOM_STATE",
-        "room_id": room_id,
-        "name": room.name,
-        "host": room.host_username,
-        "you": username,
-        "current_track": room.current_track,
-        "listeners": list(room.listeners.keys()),
-        "chat_history": room.chat_messages[-30:],
-    })
+    await websocket.send_json({"type": "ROOM_STATE", "you": username, **room})
 
     # Broadcast user joined to other listeners
-    await room.broadcast({
+    await manager.broadcast_to_room(room_id, {
         "type": "USER_JOINED",
         "username": username,
-        "listeners": list(room.listeners.keys()),
+        "listeners": room["listeners"],
     }, exclude_user=username)
 
     state = {"last_chat": 0.0}
@@ -360,16 +360,17 @@ async def together_websocket_route(websocket: WebSocket, room_id: str):
         while True:
             data = await websocket.receive_json()
             if isinstance(data, dict):
-                await _handle_room_message(room, username, data, state)
+                await _handle_room_message(room_id, username, data, state)
     except Exception:
         pass
     finally:
-        room.remove_listener(username, websocket)
-        if not room.listeners:
-            manager.remove_room(room_id)
-        else:
-            await room.broadcast({
-                "type": "USER_LEFT",
-                "username": username,
-                "listeners": list(room.listeners.keys()),
-            })
+        # The handler task is usually being cancelled here (client went away);
+        # shield the async cleanup so the listener is always unregistered.
+        with anyio.CancelScope(shield=True):
+            remaining = await manager.leave_room(room_id, username, websocket)
+            if remaining:
+                await manager.broadcast_to_room(room_id, {
+                    "type": "USER_LEFT",
+                    "username": username,
+                    "listeners": remaining,
+                })
