@@ -8,7 +8,8 @@ if project_root not in sys.path:
     sys.path.append(project_root)
 
 TEST_DB_FILE = os.path.join(project_root, "test_temp.db")
-TEST_DB_URL = f"sqlite:///{TEST_DB_FILE}"
+# CI also runs the suite against PostgreSQL by setting TEST_DATABASE_URL
+TEST_DB_URL = os.getenv("TEST_DATABASE_URL", f"sqlite:///{TEST_DB_FILE}")
 
 # Force env vars for testing before importing database module
 os.environ["DATABASE_URL"] = TEST_DB_URL
@@ -46,7 +47,8 @@ def setup_test_database():
         except Exception:
             pass
 
-    # Create all tables
+    # Start from an empty schema (a PostgreSQL test database is reused)
+    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
 
     # Seed default achievements

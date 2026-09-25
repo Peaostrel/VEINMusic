@@ -1,9 +1,9 @@
-from datetime import UTC, datetime
 import hashlib
 import hmac
 import os
 import time
-from typing import Annotated
+from datetime import UTC, datetime
+from typing import Annotated, Any
 
 import bcrypt
 from fastapi import Depends, HTTPException, Request
@@ -29,14 +29,21 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         hashed_password.encode('utf-8'))
 
 
-def create_session_token(user_id: str, hashed_password: str) -> str:
+def _session_signing_key(hashed_password: str, session_version: int) -> bytes:
+    # The signature is bound to the password hash (changing the password
+    # invalidates all sessions) and to the user's session_version (bumped by
+    # "log out everywhere" and by bans). Version 0 keeps the original key so
+    # sessions issued before versioning stay valid.
+    suffix = f":v{session_version}" if session_version else ""
+    return (SECRET_KEY + hashed_password + suffix).encode('utf-8')
+
+
+def create_session_token(user_id: str, hashed_password: str, session_version: int = 0) -> str:
     # Set session lifespan to 30 days
     expires_at = int(time.time()) + 30 * 24 * 3600
     msg = f"{user_id}:{expires_at}"
-    # Bind signature to user password hash so changing password invalidates
-    # all sessions
     signature = hmac.new(
-        (SECRET_KEY + hashed_password).encode('utf-8'),
+        _session_signing_key(hashed_password, session_version),
         msg.encode('utf-8'),
         hashlib.sha256
     ).hexdigest()
@@ -56,7 +63,7 @@ def verify_session_token(token: str, db_user: User) -> bool:
 
         msg = f"{user_id_str}:{expires_at_str}"
         expected_signature = hmac.new(
-            (SECRET_KEY + db_user.hashed_password).encode('utf-8'),
+            _session_signing_key(str(db_user.hashed_password), int(db_user.session_version or 0)),
             msg.encode('utf-8'),
             hashlib.sha256
         ).hexdigest()  # codeql[py/weak-cryptographic-algorithm]
@@ -64,6 +71,11 @@ def verify_session_token(token: str, db_user: User) -> bool:
         return hmac.compare_digest(signature, expected_signature)
     except Exception:  # NOSONAR
         return False
+
+
+def revoke_all_sessions(user: User) -> None:
+    """Invalidate every session token of the user (caller commits)."""
+    user.session_version = int(user.session_version or 0) + 1  # type: ignore[assignment]
 
 
 def _extract_token(request: Request) -> tuple[str | None, bool]:
@@ -102,7 +114,52 @@ def hash_developer_key(token: str) -> str:
     return hashlib.pbkdf2_hmac("sha256", token.encode("utf-8"), SECRET_KEY.encode("utf-8"), 100000).hex()
 
 
+# Scopes that can be granted to developer API keys ("vm_..." tokens)
+DEVELOPER_KEY_SCOPES = {"scrobble:write", "profile:read", "profile:write"}
+
+# Account-management areas that are never reachable with a developer API key,
+# regardless of its scopes (keys must not be able to mint keys, etc.)
+_DEV_KEY_FORBIDDEN_PREFIXES = (
+    "/api/developer",
+    "/api/admin",
+    "/api/profile/apikey",
+    "/api/integrations",
+    "/api/import",
+    "/api/account",
+    "/api/devices",
+    "/api/push",
+    "/auth",
+)
+
+
+def _required_dev_key_scope(request: Request) -> str | None:
+    """Return the scope a developer key needs for this request, or None if forbidden."""
+    path = request.url.path
+    if path.startswith(_DEV_KEY_FORBIDDEN_PREFIXES):
+        return None
+    if path == "/api/scrobble" and request.method == "POST":
+        return "scrobble:write"
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return "profile:read"
+    return "profile:write"
+
+
+def _check_dev_key_scope(request: Request, scopes: str | None):
+    granted = {s.strip() for s in (scopes or "").split(",") if s.strip()}
+    required = _required_dev_key_scope(request)
+    if required is None or ("*" not in granted and required not in granted):
+        raise HTTPException(
+            status_code=403,
+            detail="API ключ не имеет прав для этого действия")
+
+
 def _authenticate_user(token: str, db: Session) -> User | None:
+    user, _ = _authenticate_user_with_scopes(token, db)
+    return user
+
+
+def _authenticate_user_with_scopes(token: str, db: Session) -> tuple[User | None, str | None]:
+    """Authenticate a token. Returns (user, scopes); scopes is None for full-access tokens."""
     # Check if this is a developer API key (prefix 'vm_')
     if token.startswith("vm_"):
         from app.models import ApiKey
@@ -111,12 +168,21 @@ def _authenticate_user(token: str, db: Session) -> User | None:
             ApiKey.key_hash == key_hash,
             ApiKey.is_active == True,  # noqa: E712
         ).first()
-        if api_key_obj and (not api_key_obj.expires_at or api_key_obj.expires_at > datetime.now(UTC)):
+        if api_key_obj and (not api_key_obj.expires_at or _as_aware(api_key_obj.expires_at) > datetime.now(UTC)):
             api_key_obj.last_used_at = datetime.now(UTC)  # type: ignore[assignment]
             db.commit()
-            return db.query(User).filter(User.id == api_key_obj.user_id).first()
-        return None
+            user = db.query(User).filter(User.id == api_key_obj.user_id).first()
+            return user, str(api_key_obj.scopes or "")
+        return None, None
 
+    return _authenticate_full_access_token(token, db), None
+
+
+def _as_aware(dt: Any) -> datetime:
+    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
+
+
+def _authenticate_full_access_token(token: str, db: Session) -> User | None:
     if ":" in token:
         try:
             user_id_str = token.split(":")[0]
@@ -132,7 +198,7 @@ def _authenticate_user(token: str, db: Session) -> User | None:
 
 
 def _check_csrf(request: Request, from_cookie: bool):
-    if not from_cookie or request.method not in ["POST", "PUT", "DELETE"]:
+    if not from_cookie or request.method not in ["POST", "PUT", "PATCH", "DELETE"]:
         return
 
     origin = request.headers.get("Origin")
@@ -166,11 +232,17 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    user = _authenticate_user(token, db)
+    user, dev_key_scopes = _authenticate_user_with_scopes(token, db)
     if not user:
         raise HTTPException(
             status_code=401,
             detail="Invalid API Key or Session")
+
+    if user.is_banned:
+        raise HTTPException(status_code=403, detail="Аккаунт заблокирован")
+
+    if dev_key_scopes is not None:
+        _check_dev_key_scope(request, dev_key_scopes)
 
     _check_csrf(request, from_cookie)
     return user

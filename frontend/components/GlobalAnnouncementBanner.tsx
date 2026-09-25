@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { AlertCircle, Info, AlertTriangle, X } from "lucide-react";
+import { API_URL } from "@/app/lib/api";
 
 interface Announcement {
   id: number;
@@ -15,7 +16,7 @@ export default function GlobalAnnouncementBanner() {
   const [dismissed, setDismissed] = useState<number[]>([]);
 
   useEffect(() => {
-    const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+    const API_BASE = API_URL;
     fetch(`${API_BASE}/api/announcements/active`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {

@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { API_URL } from "@/app/lib/api";
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -14,14 +15,6 @@ export default function Auth() {
     if (storedUser) {
       setUsername(storedUser);
       setStep("success");
-      const API_URL =
-        process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-      fetch(`${API_URL}/api/user/${storedUser}`, { credentials: "include" })
-        .then((r) => r.json())
-        .then((d) => {
-          if (d.api_key) setApiKey(d.api_key);
-        })
-        .catch(console.error);
     }
   }, []);
   const handleSubmit = async (e: React.FormEvent) => {
@@ -32,8 +25,6 @@ export default function Auth() {
     const endpoint = isLogin ? "/auth/login" : "/auth/register";
 
     try {
-      const API_URL =
-        process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
       const res = await fetch(`${API_URL}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -52,15 +43,19 @@ export default function Auth() {
       localStorage.setItem("username", data.username);
       globalThis.dispatchEvent(new Event("themeChanged"));
 
-      // Fetch api_key from user profile (returned only to the owner via cookie)
-      try {
-        const profileRes = await fetch(`${API_URL}/api/user/${data.username}`, {
-          credentials: "include",
-        });
-        const profileData = await profileRes.json();
-        if (profileData.api_key) setApiKey(profileData.api_key);
-      } catch (error) {
-        console.error(error);
+      // The raw API key is only returned once, on registration (the server
+      // stores just a hash). Hand it to the browser extension directly
+      // instead of persisting it in localStorage.
+      if (data.api_key) {
+        setApiKey(data.api_key);
+        globalThis.postMessage(
+          {
+            type: "VEIN_EXTENSION_SYNC_KEYS",
+            username: data.username,
+            apiKey: data.api_key,
+          },
+          globalThis.location.origin,
+        );
       }
 
       setStep("success");
@@ -120,8 +115,15 @@ export default function Auth() {
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--accent)] transition-colors"
                   placeholder="••••••••"
+                  minLength={isLogin ? undefined : 8}
+                  autoComplete={isLogin ? "current-password" : "new-password"}
                   required
                 />
+                {!isLogin && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    Минимум 8 символов.
+                  </p>
+                )}
               </div>
 
               {error && (
@@ -174,7 +176,8 @@ export default function Auth() {
               className="bg-[#121212] border border-white/10 font-mono text-sm p-4 rounded-xl mb-6 select-all overflow-x-auto shadow-inner"
               style={{ color: "var(--accent)" }}
             >
-              {apiKey}
+              {apiKey ||
+                "Ключ показывается только один раз при создании. Новый ключ можно сгенерировать в настройках."}
             </div>
 
             <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-5 mb-8 flex items-center justify-center gap-3">
@@ -188,6 +191,13 @@ export default function Auth() {
               <button
                 type="button"
                 onClick={() => {
+                  // Return to the page that sent the user here (e.g. /link)
+                  const next = sessionStorage.getItem("vein_after_login");
+                  sessionStorage.removeItem("vein_after_login");
+                  if (next && next.startsWith("/") && !next.startsWith("//")) {
+                    globalThis.location.href = next;
+                    return;
+                  }
                   const safeUsername = encodeURIComponent(username);
                   globalThis.location.href = `/user/${safeUsername}`;
                 }}
