@@ -10,6 +10,7 @@ import {
 import { PieChart, Clock, CalendarDays, Award } from "lucide-react";
 import { getPlatformIcon } from "../../../../utils/formatters";
 import { sanitizeUrl } from "@/app/utils/sanitizeUrl";
+import { API_URL } from "@/app/lib/api";
 
 const getArtistUrl = (artist: string, source: string) => {
   if (!artist) return "#";
@@ -26,7 +27,7 @@ const getArtistUrl = (artist: string, source: string) => {
     case "apple_music":
       return `https://music.apple.com/search?term=${q}`;
     case "yandex":
-      return `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/redirect?source=yandex&type=artist&q=${q}`;
+      return `${API_URL}/api/redirect?source=yandex&type=artist&q=${q}`;
     default:
       return "#";
   }
@@ -47,7 +48,7 @@ const getAlbumUrl = (album: string, artist: string, source: string) => {
     case "apple_music":
       return `https://music.apple.com/search?term=${q}`;
     case "yandex":
-      return `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/redirect?source=yandex&type=album&q=${q}`;
+      return `${API_URL}/api/redirect?source=yandex&type=album&q=${q}`;
     default:
       return "#";
   }
@@ -55,7 +56,7 @@ const getAlbumUrl = (album: string, artist: string, source: string) => {
 
 const getTrackUrl = (t: any) => {
   if (t.source === "yandex" && !t.track_url?.includes("/track/")) {
-    return `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/redirect?source=yandex&type=track&q=${encodeURIComponent(t.artist + " " + (t.title || ""))}`;
+    return `${API_URL}/api/redirect?source=yandex&type=track&q=${encodeURIComponent(t.artist + " " + (t.title || ""))}`;
   }
   return (t.track_url && sanitizeUrl(t.track_url)) || "#";
 };
@@ -77,10 +78,10 @@ export default function DetailedStats() {
   useEffect(() => {
     if (!username) return;
     setLoading(true);
-    fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/detailed-stats/${username}?period=${period}`,
-      { credentials: "include", cache: "no-store" },
-    )
+    fetch(`${API_URL}/api/detailed-stats/${username}?period=${period}`, {
+      credentials: "include",
+      cache: "no-store",
+    })
       .then(async (res) => {
         if (!res.ok) {
           setError(

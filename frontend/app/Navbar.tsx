@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { API_URL } from "@/app/lib/api";
 
 export const THEMES = {
   classic: {
@@ -304,7 +305,6 @@ export default function Navbar() {
   }, [currentTheme]);
 
   useEffect(() => {
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
     const storedUser = localStorage.getItem("username");
     if (isValidUser(storedUser)) {
       setUsername(storedUser);
@@ -338,7 +338,6 @@ export default function Navbar() {
       setSearchResults([]);
       return;
     }
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
     const delay = setTimeout(() => {
       fetch(`${API_URL}/api/search/users?q=${searchQuery}`, {
         credentials: "include",
@@ -354,7 +353,6 @@ export default function Navbar() {
   }, [searchQuery]);
 
   const handleLogout = async () => {
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
     try {
       await fetch(`${API_URL}/auth/logout`, {
         method: "POST",
