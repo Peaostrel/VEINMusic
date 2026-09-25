@@ -139,7 +139,7 @@ export default function SecurityTab() {
         { type: "VEIN_EXTENSION_LOGOUT" },
         globalThis.location.origin,
       );
-      globalThis.location.href = "/auth";
+      globalThis.location.replace("/auth");
     } catch (e) {
       setMessage(`❌ ${errorText(e)}`);
     }
@@ -176,7 +176,7 @@ export default function SecurityTab() {
         { type: "VEIN_EXTENSION_LOGOUT" },
         globalThis.location.origin,
       );
-      globalThis.location.href = "/";
+      globalThis.location.replace("/");
     } catch (e) {
       setMessage(`❌ ${errorText(e)}`);
       setDeleteBusy(false);
