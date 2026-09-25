@@ -1,6 +1,7 @@
 """Outbound Webhook Dispatcher Service with HMAC-SHA256 Signatures."""
 from __future__ import annotations
 
+import asyncio
 import hmac
 import hashlib
 import json
@@ -12,6 +13,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.models import Webhook
+from app.utils import is_safe_url
 
 
 def sign_payload(secret: str, payload_bytes: bytes) -> str:
@@ -61,6 +63,13 @@ async def dispatch_webhook_event(
                 "X-VEIN-Delivery": delivery_id,
                 "X-VEIN-Signature": f"sha256={signature}",
             }
+
+            # Re-validate at delivery time: DNS may have changed since the
+            # webhook was registered (SSRF protection). Redirects are not
+            # followed (httpx default).
+            if not await asyncio.to_thread(is_safe_url, str(wh.url)):
+                print(f"[Webhook] Blocked delivery to non-public URL {wh.url}")
+                continue
 
             try:
                 await client.post(str(wh.url), content=payload_bytes, headers=headers)

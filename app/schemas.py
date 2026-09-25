@@ -1,5 +1,9 @@
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+SyncPrivacy = Literal["all", "followers", "none"]
 
 
 class UserCreate(BaseModel):
@@ -23,28 +27,30 @@ class ScrobbleData(BaseModel):
 
 
 class ProfileUpdate(BaseModel):
-    # api_key optional for compatibility, but we rely on cookies
+    # api_key optional for compatibility, but we rely on cookies.
+    # All fields default to None so that omitted fields are left untouched
+    # (in particular, privacy settings must never be reset implicitly).
     api_key: str | None = None
-    display_name: str | None = None
-    bio: str | None = None
-    avatar_url: str | None = None
-    cover_url: str | None = None
-    location: str | None = None
-    favorite_genre: str | None = None
-    equipment: str | None = None
-    social_links: str | None = None
-    theme: str | None = None
-    favorite_artist: str | None = None
+    display_name: str | None = Field(None, max_length=64)
+    bio: str | None = Field(None, max_length=1000)
+    avatar_url: str | None = Field(None, max_length=2048)
+    cover_url: str | None = Field(None, max_length=2048)
+    location: str | None = Field(None, max_length=128)
+    favorite_genre: str | None = Field(None, max_length=128)
+    equipment: str | None = Field(None, max_length=256)
+    social_links: str | None = Field(None, max_length=4096)
+    theme: str | None = Field(None, max_length=64)
+    favorite_artist: str | None = Field(None, max_length=256)
     favorite_artist_url: str | None = None
-    favorite_track: str | None = None
+    favorite_track: str | None = Field(None, max_length=256)
     favorite_track_url: str | None = None
-    favorite_album: str | None = None
+    favorite_album: str | None = Field(None, max_length=256)
     favorite_album_url: str | None = None
-    avatar_frame: str | None = None
-    is_private: bool | None = False
-    hidden_artists: str | None = ""
-    sync_privacy: str | None = "all"
-    lastfm_username: str | None = None
+    avatar_frame: str | None = Field(None, max_length=64)
+    is_private: bool | None = None
+    hidden_artists: str | None = Field(None, max_length=4096)
+    sync_privacy: SyncPrivacy | None = None
+    lastfm_username: str | None = Field(None, max_length=64)
 
 
 class LevelUpdate(BaseModel):
@@ -123,8 +129,8 @@ class ApiKeyRequest(BaseModel):
 
 class PrivacyUpdate(BaseModel):
     is_private: bool | None = None
-    hidden_artists: str | None = None
-    sync_privacy: str | None = None
+    hidden_artists: str | None = Field(None, max_length=4096)
+    sync_privacy: SyncPrivacy | None = None
 
 
 class UserBanRequest(BaseModel):
@@ -218,6 +224,10 @@ class BlacklistFilterCreate(BaseModel):
 
 
 class PushSubscribeRequest(BaseModel):
-    endpoint: str
-    p256dh: str
-    auth: str
+    endpoint: str = Field(..., max_length=2048)
+    p256dh: str = Field(..., max_length=256)
+    auth: str = Field(..., max_length=256)
+
+
+class YandexTokenUpdate(BaseModel):
+    token: str = Field(..., max_length=512)

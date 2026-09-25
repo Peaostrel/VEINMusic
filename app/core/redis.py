@@ -1,6 +1,9 @@
 import asyncio
 import logging
 import os
+import time
+from collections.abc import Callable, Coroutine
+from typing import Any
 from contextlib import asynccontextmanager
 
 import redis.asyncio as aioredis
@@ -82,16 +85,56 @@ async def redis_lock(lock_key: str, expire_sec: int = 10):
                 logging.exception(f"Failed to release Redis lock '{lock_key}'")
 
 
+_ARQ_RETRY_INTERVAL_SEC = 60.0
+_arq_last_failure = 0.0
+
+
 async def get_arq_pool():
-    global arq_pool
+    global arq_pool, _arq_last_failure
     if arq_pool is None:
+        # Don't retry the (slow) connection on every call while Redis is down
+        if time.monotonic() - _arq_last_failure < _ARQ_RETRY_INTERVAL_SEC:
+            return None
         try:
             settings = RedisSettings.from_dsn(REDIS_URL)
+            settings.conn_retries = 0
             arq_pool = await create_pool(settings)
         except Exception:
             logging.exception("Failed to initialize arq Redis pool")
             arq_pool = None
+            _arq_last_failure = time.monotonic()
     return arq_pool
+
+
+async def _run_webhook_job(event_name: str, data: dict, user_id: int) -> None:
+    from app.database import SessionLocal
+    from app.services.webhooks import dispatch_webhook_event
+    db = SessionLocal()
+    try:
+        await dispatch_webhook_event(event_name, data, user_id, db)
+    except Exception:
+        logging.exception("Webhook dispatch failed")
+    finally:
+        db.close()
+
+
+async def _run_export_job(user_id: int, artist: str, title: str, album, timestamp: int) -> None:
+    from app.database import SessionLocal
+    from app.services.external_sync import dispatch_external_exports
+    db = SessionLocal()
+    try:
+        await dispatch_external_exports(user_id, artist, title, album, timestamp, db)
+    except Exception:
+        logging.exception("External scrobble export failed")
+    finally:
+        db.close()
+
+
+# In-process fallbacks for async jobs when the arq worker is unavailable
+_ASYNC_JOB_FALLBACKS: dict[str, Callable[..., Coroutine[Any, Any, None]]] = {
+    'async_dispatch_webhook': _run_webhook_job,
+    'async_export_scrobble': _run_export_job,
+}
 
 
 async def enqueue_background_task(job_name: str, *args, background_tasks=None):
@@ -110,6 +153,12 @@ async def enqueue_background_task(job_name: str, *args, background_tasks=None):
                 f"Failed to enqueue job '{job_name}' to arq. Falling back to local/inline background tasks.")
 
     # Fallback mechanisms
+    if job_name in _ASYNC_JOB_FALLBACKS:
+        task = asyncio.create_task(_ASYNC_JOB_FALLBACKS[job_name](*args))
+        _BACKGROUND_TASKS.add(task)
+        task.add_done_callback(_BACKGROUND_TASKS.discard)
+        return True
+
     if background_tasks:
         if job_name == 'check_achievements':
             from app.routers.extended import run_check_achievements_bg

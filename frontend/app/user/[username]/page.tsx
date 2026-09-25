@@ -1184,7 +1184,7 @@ export default function Profile() {
                         {getPlatformIcon(item.source)}
                       </div>
                       <a
-                        href={getTrackUrl(item)}
+                        href={getSafeUrl(getTrackUrl(item))}
                         target="_blank"
                         rel="noopener noreferrer"
 

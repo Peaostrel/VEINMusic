@@ -44,6 +44,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
   const [connected, setConnected] = useState(false);
   const [listeners, setListeners] = useState<string[]>([]);
   const [host, setHost] = useState("");
+  const [me, setMe] = useState("");
   const [track, setTrack] = useState<TrackState>({
     title: "Ожидание трека от DJ...",
     artist: "VEIN Music",
@@ -82,6 +83,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
         if (data.type === "ROOM_STATE") {
           setListeners(data.listeners || []);
           setHost(data.host || "");
+          setMe(data.you || "");
           if (data.current_track) {
             setTrack({
               ...data.current_track,
@@ -159,8 +161,10 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
     setChatInput("");
   };
 
+  const isHost = !!me && me === host;
+
   const handleTogglePlay = () => {
-    if (!socketRef.current) return;
+    if (!socketRef.current || !isHost) return;
     const nextPlay = !track.is_playing;
     socketRef.current.send(
       JSON.stringify({
@@ -307,7 +311,13 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
               <button
                 type="button"
                 onClick={handleTogglePlay}
-                className="w-14 h-14 rounded-full bg-gradient-to-tr from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white flex items-center justify-center shadow-lg shadow-red-600/30 transition-transform active:scale-95 cursor-pointer"
+                disabled={!isHost}
+                title={
+                  isHost
+                    ? undefined
+                    : "Управлять воспроизведением может только DJ"
+                }
+                className="disabled:opacity-40 disabled:cursor-not-allowed w-14 h-14 rounded-full bg-gradient-to-tr from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white flex items-center justify-center shadow-lg shadow-red-600/30 transition-transform active:scale-95 cursor-pointer"
               >
                 {track.is_playing ? (
                   <Pause className="w-6 h-6" />
