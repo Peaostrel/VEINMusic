@@ -1,8 +1,10 @@
+import functools
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse
 
+import anyio
 import httpx
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -188,14 +190,15 @@ def _update_existing_track(
         db.commit()
 
 
-async def _get_or_create_track(
+def _find_or_create_track(
         db: Session,
         title: str,
         artist: str,
         cover_url: str,
         track_url: str,
         duration: int,
-        album: str) -> Track:
+        album: str) -> tuple[Track, bool]:
+    """Catalog lookup/insert (blocking DB work). Returns (track, may_enrich)."""
     norm_title, norm_artist = clean_track_metadata(title, artist)
     cover_url = _safe_http_url(cover_url)
     track_url = _safe_track_url(track_url)
@@ -207,7 +210,7 @@ async def _get_or_create_track(
     ).first()
 
     if alias and alias.canonical_track:
-        return alias.canonical_track
+        return alias.canonical_track, False
 
     track = db.query(Track).filter(
         func.lower(Track.title) == func.lower(norm_title),
@@ -233,15 +236,42 @@ async def _get_or_create_track(
             track_url,
             duration,
             album)
+    return track, True
 
-    if track.duration == 0 and track.track_url:
-        track.duration = await get_track_duration(str(track.track_url))  # type: ignore[assignment]
-        db.commit()
 
-    if not track.genre and track.track_url:
-        track.genre = await get_track_genre(str(track.track_url))  # type: ignore[assignment]
-        db.commit()
+def _track_enrichment_needs(track: Track) -> tuple[str | None, bool, bool]:
+    url = str(track.track_url) if track.track_url else None
+    return url, bool(url and track.duration == 0), bool(url and not track.genre)
 
+
+def _set_track_fields(db: Session, track: Track, fields: dict[str, Any]) -> None:
+    for name, value in fields.items():
+        setattr(track, name, value)
+    db.commit()
+
+
+async def _get_or_create_track(
+        db: Session,
+        title: str,
+        artist: str,
+        cover_url: str,
+        track_url: str,
+        duration: int,
+        album: str) -> Track:
+    track, may_enrich = await _run_db(
+        _find_or_create_track, db, title, artist, cover_url, track_url, duration, album)
+    if not may_enrich:
+        return track
+
+    # Network lookups stay on the event loop; DB writes go to a thread
+    url, need_duration, need_genre = await _run_db(_track_enrichment_needs, track)
+    fields: dict[str, Any] = {}
+    if need_duration and url:
+        fields["duration"] = await get_track_duration(url)
+    if need_genre and url:
+        fields["genre"] = await get_track_genre(url)
+    if fields:
+        await _run_db(_set_track_fields, db, track, fields)
     return track
 
 
@@ -398,25 +428,82 @@ def _is_blacklisted(title: str, artist: str, album: str, db: Session) -> bool:
     return any(_matches_filter(f, t_l, a_l, alb_l, title, artist) for f in filters)
 
 
-async def _dispatch_counted_scrobble(user: User, track: Track, scrobble: Scrobble) -> None:
+async def _run_db(fn, *args):
+    """Run blocking SQLAlchemy work in a worker thread so the event loop
+    keeps serving other requests. The session is only used by one thread
+    at a time (calls are awaited sequentially)."""
+    return await anyio.to_thread.run_sync(functools.partial(fn, *args))
+
+
+async def _dispatch_counted_scrobble(user_id: int, counted: dict[str, Any]) -> None:
     """Notify webhooks and external services once a scrobble actually counts.
 
     Runs in the background (arq worker, or an in-process task as fallback) so
     that slow third-party endpoints never block the scrobble request."""
     from app.core.redis import enqueue_background_task
-    history_item = format_history_item(scrobble, track)
-    played_at = scrobble.played_at
-    if played_at.tzinfo is None:
-        played_at = played_at.replace(tzinfo=UTC)
     await enqueue_background_task(
-        'async_dispatch_webhook', "scrobble.created", history_item, int(user.id))
+        'async_dispatch_webhook', "scrobble.created", counted["history_item"], user_id)
     await enqueue_background_task(
         'async_export_scrobble',
-        int(user.id),
-        str(track.artist),
-        str(track.title),
-        str(track.album) if track.album else None,
-        int(played_at.timestamp()))
+        user_id,
+        counted["artist"],
+        counted["title"],
+        counted["album"],
+        counted["timestamp"])
+
+
+def _record_scrobble(db: Session, user: User, track: Track, source: str,
+                     progress_sec: int, is_playing: bool) -> dict[str, Any]:
+    """Create or advance the user's current scrobble (blocking DB work).
+
+    Returns plain data only, so nothing touches expired ORM objects (and the
+    DB) from the event loop afterwards."""
+    username = str(user.username)
+    user_id = int(user.id)
+    now = datetime.now(UTC)
+    last_scrobble = db.query(Scrobble).filter(
+        Scrobble.user_id == user_id).order_by(
+        Scrobble.id.desc()).first()
+
+    if last_scrobble:
+        l_updated_at = last_scrobble.updated_at.replace(
+            tzinfo=UTC) if last_scrobble.updated_at.tzinfo is None else last_scrobble.updated_at
+    else:
+        l_updated_at = None
+
+    result: dict[str, Any] = {"status": "ok", "username": username, "user_id": user_id,
+                              "new_item": None, "counted": None}
+    is_new, early_return = _determine_is_new(
+        db, track, last_scrobble, now, l_updated_at, progress_sec)
+    if early_return:
+        result["status"] = early_return
+        return result
+
+    if is_new:
+        new_s = Scrobble(
+            user_id=user_id,
+            track_id=track.id,
+            source=source,
+            played_at=now,
+            listened_sec=0,
+            is_playing=is_playing,
+            updated_at=now)
+        db.add(new_s)
+        db.commit()
+        result["new_item"] = format_history_item(new_s, track)
+    elif last_scrobble is not None and _update_scrobble_progress(
+            db, user, track, last_scrobble, now, l_updated_at, is_playing):
+        played_at = last_scrobble.played_at
+        if played_at.tzinfo is None:
+            played_at = played_at.replace(tzinfo=UTC)
+        result["counted"] = {
+            "history_item": format_history_item(last_scrobble, track),
+            "artist": str(track.artist),
+            "title": str(track.title),
+            "album": str(track.album) if track.album else None,
+            "timestamp": int(played_at.timestamp()),
+        }
+    return result
 
 
 async def process_scrobble(
@@ -431,53 +518,17 @@ async def process_scrobble(
         is_playing: bool,
         duration: int,
         album: str = ""):
-    if _is_blacklisted(title, artist, album, db):
+    if await _run_db(_is_blacklisted, title, artist, album, db):
         return "blacklisted"
 
     track = await _get_or_create_track(db, title, artist, cover_url, track_url, duration, album)
+    result = await _run_db(_record_scrobble, db, user, track, source, progress_sec, is_playing)
 
-    now = datetime.now(UTC)
-    last_scrobble = db.query(Scrobble).filter(
-        Scrobble.user_id == user.id).order_by(
-        Scrobble.id.desc()).first()
-
-    if last_scrobble:
-        l_updated_at = last_scrobble.updated_at.replace(
-            tzinfo=UTC) if last_scrobble.updated_at.tzinfo is None else last_scrobble.updated_at
-    else:
-        l_updated_at = None
-
-    is_new, early_return = _determine_is_new(
-        db, track, last_scrobble, now, l_updated_at, progress_sec)
-    if early_return:
-        return early_return
-
-    if is_new:
-        new_s = Scrobble(
-            user_id=user.id,
-            track_id=track.id,
-            source=source,
-            played_at=now,
-            listened_sec=0,
-            is_playing=is_playing,
-            updated_at=now)
-        db.add(new_s)
-        db.commit()
-        history_item = format_history_item(new_s, track)
-        await manager.broadcast_to_user(str(user.username), {
+    if result["new_item"] is not None:
+        await manager.broadcast_to_user(result["username"], {
             "type": "NEW_SCROBBLE",
-            "track": history_item
+            "track": result["new_item"]
         })
-    else:
-        counted = _update_scrobble_progress(
-            db,
-            user,
-            track,
-            last_scrobble,
-            now,
-            l_updated_at,
-            is_playing)
-        if counted and last_scrobble is not None:
-            await _dispatch_counted_scrobble(user, track, last_scrobble)
-
-    return "ok"
+    if result["counted"] is not None:
+        await _dispatch_counted_scrobble(result["user_id"], result["counted"])
+    return result["status"]

@@ -1,6 +1,8 @@
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
+import anyio
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
@@ -21,6 +23,8 @@ from app.models import (
 )
 from app.schemas import CommentRequest, ScrobbleData
 from app.services.scrobble_processor import format_history_item, process_scrobble
+
+logger = logging.getLogger(__name__)
 
 
 def get_scrobble_counters(db: Session, s_ids: list) -> dict:
@@ -49,42 +53,53 @@ async def add_scrobble(data: ScrobbleData,
                                                Depends(get_current_user)]):
     user = current_user
 
-    async with redis_lock(f"scrobble_lock:{user.id}", expire_sec=10):
+    user_id = int(user.id)
+    async with redis_lock(f"scrobble_lock:{user_id}", expire_sec=10):
         try:
-            # Anti-Cheat: Max 40 scrobbles per hour
-            now = datetime.now(UTC)
-            hour_ago = now - timedelta(hours=1)
-            scrobbles_h = db.query(Scrobble).filter(
-                Scrobble.user_id == user.id,
-                Scrobble.played_at >= hour_ago).count()
-            if scrobbles_h > 40:
-                return {
-                    "status": "flagged",
-                    "message": "Слишком много прослушиваний за час (Anti-Cheat)"}
-
-            # Anti-Spam: Max 1 ping per 2 seconds. `process_scrobble` handles
-            # debouncing and fast skipping logic. We just prevent endpoint abuse here.
-            last_s = db.query(Scrobble).filter(
-                Scrobble.user_id == user.id).order_by(
-                Scrobble.id.desc()).first()
-            if last_s and (now - last_s.updated_at).total_seconds() < 2:
-                return {
-                    "status": "rate_limited",
-                    "message": "Слишком частые скробблы"}
+            blocked = await anyio.to_thread.run_sync(_anti_abuse_check, db, user_id)
+            if blocked:
+                return blocked
 
             res = await process_scrobble(db, user, data.title, data.artist, data.cover_url or "", data.track_url or "", data.source, data.progress_sec or 0, bool(data.is_playing), data.duration or 0, data.album or "")
 
             from app.core.redis import enqueue_background_task
-            await enqueue_background_task('check_achievements', user.id, background_tasks=background_tasks)
+            await enqueue_background_task('check_achievements', user_id, background_tasks=background_tasks)
 
             return {"status": res}
         except Exception:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.exception("Scrobble error")
             raise HTTPException(
                 status_code=500,
                 detail="Internal Server Error")
+
+
+def _anti_abuse_check(db: Session, user_id: int) -> dict | None:
+    """Blocking DB checks run before processing a scrobble (in a thread)."""
+    # Anti-Cheat: Max 40 scrobbles per hour
+    now = datetime.now(UTC)
+    hour_ago = now - timedelta(hours=1)
+    scrobbles_h = db.query(Scrobble).filter(
+        Scrobble.user_id == user_id,
+        Scrobble.played_at >= hour_ago).count()
+    if scrobbles_h > 40:
+        return {
+            "status": "flagged",
+            "message": "Слишком много прослушиваний за час (Anti-Cheat)"}
+
+    # Anti-Spam: Max 1 ping per 2 seconds. `process_scrobble` handles
+    # debouncing and fast skipping logic. We just prevent endpoint abuse here.
+    last_s = db.query(Scrobble).filter(
+        Scrobble.user_id == user_id).order_by(
+        Scrobble.id.desc()).first()
+    if last_s:
+        updated_at = last_s.updated_at
+        if updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=UTC)
+        if (now - updated_at).total_seconds() < 2:
+            return {
+                "status": "rate_limited",
+                "message": "Слишком частые скробблы"}
+    return None
 
 
 @router.get("/history/{username}",

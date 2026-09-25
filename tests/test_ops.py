@@ -141,3 +141,38 @@ def test_followers_list_has_no_n_plus_one(client):
 
     assert len(client.get("/api/followers/popular").json()) == 6
     assert many == few  # query count doesn't grow with the number of followers
+
+
+def test_scrobble_db_work_does_not_block_event_loop(db, client):
+    import time as _time
+    from unittest.mock import patch
+
+    from app.models import User
+    from app.services import scrobble_processor
+
+    client.post("/auth/register", json={"username": "loopuser", "password": TEST_PASSWORD})
+    user = db.query(User).filter_by(username="loopuser").first()
+    real_record = scrobble_processor._record_scrobble
+    state = {"ticks": 0, "during_slow_db": 0}
+
+    def slow_record(*args):
+        before = state["ticks"]
+        _time.sleep(0.3)  # simulates a slow database call
+        state["during_slow_db"] = state["ticks"] - before
+        return real_record(*args)
+
+    async def ticker():
+        for _ in range(50):
+            await asyncio.sleep(0.01)
+            state["ticks"] += 1
+
+    async def scenario():
+        with patch.object(scrobble_processor, "_record_scrobble", slow_record), \
+             patch.object(scrobble_processor, "get_track_genre", new=AsyncMock(return_value=None)):
+            await asyncio.gather(
+                scrobble_processor.process_scrobble(db, user, "T", "A", "", "", "x", 0, True, 200, ""),
+                ticker())
+
+    asyncio.run(scenario())
+    # If the DB phase ran on the event loop, no tick could happen meanwhile
+    assert state["during_slow_db"] >= 10
