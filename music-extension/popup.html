@@ -15,8 +15,20 @@
 <body>
     <h3>VEIN TRACKER</h3>
     
+    <div id="pair-box" class="box">
+        <div style="font-size: 11px; color: #888; margin-bottom: 8px;">Рекомендуемый способ: подтвердить расширение на сайте VEIN.</div>
+        <button id="pair-btn" style="width: 100%; padding: 8px; background: #ffcc00; border: none; cursor: pointer; font-weight: bold; color: black; border-radius: 4px;">Подключить через сайт</button>
+        <div id="pair-code-box" style="display: none; margin-top: 10px;">
+            <div style="font-size: 11px; color: #888;">Код для подтверждения:</div>
+            <div id="pair-code" style="font-family: monospace; font-size: 22px; font-weight: 900; letter-spacing: 3px; color: #fff; margin: 6px 0;"></div>
+            <button id="pair-open-btn" style="width: 100%; padding: 6px; background: #333; color: white; border: 1px solid #555; cursor: pointer; border-radius: 4px;">Открыть страницу подтверждения</button>
+            <div style="font-size: 10px; color: #888; margin-top: 6px;">Ждём подтверждения на сайте…</div>
+        </div>
+        <div id="pair-status" style="margin-top: 8px; font-size: 11px;"></div>
+    </div>
+
     <div id="unauth-box" class="box">
-        <div style="font-size: 11px; color: #888; margin-bottom: 8px;">Вставь API ключ со страницы настроек VEIN:</div>
+        <div style="font-size: 11px; color: #888; margin-bottom: 8px;">Или вставь API ключ со страницы настроек VEIN:</div>
         <input type="text" id="api-key-input" aria-label="API Ключ" placeholder="API Ключ" style="width: 100%; box-sizing: border-box; padding: 5px; margin-bottom: 5px; background: #222; color: white; border: 1px solid #444;" />
         <input type="text" id="username-input" aria-label="Твой никнейм" placeholder="Твой никнейм" style="width: 100%; box-sizing: border-box; padding: 5px; margin-bottom: 5px; background: #222; color: white; border: 1px solid #444;" />
         <button id="save-btn" style="width: 100%; padding: 6px; background: #ffcc00; border: none; cursor: pointer; font-weight: bold; color: black; border-radius: 4px;">Сохранить</button>
@@ -27,9 +39,11 @@
         <div style="font-weight: bold; margin-top: 5px; color: #fff;">@<span id="username-display"></span></div>
         <div style="font-size: 10px; color: #888; margin-top: 5px;">Скробблер работает в фоновом режиме.</div>
         <button id="test-btn" style="width: 100%; padding: 6px; margin-top: 10px; background: #333; color: white; border: 1px solid #555; cursor: pointer; border-radius: 4px;">Тест связи</button>
+        <button id="logout-btn" style="width: 100%; padding: 6px; margin-top: 6px; background: transparent; color: #ef4444; border: 1px solid #5a1f1f; cursor: pointer; border-radius: 4px;">Отключить</button>
         <div id="log-box" style="margin-top: 10px; font-size: 10px; color: #ffcc00; word-break: break-all;"></div>
     </div>
     
+    <script src="pairing.js"></script>
     <script src="popup.js"></script>
 </body>
 </html>

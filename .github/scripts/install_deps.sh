@@ -1,2 +1,2 @@
 #!/bin/bash
-pip install --only-binary :all: -r requirements.txt
+pip install --only-binary :all: --require-hashes -r requirements.txt

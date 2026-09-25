@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
@@ -6,7 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core import redis
-from app.core.security import get_admin_user
+from app.core.security import get_admin_user, revoke_all_sessions
 from app.core.websockets import manager
 from app.database import get_db
 from app.models import (
@@ -180,6 +181,8 @@ def toggle_user_ban(
         raise HTTPException(400, "Нельзя заблокировать администратора")
 
     target.is_banned = data.is_banned  # type: ignore[assignment]
+    if data.is_banned:
+        revoke_all_sessions(target)
     db.commit()
     return {"status": "ok", "is_banned": target.is_banned}
 
@@ -413,14 +416,20 @@ def set_xp_multiplier(data: EconomyMultiplierRequest, admin: Annotated[User, Dep
 # ─── SYSTEM HEALTH & METRICS ──────────────────────────────────────────────────
 
 @router.get("/system/health")
-def get_system_health(db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
-    users_cnt = db.query(User).count()
-    scrobbles_cnt = db.query(Scrobble).count()
-    tracks_cnt = db.query(Track).count()
-    ws_connections = sum(len(c) for c in manager.active_connections.values())
+async def get_system_health(db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
+    def _counts() -> tuple[int, int, int, int, int]:
+        return (
+            db.query(User).count(),
+            db.query(Scrobble).count(),
+            db.query(Track).count(),
+            db.query(UserIntegration).filter(UserIntegration.yandex_token.isnot(None)).count(),
+            db.query(UserIntegration).filter(UserIntegration.spotify_access_token.isnot(None)).count(),
+        )
 
-    yandex_sync_users = db.query(UserIntegration).filter(UserIntegration.yandex_token.isnot(None)).count()
-    spotify_sync_users = db.query(UserIntegration).filter(UserIntegration.spotify_access_token.isnot(None)).count()
+    users_cnt, scrobbles_cnt, tracks_cnt, yandex_sync_users, spotify_sync_users = await asyncio.to_thread(_counts)
+    # WebSockets are held per API process; this is the count for this process
+    ws_connections = sum(len(c) for c in manager.active_connections.values())
+    rooms = await manager.get_active_rooms_info()
 
     return {
         "status": "healthy",
@@ -432,7 +441,7 @@ def get_system_health(db: Annotated[Session, Depends(get_db)], admin: Annotated[
             "pool_status": "active",
         },
         "websockets": {
-            "active_rooms": len(manager.active_connections),
+            "active_rooms": len(rooms),
             "connected_clients": ws_connections,
         },
         "cloud_scrobblers": {
@@ -656,8 +665,9 @@ def list_lastfm_import_jobs(
     return {"jobs": jobs}
 
 
-@router.post("/jobs/lastfm/{job_id}/retry", responses={404: {"description": "Not Found"}})
-def retry_lastfm_import_job(
+@router.post("/jobs/lastfm/{job_id}/retry",
+             responses={404: {"description": "Not Found"}, 400: {"description": "Bad Request"}})
+async def retry_lastfm_import_job(
     job_id: int,
     db: Annotated[Session, Depends(get_db)],
     admin: Annotated[User, Depends(get_admin_user)],
@@ -667,17 +677,22 @@ def retry_lastfm_import_job(
     if not job:
         raise HTTPException(404, "Задача импорта не найдена")
 
+    if job.status not in ("failed", "pending", "in_progress"):
+        raise HTTPException(400, "Повторить можно только незавершённую задачу")
     job.status = "pending"  # type: ignore[assignment]
     job.error_log = None  # type: ignore[assignment]
     db.commit()
+    # Resumes from the last imported page
+    from app.services.lastfm_import import enqueue_import
+    await enqueue_import(job_id)
     return {"status": "ok", "message": f"Задача импорта #{job_id} поставлена в очередь на повтор"}
 
 
 # ─── LISTEN TOGETHER ROOMS MONITORING ─────────────────────────────────────────
 
 @router.get("/together/rooms")
-def list_admin_together_rooms(
+async def list_admin_together_rooms(
     admin: Annotated[User, Depends(get_admin_user)],
 ):
     """List live Listen Together rooms and metrics."""
-    return {"rooms": manager.get_active_rooms_info()}
+    return {"rooms": await manager.get_active_rooms_info()}
