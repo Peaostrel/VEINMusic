@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -16,8 +16,8 @@ class User(Base):
     hashed_password = Column(String)
     api_key = Column(String, unique=True, index=True)
     role = Column(String, default="user")
-    is_banned = Column(Boolean, default=False)
-    is_flagged_antifraud = Column(Boolean, default=False)
+    is_banned = Column(Boolean, default=False, server_default=text("false"), nullable=False)
+    is_flagged_antifraud = Column(Boolean, default=False, server_default=text("false"), nullable=False)
     antifraud_reason = Column(String, nullable=True)
 
     profile = relationship(
@@ -285,7 +285,7 @@ class AvatarFrame(Base):
     __tablename__ = "avatar_frames"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    code = Column(String, unique=True, index=True)
+    code = Column(String, unique=True, index=True, nullable=False)
     css_style = Column(String, nullable=True)
     image_url = Column(String, nullable=True)
     rarity = Column(String, default="common")
@@ -314,7 +314,7 @@ class SystemAnnouncement(Base):
 class FeatureFlag(Base):
     __tablename__ = "feature_flags"
     id = Column(Integer, primary_key=True, index=True)
-    key = Column(String, unique=True, index=True)
+    key = Column(String, unique=True, index=True, nullable=False)
     description = Column(String, nullable=True)
     is_enabled = Column(Boolean, default=True)
     updated_at = Column(

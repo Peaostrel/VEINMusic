@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import asyncio
-import hmac
 import hashlib
+import hmac
 import json
+import logging
 import time
 import uuid
 from typing import Any
@@ -14,6 +15,8 @@ from sqlalchemy.orm import Session
 
 from app.models import Webhook
 from app.utils import is_safe_url
+
+logger = logging.getLogger(__name__)
 
 
 def sign_payload(secret: str, payload_bytes: bytes) -> str:
@@ -68,10 +71,10 @@ async def dispatch_webhook_event(
             # webhook was registered (SSRF protection). Redirects are not
             # followed (httpx default).
             if not await asyncio.to_thread(is_safe_url, str(wh.url)):
-                print(f"[Webhook] Blocked delivery to non-public URL {wh.url}")
+                logger.warning(f"[Webhook] Blocked delivery to non-public URL {wh.url}")
                 continue
 
             try:
                 await client.post(str(wh.url), content=payload_bytes, headers=headers)
             except Exception as e:
-                print(f"[Webhook] Failed to deliver {event_name} to {wh.url}: {e}")
+                logger.warning(f"[Webhook] Failed to deliver {event_name} to {wh.url}: {e}")

@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse
@@ -16,6 +17,8 @@ from app.models import (
     User,
 )
 from app.services.metadata_cleaner import clean_track_metadata
+
+logger = logging.getLogger(__name__)
 
 TRACK_PATH = "/track/"
 
@@ -75,7 +78,7 @@ async def get_track_duration(url: str) -> int:
                         "durationMs",
                         180000) / 1000)
     except Exception as e:
-        print(f"Duration fetch error: {e}")
+        logger.warning(f"Duration fetch error: {e}")
     return 180
 
 
@@ -99,7 +102,7 @@ async def get_track_genre(url: str) -> str | None:
                     res = (await client.get(f"https://music.yandex.ru/handlers/album.jsx?album={album_id}")).json()
                     return res.get("genre")
     except Exception as e:
-        print(f"Genre fetch error: {e}")
+        logger.warning(f"Genre fetch error: {e}")
     return None
 
 

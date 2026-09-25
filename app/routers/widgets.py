@@ -232,6 +232,7 @@ def get_top_artists_widget(username: str, db: Annotated[Session, Depends(get_db)
 def get_og_recap_card(username: str, period: str = "week", db: Annotated[Session, Depends(get_db)] = None):  # type: ignore[assignment]
     """Generate 1200x630 social share card for Weekly/Monthly recap."""
     from datetime import UTC, datetime, timedelta
+
     from app.services.og_image import generate_recap_card_svg
 
     user = db.query(User).filter(User.username == username).first()

@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 
 from sqlalchemy.orm import Session
 
 from app.models import PushSubscription
+
+logger = logging.getLogger(__name__)
 
 VAPID_PUBLIC_KEY = os.getenv(
     "VAPID_PUBLIC_KEY",
@@ -30,10 +33,10 @@ async def send_push_notification(
     }
     # In production pywebpush can be used; provide safe fallback
     try:
-        print(f"[Push Notification] Sent '{payload['title']} - {payload['body']}' to {subscription.endpoint[:30]}...")
+        logger.info(f"[Push Notification] Sent '{payload['title']} - {payload['body']}' to {subscription.endpoint[:30]}...")
         return True
     except Exception as e:
-        print(f"[Push Notification] Error sending to {subscription.endpoint}: {e}")
+        logger.warning(f"[Push Notification] Error sending to {subscription.endpoint}: {e}")
         return False
 
 

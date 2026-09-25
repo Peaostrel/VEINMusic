@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import re
 import secrets
@@ -11,6 +12,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
 
+from app.core.observability import setup_observability
 from app.core.rate_limit import limiter
 from app.core.websockets import manager
 from app.database import Base, SessionLocal, engine
@@ -19,44 +21,58 @@ from app.routers import admin, auth, developer, extended, profile, scrobbling, w
 from app.services.cloud_scrobbling import poll_external_services
 from app.services.scrobble_processor import process_scrobble
 
+setup_observability("api")
+
 background_tasks: set[asyncio.Task] = set()
+logger = logging.getLogger(__name__)
+
+
+def _migrate_plaintext_api_keys() -> None:
+    """Hash legacy plain-text API keys (anything that is not a 64-char hex digest)."""
+    import hashlib
+
+    from sqlalchemy import func
+
+    from app.core.security import SECRET_KEY
+
+    db = SessionLocal()
+    try:
+        users = db.query(User).filter(
+            User.api_key.isnot(None), func.length(User.api_key) != 64).all()
+        for user in users:
+            if not str(user.api_key).startswith("pbkdf2"):
+                dk = hashlib.pbkdf2_hmac('sha256', str(user.api_key).encode('utf-8'), SECRET_KEY.encode(), 100000)
+                user.api_key = dk.hex()  # type: ignore[assignment]
+        db.commit()
+    except Exception:
+        logger.exception("Startup API key migration failed")
+        db.rollback()
+    finally:
+        db.close()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize DB (creates tables if they don't exist)
-    Base.metadata.create_all(bind=engine)
+    # The schema is managed by Alembic (`alembic upgrade head`, run by the
+    # Docker entrypoint). Creating tables directly is only a convenience for
+    # local SQLite development, where the Postgres migrations can't run.
+    if engine.dialect.name == "sqlite" or os.getenv("AUTO_CREATE_TABLES") == "1":
+        Base.metadata.create_all(bind=engine)
 
     from app.core.security import SECRET_KEY
     insecure_keys = {"super-secret-vein-key-change-it-in-production", "change_me_to_a_long_random_string"}
     if os.getenv("ENVIRONMENT") == "production" and (SECRET_KEY in insecure_keys or len(SECRET_KEY) < 32):
         raise RuntimeError("CRITICAL SECURITY ERROR: SECRET_KEY is a default/weak value in production!")
 
-    # Run API key migration for existing users (hash plain-text API keys of
-    # length != 64)
-    import hashlib
+    _migrate_plaintext_api_keys()
 
-    db = SessionLocal()
-    try:
-        users = db.query(User).all()
-        from app.core.security import SECRET_KEY
-        for user in users:
-            if user.api_key and len(str(user.api_key)) != 64:
-                # Hash plain-text API keys correctly using the deterministic format
-                if not str(user.api_key).startswith("pbkdf2"):
-                    dk = hashlib.pbkdf2_hmac('sha256', str(user.api_key).encode('utf-8'), SECRET_KEY.encode(), 100000)
-                    user.api_key = dk.hex()  # type: ignore[assignment]
-        db.commit()
-    except Exception as e:
-        print(f"Startup migration failed: {e}")
-        db.rollback()
-    finally:
-        db.close()
-
-    # Start cloud scrobbling with safe interval
-    task = asyncio.create_task(poll_external_services(process_scrobble))
-    background_tasks.add(task)
-    task.add_done_callback(background_tasks.discard)
+    # Cloud scrobbling (Spotify / Yandex polling). In Docker it runs in the
+    # arq worker instead (RUN_CLOUD_POLLING=0), so that several API workers
+    # don't poll the same accounts.
+    if os.getenv("RUN_CLOUD_POLLING", "1") == "1":
+        task = asyncio.create_task(poll_external_services(process_scrobble))
+        background_tasks.add(task)
+        task.add_done_callback(background_tasks.discard)
 
     yield
 
@@ -97,6 +113,41 @@ app.include_router(admin.router)
 app.include_router(extended.router)
 app.include_router(widgets.router)
 app.include_router(developer.router)
+
+
+@app.get("/health", tags=["health"], responses={503: {"description": "A dependency is down"}})
+async def health():
+    """Liveness/readiness probe: checks the database and (optionally) Redis."""
+    from fastapi.responses import JSONResponse
+    from sqlalchemy import text
+
+    from app.core.redis import get_redis_client
+
+    checks: dict[str, str] = {}
+
+    def _check_db() -> None:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+
+    try:
+        await asyncio.to_thread(_check_db)
+        checks["database"] = "ok"
+    except Exception:
+        logger.exception("Health check: database unavailable")
+        checks["database"] = "error"
+
+    try:
+        await asyncio.wait_for(get_redis_client().ping(), timeout=2)
+        checks["redis"] = "ok"
+    except Exception:
+        # Redis is optional (in-memory fallbacks exist), so it's reported
+        # but doesn't make the service unhealthy.
+        checks["redis"] = "unavailable"
+
+    healthy = checks["database"] == "ok"
+    return JSONResponse(status_code=200 if healthy else 503,
+                        content={"status": "ok" if healthy else "error", "checks": checks})
+
 
 # Setup WebSocket manually at root
 

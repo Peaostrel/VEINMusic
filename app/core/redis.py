@@ -3,8 +3,8 @@ import logging
 import os
 import time
 from collections.abc import Callable, Coroutine
-from typing import Any
 from contextlib import asynccontextmanager
+from typing import Any
 
 import redis.asyncio as aioredis
 from arq import create_pool

@@ -1,5 +1,6 @@
 """Last.fm history import."""
 
+import logging
 import os
 from datetime import UTC, datetime
 
@@ -12,6 +13,8 @@ from app.models import (
     Track,
     User,
 )
+
+logger = logging.getLogger(__name__)
 
 LASTFM_API_KEY = os.getenv("LASTFM_API_KEY")
 LASTFM_BASE_URL = "https://ws.audioscrobbler.com/2.0/"
@@ -65,11 +68,11 @@ async def _import_lastfm_page(db, client, user, page: int):
     }
     resp = await client.get(LASTFM_BASE_URL, params=params)
     if resp.status_code != 200:
-        print(f"Last.fm API Error: {resp.status_code} - {resp.text}")
+        logger.warning(f"Last.fm API Error: {resp.status_code} - {resp.text}")
         return None, None
     res = resp.json()
     if "error" in res:
-        print(f"Last.fm API Logic Error: {res.get('message')}")
+        logger.warning(f"Last.fm API Logic Error: {res.get('message')}")
         return None, None
 
     tracks = res.get("recenttracks", {}).get("track", [])
@@ -81,7 +84,7 @@ async def _import_lastfm_page(db, client, user, page: int):
             {}).get(
                 "totalPages",
             1))
-    print(
+    logger.info(
         f"Importing page {page}/{total_pages} for user {user.username}, found {len(tracks)} tracks")
 
     imported_count = 0
@@ -131,7 +134,7 @@ async def import_lastfm_history(user_id: int, db_session_factory):
     try:
         user, error = _validate_import_user(db, user_id)
         if error:
-            print(error)
+            logger.warning(error)
             return
 
         succeeded = False
@@ -154,13 +157,13 @@ async def import_lastfm_history(user_id: int, db_session_factory):
         user.integration.has_imported_lastfm = True
         db.commit()
 
-        print(
+        logger.info(
             f"Import Finished: Imported {imported_count} scrobbles for user {user.username}")
         # Notify user via WebSocket if connected
         await manager.broadcast_to_user(user.username, {"type": "IMPORT_FINISHED", "message": f"✅ Импорт завершен! Добавлено {imported_count} треков."})
 
     except Exception as e:
-        print(f"Last.fm Import Logic Error: {e}")
+        logger.warning(f"Last.fm Import Logic Error: {e}")
     finally:
         IMPORTING_USERS.discard(str(user_id))
         db.close()

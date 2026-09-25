@@ -1,10 +1,13 @@
 """PostgreSQL / TimescaleDB Time-Series Partitioning Helper for Scrobbles Table."""
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
+
+logger = logging.getLogger(__name__)
 
 
 def generate_partition_ddl(year: int, month: int) -> tuple[str, str, str]:
@@ -44,7 +47,7 @@ def ensure_monthly_partitions(engine: Engine, months_ahead: int = 3) -> list[str
                 created_partitions.append(table_name)
             except Exception as e:
                 # If scrobbles table is not partitioned, ignore gracefully
-                print(f"[Partitioning] Notice: {e}")
+                logger.warning(f"[Partitioning] Notice: {e}")
                 break
 
     return created_partitions

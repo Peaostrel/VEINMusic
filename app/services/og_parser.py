@@ -1,7 +1,10 @@
+import logging
 import re
 import urllib.parse
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 HTTPS_PREFIX = "https://"
 
@@ -78,7 +81,7 @@ async def _parse_yandex_meta(
             res = (await client.get(f"https://music.yandex.ru/handlers/track.jsx?track={track_id}")).json()
             return _parse_yandex_track(res)
     except Exception as e:
-        print(f"Yandex OG parsing error: {e}")
+        logger.warning(f"Yandex OG parsing error: {e}")
     return None, None
 
 
@@ -119,7 +122,7 @@ async def _resolve_url_metadata(client: httpx.AsyncClient, current_url: str) -> 
                 next_url = urllib.parse.urljoin(clean_url, next_url)
             if is_safe_url(next_url):
                 return None, None, _sanitize_url_for_request(next_url)
-            print(f"Blocked SSRF attempt on redirect to: {next_url}")
+            logger.warning(f"Blocked SSRF attempt on redirect to: {next_url}")
             return None, None, None
         if resp.status_code == 200:
             t_gen, i_gen = _parse_generic_html(resp.text)
@@ -138,7 +141,7 @@ async def parse_og_meta(url: str):
     # SSRF Protection using strict IP resolution (synchronous call is safe and
     # fast)
     if not is_safe_url(url):
-        print(f"Blocked SSRF attempt for URL: {url}")
+        logger.warning(f"Blocked SSRF attempt for URL: {url}")
         return None, None
 
     headers = {

@@ -1,5 +1,6 @@
 """Taste matching, recommendations, search and smart redirects."""
 
+import logging
 import urllib.parse
 from typing import Annotated
 
@@ -25,6 +26,8 @@ from app.models import (
 from app.routers.common import _check_privacy_and_owner, _get_visible_user
 from app.services.cache import get_from_cache, set_to_cache
 from app.services.taste import get_taste_match_internal, get_taste_twins
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["discovery"])
 
@@ -191,7 +194,7 @@ async def smart_redirect(source: str, type: str, q: str):
                     if direct:
                         return direct
         except Exception as e:
-            print(f"Redirect error: {e}")
+            logger.warning(f"Redirect error: {e}")
         return _yandex_fallback_redirect(type, q)
 
     return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}")

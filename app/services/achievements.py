@@ -1,5 +1,6 @@
 """Achievement rules: auto-award checks and progress calculation."""
 
+import logging
 import re
 import urllib.parse
 from datetime import UTC, timedelta
@@ -27,6 +28,8 @@ from app.models import (
 )
 from app.services.og_parser import parse_og_meta
 from app.services.user_stats import get_user_timezone_offset
+
+logger = logging.getLogger(__name__)
 
 
 def _check_total_scrobbles(user, ach, db: Session) -> bool:
@@ -343,5 +346,5 @@ async def get_album_track_count(url: str) -> int:
                 if match:
                     return int(match.group(1))
     except Exception as e:
-        print(f"Album track count error: {e}")
+        logger.warning(f"Album track count error: {e}")
     return 0

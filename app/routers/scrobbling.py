@@ -6,8 +6,8 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.redis import redis_lock
 from app.core.rate_limit import limiter
+from app.core.redis import redis_lock
 from app.core.security import get_current_user, get_current_user_optional
 from app.database import get_db
 from app.models import (
