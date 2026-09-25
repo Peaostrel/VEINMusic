@@ -312,7 +312,11 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
                 type="button"
                 onClick={handleTogglePlay}
                 disabled={!isHost}
-                title={isHost ? undefined : "Управлять воспроизведением может только DJ"}
+                title={
+                  isHost
+                    ? undefined
+                    : "Управлять воспроизведением может только DJ"
+                }
                 className="disabled:opacity-40 disabled:cursor-not-allowed w-14 h-14 rounded-full bg-gradient-to-tr from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white flex items-center justify-center shadow-lg shadow-red-600/30 transition-transform active:scale-95 cursor-pointer"
               >
                 {track.is_playing ? (
