@@ -18,7 +18,17 @@ from app.core.rate_limit import limiter
 from app.core.websockets import manager
 from app.database import Base, SessionLocal, engine
 from app.models import User
-from app.routers import admin, auth, developer, extended, profile, scrobbling, widgets
+from app.routers import (
+    account,
+    admin,
+    auth,
+    developer,
+    devices,
+    extended,
+    profile,
+    scrobbling,
+    widgets,
+)
 from app.services.cloud_scrobbling import poll_external_services
 from app.services.scrobble_processor import process_scrobble
 
@@ -138,6 +148,8 @@ app.include_router(admin.router)
 app.include_router(extended.router)
 app.include_router(widgets.router)
 app.include_router(developer.router)
+app.include_router(devices.router)
+app.include_router(account.router)
 
 
 @app.get("/health", tags=["health"], responses={503: {"description": "A dependency is down"}})

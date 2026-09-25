@@ -118,6 +118,14 @@ async def _run_webhook_job(event_name: str, data: dict, user_id: int) -> None:
         db.close()
 
 
+async def _run_lastfm_import_job(job_id: int) -> None:
+    from app.services.lastfm_import import run_import_job
+    try:
+        await run_import_job(job_id)
+    except Exception:
+        logging.exception("Last.fm import failed")
+
+
 async def _run_export_job(user_id: int, artist: str, title: str, album, timestamp: int) -> None:
     from app.database import SessionLocal
     from app.services.external_sync import dispatch_external_exports
@@ -134,6 +142,7 @@ async def _run_export_job(user_id: int, artist: str, title: str, album, timestam
 _ASYNC_JOB_FALLBACKS: dict[str, Callable[..., Coroutine[Any, Any, None]]] = {
     'async_dispatch_webhook': _run_webhook_job,
     'async_export_scrobble': _run_export_job,
+    'import_lastfm': _run_lastfm_import_job,
 }
 
 

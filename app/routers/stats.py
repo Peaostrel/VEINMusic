@@ -20,8 +20,8 @@ from app.models import (
     UserProfile,
 )
 from app.routers.common import _check_privacy_and_owner, _get_visible_user
-from app.services.scrobble_processor import format_history_item
 from app.services.cache import get_from_cache, set_to_cache
+from app.services.scrobble_processor import format_history_item
 from app.services.user_stats import (
     get_active_streak,
     get_user_level_info,

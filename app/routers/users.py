@@ -31,7 +31,11 @@ from app.schemas import (
     MarkRead,
     ToggleAch,
 )
-from app.services.user_stats import get_active_streak, get_levels_for_users, get_user_level_info
+from app.services.user_stats import (
+    get_active_streak,
+    get_levels_for_users,
+    get_user_level_info,
+)
 
 router = APIRouter(tags=["users"])
 

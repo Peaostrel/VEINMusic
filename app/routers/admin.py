@@ -665,8 +665,9 @@ def list_lastfm_import_jobs(
     return {"jobs": jobs}
 
 
-@router.post("/jobs/lastfm/{job_id}/retry", responses={404: {"description": "Not Found"}})
-def retry_lastfm_import_job(
+@router.post("/jobs/lastfm/{job_id}/retry",
+             responses={404: {"description": "Not Found"}, 400: {"description": "Bad Request"}})
+async def retry_lastfm_import_job(
     job_id: int,
     db: Annotated[Session, Depends(get_db)],
     admin: Annotated[User, Depends(get_admin_user)],
@@ -676,9 +677,14 @@ def retry_lastfm_import_job(
     if not job:
         raise HTTPException(404, "Задача импорта не найдена")
 
+    if job.status not in ("failed", "pending", "in_progress"):
+        raise HTTPException(400, "Повторить можно только незавершённую задачу")
     job.status = "pending"  # type: ignore[assignment]
     job.error_log = None  # type: ignore[assignment]
     db.commit()
+    # Resumes from the last imported page
+    from app.services.lastfm_import import enqueue_import
+    await enqueue_import(job_id)
     return {"status": "ok", "message": f"Задача импорта #{job_id} поставлена в очередь на повтор"}
 
 

@@ -26,10 +26,6 @@ from app.services.achievements import (  # noqa: F401
     run_check_achievements_bg,
 )
 from app.services.cache import get_from_cache, set_to_cache  # noqa: F401
-from app.services.lastfm_import import (  # noqa: F401
-    IMPORTING_USERS,
-    import_lastfm_history,
-)
 from app.services.taste import get_taste_match_internal, get_taste_twins  # noqa: F401
 from app.services.user_stats import (  # noqa: F401
     get_active_streak,

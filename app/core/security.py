@@ -125,6 +125,9 @@ _DEV_KEY_FORBIDDEN_PREFIXES = (
     "/api/profile/apikey",
     "/api/integrations",
     "/api/import",
+    "/api/account",
+    "/api/devices",
+    "/api/push",
     "/auth",
 )
 

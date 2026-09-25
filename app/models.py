@@ -1,6 +1,16 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, func, text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    func,
+    text,
+)
 from sqlalchemy.orm import relationship
 
 from app.core.crypto import EncryptedString
@@ -455,6 +465,13 @@ class LastfmImportJob(Base):
             timezone=True), default=lambda: datetime.now(
             UTC))
     finished_at = Column(DateTime(timezone=True), nullable=True)
+    # Incremental, resumable import: the job imports scrobbles played in
+    # (window_from, window_to] page by page and records where it stopped.
+    window_from = Column(Integer, nullable=True)
+    window_to = Column(Integer, nullable=True)
+    current_page = Column(Integer, default=0, server_default=text("0"), nullable=False)
+    total_pages = Column(Integer, default=0, server_default=text("0"), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=True)
 
     user = relationship("User")
 
@@ -477,3 +494,18 @@ class PushSubscription(Base):
             UTC))
 
     user = relationship("User")
+
+
+class DeviceAuthorization(Base):
+    """Device-code pairing (e.g. the browser extension): the device shows a
+    short user code, the signed-in user approves it on the website and the
+    device receives its own revocable API key."""
+    __tablename__ = "device_authorizations"
+    id = Column(Integer, primary_key=True, index=True)
+    device_code_hash = Column(String, nullable=False, unique=True, index=True)
+    user_code = Column(String, nullable=False, unique=True, index=True)
+    client_name = Column(String, nullable=False, default="VEIN Music Extension")
+    status = Column(String, nullable=False, default="pending")  # pending, approved, denied, consumed
+    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    expires_at = Column(DateTime(timezone=True), nullable=False)

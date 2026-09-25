@@ -11,7 +11,10 @@ from arq.connections import RedisSettings
 
 from app.core.observability import setup_observability
 from app.database import SessionLocal
-from app.services.achievements import award_achievements_for_user, notify_achievements_unlocked
+from app.services.achievements import (
+    award_achievements_for_user,
+    notify_achievements_unlocked,
+)
 from app.services.external_sync import dispatch_external_exports
 from app.services.webhooks import dispatch_webhook_event
 
@@ -63,6 +66,12 @@ async def async_export_scrobble(
         db.close()
 
 
+async def import_lastfm(ctx: dict[str, Any], job_id: int) -> None:
+    """ARQ job: import (or resume importing) Last.fm history for one job."""
+    from app.services.lastfm_import import run_import_job
+    await run_import_job(job_id)
+
+
 async def cloud_poll(ctx: dict[str, Any]) -> None:
     """arq cron job: poll Spotify / Yandex for currently playing tracks."""
     from app.services.cloud_scrobbling import poll_once
@@ -86,6 +95,7 @@ class WorkerSettings:
         check_achievements,
         async_dispatch_webhook,
         async_export_scrobble,
+        import_lastfm,
     ]
     cron_jobs: ClassVar[list] = [
         # Every 30 seconds; poll_once itself takes a Redis lock, so several
