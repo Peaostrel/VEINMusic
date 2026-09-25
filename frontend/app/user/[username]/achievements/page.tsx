@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { API_URL } from "@/app/lib/api";
 
 function getRarityStyle(rarity: number): string {
   if (rarity < 10)
@@ -164,10 +165,9 @@ export default function AchievementsPage() {
 
   useEffect(() => {
     if (!username) return;
-    fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/achievements/all/${username}`,
-      { credentials: "include" },
-    )
+    fetch(`${API_URL}/api/achievements/all/${username}`, {
+      credentials: "include",
+    })
       .then((res) => {
         if (!res.ok) throw new Error("Not found or Server Error");
         return res.json();

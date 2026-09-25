@@ -7,6 +7,7 @@ import { Heart, MessageCircle, Users } from "lucide-react";
 import { getPlatformIcon } from "../utils/formatters";
 
 import About from "./about/page";
+import { API_URL } from "@/app/lib/api";
 
 interface FeedItem {
   id: number;
@@ -34,8 +35,6 @@ export default function Home() {
     setUsername(user);
 
     const fetchFeeds = async () => {
-      const API_URL =
-        process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
       try {
         const globalRes = await fetch(`${API_URL}/api/global-history`, {
           credentials: "include",
@@ -72,7 +71,6 @@ export default function Home() {
 
   const toggleLike = async (e: React.MouseEvent, scrobbleId: number) => {
     e.stopPropagation();
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
     try {
       await fetch(`${API_URL}/api/scrobble/${scrobbleId}/like`, {
         method: "POST",

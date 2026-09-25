@@ -44,7 +44,7 @@ def test_add_scrobble_success(auth_client, db, test_user):
 
     # We patch run_check_achievements_bg where it is defined to avoid
     # run_sync/threadpool complexity in tests
-    with patch("app.routers.extended.run_check_achievements_bg") as mock_bg:
+    with patch("app.services.achievements.run_check_achievements_bg") as mock_bg:
         resp = auth_client.post("/api/scrobble", json=payload)
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
@@ -86,7 +86,8 @@ def test_auto_achievements_flow(auth_client, db, test_user):
     db.commit()
 
     # Check level info / achievements check
-    from app.routers.extended import check_auto_achievements, get_user_level_info
+    from app.services.achievements import check_auto_achievements
+    from app.services.user_stats import get_user_level_info
     check_auto_achievements(test_user, db)
 
     # Verify achievement 'Первые шаги' is earned

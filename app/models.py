@@ -1,8 +1,19 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    func,
+    text,
+)
 from sqlalchemy.orm import relationship
 
+from app.core.crypto import EncryptedString
 from app.database import Base
 
 CASCADE_ALL_DELETE = "all, delete"
@@ -16,8 +27,10 @@ class User(Base):
     hashed_password = Column(String)
     api_key = Column(String, unique=True, index=True)
     role = Column(String, default="user")
-    is_banned = Column(Boolean, default=False)
-    is_flagged_antifraud = Column(Boolean, default=False)
+    is_banned = Column(Boolean, default=False, server_default=text("false"), nullable=False)
+    is_flagged_antifraud = Column(Boolean, default=False, server_default=text("false"), nullable=False)
+    # Bumped to revoke all session tokens ("log out everywhere", bans)
+    session_version = Column(Integer, default=0, server_default=text("0"), nullable=False)
     antifraud_reason = Column(String, nullable=True)
 
     profile = relationship(
@@ -113,10 +126,10 @@ class UserIntegration(Base):
     current_streak = Column(Integer, default=0)
     last_streak_date = Column(String, nullable=True)
     is_verified = Column(Boolean, default=False)
-    yandex_token = Column(String, nullable=True)
+    yandex_token = Column(EncryptedString, nullable=True)
     lastfm_username = Column(String, nullable=True)
-    spotify_access_token = Column(String, nullable=True)
-    spotify_refresh_token = Column(String, nullable=True)
+    spotify_access_token = Column(EncryptedString, nullable=True)
+    spotify_refresh_token = Column(EncryptedString, nullable=True)
     has_imported_lastfm = Column(Boolean, default=False)
     last_sync = Column(DateTime(timezone=True), nullable=True)
 
@@ -125,6 +138,10 @@ class UserIntegration(Base):
 
 class Track(Base):
     __tablename__ = "tracks"
+    __table_args__ = (
+        # Case-insensitive catalog lookup when processing scrobbles
+        Index("ix_tracks_lower_title_artist", func.lower(text("title")), func.lower(text("artist"))),
+    )
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, index=True)
     artist = Column(String, index=True)
@@ -137,6 +154,13 @@ class Track(Base):
 
 class Scrobble(Base):
     __tablename__ = "scrobbles"
+    __table_args__ = (
+        # "latest scrobble of a user", per-user history and period stats
+        Index("ix_scrobbles_user_id_id", "user_id", "id"),
+        Index("ix_scrobbles_user_played_at", "user_id", "played_at"),
+        # "online now" and activity queries
+        Index("ix_scrobbles_updated_at", "updated_at"),
+    )
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(
         Integer,
@@ -184,6 +208,9 @@ class Achievement(Base):
 
 class UserAchievement(Base):
     __tablename__ = "user_achievements"
+    __table_args__ = (
+        Index("uq_user_achievements_user_achievement", "user_id", "achievement_id", unique=True),
+    )
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(
         Integer,
@@ -210,6 +237,9 @@ class UserAchievement(Base):
 
 class Follow(Base):
     __tablename__ = "follows"
+    __table_args__ = (
+        Index("uq_follows_follower_following", "follower_id", "following_id", unique=True),
+    )
     id = Column(Integer, primary_key=True, index=True)
     follower_id = Column(
         Integer,
@@ -231,6 +261,9 @@ class Follow(Base):
 
 class ScrobbleLike(Base):
     __tablename__ = "scrobble_likes"
+    __table_args__ = (
+        Index("uq_scrobble_likes_user_scrobble", "user_id", "scrobble_id", unique=True),
+    )
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(
         Integer,
@@ -276,7 +309,7 @@ class AvatarFrame(Base):
     __tablename__ = "avatar_frames"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    code = Column(String, unique=True, index=True)
+    code = Column(String, unique=True, index=True, nullable=False)
     css_style = Column(String, nullable=True)
     image_url = Column(String, nullable=True)
     rarity = Column(String, default="common")
@@ -305,7 +338,7 @@ class SystemAnnouncement(Base):
 class FeatureFlag(Base):
     __tablename__ = "feature_flags"
     id = Column(Integer, primary_key=True, index=True)
-    key = Column(String, unique=True, index=True)
+    key = Column(String, unique=True, index=True, nullable=False)
     description = Column(String, nullable=True)
     is_enabled = Column(Boolean, default=True)
     updated_at = Column(
@@ -367,7 +400,7 @@ class Webhook(Base):
             ondelete="CASCADE"),
         index=True)
     url = Column(String, nullable=False)
-    secret = Column(String, nullable=False)
+    secret = Column(EncryptedString, nullable=False)
     events = Column(String, default="scrobble.created,achievement.unlocked")
     is_active = Column(Boolean, default=True)
     created_at = Column(
@@ -388,9 +421,9 @@ class ExternalSyncConfig(Base):
             ondelete="CASCADE"),
         unique=True,
         index=True)
-    lastfm_session_key = Column(String, nullable=True)
-    listenbrainz_token = Column(String, nullable=True)
-    librefm_session_key = Column(String, nullable=True)
+    lastfm_session_key = Column(EncryptedString, nullable=True)
+    listenbrainz_token = Column(EncryptedString, nullable=True)
+    librefm_session_key = Column(EncryptedString, nullable=True)
     is_lastfm_enabled = Column(Boolean, default=False)
     is_listenbrainz_enabled = Column(Boolean, default=False)
     is_librefm_enabled = Column(Boolean, default=False)
@@ -432,6 +465,13 @@ class LastfmImportJob(Base):
             timezone=True), default=lambda: datetime.now(
             UTC))
     finished_at = Column(DateTime(timezone=True), nullable=True)
+    # Incremental, resumable import: the job imports scrobbles played in
+    # (window_from, window_to] page by page and records where it stopped.
+    window_from = Column(Integer, nullable=True)
+    window_to = Column(Integer, nullable=True)
+    current_page = Column(Integer, default=0, server_default=text("0"), nullable=False)
+    total_pages = Column(Integer, default=0, server_default=text("0"), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=True)
 
     user = relationship("User")
 
@@ -454,3 +494,18 @@ class PushSubscription(Base):
             UTC))
 
     user = relationship("User")
+
+
+class DeviceAuthorization(Base):
+    """Device-code pairing (e.g. the browser extension): the device shows a
+    short user code, the signed-in user approves it on the website and the
+    device receives its own revocable API key."""
+    __tablename__ = "device_authorizations"
+    id = Column(Integer, primary_key=True, index=True)
+    device_code_hash = Column(String, nullable=False, unique=True, index=True)
+    user_code = Column(String, nullable=False, unique=True, index=True)
+    client_name = Column(String, nullable=False, default="VEIN Music Extension")
+    status = Column(String, nullable=False, default="pending")  # pending, approved, denied, consumed
+    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    expires_at = Column(DateTime(timezone=True), nullable=False)
