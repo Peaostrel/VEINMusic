@@ -14,14 +14,6 @@ export default function Auth() {
     if (storedUser) {
       setUsername(storedUser);
       setStep("success");
-      const API_URL =
-        process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-      fetch(`${API_URL}/api/user/${storedUser}`, { credentials: "include" })
-        .then((r) => r.json())
-        .then((d) => {
-          if (d.api_key) setApiKey(d.api_key);
-        })
-        .catch(console.error);
     }
   }, []);
   const handleSubmit = async (e: React.FormEvent) => {
@@ -52,15 +44,19 @@ export default function Auth() {
       localStorage.setItem("username", data.username);
       globalThis.dispatchEvent(new Event("themeChanged"));
 
-      // Fetch api_key from user profile (returned only to the owner via cookie)
-      try {
-        const profileRes = await fetch(`${API_URL}/api/user/${data.username}`, {
-          credentials: "include",
-        });
-        const profileData = await profileRes.json();
-        if (profileData.api_key) setApiKey(profileData.api_key);
-      } catch (error) {
-        console.error(error);
+      // The raw API key is only returned once, on registration (the server
+      // stores just a hash). Hand it to the browser extension directly
+      // instead of persisting it in localStorage.
+      if (data.api_key) {
+        setApiKey(data.api_key);
+        globalThis.postMessage(
+          {
+            type: "VEIN_EXTENSION_SYNC_KEYS",
+            username: data.username,
+            apiKey: data.api_key,
+          },
+          globalThis.location.origin,
+        );
       }
 
       setStep("success");
@@ -174,7 +170,8 @@ export default function Auth() {
               className="bg-[#121212] border border-white/10 font-mono text-sm p-4 rounded-xl mb-6 select-all overflow-x-auto shadow-inner"
               style={{ color: "var(--accent)" }}
             >
-              {apiKey}
+              {apiKey ||
+                "Ключ показывается только один раз при создании. Новый ключ можно сгенерировать в настройках."}
             </div>
 
             <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-5 mb-8 flex items-center justify-center gap-3">
