@@ -229,7 +229,7 @@ python -m desktop_client.main
 pytest
 
 # Те же тесты на PostgreSQL и с реальным Redis (как в CI)
-TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/veinmusic_test \
+TEST_DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/veinmusic_test \
 TEST_REDIS_URL=redis://localhost:6379 pytest
 
 # Проверка, что миграции совпадают с моделями

@@ -11,15 +11,18 @@ RUN groupadd -r appuser && useradd -r -g appuser -d /app appuser \
     && mkdir -p /app/uploads && chown appuser:appuser /app/uploads
 
 # Install dependencies from requirements.txt (single source of truth, kept up
-# to date by Dependabot). Binary wheels only, so no compiler is needed.
+# to date by Dependabot). Binary wheels only, so no compiler is needed; every
+# file is verified against the hashes pinned in requirements.txt.
 COPY requirements.txt .
-RUN pip install --no-cache-dir --only-binary :all: -r requirements.txt
+RUN pip install --no-cache-dir --only-binary :all: --require-hashes -r requirements.txt
 
-# Copy application files explicitly with proper ownership
-COPY --chown=appuser:appuser app/ ./app/
-COPY --chown=appuser:appuser alembic/ ./alembic/
-COPY --chown=appuser:appuser alembic.ini .
-COPY --chown=appuser:appuser docker-entrypoint.sh .
+# Copy application files explicitly. They stay owned by root, so the app
+# (running as appuser) can read but not modify its own code; it only writes
+# to /app/uploads.
+COPY app/ ./app/
+COPY alembic/ ./alembic/
+COPY alembic.ini .
+COPY docker-entrypoint.sh .
 
 USER appuser
 

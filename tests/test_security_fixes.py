@@ -1,5 +1,6 @@
 """Regression tests for security / privacy fixes found during the audit."""
 import asyncio
+import secrets
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -18,11 +19,14 @@ from app.services.cloud_scrobbling import get_pollable_user_ids
 from app.services.scrobble_processor import _get_or_create_track, _update_scrobble_progress
 from app.utils import is_safe_url, sanitize_text
 
+# Generated per run so that no credentials live in the repository
+TEST_PASSWORD = secrets.token_urlsafe(16)
+
 ORIGIN = {"Origin": "http://localhost:3000"}
 
 
 def _register(client, username: str) -> str:
-    resp = client.post("/auth/register", json={"username": username, "password": "secret123"})
+    resp = client.post("/auth/register", json={"username": username, "password": TEST_PASSWORD})
     assert resp.status_code == 200, resp.text
     return resp.json()["api_key"]
 
