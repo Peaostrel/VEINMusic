@@ -9,6 +9,8 @@ import {
 } from "@/components/StatsCharts";
 import { PieChart, Clock, CalendarDays, Award } from "lucide-react";
 import { getPlatformIcon } from "../../../../utils/formatters";
+import { sanitizeUrl } from "@/app/utils/sanitizeUrl";
+import { API_URL } from "@/app/lib/api";
 
 const getArtistUrl = (artist: string, source: string) => {
   if (!artist) return "#";
@@ -25,7 +27,7 @@ const getArtistUrl = (artist: string, source: string) => {
     case "apple_music":
       return `https://music.apple.com/search?term=${q}`;
     case "yandex":
-      return `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/redirect?source=yandex&type=artist&q=${q}`;
+      return `${API_URL}/api/redirect?source=yandex&type=artist&q=${q}`;
     default:
       return "#";
   }
@@ -46,7 +48,7 @@ const getAlbumUrl = (album: string, artist: string, source: string) => {
     case "apple_music":
       return `https://music.apple.com/search?term=${q}`;
     case "yandex":
-      return `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/redirect?source=yandex&type=album&q=${q}`;
+      return `${API_URL}/api/redirect?source=yandex&type=album&q=${q}`;
     default:
       return "#";
   }
@@ -54,9 +56,9 @@ const getAlbumUrl = (album: string, artist: string, source: string) => {
 
 const getTrackUrl = (t: any) => {
   if (t.source === "yandex" && !t.track_url?.includes("/track/")) {
-    return `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/redirect?source=yandex&type=track&q=${encodeURIComponent(t.artist + " " + (t.title || ""))}`;
+    return `${API_URL}/api/redirect?source=yandex&type=track&q=${encodeURIComponent(t.artist + " " + (t.title || ""))}`;
   }
-  return t.track_url || "#";
+  return (t.track_url && sanitizeUrl(t.track_url)) || "#";
 };
 
 const PERIOD_LABELS: Record<string, string> = {
@@ -71,16 +73,31 @@ export default function DetailedStats() {
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState("30d");
   const [hasCheckedFallback, setHasCheckedFallback] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!username) return;
     setLoading(true);
-    fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/detailed-stats/${username}?period=${period}`,
-      { credentials: "include", cache: "no-store" },
-    )
-      .then((res) => res.json())
+    fetch(`${API_URL}/api/detailed-stats/${username}?period=${period}`, {
+      credentials: "include",
+      cache: "no-store",
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          setError(
+            res.status === 403
+              ? "Это приватный профиль"
+              : "Не удалось загрузить статистику",
+          );
+          return null;
+        }
+        return res.json();
+      })
       .then((data) => {
+        if (!data) {
+          setLoading(false);
+          return;
+        }
         if (
           period === "30d" &&
           data.total_scrobbles === 0 &&
@@ -96,6 +113,14 @@ export default function DetailedStats() {
       })
       .catch(() => setLoading(false));
   }, [username, period, hasCheckedFallback]);
+
+  if (error) {
+    return (
+      <div className="min-h-screen text-[var(--accent-text)] flex items-center justify-center font-bold text-2xl">
+        {error}
+      </div>
+    );
+  }
 
   if (loading || !stats) {
     return (

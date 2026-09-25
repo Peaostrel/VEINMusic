@@ -21,10 +21,19 @@ def _escape(text: str | None) -> str:
     return html.escape(str(text), quote=True)
 
 
+def _truncate_escape(text: str | None, limit: int) -> str:
+    """Truncate BEFORE escaping so an entity like &amp; is never cut in half
+    (which would produce invalid XML and a broken SVG)."""
+    raw = str(text or "")
+    if len(raw) > limit:
+        raw = raw[:limit] + "..."
+    return _escape(raw)
+
+
 def _render_now_playing_svg(username: str, title: str, artist: str, is_playing: bool) -> str:
     escaped_user = _escape(username)
-    escaped_title = _escape(title)
-    escaped_artist = _escape(artist)
+    escaped_title = _truncate_escape(title, 32)
+    escaped_artist = _truncate_escape(artist, 36)
 
     status_text = "LISTENING NOW ON VEIN" if is_playing else "LAST PLAYED ON VEIN"
     badge_color = "#ef4444" if is_playing else "#71717a"
@@ -94,10 +103,10 @@ def _render_now_playing_svg(username: str, title: str, artist: str, is_playing: 
     <!-- Track Info -->
     <g transform="translate(92, 60)">
         <text x="0" y="0" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="700">
-            {escaped_title[:32] + ('...' if len(escaped_title) > 32 else '')}
+            {escaped_title}
         </text>
         <text x="0" y="20" fill="#a1a1aa" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="500">
-            {escaped_artist[:36] + ('...' if len(escaped_artist) > 36 else '')}
+            {escaped_artist}
         </text>
     </g>
 
@@ -114,13 +123,13 @@ def _render_top_artists_svg(username: str, top_artists: list[tuple[str, int]]) -
 
     for i, (artist, count) in enumerate(top_artists[:5]):
         y_pos = 50 + (i * 22)
-        escaped_a = _escape(artist)
+        escaped_a = _truncate_escape(artist, 22)
         pct = max(10, int((count / max_count) * 180))
 
         row = f'''
         <g transform="translate(24, {y_pos})">
             <text x="0" y="10" fill="#71717a" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="700">{i+1}</text>
-            <text x="16" y="10" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">{escaped_a[:22] + ('...' if len(escaped_a) > 22 else '')}</text>
+            <text x="16" y="10" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">{escaped_a}</text>
             <rect x="180" y="2" width="{pct}" height="8" rx="4" fill="#ef4444" opacity="0.85"/>
             <text x="372" y="10" text-anchor="end" fill="#a1a1aa" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="500">{count}</text>
         </g>
@@ -223,12 +232,17 @@ def get_top_artists_widget(username: str, db: Annotated[Session, Depends(get_db)
 def get_og_recap_card(username: str, period: str = "week", db: Annotated[Session, Depends(get_db)] = None):  # type: ignore[assignment]
     """Generate 1200x630 social share card for Weekly/Monthly recap."""
     from datetime import UTC, datetime, timedelta
+
     from app.services.og_image import generate_recap_card_svg
 
     user = db.query(User).filter(User.username == username).first()
     if not user:
         svg_content = generate_recap_card_svg(username, "User Not Found", 0, 0.0, [])
         return Response(content=svg_content, media_type=SVG_UTF8_MEDIA_TYPE)
+
+    if user.profile and user.profile.is_private:
+        svg_content = generate_recap_card_svg(username, "Private Profile", 0, 0.0, [])
+        return Response(content=svg_content, media_type=SVG_UTF8_MEDIA_TYPE, headers={"Cache-Control": "no-cache"})
 
     now = datetime.now(UTC)
     delta_days = 30 if period == "month" else 7

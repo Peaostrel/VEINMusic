@@ -1,3 +1,5 @@
+import LastfmImportStatus from "../components/LastfmImportStatus";
+
 export default function IntegrationsTab({
   data,
   updateData,
@@ -5,6 +7,7 @@ export default function IntegrationsTab({
   handleDisconnect,
   saveYandexToken,
   startLastfmImport,
+  importRefresh,
   generatedApiKey,
   handleGenerateApiKey,
   handleCopyKey,
@@ -159,7 +162,8 @@ export default function IntegrationsTab({
             <div>
               <h3 className="font-bold text-lg text-white">Last.fm Import</h3>
               <p className="text-sm text-gray-400">
-                Импорт истории прослушиваний.
+                Импорт истории прослушиваний. Повторный импорт добавит только
+                новые прослушивания.
               </p>
             </div>
           </div>
@@ -191,6 +195,7 @@ export default function IntegrationsTab({
                 Импорт
               </button>
             </div>
+            <LastfmImportStatus refreshKey={importRefresh ?? 0} />
           </div>
         </div>
       </div>

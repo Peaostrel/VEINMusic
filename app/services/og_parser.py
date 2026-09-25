@@ -1,35 +1,17 @@
-import ipaddress
+import logging
 import re
-import socket
 import urllib.parse
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 HTTPS_PREFIX = "https://"
 
 
 def is_safe_url(url: str) -> bool:
-    try:
-        parsed_url = urllib.parse.urlparse(url)
-        hostname = parsed_url.hostname
-        if not hostname:
-            return False
-
-        # Fast fail for obvious internal domains/IPs
-        if any(x in hostname.lower()
-               for x in ["localhost", "local", "internal"]):
-            return False
-
-        # Resolve IP to check for private/loopback ranges
-        addr_info = socket.getaddrinfo(hostname, None)
-        for info in addr_info:
-            ip_str = info[4][0]
-            ip_obj = ipaddress.ip_address(ip_str)
-            if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_multicast:
-                return False
-        return True
-    except Exception:
-        return False
+    from app.utils import is_safe_url as _is_safe_url
+    return _is_safe_url(url)
 
 
 def _parse_yandex_artist(res: dict) -> tuple[str | None, str | None]:
@@ -99,24 +81,7 @@ async def _parse_yandex_meta(
             res = (await client.get(f"https://music.yandex.ru/handlers/track.jsx?track={track_id}")).json()
             return _parse_yandex_track(res)
     except Exception as e:
-        print(f"Yandex OG parsing error: {e}")
-    return None, None
-
-
-async def _parse_generic_meta(
-        client, url: str) -> tuple[str | None, str | None]:
-    """Fetch the page and extract OG meta tags from HTML."""
-    from app.utils import is_safe_url
-    if not is_safe_url(url):
-        return None, None
-    clean_url = "".join(chr(ord(c)) for c in str(url))
-    try:
-        req = client.build_request("GET", clean_url)
-        resp = await client.send(req, follow_redirects=True)
-        if resp.status_code == 200:
-            return _parse_generic_html(resp.text)
-    except Exception as e:
-        print(f"Generic OG parsing error: {e}")
+        logger.warning(f"Yandex OG parsing error: {e}")
     return None, None
 
 
@@ -154,14 +119,13 @@ async def _resolve_url_metadata(client: httpx.AsyncClient, current_url: str) -> 
         if 300 <= resp.status_code < 400 and 'Location' in resp.headers:
             next_url = resp.headers['Location']
             if not next_url.startswith('http'):
-                import urllib.parse
                 next_url = urllib.parse.urljoin(clean_url, next_url)
             if is_safe_url(next_url):
                 return None, None, _sanitize_url_for_request(next_url)
-            print(f"Blocked SSRF attempt on redirect to: {next_url}")
+            logger.warning(f"Blocked SSRF attempt on redirect to: {next_url}")
             return None, None, None
         if resp.status_code == 200:
-            t_gen, i_gen = await _parse_generic_meta(client, clean_url)
+            t_gen, i_gen = _parse_generic_html(resp.text)
             return t_gen, i_gen, None
     except httpx.RequestError:
         pass
@@ -177,7 +141,7 @@ async def parse_og_meta(url: str):
     # SSRF Protection using strict IP resolution (synchronous call is safe and
     # fast)
     if not is_safe_url(url):
-        print(f"Blocked SSRF attempt for URL: {url}")
+        logger.warning(f"Blocked SSRF attempt for URL: {url}")
         return None, None
 
     headers = {

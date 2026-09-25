@@ -27,12 +27,12 @@ def generate_recap_card_svg(
     artist_rows = []
     for i, (artist, count) in enumerate(top_artists[:5]):
         y = 300 + (i * 54)
-        escaped_a = _escape(artist)
+        escaped_a = _escape(str(artist or "")[:28])
         artist_rows.append(f"""
         <g transform="translate(620, {y})">
             <rect width="520" height="42" rx="10" fill="rgba(255, 255, 255, 0.03)" stroke="rgba(255, 255, 255, 0.06)"/>
             <text x="20" y="26" fill="#ef4444" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="900">0{i+1}</text>
-            <text x="60" y="26" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="700">{escaped_a[:28]}</text>
+            <text x="60" y="26" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="700">{escaped_a}</text>
             <text x="500" y="26" text-anchor="end" fill="#a1a1aa" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="600">{count} plays</text>
         </g>
         """)

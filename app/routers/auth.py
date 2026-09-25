@@ -1,6 +1,8 @@
 import hashlib
+import hmac
 import os
 import secrets
+import urllib.parse
 from typing import Annotated
 
 import httpx
@@ -8,12 +10,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.core import login_guard
 from app.core.rate_limit import limiter
 from app.core.security import (
     SECRET_KEY,
     create_session_token,
     get_current_user,
     get_password_hash,
+    revoke_all_sessions,
     verify_password,
 )
 from app.database import get_db
@@ -21,6 +25,8 @@ from app.models import User, UserIntegration, UserProfile
 from app.schemas import UserCreate
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+MIN_PASSWORD_LENGTH = 8
 
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
@@ -37,8 +43,8 @@ def register(request: Request, data: UserCreate, response: Response,
     data.username = data.username.lower()
     if len(data.username) < 3:
         raise HTTPException(400, "Никнейм слишком короткий")
-    if len(data.password) < 6:
-        raise HTTPException(400, "Пароль должен быть не менее 6 символов")
+    if len(data.password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(400, f"Пароль должен быть не менее {MIN_PASSWORD_LENGTH} символов")
     if db.query(User).filter(User.username == data.username).first():
         raise HTTPException(400, "Никнейм занят")
 
@@ -61,7 +67,7 @@ def register(request: Request, data: UserCreate, response: Response,
 
     # Set signed session token in cookie
     session_token = create_session_token(
-        str(new_user.id), str(new_user.hashed_password))
+        str(new_user.id), str(new_user.hashed_password), int(new_user.session_version or 0))
     safe_token = session_token.replace('\r', '').replace('\n', '')
     response.set_cookie(
         key="api_key",
@@ -75,17 +81,26 @@ def register(request: Request, data: UserCreate, response: Response,
     return {"message": "Успешная регистрация", "username": new_user.username, "api_key": raw_api_key}
 
 
-@router.post("/login", responses={400: {"description": "Bad Request"}})
+@router.post("/login", responses={400: {"description": "Bad Request"},
+                                   429: {"description": "Too many failed attempts"}})
 @limiter.limit("5/minute")
 def login(request: Request, data: UserCreate, response: Response,
           db: Annotated[Session, Depends(get_db)]):
     data.username = data.username.lower()
+    locked_for = login_guard.seconds_until_unlocked(data.username)
+    if locked_for:
+        raise HTTPException(
+            429, f"Слишком много неудачных попыток входа. Попробуйте через {max(locked_for // 60, 1)} мин.")
+
     user = db.query(User).filter(User.username == data.username).first()
     if not user or not verify_password(data.password, str(user.hashed_password)):
+        login_guard.register_failure(data.username)
         raise HTTPException(400, "Неверный логин/пароль")
+    login_guard.reset(data.username)
 
     # Set signed session token in cookie
-    session_token = create_session_token(str(user.id), str(user.hashed_password))
+    session_token = create_session_token(
+        str(user.id), str(user.hashed_password), int(user.session_version or 0))
     safe_token = session_token.replace('\r', '').replace('\n', '')
     response.set_cookie(
         key="api_key",
@@ -105,21 +120,73 @@ def logout(response: Response):
     return {"message": "Успешный выход"}
 
 
+@router.post("/logout-all")
+def logout_all(response: Response,
+               db: Annotated[Session, Depends(get_db)],
+               current_user: Annotated[User, Depends(get_current_user)]):
+    """Revoke every session of the user (all browsers and devices).
+
+    API keys are not affected; they are managed separately."""
+    revoke_all_sessions(current_user)
+    db.commit()
+    response.delete_cookie("api_key")
+    return {"message": "Вы вышли на всех устройствах"}
+
+
+SPOTIFY_STATE_COOKIE = "spotify_auth_state"
+
+
+def _sign_spotify_state(user_id: str, nonce: str) -> str:
+    return hmac.new(
+        SECRET_KEY.encode("utf-8"),
+        f"spotify:{user_id}:{nonce}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _parse_spotify_state(state: str, cookie_nonce: str | None) -> int | None:
+    """Validate OAuth state (bound to the initiating browser and user). Returns user id."""
+    try:
+        user_id, nonce, signature = state.split(".", 2)
+    except ValueError:
+        return None
+    if not cookie_nonce or not secrets.compare_digest(nonce, cookie_nonce):
+        return None
+    if not hmac.compare_digest(signature, _sign_spotify_state(user_id, nonce)):
+        return None
+    try:
+        return int(user_id)
+    except ValueError:
+        return None
+
+
 @router.get("/spotify/login")
-def spotify_login(current_user: Annotated[User, Depends(
-        get_current_user)], response: Response):
+def spotify_login(current_user: Annotated[User, Depends(get_current_user)]):
     scopes = "user-read-currently-playing user-read-playback-state"
-    state = secrets.token_hex(16)
-    response.set_cookie(
-        key="spotify_auth_state",
-        value=state,
+    nonce = secrets.token_hex(16)
+    user_id = str(current_user.id)
+    state = f"{user_id}.{nonce}.{_sign_spotify_state(user_id, nonce)}"
+    query = urllib.parse.urlencode({
+        "client_id": SPOTIFY_CLIENT_ID or "",
+        "response_type": "code",
+        "redirect_uri": SPOTIFY_REDIRECT_URI,
+        "scope": scopes,
+        "state": state,
+    })
+    # The cookie must be set on the response that is actually returned;
+    # cookies set on an injected Response are dropped when a Response
+    # object is returned directly.
+    redirect = RedirectResponse(f"https://accounts.spotify.com/authorize?{query}")
+    redirect.set_cookie(
+        key=SPOTIFY_STATE_COOKIE,
+        value=nonce,
         httponly=True,
         secure=os.getenv("ENVIRONMENT") == "production",
+        # Lax so it is sent on the top-level redirect back from Spotify
         samesite="lax",
-        max_age=3600  # 1 hour
+        max_age=600,
     )
-    return RedirectResponse(
-        f"https://accounts.spotify.com/authorize?client_id={SPOTIFY_CLIENT_ID}&response_type=code&redirect_uri={SPOTIFY_REDIRECT_URI}&scope={scopes}&state={state}")
+    return redirect
 
 
 @router.get("/spotify/callback",
@@ -127,19 +194,20 @@ def spotify_login(current_user: Annotated[User, Depends(
 async def spotify_callback(code: str,
                            state: str,
                            request: Request,
-                           response: Response,
-                           db: Annotated[Session,
-                                         Depends(get_db)],
-                           current_user: Annotated[User,
-                                                   Depends(get_current_user)]):
-    cookie_state = request.cookies.get("spotify_auth_state")
-    if not cookie_state or not secrets.compare_digest(state, cookie_state):
+                           db: Annotated[Session, Depends(get_db)]):
+    # The session cookie is SameSite=Strict and is therefore NOT sent on the
+    # cross-site redirect from accounts.spotify.com, so the user is identified
+    # through the signed OAuth state bound to the Lax state cookie instead.
+    user_id = _parse_spotify_state(state, request.cookies.get(SPOTIFY_STATE_COOKIE))
+    if user_id is None:
         raise HTTPException(status_code=400, detail="Invalid state parameter")
-    response.delete_cookie("spotify_auth_state")
 
-    user = current_user
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user or user.is_banned:
+        raise HTTPException(status_code=400, detail="Invalid state parameter")
 
-    async with httpx.AsyncClient() as client:
+    result = "error"
+    async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.post("https://accounts.spotify.com/api/token", data={
             "grant_type": "authorization_code",
             "code": code,
@@ -150,12 +218,16 @@ async def spotify_callback(code: str,
 
         if resp.status_code == 200:
             data = resp.json()
-            if not user.integration:
-                db.add(UserIntegration(user_id=user.id))
+            if data.get("access_token") and data.get("refresh_token"):
+                if not user.integration:
+                    db.add(UserIntegration(user_id=user.id))
+                    db.commit()
+                    db.refresh(user)
+                user.integration.spotify_access_token = data["access_token"]
+                user.integration.spotify_refresh_token = data["refresh_token"]
                 db.commit()
-                db.refresh(user)
-            user.integration.spotify_access_token = data["access_token"]
-            user.integration.spotify_refresh_token = data["refresh_token"]
-            db.commit()
-            return RedirectResponse(f"{FRONTEND_URL}/settings?spotify=success")
-    return RedirectResponse(f"{FRONTEND_URL}/settings?spotify=error")
+                result = "success"
+
+    redirect = RedirectResponse(f"{FRONTEND_URL}/settings?spotify={result}")
+    redirect.delete_cookie(SPOTIFY_STATE_COOKIE)
+    return redirect

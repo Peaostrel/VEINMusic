@@ -35,7 +35,7 @@ def test_register_validation_errors(client, db):
         "password": "123"  # NOSONAR
     })
     assert resp.status_code == 400
-    assert "Пароль должен быть не менее 6 символов" in resp.text
+    assert "Пароль должен быть не менее 8 символов" in resp.text
 
     # Already taken
     # First register one
