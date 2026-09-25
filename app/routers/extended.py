@@ -1835,7 +1835,7 @@ def assign_achievement(target_username: str,
                 user_id=user.id,
                 achievement_id=data.achievement_id))
         user.integration.bonus_xp = int(
-            user.integration.bonus_xp or 0) + int(ach.reward_xp if ach and ach.reward_xp else 0)
+            user.integration.bonus_xp or 0) + int(ach.reward_xp or 0)
         db.commit()
     return {"status": "ok"}
 
