@@ -54,15 +54,14 @@ def get_user_timezone_offset(location: str) -> int:
     return 3
 
 
-def get_user_level_info(user: User, db: Session):
+def _counted_xp_query(db: Session):
+    return db.query(Scrobble.user_id, func.coalesce(func.sum(Scrobble.xp_earned), 0)).join(Track).filter(
+        Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85)
+
+
+def _level_and_rank(user: User, scrobbles_xp: int) -> tuple[int, str, int]:
     streak = get_active_streak(user)
-    scrobbles_xp = db.query(
-        func.sum(
-            Scrobble.xp_earned)).join(Track).filter(
-        Scrobble.user_id == user.id,
-        Scrobble.listened_sec *
-        100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85).scalar() or 0
-    base_xp = scrobbles_xp + (user.integration.bonus_xp or 0)
+    base_xp = int(scrobbles_xp or 0) + (user.integration.bonus_xp or 0)
     total_xp = int(base_xp * 1.1) if streak >= 7 else base_xp
     level = (total_xp // 100) + 1
     if level >= 100:
@@ -77,4 +76,19 @@ def get_user_level_info(user: User, db: Session):
         rank = "Меломан"
     else:
         rank = "Турист"
+    return level, rank, total_xp
+
+
+def get_user_level_info(user: User, db: Session):
+    row = _counted_xp_query(db).filter(Scrobble.user_id == user.id).group_by(Scrobble.user_id).first()
+    level, rank, total_xp = _level_and_rank(user, row[1] if row else 0)
     return level, rank, total_xp, user.profile.theme
+
+
+def get_levels_for_users(users: list[User], db: Session) -> dict[int, int]:
+    """Levels for many users with a single aggregate query (avoids N+1)."""
+    ids = [int(u.id) for u in users]
+    if not ids:
+        return {}
+    xp_by_user = dict(_counted_xp_query(db).filter(Scrobble.user_id.in_(ids)).group_by(Scrobble.user_id).all())
+    return {int(u.id): _level_and_rank(u, xp_by_user.get(u.id, 0))[0] for u in users}

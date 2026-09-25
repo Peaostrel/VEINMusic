@@ -31,7 +31,7 @@ from app.schemas import (
     MarkRead,
     ToggleAch,
 )
-from app.services.user_stats import get_active_streak, get_user_level_info
+from app.services.user_stats import get_active_streak, get_levels_for_users, get_user_level_info
 
 router = APIRouter(tags=["users"])
 
@@ -230,6 +230,16 @@ def get_follow_stats_fallback(
     return get_follow_stats("null", profile, db)
 
 
+def _user_cards(users: list[User], db: Session) -> list[dict]:
+    levels = get_levels_for_users(users, db)
+    return [{"username": u.username,
+             "display_name": u.profile.display_name or u.username,
+             "avatar_url": u.profile.avatar_url,
+             "is_verified": u.integration.is_verified,
+             "role": u.role or "user",
+             "level": levels.get(int(u.id), 1)} for u in users]
+
+
 # --- /api/followers/{username} ---
 @router.get("/api/followers/{username}",
             responses={404: {"description": "User not found"}})
@@ -248,16 +258,7 @@ def get_followers(username: str, request: Request,
     followers = db.query(User).join(
         Follow, Follow.follower_id == User.id).filter(
         Follow.following_id == target.id).all()
-    res = []
-    for u in followers:
-        lvl, _rank, _, _theme = get_user_level_info(u, db)
-        res.append({"username": u.username,
-                    "display_name": u.profile.display_name or u.username,
-                    "avatar_url": u.profile.avatar_url,
-                    "is_verified": u.integration.is_verified,
-                    "role": u.role or "user",
-                    "level": lvl})
-    return res
+    return _user_cards(followers, db)
 
 
 # --- /api/following/{username} ---
@@ -278,16 +279,7 @@ def get_following(username: str, request: Request,
     following = db.query(User).join(
         Follow, Follow.following_id == User.id).filter(
         Follow.follower_id == target.id).all()
-    res = []
-    for u in following:
-        lvl, _rank, _, _theme = get_user_level_info(u, db)
-        res.append({"username": u.username,
-                    "display_name": u.profile.display_name or u.username,
-                    "avatar_url": u.profile.avatar_url,
-                    "is_verified": u.integration.is_verified,
-                    "role": u.role or "user",
-                    "level": lvl})
-    return res
+    return _user_cards(following, db)
 
 
 # --- /api/search/users ---
@@ -295,19 +287,12 @@ def get_following(username: str, request: Request,
 def search_users(q: str, db: Annotated[Session, Depends(get_db)]):
     if not q or len(q) < 2:
         return []
+    # Escape LIKE wildcards so "%"/"_" in the query match literally
+    pattern = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
     users = db.query(User).join(UserProfile).filter(
-        (User.username.ilike(f"%{q}%")) | (
-            UserProfile.display_name.ilike(f"%{q}%"))).limit(10).all()
-    res = []
-    for u in users:
-        lvl, _rank, _, _theme = get_user_level_info(u, db)
-        res.append({"username": u.username,
-                    "display_name": u.profile.display_name or u.username,
-                    "avatar_url": u.profile.avatar_url,
-                    "is_verified": u.integration.is_verified,
-                    "role": u.role or "user",
-                    "level": lvl})
-    return res
+        (User.username.ilike(pattern, escape="\\")) | (
+            UserProfile.display_name.ilike(pattern, escape="\\"))).limit(10).all()
+    return _user_cards(users, db)
 
 # Removed duplicate get_admin_stats endpoint
 

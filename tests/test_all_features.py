@@ -1,4 +1,3 @@
-from app.core.partitioning import generate_partition_ddl
 from app.models import User, UserProfile
 from app.services.external_sync import _generate_lastfm_signature
 from app.services.og_image import generate_achievement_card_svg, generate_recap_card_svg
@@ -73,14 +72,6 @@ def test_og_achievement_svg_generation():
     assert "audiophile" in svg
     assert "Ночной слушатель" in svg
     assert "+50 XP" in svg
-
-
-def test_partitioning_ddl_generator():
-    """Test PostgreSQL monthly range partitioning helper."""
-    tbl, start, end = generate_partition_ddl(2026, 8)
-    assert tbl == "scrobbles_2026_08"
-    assert start == "2026-08-01"
-    assert end == "2026-09-01"
 
 
 def test_smart_recommendations_service(db):

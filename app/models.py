@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, func, text
 from sqlalchemy.orm import relationship
 
 from app.core.crypto import EncryptedString
@@ -128,6 +128,10 @@ class UserIntegration(Base):
 
 class Track(Base):
     __tablename__ = "tracks"
+    __table_args__ = (
+        # Case-insensitive catalog lookup when processing scrobbles
+        Index("ix_tracks_lower_title_artist", func.lower(text("title")), func.lower(text("artist"))),
+    )
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, index=True)
     artist = Column(String, index=True)
@@ -140,6 +144,13 @@ class Track(Base):
 
 class Scrobble(Base):
     __tablename__ = "scrobbles"
+    __table_args__ = (
+        # "latest scrobble of a user", per-user history and period stats
+        Index("ix_scrobbles_user_id_id", "user_id", "id"),
+        Index("ix_scrobbles_user_played_at", "user_id", "played_at"),
+        # "online now" and activity queries
+        Index("ix_scrobbles_updated_at", "updated_at"),
+    )
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(
         Integer,

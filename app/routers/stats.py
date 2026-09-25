@@ -21,6 +21,7 @@ from app.models import (
 )
 from app.routers.common import _check_privacy_and_owner, _get_visible_user
 from app.services.scrobble_processor import format_history_item
+from app.services.cache import get_from_cache, set_to_cache
 from app.services.user_stats import (
     get_active_streak,
     get_user_level_info,
@@ -28,6 +29,9 @@ from app.services.user_stats import (
 )
 
 router = APIRouter(tags=["stats"])
+
+LEADERBOARD_CACHE_KEY = "leaderboard:v1"
+LEADERBOARD_CACHE_TTL = 60
 
 # --- /api/stats/wrapped ---
 
@@ -477,6 +481,10 @@ def get_current_track(username: str, request: Request, db: Annotated[Session, De
 # --- /api/leaderboard ---
 @router.get("/api/leaderboard")
 def get_leaderboard(db: Annotated[Session, Depends(get_db)]):
+    # Aggregates over all scrobbles: cache briefly (shared through Redis)
+    cached = get_from_cache(LEADERBOARD_CACHE_KEY, ttl=LEADERBOARD_CACHE_TTL)
+    if cached is not None:
+        return cached
     # Calculate XP for all users in one query
     sql = text("""
         SELECT u.username, p.display_name, p.avatar_url, i.is_verified, p.theme,
@@ -511,6 +519,7 @@ def get_leaderboard(db: Annotated[Session, Depends(get_db)]):
             "role": urole or "user",
             "theme": theme
         })
+    set_to_cache(LEADERBOARD_CACHE_KEY, res)
     return res
 
 

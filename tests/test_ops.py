@@ -1,8 +1,12 @@
 """Operational endpoints and background polling."""
 import asyncio
+import secrets
 from unittest.mock import AsyncMock, patch
 
 from app.services import cloud_scrobbling
+
+# Generated per run so that no credentials live in the repository
+TEST_PASSWORD = secrets.token_urlsafe(16)
 
 
 def test_health_reports_database(client):
@@ -100,3 +104,40 @@ def test_vapid_authorization_header_is_valid_es256_jwt(monkeypatch):
         assert header.endswith("k=" + keys["VAPID_PUBLIC_KEY"])
     finally:
         push._vapid_private_key.cache_clear()
+
+
+def _count_queries(fn):
+    from sqlalchemy import event
+
+    from app.database import engine
+    statements = []
+
+    def before(conn, cursor, statement, *args):
+        statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", before)
+    try:
+        fn()
+    finally:
+        event.remove(engine, "before_cursor_execute", before)
+    return len(statements)
+
+
+def test_followers_list_has_no_n_plus_one(client):
+    def register(name):
+        r = client.post("/auth/register", json={"username": name, "password": TEST_PASSWORD})
+        assert r.status_code == 200
+        return r.json()["api_key"]
+
+    register("popular")
+    keys = [register(f"fan{i}") for i in range(6)]
+    client.cookies.clear()
+
+    client.post("/api/follow/popular", json={}, headers={"X-API-Key": keys[0]})
+    few = _count_queries(lambda: client.get("/api/followers/popular"))
+    for k in keys[1:]:
+        client.post("/api/follow/popular", json={}, headers={"X-API-Key": k})
+    many = _count_queries(lambda: client.get("/api/followers/popular"))
+
+    assert len(client.get("/api/followers/popular").json()) == 6
+    assert many == few  # query count doesn't grow with the number of followers
