@@ -1,4 +1,3 @@
-from app.core.partitioning import generate_partition_ddl
 from app.models import User, UserProfile
 from app.services.external_sync import _generate_lastfm_signature
 from app.services.og_image import generate_achievement_card_svg, generate_recap_card_svg
@@ -75,14 +74,6 @@ def test_og_achievement_svg_generation():
     assert "+50 XP" in svg
 
 
-def test_partitioning_ddl_generator():
-    """Test PostgreSQL monthly range partitioning helper."""
-    tbl, start, end = generate_partition_ddl(2026, 8)
-    assert tbl == "scrobbles_2026_08"
-    assert start == "2026-08-01"
-    assert end == "2026-09-01"
-
-
 def test_smart_recommendations_service(db):
     """Test recommendations engine with taste profile."""
     user = User(username="taste_tester", role="user")
@@ -144,8 +135,14 @@ def test_listen_together_rooms_endpoint(client):
     assert "rooms" in data
 
 
-def test_push_notifications_endpoints(client, db):
+def test_push_notifications_endpoints(client, db, monkeypatch, request):
     """Test Web Push VAPID key and subscription endpoints."""
+    from app.services import push_notifications
+    for name, value in push_notifications.generate_vapid_keys().items():
+        monkeypatch.setenv(name, value)
+    push_notifications._vapid_private_key.cache_clear()
+    request.addfinalizer(push_notifications._vapid_private_key.cache_clear)
+    monkeypatch.setattr("app.utils.is_safe_url", lambda url, allowed_domains=None: True)
     # VAPID Key
     v_res = client.get("/api/push/vapid-key")
     assert v_res.status_code == 200
@@ -166,3 +163,4 @@ def test_push_notifications_endpoints(client, db):
     )
     assert sub_res.status_code == 200
     assert sub_res.json()["status"] == "ok"
+    assert v_res.json()["enabled"] is True

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { API_URL } from "@/app/lib/api";
 
 export default function About() {
   const [stats, setStats] = useState({
@@ -14,10 +15,7 @@ export default function About() {
   useEffect(() => {
     setUsername(localStorage.getItem("username"));
 
-    fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/public-stats`,
-      { credentials: "include" },
-    )
+    fetch(`${API_URL}/api/public-stats`, { credentials: "include" })
       .then((res) => res.json())
       .then((data) => setStats(data))
       .catch(() => {});
