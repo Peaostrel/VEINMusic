@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
+import { API_URL } from "@/app/lib/api";
 
 interface AutocompleteInputProps {
   id?: string;
@@ -40,8 +41,7 @@ export default function AutocompleteInput({
     debounceRef.current = setTimeout(async () => {
       setIsLoading(true);
       try {
-        const apiUrl =
-          process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+        const apiUrl = API_URL;
         const res = await fetch(
           `${apiUrl}/api/search-suggestions?q=${encodeURIComponent(value)}&type=${entityType}`,
         );

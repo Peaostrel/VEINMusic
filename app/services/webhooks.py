@@ -1,17 +1,20 @@
 """Outbound Webhook Dispatcher Service with HMAC-SHA256 Signatures."""
 from __future__ import annotations
 
-import hmac
 import hashlib
+import hmac
 import json
+import logging
 import time
 import uuid
 from typing import Any
 
-import httpx
 from sqlalchemy.orm import Session
 
+from app.core.safe_http import UnsafeURLError, pinned_request
 from app.models import Webhook
+
+logger = logging.getLogger(__name__)
 
 
 def sign_payload(secret: str, payload_bytes: bytes) -> str:
@@ -47,22 +50,26 @@ async def dispatch_webhook_event(
     payload_json = json.dumps(payload, ensure_ascii=False)
     payload_bytes = payload_json.encode("utf-8")
 
-    async with httpx.AsyncClient(timeout=4.0) as client:
-        for wh in webhooks:
-            subscribed_events = [e.strip() for e in (wh.events or "").split(",") if e.strip()]
-            if subscribed_events and event_name not in subscribed_events and "*" not in subscribed_events:
-                continue
+    for wh in webhooks:
+        subscribed_events = [e.strip() for e in (wh.events or "").split(",") if e.strip()]
+        if subscribed_events and event_name not in subscribed_events and "*" not in subscribed_events:
+            continue
 
-            signature = sign_payload(str(wh.secret), payload_bytes)
-            headers = {
-                "Content-Type": "application/json",
-                "User-Agent": "VEINMusic-Webhooks/2.0",
-                "X-VEIN-Event": event_name,
-                "X-VEIN-Delivery": delivery_id,
-                "X-VEIN-Signature": f"sha256={signature}",
-            }
+        signature = sign_payload(str(wh.secret), payload_bytes)
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "VEINMusic-Webhooks/2.0",
+            "X-VEIN-Event": event_name,
+            "X-VEIN-Delivery": delivery_id,
+            "X-VEIN-Signature": f"sha256={signature}",
+        }
 
-            try:
-                await client.post(str(wh.url), content=payload_bytes, headers=headers)
-            except Exception as e:
-                print(f"[Webhook] Failed to deliver {event_name} to {wh.url}: {e}")
+        # The URL is re-validated and the connection pinned to the vetted IP
+        # at delivery time (SSRF / DNS rebinding protection); redirects are
+        # not followed.
+        try:
+            await pinned_request("POST", str(wh.url), timeout=4.0, content=payload_bytes, headers=headers)
+        except UnsafeURLError:
+            logger.warning(f"[Webhook] Blocked delivery to non-public URL {wh.url}")
+        except Exception as e:
+            logger.warning(f"[Webhook] Failed to deliver {event_name} to {wh.url}: {e}")

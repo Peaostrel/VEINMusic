@@ -8,7 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.security import get_current_user, hash_developer_key
+from app.core.security import DEVELOPER_KEY_SCOPES, get_current_user, hash_developer_key
 from app.database import get_db
 from app.models import ApiKey, ExternalSyncConfig, User, Webhook
 from app.schemas import ApiKeyCreate, ExternalSyncUpdate, WebhookCreate
@@ -49,13 +49,22 @@ def list_api_keys(
     ]
 
 
-@router.post("/keys")
+@router.post("/keys", responses={400: {"description": "Invalid scopes"}})
 def create_api_key(
     payload: ApiKeyCreate,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
     """Generate a new developer API key (returned once)."""
+    requested_scopes = [s.strip() for s in payload.scopes.split(",") if s.strip()]
+    invalid = [s for s in requested_scopes if s not in DEVELOPER_KEY_SCOPES and s != "*"]
+    if not requested_scopes or invalid:
+        raise HTTPException(
+            400,
+            f"Недопустимые scopes: {', '.join(invalid) or '(пусто)'}. "
+            f"Доступные: {', '.join(sorted(DEVELOPER_KEY_SCOPES))}, *")
+    normalized_scopes = ",".join(dict.fromkeys(requested_scopes))
+
     raw_secret = secrets.token_urlsafe(32)
     key_prefix = f"vm_{raw_secret[:6]}"
     full_key = f"vm_{raw_secret}"
@@ -70,7 +79,7 @@ def create_api_key(
         key_hash=key_hash,
         prefix=key_prefix,
         name=payload.name,
-        scopes=payload.scopes,
+        scopes=normalized_scopes,
         is_active=True,
         expires_at=expires_at,
     )
@@ -126,13 +135,19 @@ def list_webhooks(
     ]
 
 
-@router.post("/webhooks")
+@router.post("/webhooks", responses={400: {"description": "Invalid webhook URL"}})
 def create_webhook(
     payload: WebhookCreate,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
     """Register a new webhook subscription."""
+    from app.utils import is_safe_url
+    if not is_safe_url(str(payload.url)):
+        raise HTTPException(
+            400,
+            "URL вебхука должен быть публичным http(s) адресом "
+            "(внутренние и приватные адреса запрещены)")
     secret = secrets.token_hex(24)
     wh = Webhook(
         user_id=current_user.id,

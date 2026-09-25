@@ -8,6 +8,7 @@ import { useState, useEffect, Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
+import { API_URL } from "@/app/lib/api";
 const Cropper = dynamic(() => import("react-easy-crop"), { ssr: false }) as any;
 import { getCroppedImg, fixImageUrl } from "./utils";
 
@@ -17,6 +18,7 @@ import ShowcaseTab from "./tabs/ShowcaseTab";
 import ThemeTab from "./tabs/ThemeTab";
 import PrivacyTab from "./tabs/PrivacyTab";
 import IntegrationsTab from "./tabs/IntegrationsTab";
+import SecurityTab from "./tabs/SecurityTab";
 
 const LOCAL_COUNTRIES = [
   { name: "Россия", code: "RU", flag: "🇷🇺" },
@@ -190,6 +192,7 @@ function SettingsContent() {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("general");
+  const [importRefresh, setImportRefresh] = useState(0);
   const [copied, setCopied] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -207,14 +210,8 @@ function SettingsContent() {
     }
 
     Promise.all([
-      fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/user/${username}`,
-        { credentials: "include" },
-      ),
-      fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/stats/${username}`,
-        { credentials: "include" },
-      ),
+      fetch(`${API_URL}/api/user/${username}`, { credentials: "include" }),
+      fetch(`${API_URL}/api/stats/${username}`, { credentials: "include" }),
     ])
       .then(async ([userRes, statsRes]) => {
         if (!userRes.ok || !statsRes.ok) {
@@ -298,10 +295,11 @@ function SettingsContent() {
       if (croppedFile) {
         const formData = new FormData();
         formData.append("file", croppedFile);
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/upload`,
-          { credentials: "include", method: "POST", body: formData },
-        );
+        const res = await fetch(`${API_URL}/api/upload`, {
+          credentials: "include",
+          method: "POST",
+          body: formData,
+        });
         if (res.ok) {
           const { url } = await res.json();
           updateData(cropFieldTarget, url);
@@ -337,13 +335,10 @@ function SettingsContent() {
       return;
     setStatus("Генерация...");
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/profile/apikey/generate`,
-        {
-          credentials: "include",
-          method: "POST",
-        },
-      );
+      const res = await fetch(`${API_URL}/api/profile/apikey/generate`, {
+        credentials: "include",
+        method: "POST",
+      });
       if (res.ok) {
         const d = await res.json();
         const safeKey = String.fromCodePoint(
@@ -352,7 +347,16 @@ function SettingsContent() {
           ),
         );
         setGeneratedApiKey(safeKey);
-        localStorage.setItem("apiKey", safeKey);
+        // Send the key to the browser extension (if installed) without
+        // persisting it in localStorage, where any XSS could read it.
+        globalThis.postMessage(
+          {
+            type: "VEIN_EXTENSION_SYNC_KEYS",
+            username: localStorage.getItem("username") || "",
+            apiKey: safeKey,
+          },
+          globalThis.location.origin,
+        );
         setStatus("✅ Новый API ключ успешно сгенерирован!");
         setTimeout(() => setStatus(""), 5000);
       } else {
@@ -365,7 +369,7 @@ function SettingsContent() {
   };
 
   const handleCopyKey = () => {
-    const keyToCopy = generatedApiKey || userProfile?.api_key;
+    const keyToCopy = generatedApiKey;
     if (keyToCopy) {
       navigator.clipboard.writeText(keyToCopy);
       setCopied(true);
@@ -387,35 +391,32 @@ function SettingsContent() {
         : data.country || data.city || "";
 
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/profile/update`,
-        {
-          credentials: "include",
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            display_name: data.displayName || localStorage.getItem("username"),
-            bio: data.bio,
-            avatar_url: fixImageUrl(data.avatarUrl),
-            cover_url: fixImageUrl(data.coverUrl),
-            location: finalLocation,
-            favorite_genre: data.favoriteGenre,
-            equipment: data.equipment,
-            theme: data.theme,
-            favorite_artist: data.favArtist,
-            favorite_track: data.favTrack,
-            favorite_album: data.favAlbum,
-            avatar_frame: data.avatarFrame,
-            is_private: data.isPrivate,
-            hidden_artists: data.hiddenArtists,
-            sync_privacy: data.syncPrivacy,
-            lastfm_username: data.lastfmUsername,
-            social_links: JSON.stringify(
-              socialLinks.filter((l) => l.username.trim() !== ""),
-            ),
-          }),
-        },
-      );
+      const res = await fetch(`${API_URL}/api/profile/update`, {
+        credentials: "include",
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          display_name: data.displayName || localStorage.getItem("username"),
+          bio: data.bio,
+          avatar_url: fixImageUrl(data.avatarUrl),
+          cover_url: fixImageUrl(data.coverUrl),
+          location: finalLocation,
+          favorite_genre: data.favoriteGenre,
+          equipment: data.equipment,
+          theme: data.theme,
+          favorite_artist: data.favArtist,
+          favorite_track: data.favTrack,
+          favorite_album: data.favAlbum,
+          avatar_frame: data.avatarFrame,
+          is_private: data.isPrivate,
+          hidden_artists: data.hiddenArtists,
+          sync_privacy: data.syncPrivacy,
+          lastfm_username: data.lastfmUsername,
+          social_links: JSON.stringify(
+            socialLinks.filter((l) => l.username.trim() !== ""),
+          ),
+        }),
+      });
       if (!res.ok) throw new Error("Ошибка при сохранении");
       localStorage.setItem("site_theme", data.theme);
       globalThis.dispatchEvent(new Event("theme_update"));
@@ -451,15 +452,12 @@ function SettingsContent() {
   const saveYandexToken = async () => {
     setStatus("Сохраняем токен Яндекса...");
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/integrations/yandex`,
-        {
-          credentials: "include",
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: data.yandexToken }),
-        },
-      );
+      const res = await fetch(`${API_URL}/api/integrations/yandex`, {
+        credentials: "include",
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: data.yandexToken }),
+      });
       if (res.ok) {
         setStatus("✅ Токен Яндекса сохранен!");
         setUserProfile({ ...userProfile, yandex_linked: true });
@@ -475,7 +473,7 @@ function SettingsContent() {
     setStatus(`Отключаем ${service}...`);
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/integrations/${service}/disconnect`,
+        `${API_URL}/api/integrations/${service}/disconnect`,
         {
           credentials: "include",
           method: "POST",
@@ -503,33 +501,33 @@ function SettingsContent() {
     if (!data.lastfmUsername) return alert("Введите никнейм Last.fm");
     setStatus("Запускаем импорт...");
     try {
-      const updateRes = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/profile/update`,
-        {
-          credentials: "include",
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lastfm_username: data.lastfmUsername }),
-        },
-      );
+      const updateRes = await fetch(`${API_URL}/api/profile/update`, {
+        credentials: "include",
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lastfm_username: data.lastfmUsername }),
+      });
 
       if (!updateRes.ok) {
         setStatus("❌ Ошибка сохранения профиля");
         return;
       }
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/import/lastfm`,
-        {
-          credentials: "include",
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        },
-      );
+      const res = await fetch(`${API_URL}/api/import/lastfm`, {
+        credentials: "include",
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
 
       if (res.ok) {
-        setStatus("🚀 Импорт запущен!");
+        const started = await res.json();
+        setStatus(
+          started.status === "already_running"
+            ? "⏳ Импорт уже идёт"
+            : "🚀 Импорт запущен!",
+        );
+        setImportRefresh((n) => n + 1);
       } else {
         let errorMessage = "Не удалось запустить импорт";
         try {
@@ -552,6 +550,7 @@ function SettingsContent() {
     if (tab === "showcase") return "Витрина профиля";
     if (tab === "theme") return "Оформление";
     if (tab === "privacy") return "Приватность";
+    if (tab === "security") return "Безопасность и данные";
     return "Интеграции";
   };
 
@@ -617,22 +616,29 @@ function SettingsContent() {
           >
             ← Глобальная лента
           </a>
-          {["general", "showcase", "theme", "privacy", "integrations"].map(
-            (tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                className={`text-left px-4 py-3 rounded-lg font-bold transition-all ${activeTab === tab ? "bg-[var(--accent)] text-[var(--text-on-accent)]" : "text-gray-400 hover:bg-[#1e1e1e]"}`}
-              >
-                {tabLabel(tab)}
-              </button>
-            ),
-          )}
+          {[
+            "general",
+            "showcase",
+            "theme",
+            "privacy",
+            "security",
+            "integrations",
+          ].map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className={`text-left px-4 py-3 rounded-lg font-bold transition-all ${activeTab === tab ? "bg-[var(--accent)] text-[var(--text-on-accent)]" : "text-gray-400 hover:bg-[#1e1e1e]"}`}
+            >
+              {tabLabel(tab)}
+            </button>
+          ))}
         </aside>
 
         <main className="flex-grow bg-[#1e1e1e]/60 backdrop-blur-md rounded-xl border border-white/5 shadow-lg relative overflow-hidden mb-20">
-          {activeTab === "integrations" ? (
+          {activeTab === "security" ? (
+            <SecurityTab />
+          ) : activeTab === "integrations" ? (
             <IntegrationsTab
               data={data}
               updateData={updateData}
@@ -640,14 +646,13 @@ function SettingsContent() {
               handleDisconnect={handleDisconnect}
               saveYandexToken={saveYandexToken}
               startLastfmImport={startLastfmImport}
+              importRefresh={importRefresh}
               userApiKey={userProfile?.api_key || ""}
               generatedApiKey={generatedApiKey}
               handleGenerateApiKey={handleGenerateApiKey}
               handleCopyKey={handleCopyKey}
               copied={copied}
-              API_URL={
-                process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
-              }
+              API_URL={API_URL}
             />
           ) : (
             <form onSubmit={handleSubmit}>

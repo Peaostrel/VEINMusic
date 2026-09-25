@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { API_URL } from "@/app/lib/api";
 
 export default function Footer() {
   const [stats, setStats] = useState({
@@ -12,10 +13,7 @@ export default function Footer() {
 
   useEffect(() => {
     const fetchStats = () => {
-      fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/public-stats`,
-        { credentials: "include" },
-      )
+      fetch(`${API_URL}/api/public-stats`, { credentials: "include" })
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (data) {

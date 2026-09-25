@@ -1,0 +1,11 @@
+"""Shared constants for music-service URLs and messages."""
+
+TRACK_PATH = "/track/"
+ALBUM_PATH = "/album/"
+YANDEX_MUSIC_DOMAIN = "music.yandex.ru"
+USER_NOT_FOUND = "Юзер не найден"
+ORDER_PLAYS_DESC = "plays DESC"
+SCDN_CO = "scdn.co"
+YANDEX_AVATARS = "avatars.yandex.net"
+TEXT_KEY = "#text"
+USER_AGENT_MOZILLA = "Mozilla/5.0"
