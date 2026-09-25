@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { API_URL } from "@/app/lib/api";
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -24,8 +25,6 @@ export default function Auth() {
     const endpoint = isLogin ? "/auth/login" : "/auth/register";
 
     try {
-      const API_URL =
-        process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
       const res = await fetch(`${API_URL}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -116,8 +115,15 @@ export default function Auth() {
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--accent)] transition-colors"
                   placeholder="••••••••"
+                  minLength={isLogin ? undefined : 8}
+                  autoComplete={isLogin ? "current-password" : "new-password"}
                   required
                 />
+                {!isLogin && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    Минимум 8 символов.
+                  </p>
+                )}
               </div>
 
               {error && (
@@ -185,6 +191,13 @@ export default function Auth() {
               <button
                 type="button"
                 onClick={() => {
+                  // Return to the page that sent the user here (e.g. /link)
+                  const next = sessionStorage.getItem("vein_after_login");
+                  sessionStorage.removeItem("vein_after_login");
+                  if (next && next.startsWith("/") && !next.startsWith("//")) {
+                    globalThis.location.href = next;
+                    return;
+                  }
                   const safeUsername = encodeURIComponent(username);
                   globalThis.location.href = `/user/${safeUsername}`;
                 }}

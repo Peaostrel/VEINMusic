@@ -1,6 +1,6 @@
-from html.parser import HTMLParser
 import ipaddress
 import urllib.parse
+from html.parser import HTMLParser
 
 
 class _HTMLStripper(HTMLParser):

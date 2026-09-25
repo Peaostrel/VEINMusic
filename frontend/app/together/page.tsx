@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Radio, Users, Plus, Disc, ArrowRight } from "lucide-react";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
+import { API_URL } from "@/app/lib/api";
 
 interface RoomInfo {
   room_id: string;
@@ -29,10 +30,9 @@ export default function ListenTogetherLobby() {
 
   const fetchRooms = async () => {
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/together/rooms`,
-        { credentials: "include" },
-      );
+      const res = await fetch(`${API_URL}/api/together/rooms`, {
+        credentials: "include",
+      });
       if (res.ok) {
         const data = await res.json();
         setRooms(

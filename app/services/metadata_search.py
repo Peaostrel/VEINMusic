@@ -1,7 +1,10 @@
+import logging
 import re
 import urllib.parse
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 TEXT_KEY = "#text"
 
@@ -37,7 +40,7 @@ async def _search_itunes(client: httpx.AsyncClient,
                     cover = cover.replace('100x100bb.jpg', '600x600bb.jpg')
                 return title, cover, ext_url
     except Exception as e:
-        print(f"iTunes API Error: {e}")
+        logger.warning(f"iTunes API Error: {e}")
     return None, None, None
 
 
@@ -96,7 +99,7 @@ async def _search_genius(client: httpx.AsyncClient,
                     'result', {}), entity_type, title, cover)
                 break
     except Exception as e:
-        print(f"Genius API Error: {e}")
+        logger.warning(f"Genius API Error: {e}")
     return title, cover
 
 
@@ -180,7 +183,7 @@ async def _search_lastfm(client: httpx.AsyncClient,
         if entity_type == 'track':
             return await _fetch_lastfm_track(client, artist, item_name, title, cover, lastfm_key)
     except Exception as e:
-        print(f"Last.fm API Error: {e}")
+        logger.warning(f"Last.fm API Error: {e}")
     return title, cover, None
 
 
@@ -271,7 +274,7 @@ async def search_suggestions(query: str, entity_type: str) -> list[dict]:  # NOS
                                     if len(results) >= 5:
                                         break
             except Exception as e:
-                print(f"Genius Parse Error: {e}")
+                logger.warning(f"Genius Parse Error: {e}")
 
         # 2. Try Last.fm (if Genius didn't get enough results or for albums)
         if lastfm_key and len(results) < 5:
@@ -356,7 +359,7 @@ async def search_suggestions(query: str, entity_type: str) -> list[dict]:  # NOS
                                 if len(results) >= 5:
                                     break
             except Exception as e:
-                print(f"Last.fm Suggestion API Error: {e}")
+                logger.warning(f"Last.fm Suggestion API Error: {e}")
 
         # 3. Fallback to iTunes API
         if len(results) < 5:
@@ -395,7 +398,7 @@ async def search_suggestions(query: str, entity_type: str) -> list[dict]:  # NOS
                                 "image": img
                             })
             except Exception as e:
-                print(f"iTunes Suggestion API Error: {e}")
+                logger.warning(f"iTunes Suggestion API Error: {e}")
     return results
 
 
@@ -424,5 +427,5 @@ async def search_musicbrainz_metadata(artist: str, title: str) -> dict[str, str 
                         "release_title": release_title,
                     }
     except Exception as e:
-        print(f"[MusicBrainz] Error: {e}")
+        logger.warning(f"[MusicBrainz] Error: {e}")
     return {"mbid": None, "isrc": None, "canonical_title": None, "release_title": None}

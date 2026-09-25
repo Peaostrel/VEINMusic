@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from datetime import UTC, datetime
 
@@ -7,6 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import User
+
+logger = logging.getLogger(__name__)
 
 # We will import process_scrobble locally or pass it as a callback to
 # avoid circular imports.
@@ -32,7 +35,7 @@ async def refresh_spotify_token(user: User, db: Session):
                 db.commit()
                 return data["access_token"]
         except Exception as e:
-            print(f"Token refresh error: {e}")
+            logger.warning(f"Token refresh error: {e}")
     return None
 
 
@@ -69,7 +72,7 @@ async def sync_spotify_status(user: User, db: Session, process_func):
 
                     await process_func(db, user, title, artist, cover, track_url, "spotify", progress, True, duration, album)
         except Exception as e:
-            print(f"Spotify sync error: {e}")
+            logger.warning(f"Spotify sync error: {e}")
 
 
 def _parse_yandex_now_playing(data: dict):
@@ -179,7 +182,7 @@ async def sync_yandex_status(user: User, db: Session, process_func):
             }
             resp = await client.get("https://api.music.yandex.net/queues", headers=headers, timeout=5.0)
             if resp.status_code in (401, 403):
-                print(f"Yandex OAuth token invalid or expired for user {user.username}")
+                logger.warning(f"Yandex OAuth token invalid or expired for user {user.username}")
                 return
             if resp.status_code == 200:
                 queues = resp.json().get("result", {}).get("queues", [])
@@ -187,10 +190,11 @@ async def sync_yandex_status(user: User, db: Session, process_func):
                     queues.sort(key=lambda x: x.get("modified", ""), reverse=True)
                     await _handle_active_yandex_queue(client, queues[0], headers, process_func, db, user)
         except Exception as e:
-            print(f"Yandex sync error for user {user.username}: {e}")
-
-
+            logger.warning(f"Yandex sync error for user {user.username}: {e}")
 POLL_CONCURRENCY = 5
+POLL_INTERVAL_SEC = 30
+POLL_LOCK_KEY = "cloud_poll_lock"
+POLL_LOCK_TTL = 25
 
 
 async def poll_user(user_id: int, process_func):
@@ -216,7 +220,7 @@ async def poll_user(user_id: int, process_func):
         u.integration.last_sync = datetime.now(UTC)
         local_db.commit()
     except Exception as e:
-        print(f"Error polling user {user_id}: {e}")
+        logger.warning(f"Error polling user {user_id}: {e}")
     finally:
         local_db.close()
 
@@ -232,28 +236,52 @@ def get_pollable_user_ids(db: Session) -> list[int]:
         | UserIntegration.yandex_token.isnot(None)).all()]
 
 
-async def poll_external_services(process_func):
-    """
-    Основной цикл облачного скробблинга.
-    """
-    while True:
+async def poll_once(process_func) -> None:
+    """Poll all linked accounts once.
+
+    Guarded by a Redis lock so that only one process (API worker or arq
+    worker) polls at a time; without Redis it simply runs locally."""
+    from app.core.redis import get_redis_client
+
+    lock_acquired = True
+    client = None
+    try:
+        client = get_redis_client()
+        lock_acquired = bool(await client.set(POLL_LOCK_KEY, "1", nx=True, ex=POLL_LOCK_TTL))
+    except Exception:
+        client = None  # Redis unavailable: single-process fallback
+    if not lock_acquired:
+        return
+
+    try:
         db = SessionLocal()
         try:
             user_ids = get_pollable_user_ids(db)
-            db.close()
-
-            if user_ids:
-                # Bound concurrency so polling never exhausts the DB pool
-                semaphore = asyncio.Semaphore(POLL_CONCURRENCY)
-
-                async def _bounded_poll(uid: int):
-                    async with semaphore:
-                        await poll_user(uid, process_func)
-
-                await asyncio.gather(*(_bounded_poll(uid) for uid in user_ids))
-
-        except Exception as e:
-            print(f"Cloud Worker Global Error: {e}")
         finally:
             db.close()
-        await asyncio.sleep(30)
+
+        if user_ids:
+            # Bound concurrency so polling never exhausts the DB pool
+            semaphore = asyncio.Semaphore(POLL_CONCURRENCY)
+
+            async def _bounded_poll(uid: int):
+                async with semaphore:
+                    await poll_user(uid, process_func)
+
+            await asyncio.gather(*(_bounded_poll(uid) for uid in user_ids))
+    finally:
+        if client is not None:
+            try:
+                await client.delete(POLL_LOCK_KEY)
+            except Exception:
+                logger.debug("Failed to release cloud poll lock", exc_info=True)
+
+
+async def poll_external_services(process_func):
+    """Основной цикл облачного скробблинга (используется без arq-воркера)."""
+    while True:
+        try:
+            await poll_once(process_func)
+        except Exception:
+            logger.exception("Cloud Worker Global Error")
+        await asyncio.sleep(POLL_INTERVAL_SEC)

@@ -3,8 +3,8 @@ import logging
 import os
 import time
 from collections.abc import Callable, Coroutine
-from typing import Any
 from contextlib import asynccontextmanager
+from typing import Any
 
 import redis.asyncio as aioredis
 from arq import create_pool
@@ -118,6 +118,14 @@ async def _run_webhook_job(event_name: str, data: dict, user_id: int) -> None:
         db.close()
 
 
+async def _run_lastfm_import_job(job_id: int) -> None:
+    from app.services.lastfm_import import run_import_job
+    try:
+        await run_import_job(job_id)
+    except Exception:
+        logging.exception("Last.fm import failed")
+
+
 async def _run_export_job(user_id: int, artist: str, title: str, album, timestamp: int) -> None:
     from app.database import SessionLocal
     from app.services.external_sync import dispatch_external_exports
@@ -134,6 +142,7 @@ async def _run_export_job(user_id: int, artist: str, title: str, album, timestam
 _ASYNC_JOB_FALLBACKS: dict[str, Callable[..., Coroutine[Any, Any, None]]] = {
     'async_dispatch_webhook': _run_webhook_job,
     'async_export_scrobble': _run_export_job,
+    'import_lastfm': _run_lastfm_import_job,
 }
 
 
@@ -161,12 +170,12 @@ async def enqueue_background_task(job_name: str, *args, background_tasks=None):
 
     if background_tasks:
         if job_name == 'check_achievements':
-            from app.routers.extended import run_check_achievements_bg
+            from app.services.achievements import run_check_achievements_bg
             background_tasks.add_task(run_check_achievements_bg, *args)
             return True
     else:
         if job_name == 'check_achievements':
-            from app.routers.extended import run_check_achievements_bg
+            from app.services.achievements import run_check_achievements_bg
             # Execute safely in a separate thread to avoid blocking the asyncio
             # event loop
             task = asyncio.create_task(

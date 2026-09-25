@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import time
 from typing import Optional
@@ -10,6 +11,8 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.models import ExternalSyncConfig
+
+logger = logging.getLogger(__name__)
 
 LASTFM_API_KEY = os.getenv("LASTFM_API_KEY", "")
 LASTFM_SHARED_SIGNING_SALT = os.getenv("LASTFM_API_SECRET", "")
@@ -64,7 +67,7 @@ async def export_to_lastfm(
                 scrobbles = data.get("scrobbles", {})
                 return "@attr" in scrobbles and int(scrobbles["@attr"].get("accepted", 0)) > 0
     except Exception as e:
-        print(f"[ExternalSync] Last.fm export error: {e}")
+        logger.warning(f"[ExternalSync] Last.fm export error: {e}")
     return False
 
 
@@ -96,7 +99,7 @@ async def export_to_librefm(
             res = await client.post(LIBREFM_API_URL, data=params)
             return res.is_success
     except Exception as e:
-        print(f"[ExternalSync] Libre.fm export error: {e}")
+        logger.warning(f"[ExternalSync] Libre.fm export error: {e}")
     return False
 
 
@@ -136,7 +139,7 @@ async def export_to_listenbrainz(
             res = await client.post(LISTENBRAINZ_API_URL, json=payload, headers=headers)
             return res.is_success
     except Exception as e:
-        print(f"[ExternalSync] ListenBrainz export error: {e}")
+        logger.warning(f"[ExternalSync] ListenBrainz export error: {e}")
     return False
 
 

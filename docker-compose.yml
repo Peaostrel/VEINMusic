@@ -1,4 +1,22 @@
-version: '3.8'
+# Shared configuration of the API and the background worker
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-veinmusic}
+  REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+  SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
+  TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
+  ENVIRONMENT: ${ENVIRONMENT:-production}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  SENTRY_DSN: ${SENTRY_DSN:-}
+  VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+  VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+  VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@music.vein.guru}
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+  API_BASE_URL: ${API_BASE_URL:-http://localhost:8000}
+  LASTFM_API_KEY: ${LASTFM_API_KEY:-}
+  LASTFM_API_SECRET: ${LASTFM_API_SECRET:-}
+  SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
+  SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
+  SPOTIFY_REDIRECT_URI: ${SPOTIFY_REDIRECT_URI:-http://localhost:8000/auth/spotify/callback}
 
 services:
   db:
@@ -16,6 +34,11 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   redis:
     image: redis:alpine
@@ -34,9 +57,14 @@ services:
       - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   backend:
-    build: 
+    build:
       context: .
       dockerfile: backend.Dockerfile
     container_name: veinmusic-backend
@@ -44,25 +72,40 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-veinmusic}
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
-      - SECRET_KEY=${SECRET_KEY:?Set SECRET_KEY in .env}
-      - ENVIRONMENT=${ENVIRONMENT:-production}
+      <<: *backend-env
+      # The API applies Alembic migrations on start (see docker-entrypoint.sh)
+      RUN_MIGRATIONS: "1"
+      # Spotify/Yandex polling runs in the worker (arq cron job)
+      RUN_CLOUD_POLLING: "0"
       # IPs of the reverse proxy allowed to set X-Forwarded-For (for correct
       # client IPs in rate limiting). Use the proxy's address, not "*".
-      - FORWARDED_ALLOW_IPS=${FORWARDED_ALLOW_IPS:-127.0.0.1}
-      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
-      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
-      - API_BASE_URL=${API_BASE_URL:-http://localhost:8000}
-      - LASTFM_API_KEY=${LASTFM_API_KEY}
-      - LASTFM_API_SECRET=${LASTFM_API_SECRET}
-      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
-      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
-      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
+    volumes:
+      - uploads:/app/uploads
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Executes background jobs queued in Redis (achievements, webhooks,
+  # Last.fm/ListenBrainz exports, Last.fm history import)
+  worker:
+    build:
+      context: .
+      dockerfile: backend.Dockerfile
+    container_name: veinmusic-worker
+    restart: always
+    command: ["arq", "app.worker.WorkerSettings"]
+    environment:
+      <<: *backend-env
+    volumes:
+      - uploads:/app/uploads
+    healthcheck:
+      disable: true
+    depends_on:
+      backend:
+        condition: service_healthy
 
   frontend:
     build:
@@ -81,3 +124,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  uploads:

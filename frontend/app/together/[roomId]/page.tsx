@@ -13,6 +13,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
+import { wsUrl } from "@/app/lib/api";
 
 interface ChatMessage {
   from: string;
@@ -65,12 +66,8 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
 
   // Connect to WebSocket
   useEffect(() => {
-    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const hostUrl = process.env.NEXT_PUBLIC_WS_URL || "127.0.0.1:8000";
     const safeRoomId = encodeURIComponent(roomId);
-    const wsUrl = `${wsProtocol}//${hostUrl}/ws/together/${safeRoomId}`;
-
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(wsUrl(`/ws/together/${safeRoomId}`));
     socketRef.current = ws;
 
     ws.onopen = () => {
