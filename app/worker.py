@@ -9,7 +9,7 @@ from arq.connections import RedisSettings
 
 from app.database import SessionLocal
 from app.models import User
-from app.routers.extended import check_auto_achievements
+from app.services.achievements import check_auto_achievements
 from app.services.external_sync import dispatch_external_exports
 from app.services.webhooks import dispatch_webhook_event
 

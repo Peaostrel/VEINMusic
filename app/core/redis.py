@@ -161,12 +161,12 @@ async def enqueue_background_task(job_name: str, *args, background_tasks=None):
 
     if background_tasks:
         if job_name == 'check_achievements':
-            from app.routers.extended import run_check_achievements_bg
+            from app.services.achievements import run_check_achievements_bg
             background_tasks.add_task(run_check_achievements_bg, *args)
             return True
     else:
         if job_name == 'check_achievements':
-            from app.routers.extended import run_check_achievements_bg
+            from app.services.achievements import run_check_achievements_bg
             # Execute safely in a separate thread to avoid blocking the asyncio
             # event loop
             task = asyncio.create_task(

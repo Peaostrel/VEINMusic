@@ -212,7 +212,8 @@ def get_friends_history(username: str,
                        404: {"description": "User not found"}})
 def api_get_taste_twins(
         username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
-    from app.routers.extended import _get_visible_user, get_taste_twins
+    from app.routers.common import _get_visible_user
+    from app.services.taste import get_taste_twins
     _get_visible_user(username, request, db)
     return get_taste_twins(username, db)
 
