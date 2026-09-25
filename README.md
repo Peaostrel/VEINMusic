@@ -151,12 +151,12 @@ VEINMusic/
 ├── desktop_client/               # Нативный клиент для Windows и Linux (SMTC/MPRIS/Discord RPC)
 ├── frontend/                     # Веб-приложение Next.js 16 (React 19)
 │   ├── app/                      # Страницы и маршруты (about, admin, auth, developers, feed, together, user)
-│   ├── components/               # UI-компоненты (PWARegistration, StatsCharts, GlobalAnnouncementBanner)
+│   ├── components/               # Общие компоненты (PWARegistration, StatsCharts, GlobalAnnouncementBanner)
 │   └── public/                   # Статика, манифест PWA и Service Worker (sw.js)
 ├── music-extension/              # Расширение для Chromium-браузеров (Manifest V3)
 ├── alembic/                      # Миграции структуры базы данных PostgreSQL
-├── tests/                        # Комплексный набор тестов (48 шт., pytest)
-└── docker-compose.yml            # Сервисы PostgreSQL и Redis
+├── tests/                        # Тесты бэкенда (pytest)
+└── docker-compose.yml            # PostgreSQL, Redis, API, воркер и фронтенд
 ```
 
 ---
