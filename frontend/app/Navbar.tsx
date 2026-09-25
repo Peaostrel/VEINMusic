@@ -364,6 +364,10 @@ export default function Navbar() {
       console.error("Logout failed:", e);
     }
     localStorage.removeItem("username");
+    globalThis.postMessage(
+      { type: "VEIN_EXTENSION_LOGOUT" },
+      globalThis.location.origin,
+    );
     localStorage.setItem("site_theme", "classic");
     setUsername(null);
     setUserProfile(null);

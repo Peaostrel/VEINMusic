@@ -9,6 +9,7 @@ import {
 } from "@/components/StatsCharts";
 import { PieChart, Clock, CalendarDays, Award } from "lucide-react";
 import { getPlatformIcon } from "../../../../utils/formatters";
+import { sanitizeUrl } from "@/app/utils/sanitizeUrl";
 
 const getArtistUrl = (artist: string, source: string) => {
   if (!artist) return "#";
@@ -56,7 +57,7 @@ const getTrackUrl = (t: any) => {
   if (t.source === "yandex" && !t.track_url?.includes("/track/")) {
     return `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/redirect?source=yandex&type=track&q=${encodeURIComponent(t.artist + " " + (t.title || ""))}`;
   }
-  return t.track_url || "#";
+  return (t.track_url && sanitizeUrl(t.track_url)) || "#";
 };
 
 const PERIOD_LABELS: Record<string, string> = {
@@ -71,6 +72,7 @@ export default function DetailedStats() {
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState("30d");
   const [hasCheckedFallback, setHasCheckedFallback] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!username) return;
@@ -79,8 +81,22 @@ export default function DetailedStats() {
       `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/detailed-stats/${username}?period=${period}`,
       { credentials: "include", cache: "no-store" },
     )
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) {
+          setError(
+            res.status === 403
+              ? "Это приватный профиль"
+              : "Не удалось загрузить статистику",
+          );
+          return null;
+        }
+        return res.json();
+      })
       .then((data) => {
+        if (!data) {
+          setLoading(false);
+          return;
+        }
         if (
           period === "30d" &&
           data.total_scrobbles === 0 &&
@@ -96,6 +112,14 @@ export default function DetailedStats() {
       })
       .catch(() => setLoading(false));
   }, [username, period, hasCheckedFallback]);
+
+  if (error) {
+    return (
+      <div className="min-h-screen text-[var(--accent-text)] flex items-center justify-center font-bold text-2xl">
+        {error}
+      </div>
+    );
+  }
 
   if (loading || !stats) {
     return (

@@ -3,7 +3,7 @@ import hashlib
 import hmac
 import os
 import time
-from typing import Annotated
+from typing import Annotated, Any
 
 import bcrypt
 from fastapi import Depends, HTTPException, Request
@@ -102,7 +102,49 @@ def hash_developer_key(token: str) -> str:
     return hashlib.pbkdf2_hmac("sha256", token.encode("utf-8"), SECRET_KEY.encode("utf-8"), 100000).hex()
 
 
+# Scopes that can be granted to developer API keys ("vm_..." tokens)
+DEVELOPER_KEY_SCOPES = {"scrobble:write", "profile:read", "profile:write"}
+
+# Account-management areas that are never reachable with a developer API key,
+# regardless of its scopes (keys must not be able to mint keys, etc.)
+_DEV_KEY_FORBIDDEN_PREFIXES = (
+    "/api/developer",
+    "/api/admin",
+    "/api/profile/apikey",
+    "/api/integrations",
+    "/api/import",
+    "/auth",
+)
+
+
+def _required_dev_key_scope(request: Request) -> str | None:
+    """Return the scope a developer key needs for this request, or None if forbidden."""
+    path = request.url.path
+    if path.startswith(_DEV_KEY_FORBIDDEN_PREFIXES):
+        return None
+    if path == "/api/scrobble" and request.method == "POST":
+        return "scrobble:write"
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return "profile:read"
+    return "profile:write"
+
+
+def _check_dev_key_scope(request: Request, scopes: str | None):
+    granted = {s.strip() for s in (scopes or "").split(",") if s.strip()}
+    required = _required_dev_key_scope(request)
+    if required is None or ("*" not in granted and required not in granted):
+        raise HTTPException(
+            status_code=403,
+            detail="API ключ не имеет прав для этого действия")
+
+
 def _authenticate_user(token: str, db: Session) -> User | None:
+    user, _ = _authenticate_user_with_scopes(token, db)
+    return user
+
+
+def _authenticate_user_with_scopes(token: str, db: Session) -> tuple[User | None, str | None]:
+    """Authenticate a token. Returns (user, scopes); scopes is None for full-access tokens."""
     # Check if this is a developer API key (prefix 'vm_')
     if token.startswith("vm_"):
         from app.models import ApiKey
@@ -111,12 +153,21 @@ def _authenticate_user(token: str, db: Session) -> User | None:
             ApiKey.key_hash == key_hash,
             ApiKey.is_active == True,  # noqa: E712
         ).first()
-        if api_key_obj and (not api_key_obj.expires_at or api_key_obj.expires_at > datetime.now(UTC)):
+        if api_key_obj and (not api_key_obj.expires_at or _as_aware(api_key_obj.expires_at) > datetime.now(UTC)):
             api_key_obj.last_used_at = datetime.now(UTC)  # type: ignore[assignment]
             db.commit()
-            return db.query(User).filter(User.id == api_key_obj.user_id).first()
-        return None
+            user = db.query(User).filter(User.id == api_key_obj.user_id).first()
+            return user, str(api_key_obj.scopes or "")
+        return None, None
 
+    return _authenticate_full_access_token(token, db), None
+
+
+def _as_aware(dt: Any) -> datetime:
+    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
+
+
+def _authenticate_full_access_token(token: str, db: Session) -> User | None:
     if ":" in token:
         try:
             user_id_str = token.split(":")[0]
@@ -132,7 +183,7 @@ def _authenticate_user(token: str, db: Session) -> User | None:
 
 
 def _check_csrf(request: Request, from_cookie: bool):
-    if not from_cookie or request.method not in ["POST", "PUT", "DELETE"]:
+    if not from_cookie or request.method not in ["POST", "PUT", "PATCH", "DELETE"]:
         return
 
     origin = request.headers.get("Origin")
@@ -166,11 +217,17 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    user = _authenticate_user(token, db)
+    user, dev_key_scopes = _authenticate_user_with_scopes(token, db)
     if not user:
         raise HTTPException(
             status_code=401,
             detail="Invalid API Key or Session")
+
+    if user.is_banned:
+        raise HTTPException(status_code=403, detail="Аккаунт заблокирован")
+
+    if dev_key_scopes is not None:
+        _check_dev_key_scope(request, dev_key_scopes)
 
     _check_csrf(request, from_cookie)
     return user
