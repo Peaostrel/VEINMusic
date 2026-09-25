@@ -111,6 +111,25 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+_API_CSP = "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; frame-ancestors 'none'"
+_DOCS_PATHS = ("/docs", "/redoc", "/openapi.json")
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    headers = response.headers
+    headers.setdefault("X-Content-Type-Options", "nosniff")
+    headers.setdefault("X-Frame-Options", "DENY")
+    headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    if not request.url.path.startswith(_DOCS_PATHS):
+        # The API only serves JSON, images and SVG widgets: nothing may run
+        headers.setdefault("Content-Security-Policy", _API_CSP)
+    if os.getenv("ENVIRONMENT") == "production":
+        headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
+
+
 # Include Routers
 app.include_router(auth.router)
 app.include_router(profile.router)

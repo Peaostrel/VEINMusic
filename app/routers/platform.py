@@ -19,6 +19,7 @@ from app.models import (
 )
 from app.schemas import (
     PushSubscribeRequest,
+    PushUnsubscribeRequest,
 )
 
 router = APIRouter(tags=["platform"])
@@ -101,18 +102,23 @@ def get_public_avatar_frames(db: Annotated[Session, Depends(get_db)]):
 # --- Web Push Notifications (PWA) ---
 @router.get("/api/push/vapid-key")
 def get_vapid_key():
-    from app.services.push_notifications import VAPID_PUBLIC_KEY
-    return {"vapid_public_key": VAPID_PUBLIC_KEY}
+    from app.services.push_notifications import is_enabled, vapid_public_key
+    return {"enabled": is_enabled(), "vapid_public_key": vapid_public_key()}
 
 
-@router.post("/api/push/subscribe", responses={400: {"description": "Invalid endpoint"}})
+@router.post("/api/push/subscribe", responses={400: {"description": "Invalid endpoint"},
+                                               503: {"description": "Web Push is not configured"}})
 def subscribe_push(
     payload: PushSubscribeRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
     from app.models import PushSubscription
+    from app.services.push_notifications import is_enabled
     from app.utils import is_safe_url
+
+    if not is_enabled():
+        raise HTTPException(503, "Web Push не настроен на сервере")
 
     if not payload.endpoint.startswith("https://") or not is_safe_url(payload.endpoint):
         raise HTTPException(400, "Некорректный push endpoint")
@@ -138,6 +144,21 @@ def subscribe_push(
 
     db.commit()
     return {"status": "ok", "message": "Подписка на Web Push успешно оформлена"}
+
+
+@router.post("/api/push/unsubscribe")
+def unsubscribe_push(
+    payload: PushUnsubscribeRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    from app.models import PushSubscription
+    db.query(PushSubscription).filter(
+        PushSubscription.user_id == current_user.id,
+        PushSubscription.endpoint == payload.endpoint,
+    ).delete(synchronize_session=False)
+    db.commit()
+    return {"status": "ok"}
 
 
 @router.post("/api/push/send-test")

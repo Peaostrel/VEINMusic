@@ -29,14 +29,21 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         hashed_password.encode('utf-8'))
 
 
-def create_session_token(user_id: str, hashed_password: str) -> str:
+def _session_signing_key(hashed_password: str, session_version: int) -> bytes:
+    # The signature is bound to the password hash (changing the password
+    # invalidates all sessions) and to the user's session_version (bumped by
+    # "log out everywhere" and by bans). Version 0 keeps the original key so
+    # sessions issued before versioning stay valid.
+    suffix = f":v{session_version}" if session_version else ""
+    return (SECRET_KEY + hashed_password + suffix).encode('utf-8')
+
+
+def create_session_token(user_id: str, hashed_password: str, session_version: int = 0) -> str:
     # Set session lifespan to 30 days
     expires_at = int(time.time()) + 30 * 24 * 3600
     msg = f"{user_id}:{expires_at}"
-    # Bind signature to user password hash so changing password invalidates
-    # all sessions
     signature = hmac.new(
-        (SECRET_KEY + hashed_password).encode('utf-8'),
+        _session_signing_key(hashed_password, session_version),
         msg.encode('utf-8'),
         hashlib.sha256
     ).hexdigest()
@@ -56,7 +63,7 @@ def verify_session_token(token: str, db_user: User) -> bool:
 
         msg = f"{user_id_str}:{expires_at_str}"
         expected_signature = hmac.new(
-            (SECRET_KEY + db_user.hashed_password).encode('utf-8'),
+            _session_signing_key(str(db_user.hashed_password), int(db_user.session_version or 0)),
             msg.encode('utf-8'),
             hashlib.sha256
         ).hexdigest()  # codeql[py/weak-cryptographic-algorithm]
@@ -64,6 +71,11 @@ def verify_session_token(token: str, db_user: User) -> bool:
         return hmac.compare_digest(signature, expected_signature)
     except Exception:  # NOSONAR
         return False
+
+
+def revoke_all_sessions(user: User) -> None:
+    """Invalidate every session token of the user (caller commits)."""
+    user.session_version = int(user.session_version or 0) + 1  # type: ignore[assignment]
 
 
 def _extract_token(request: Request) -> tuple[str | None, bool]:

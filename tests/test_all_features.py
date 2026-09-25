@@ -144,8 +144,14 @@ def test_listen_together_rooms_endpoint(client):
     assert "rooms" in data
 
 
-def test_push_notifications_endpoints(client, db):
+def test_push_notifications_endpoints(client, db, monkeypatch, request):
     """Test Web Push VAPID key and subscription endpoints."""
+    from app.services import push_notifications
+    for name, value in push_notifications.generate_vapid_keys().items():
+        monkeypatch.setenv(name, value)
+    push_notifications._vapid_private_key.cache_clear()
+    request.addfinalizer(push_notifications._vapid_private_key.cache_clear)
+    monkeypatch.setattr("app.utils.is_safe_url", lambda url, allowed_domains=None: True)
     # VAPID Key
     v_res = client.get("/api/push/vapid-key")
     assert v_res.status_code == 200
@@ -166,3 +172,4 @@ def test_push_notifications_endpoints(client, db):
     )
     assert sub_res.status_code == 200
     assert sub_res.json()["status"] == "ok"
+    assert v_res.json()["enabled"] is True

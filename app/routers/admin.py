@@ -7,7 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core import redis
-from app.core.security import get_admin_user
+from app.core.security import get_admin_user, revoke_all_sessions
 from app.core.websockets import manager
 from app.database import get_db
 from app.models import (
@@ -181,6 +181,8 @@ def toggle_user_ban(
         raise HTTPException(400, "Нельзя заблокировать администратора")
 
     target.is_banned = data.is_banned  # type: ignore[assignment]
+    if data.is_banned:
+        revoke_all_sessions(target)
     db.commit()
     return {"status": "ok", "is_banned": target.is_banned}
 

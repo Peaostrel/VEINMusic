@@ -10,12 +10,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.core import login_guard
 from app.core.rate_limit import limiter
 from app.core.security import (
     SECRET_KEY,
     create_session_token,
     get_current_user,
     get_password_hash,
+    revoke_all_sessions,
     verify_password,
 )
 from app.database import get_db
@@ -23,6 +25,8 @@ from app.models import User, UserIntegration, UserProfile
 from app.schemas import UserCreate
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+MIN_PASSWORD_LENGTH = 8
 
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
@@ -39,8 +43,8 @@ def register(request: Request, data: UserCreate, response: Response,
     data.username = data.username.lower()
     if len(data.username) < 3:
         raise HTTPException(400, "Никнейм слишком короткий")
-    if len(data.password) < 6:
-        raise HTTPException(400, "Пароль должен быть не менее 6 символов")
+    if len(data.password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(400, f"Пароль должен быть не менее {MIN_PASSWORD_LENGTH} символов")
     if db.query(User).filter(User.username == data.username).first():
         raise HTTPException(400, "Никнейм занят")
 
@@ -63,7 +67,7 @@ def register(request: Request, data: UserCreate, response: Response,
 
     # Set signed session token in cookie
     session_token = create_session_token(
-        str(new_user.id), str(new_user.hashed_password))
+        str(new_user.id), str(new_user.hashed_password), int(new_user.session_version or 0))
     safe_token = session_token.replace('\r', '').replace('\n', '')
     response.set_cookie(
         key="api_key",
@@ -77,17 +81,26 @@ def register(request: Request, data: UserCreate, response: Response,
     return {"message": "Успешная регистрация", "username": new_user.username, "api_key": raw_api_key}
 
 
-@router.post("/login", responses={400: {"description": "Bad Request"}})
+@router.post("/login", responses={400: {"description": "Bad Request"},
+                                   429: {"description": "Too many failed attempts"}})
 @limiter.limit("5/minute")
 def login(request: Request, data: UserCreate, response: Response,
           db: Annotated[Session, Depends(get_db)]):
     data.username = data.username.lower()
+    locked_for = login_guard.seconds_until_unlocked(data.username)
+    if locked_for:
+        raise HTTPException(
+            429, f"Слишком много неудачных попыток входа. Попробуйте через {max(locked_for // 60, 1)} мин.")
+
     user = db.query(User).filter(User.username == data.username).first()
     if not user or not verify_password(data.password, str(user.hashed_password)):
+        login_guard.register_failure(data.username)
         raise HTTPException(400, "Неверный логин/пароль")
+    login_guard.reset(data.username)
 
     # Set signed session token in cookie
-    session_token = create_session_token(str(user.id), str(user.hashed_password))
+    session_token = create_session_token(
+        str(user.id), str(user.hashed_password), int(user.session_version or 0))
     safe_token = session_token.replace('\r', '').replace('\n', '')
     response.set_cookie(
         key="api_key",
@@ -105,6 +118,19 @@ def login(request: Request, data: UserCreate, response: Response,
 def logout(response: Response):
     response.delete_cookie("api_key")
     return {"message": "Успешный выход"}
+
+
+@router.post("/logout-all")
+def logout_all(response: Response,
+               db: Annotated[Session, Depends(get_db)],
+               current_user: Annotated[User, Depends(get_current_user)]):
+    """Revoke every session of the user (all browsers and devices).
+
+    API keys are not affected; they are managed separately."""
+    revoke_all_sessions(current_user)
+    db.commit()
+    response.delete_cookie("api_key")
+    return {"message": "Вы вышли на всех устройствах"}
 
 
 SPOTIFY_STATE_COOKIE = "spotify_auth_state"

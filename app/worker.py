@@ -11,8 +11,7 @@ from arq.connections import RedisSettings
 
 from app.core.observability import setup_observability
 from app.database import SessionLocal
-from app.models import User
-from app.services.achievements import check_auto_achievements
+from app.services.achievements import award_achievements_for_user, notify_achievements_unlocked
 from app.services.external_sync import dispatch_external_exports
 from app.services.webhooks import dispatch_webhook_event
 
@@ -21,21 +20,13 @@ logger = logging.getLogger(__name__)
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
 
-def _sync_check_achievements(user_id: int) -> None:
-    db = SessionLocal()
-    try:
-        user = db.query(User).filter(User.id == user_id).first()
-        if user:
-            check_auto_achievements(user, db)
-    except Exception as e:
-        logger.warning(f"[Worker] Error checking achievements for user {user_id}: {e}")
-    finally:
-        db.close()
-
-
 async def check_achievements(ctx: dict[str, Any], user_id: int) -> None:
     """ARQ background job to check and award auto-achievements for a user."""
-    await asyncio.to_thread(_sync_check_achievements, user_id)
+    try:
+        awarded = await asyncio.to_thread(award_achievements_for_user, user_id)
+        await notify_achievements_unlocked(user_id, awarded)
+    except Exception as e:
+        logger.warning(f"[Worker] Error checking achievements for user {user_id}: {e}")
 
 
 async def async_dispatch_webhook(

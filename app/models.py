@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import relationship
 
+from app.core.crypto import EncryptedString
 from app.database import Base
 
 CASCADE_ALL_DELETE = "all, delete"
@@ -18,6 +19,8 @@ class User(Base):
     role = Column(String, default="user")
     is_banned = Column(Boolean, default=False, server_default=text("false"), nullable=False)
     is_flagged_antifraud = Column(Boolean, default=False, server_default=text("false"), nullable=False)
+    # Bumped to revoke all session tokens ("log out everywhere", bans)
+    session_version = Column(Integer, default=0, server_default=text("0"), nullable=False)
     antifraud_reason = Column(String, nullable=True)
 
     profile = relationship(
@@ -113,10 +116,10 @@ class UserIntegration(Base):
     current_streak = Column(Integer, default=0)
     last_streak_date = Column(String, nullable=True)
     is_verified = Column(Boolean, default=False)
-    yandex_token = Column(String, nullable=True)
+    yandex_token = Column(EncryptedString, nullable=True)
     lastfm_username = Column(String, nullable=True)
-    spotify_access_token = Column(String, nullable=True)
-    spotify_refresh_token = Column(String, nullable=True)
+    spotify_access_token = Column(EncryptedString, nullable=True)
+    spotify_refresh_token = Column(EncryptedString, nullable=True)
     has_imported_lastfm = Column(Boolean, default=False)
     last_sync = Column(DateTime(timezone=True), nullable=True)
 
@@ -376,7 +379,7 @@ class Webhook(Base):
             ondelete="CASCADE"),
         index=True)
     url = Column(String, nullable=False)
-    secret = Column(String, nullable=False)
+    secret = Column(EncryptedString, nullable=False)
     events = Column(String, default="scrobble.created,achievement.unlocked")
     is_active = Column(Boolean, default=True)
     created_at = Column(
@@ -397,9 +400,9 @@ class ExternalSyncConfig(Base):
             ondelete="CASCADE"),
         unique=True,
         index=True)
-    lastfm_session_key = Column(String, nullable=True)
-    listenbrainz_token = Column(String, nullable=True)
-    librefm_session_key = Column(String, nullable=True)
+    lastfm_session_key = Column(EncryptedString, nullable=True)
+    listenbrainz_token = Column(EncryptedString, nullable=True)
+    librefm_session_key = Column(EncryptedString, nullable=True)
     is_lastfm_enabled = Column(Boolean, default=False)
     is_listenbrainz_enabled = Column(Boolean, default=False)
     is_librefm_enabled = Column(Boolean, default=False)

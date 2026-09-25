@@ -158,11 +158,15 @@ def _check_specific_artist(user, ach, db: Session) -> bool:
     return count >= ach.rule_value
 
 
-def check_auto_achievements(user, db: Session):
+def check_auto_achievements(user, db: Session) -> list[Achievement]:
+    """Award every automatic achievement the user now qualifies for.
+
+    Returns the newly awarded achievements."""
+    awarded: list[Achievement] = []
     auto_achs = db.query(Achievement).filter(
         Achievement.rule_type != "manual").all()
     if not auto_achs:
-        return
+        return awarded
     user_ach_ids = {ua.achievement_id for ua in db.query(
         UserAchievement).filter_by(user_id=user.id).all()}
 
@@ -184,20 +188,59 @@ def check_auto_achievements(user, db: Session):
                 user.integration.bonus_xp or 0) + (ach.reward_xp or 0)
             try:
                 db.commit()
+                awarded.append(ach)
             except IntegrityError:
                 # Already awarded by a concurrent check (unique constraint):
                 # roll back so the reward XP is not granted twice.
                 db.rollback()
+    return awarded
 
 
-def run_check_achievements_bg(user_id: int):
+async def notify_achievements_unlocked(user_id: int, achievements: list[dict]) -> None:
+    """Send Web Push notifications and `achievement.unlocked` webhooks."""
+    if not achievements:
+        return
+    from app.services.push_notifications import notify_user_push
+    from app.services.webhooks import dispatch_webhook_event
+    db = SessionLocal()
+    try:
+        for ach in achievements:
+            await dispatch_webhook_event("achievement.unlocked", ach, user_id, db)
+            await notify_user_push(
+                user_id=user_id,
+                title=f"{ach.get('icon') or '🏆'} Новое достижение!",
+                body=f"{ach['name']} (+{ach.get('reward_xp') or 0} XP)",
+                url="/",
+                db=db,
+            )
+    except Exception:
+        logger.exception("Failed to send achievement notifications")
+    finally:
+        db.close()
+
+
+def _achievement_summary(ach: Achievement) -> dict:
+    return {"id": ach.id, "name": ach.name, "icon": ach.icon, "reward_xp": ach.reward_xp}
+
+
+def award_achievements_for_user(user_id: int) -> list[dict]:
+    """Run the achievement check for a user in its own DB session."""
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.id == user_id).first()
-        if user:
-            check_auto_achievements(user, db)
+        if not user:
+            return []
+        return [_achievement_summary(a) for a in check_auto_achievements(user, db)]
     finally:
         db.close()
+
+
+def run_check_achievements_bg(user_id: int):
+    """In-process fallback when the arq worker is unavailable (runs in a thread)."""
+    import asyncio
+    awarded = award_achievements_for_user(user_id)
+    if awarded:
+        asyncio.run(notify_achievements_unlocked(user_id, awarded))
 
 
 def _calc_specific_track(db: Session, user: User, a: Achievement) -> int:

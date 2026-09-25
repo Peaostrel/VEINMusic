@@ -229,5 +229,9 @@ class PushSubscribeRequest(BaseModel):
     auth: str = Field(..., max_length=256)
 
 
+class PushUnsubscribeRequest(BaseModel):
+    endpoint: str = Field(..., max_length=2048)
+
+
 class YandexTokenUpdate(BaseModel):
     token: str = Field(..., max_length=512)
