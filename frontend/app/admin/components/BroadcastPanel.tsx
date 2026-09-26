@@ -56,12 +56,14 @@ export default function BroadcastPanel() {
     }, "Отправлено");
     if (result) {
       const r: BroadcastResult = result;
-      setNotice(
-        `✅ Получателей: ${r.recipients}; в уведомлениях: ${r.inapp}` +
-          (push
-            ? `; push ${r.push_queued ? "поставлен в очередь" : "не отправлен"}`
-            : ""),
-      );
+      let text = `✅ Получателей: ${r.recipients}; в уведомлениях: ${r.inapp}`;
+      if (push) {
+        const pushState = r.push_queued
+          ? "поставлен в очередь"
+          : "не отправлен";
+        text += `; push ${pushState}`;
+      }
+      setNotice(text);
       setMessage("");
     }
   };

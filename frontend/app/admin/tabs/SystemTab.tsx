@@ -85,7 +85,11 @@ function StatusPanel() {
             />
             <Stat
               label="База данных"
-              value={`${data.database.dialect}${data.database.bytes ? `, ${formatBytes(data.database.bytes)}` : ""}`}
+              value={
+                data.database.bytes
+                  ? `${data.database.dialect}, ${formatBytes(data.database.bytes)}`
+                  : data.database.dialect
+              }
             />
             <Stat
               label="Загрузки"

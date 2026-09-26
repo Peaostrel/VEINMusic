@@ -23,8 +23,7 @@ function Details({ value }: Readonly<{ value: AuditEntry["details"] }>) {
     <span className="font-mono text-[11px] text-gray-300 break-all">
       {Object.entries(value)
         .map(
-          ([k, v]) =>
-            `${k}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`,
+          ([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`,
         )
         .join(" · ")}
     </span>

@@ -126,46 +126,64 @@ def _user_counts(db: Session, user_id: int) -> dict[str, int]:
     }
 
 
+def _account_block(user: User) -> dict[str, Any]:
+    profile = user.profile
+    return {
+        "id": int(user.id),
+        "username": user.username,
+        "display_name": profile.display_name if profile else None,
+        "avatar_url": profile.avatar_url if profile else None,
+        "role": user.role or "user",
+        "is_banned": bool(user.is_banned),
+        "is_flagged": bool(user.is_flagged_antifraud),
+        "antifraud_reason": user.antifraud_reason,
+        "is_private": bool(profile.is_private) if profile else False,
+        "location": profile.location if profile else None,
+        "created_at": _iso(user.created_at),
+        "session_version": int(user.session_version or 0),
+    }
+
+
+def _integration_block(user: User) -> dict[str, Any]:
+    integration = user.integration
+    if integration is None:
+        return {"is_verified": False, "bonus_xp": 0, "current_streak": 0, "spotify_linked": False,
+                "yandex_linked": False, "lastfm_username": None, "last_sync": None}
+    return {
+        "is_verified": bool(integration.is_verified),
+        "bonus_xp": int(integration.bonus_xp or 0),
+        "current_streak": int(integration.current_streak or 0),
+        "spotify_linked": bool(integration.spotify_refresh_token),
+        "yandex_linked": bool(integration.yandex_token),
+        "lastfm_username": integration.lastfm_username,
+        "last_sync": _iso(integration.last_sync),
+    }
+
+
+def _export_block(export: ExternalSyncConfig | None) -> dict[str, bool]:
+    if export is None:
+        return {"lastfm": False, "listenbrainz": False, "librefm": False}
+    return {
+        "lastfm": bool(export.is_lastfm_enabled and export.lastfm_session_key),
+        "listenbrainz": bool(export.is_listenbrainz_enabled and export.listenbrainz_token),
+        "librefm": bool(export.is_librefm_enabled and export.librefm_session_key),
+    }
+
+
 @router.get("/users/{username}/details", responses={404: {"description": "User not found"}})
 def user_details(username: str, db: DB, admin: AdminUser):
     """Everything an admin needs to look into one account."""
     user = _get_user(db, username)
     uid = int(user.id)
-    profile, integration = user.profile, user.integration
     export = db.query(ExternalSyncConfig).filter(ExternalSyncConfig.user_id == uid).first()
     recent = (db.query(Scrobble, Track).join(Track).filter(Scrobble.user_id == uid)
               .order_by(Scrobble.id.desc()).limit(15).all())
     achievements = (db.query(UserAchievement).filter(UserAchievement.user_id == uid)
                     .order_by(UserAchievement.earned_at.desc()).all())
     return {
-        "user": {
-            "id": uid,
-            "username": user.username,
-            "display_name": profile.display_name if profile else None,
-            "avatar_url": profile.avatar_url if profile else None,
-            "role": user.role or "user",
-            "is_banned": bool(user.is_banned),
-            "is_flagged": bool(user.is_flagged_antifraud),
-            "antifraud_reason": user.antifraud_reason,
-            "is_private": bool(profile.is_private) if profile else False,
-            "location": profile.location if profile else None,
-            "created_at": _iso(user.created_at),
-            "session_version": int(user.session_version or 0),
-        },
-        "integration": {
-            "is_verified": bool(integration.is_verified) if integration else False,
-            "bonus_xp": int(integration.bonus_xp or 0) if integration else 0,
-            "current_streak": int(integration.current_streak or 0) if integration else 0,
-            "spotify_linked": bool(integration and integration.spotify_refresh_token),
-            "yandex_linked": bool(integration and integration.yandex_token),
-            "lastfm_username": integration.lastfm_username if integration else None,
-            "last_sync": _iso(integration.last_sync) if integration else None,
-        },
-        "export": {
-            "lastfm": bool(export and export.is_lastfm_enabled and export.lastfm_session_key),
-            "listenbrainz": bool(export and export.is_listenbrainz_enabled and export.listenbrainz_token),
-            "librefm": bool(export and export.is_librefm_enabled and export.librefm_session_key),
-        },
+        "user": _account_block(user),
+        "integration": _integration_block(user),
+        "export": _export_block(export),
         "stats": _user_counts(db, uid),
         "api_keys": [{
             "id": k.id, "name": k.name, "prefix": k.prefix, "scopes": k.scopes,
@@ -292,6 +310,10 @@ def update_track(track_id: int, data: TrackUpdate, db: DB, admin: AdminUser):
 
 # ─── ANALYTICS ────────────────────────────────────────────────────────────────
 
+MIN_TIMESERIES_DAYS = 7
+MAX_TIMESERIES_DAYS = 180
+
+
 def _per_day(rows: list[tuple[Any, Any]]) -> dict[str, int]:
     """{'YYYY-MM-DD': n} from (day, n) rows (a date, or a string on SQLite)."""
     return {str(day)[:10]: int(n) for day, n in rows if day is not None}
@@ -300,11 +322,13 @@ def _per_day(rows: list[tuple[Any, Any]]) -> dict[str, int]:
 @router.get("/analytics/timeseries")
 def analytics_timeseries(
     db: DB, admin: AdminUser,
-    days: Annotated[int, Query(ge=7, le=180)] = 30,
+    days: Annotated[int, Query(ge=MIN_TIMESERIES_DAYS, le=MAX_TIMESERIES_DAYS)] = 30,
 ):
     """Sign-ups, counted plays and active listeners per day (UTC)."""
+    # Query() already bounds it; clamped again so the loop bound is constant
+    span = max(MIN_TIMESERIES_DAYS, min(int(days), MAX_TIMESERIES_DAYS))
     today = datetime.now(UTC).date()
-    start_day = today - timedelta(days=days - 1)
+    start_day = today - timedelta(days=span - 1)
     start = datetime.combine(start_day, datetime.min.time(), tzinfo=UTC)
 
     reg_day = func.date(User.created_at)
@@ -316,7 +340,7 @@ def analytics_timeseries(
     scrobbles = _per_day([(d, n) for d, n, _ in plays])
     active = _per_day([(d, u) for d, _, u in plays])
 
-    labels = [(start_day + timedelta(days=i)).isoformat() for i in range(days)]
+    labels = [(start_day + timedelta(days=i)).isoformat() for i in range(span)]
     return {
         "days": labels,
         "registrations": [registrations.get(d, 0) for d in labels],
