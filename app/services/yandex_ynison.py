@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import secrets
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -37,10 +38,15 @@ class _YnisonProtocol(WebSocketClientProtocol):
         return None
 
 
+# A track "playing" this long past its end is a stale state (the app was
+# closed without pausing), not playback
+STALE_AFTER_END_MS = 30_000
+
+
 @dataclass
 class Playback:
     track_id: str
-    paused: bool
+    playing: bool
     progress_sec: int
     duration_sec: int
 
@@ -100,7 +106,29 @@ def _hello(device_id: str) -> dict[str, Any]:
     }
 
 
-def parse_state(state: dict[str, Any]) -> Playback | None:
+def _position(status: dict[str, Any], now_ms: int) -> tuple[int, bool]:
+    """(progress_ms, playing). Ynison sends the position at the last player
+    event (start, pause, seek) with that event's timestamp; while playing,
+    the current position is extrapolated from it."""
+    try:
+        progress = int(status.get("progress_ms", 0))
+        duration = int(status.get("duration_ms", 0))
+        stamp = int((status.get("version") or {}).get("timestamp_ms", 0))
+        speed = float(status.get("playback_speed", 1) or 1)
+    except (TypeError, ValueError):
+        return 0, False
+    if status.get("paused", True):
+        return max(progress, 0), False
+    if stamp > 0 and now_ms > stamp:
+        progress += int((now_ms - stamp) * speed)
+    if duration > 0 and progress > duration + STALE_AFTER_END_MS:
+        return duration, False
+    if duration > 0:
+        progress = min(progress, duration)
+    return max(progress, 0), True
+
+
+def parse_state(state: dict[str, Any], now_ms: int | None = None) -> Playback | None:
     """Current track of a Ynison state message, or None when nothing is queued."""
     player = state.get("player_state")
     if not isinstance(player, dict):
@@ -116,16 +144,18 @@ def parse_state(state: dict[str, Any]) -> Playback | None:
         return None
     if item.get("playable_type", "TRACK") != "TRACK":
         return None  # videos, local files: nothing to look up
+    if now_ms is None:
+        now_ms = int(time.time() * 1000)
+    progress_ms, playing = _position(status, now_ms)
     try:
-        progress = int(status.get("progress_ms", 0)) // 1000
-        duration = int(status.get("duration_ms", 0)) // 1000
+        duration = max(int(status.get("duration_ms", 0)) // 1000, 0)
     except (TypeError, ValueError):
-        progress = duration = 0
+        duration = 0
     return Playback(
         track_id=str(item["playable_id"]),
-        paused=bool(status.get("paused", True)),
-        progress_sec=max(progress, 0),
-        duration_sec=max(duration, 0),
+        playing=playing,
+        progress_sec=progress_ms // 1000,
+        duration_sec=duration,
     )
 
 
@@ -166,8 +196,10 @@ def _main(username: str) -> None:  # pragma: no cover - manual diagnostics
     if not token:
         print(f"{username}: Yandex token is not set")  # noqa: T201
         return
-    playback = asyncio.run(fetch_playback(token))
-    print(f"{username}: {playback or 'nothing is playing'}")  # noqa: T201
+    state = asyncio.run(_read_state(token))
+    status = (state.get("player_state") or {}).get("status")
+    print(f"status: {json.dumps(status, ensure_ascii=False)}")  # noqa: T201
+    print(f"{username}: {parse_state(state) or 'nothing is playing'}")  # noqa: T201
 
 
 if __name__ == "__main__":  # pragma: no cover

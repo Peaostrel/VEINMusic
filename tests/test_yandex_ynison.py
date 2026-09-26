@@ -13,17 +13,39 @@ STATE = {"player_state": {
     "player_queue": {"current_playable_index": 1, "playable_list": [
         {"playable_id": "111", "playable_type": "TRACK"},
         {"playable_id": "222", "playable_type": "TRACK"}]},
-    "status": {"paused": False, "progress_ms": 61500, "duration_ms": 200000},
+    "status": {"paused": False, "progress_ms": 61500, "duration_ms": 200000,
+               "version": {"timestamp_ms": 1_000_000}},
 }}
 
 
 def test_parse_state():
-    assert yn.parse_state(STATE) == yn.Playback("222", False, 61, 200)
+    assert yn.parse_state(STATE, now_ms=1_000_000) == yn.Playback("222", True, 61, 200)
     assert yn.parse_state({}) is None
     assert yn.parse_state({"player_state": {"player_queue": {"current_playable_index": -1}}}) is None
     video = {"player_state": {"player_queue": {"current_playable_index": 0, "playable_list": [
         {"playable_id": "v", "playable_type": "VIDEO"}]}}}
     assert yn.parse_state(video) is None
+
+
+def _status(**kw):
+    base = {"paused": False, "progress_ms": 10_000, "duration_ms": 200_000,
+            "version": {"timestamp_ms": 1_000_000}}
+    base.update(kw)
+    return base
+
+
+def test_position_is_extrapolated_while_playing():
+    # 50 s after the last player event, playback has moved on by 50 s
+    assert yn._position(_status(), 1_050_000) == (60_000, True)
+    # Paused: the stored position, not playing
+    assert yn._position(_status(paused=True), 1_050_000) == (10_000, False)
+    # Past the end by less than the margin: still the same track finishing
+    assert yn._position(_status(), 1_000_000 + 200_000) == (200_000, True)
+    # Long past the end: the app was closed while playing
+    assert yn._position(_status(), 1_000_000 + 600_000) == (200_000, False)
+    # No timestamp: nothing to extrapolate from
+    assert yn._position(_status(version={}), 1_050_000) == (10_000, True)
+    assert yn._position({"progress_ms": "x"}, 0) == (0, False)
 
 
 def _frame(payload: bytes) -> bytes:
@@ -75,13 +97,14 @@ def test_fetch_playback_against_fake_ynison():
         srv = await asyncio.start_server(server, "127.0.0.1", 0)
         port = srv.sockets[0].getsockname()[1]
         with patch.object(yn, "REDIRECT_URL", f"ws://127.0.0.1:{port}/redirect"), \
-                patch.object(yn, "STATE_URL", "ws://{host}/state"):
+                patch.object(yn, "STATE_URL", "ws://{host}/state"), \
+                patch.object(yn.time, "time", return_value=1_000.0):
             result = await yn.fetch_playback("secret-token")
         srv.close()
         return result
 
     port = 0
-    assert asyncio.run(run()) == yn.Playback("222", False, 61, 200)
+    assert asyncio.run(run()) == yn.Playback("222", True, 61, 200)
     (_, first), (state_path, second) = seen
     assert state_path == "/state"
     assert first["Authorization"] == "OAuth secret-token"

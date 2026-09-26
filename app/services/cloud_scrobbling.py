@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import User
+from app.services import yandex_ynison
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +123,11 @@ def _parse_yandex_now_playing(data: dict):
 
 
 async def _fetch_yandex_track_info(client, track_id, headers, process_func, db, user,
-                                   changed_at: datetime | None = None):
+                                   changed_at: datetime | None = None,
+                                   position: tuple[int, bool] | None = None):
+    """Look the track up and report it. `position` is (progress_sec,
+    is_playing) when known (Ynison); otherwise it is estimated from the time
+    the play queue last changed."""
     t_resp = await client.post("https://api.music.yandex.net/tracks", data={"track-ids": [track_id]}, headers=headers, timeout=5.0)
     if t_resp.status_code != 200:
         logger.warning(f"Yandex /tracks answered {t_resp.status_code} for user {user.username}")
@@ -142,7 +147,7 @@ async def _fetch_yandex_track_info(client, track_id, headers, process_func, db, 
     albums = t_info.get("albums", [])
     album = albums[0].get("title") if albums else None
 
-    progress, is_playing = _estimate_queue_position(changed_at, duration)
+    progress, is_playing = position or _estimate_queue_position(changed_at, duration)
     await process_func(
         db, user, title, artist, cover,
         track_url, "yandex", progress, is_playing,
@@ -200,15 +205,39 @@ async def _handle_active_yandex_queue(client: httpx.AsyncClient, active_queue: d
                                            _queue_changed_at(active_queue))
 
 
+def _yandex_headers(token: str) -> dict[str, str]:
+    return {
+        "Authorization": f"OAuth {token}",
+        "X-Yandex-Music-Client": "YandexMusicAndroid/2023.12.1",
+        "User-Agent": "Yandex-Music-API",
+        "X-Yandex-Music-Device": "os=unknown; os_version=unknown; manufacturer=unknown; model=unknown; clid=unknown; device_id=unknown; uuid=unknown"
+    }
+
+
 async def sync_yandex_status(user: User, db: Session, process_func):
+    """Report the user's current Yandex Music track.
+
+    Current clients sync the player through Ynison; the old REST play queue
+    stays empty for them, so it is only a fallback for when Ynison fails."""
+    token = user.integration.yandex_token
+    headers = _yandex_headers(token)
+    try:
+        playback = await yandex_ynison.fetch_playback(token)
+    except Exception as e:
+        logger.warning(f"Ynison unavailable for user {user.username}, trying /queues: {e}")
+    else:
+        if playback is not None:
+            async with httpx.AsyncClient() as client:
+                await _fetch_yandex_track_info(
+                    client, playback.track_id, headers, process_func, db, user,
+                    position=(playback.progress_sec, playback.playing))
+        return
+    await _sync_yandex_queue(user, db, process_func, headers)
+
+
+async def _sync_yandex_queue(user: User, db: Session, process_func, headers: dict[str, str]):
     async with httpx.AsyncClient() as client:
         try:
-            headers = {
-                "Authorization": f"OAuth {user.integration.yandex_token}",
-                "X-Yandex-Music-Client": "YandexMusicAndroid/2023.12.1",
-                "User-Agent": "Yandex-Music-API",
-                "X-Yandex-Music-Device": "os=unknown; os_version=unknown; manufacturer=unknown; model=unknown; clid=unknown; device_id=unknown; uuid=unknown"
-            }
             resp = await client.get("https://api.music.yandex.net/queues", headers=headers, timeout=5.0)
             if resp.status_code in (401, 403):
                 logger.warning(f"Yandex OAuth token invalid or expired for user {user.username}")

@@ -139,9 +139,35 @@ def _yandex_handler(queue_status=200, queues=None, current_index=1):
     return handler
 
 
+def _no_ynison():
+    """Ynison unreachable: the sync falls back to the REST play queue."""
+    return patch.object(cs.yandex_ynison, "fetch_playback",
+                        new=AsyncMock(side_effect=OSError("ynison down")))
+
+
+def test_yandex_sync_uses_ynison_playback():
+    user, db, process = _user(), MagicMock(), AsyncMock()
+    playback = cs.yandex_ynison.Playback("2", True, 95, 120)
+    with patch.object(cs.yandex_ynison, "fetch_playback", new=AsyncMock(return_value=playback)), \
+            _mock_http(_yandex_handler(queues=[])):
+        asyncio.run(cs.sync_yandex_status(user, db, process))
+    process.assert_awaited_once_with(
+        db, user, "YT", "YA", "https://y/400x400", "https://music.yandex.ru/track/2",
+        "yandex", 95, True, 120, "YAlb")
+
+
+def test_yandex_sync_ynison_nothing_playing_skips_queue():
+    process = AsyncMock()
+    with patch.object(cs.yandex_ynison, "fetch_playback", new=AsyncMock(return_value=None)), \
+            patch.object(cs, "_sync_yandex_queue", new=AsyncMock()) as queue:
+        asyncio.run(cs.sync_yandex_status(_user(), MagicMock(), process))
+    process.assert_not_awaited()
+    queue.assert_not_awaited()
+
+
 def test_yandex_sync_processes_current_track():
     user, db, process = _user(), MagicMock(), AsyncMock()
-    with _mock_http(_yandex_handler()):
+    with _no_ynison(), _mock_http(_yandex_handler()):
         asyncio.run(cs.sync_yandex_status(user, db, process))
     process.assert_awaited_once_with(
         db, user, "YT", "YA", "https://y/400x400", "https://music.yandex.ru/track/2",
@@ -154,7 +180,7 @@ def test_yandex_sync_processes_current_track():
 ])
 def test_yandex_sync_skips_when_nothing_to_do(kwargs):
     process = AsyncMock()
-    with _mock_http(_yandex_handler(**kwargs)):
+    with _no_ynison(), _mock_http(_yandex_handler(**kwargs)):
         asyncio.run(cs.sync_yandex_status(_user(), MagicMock(), process))
     process.assert_not_awaited()
 
