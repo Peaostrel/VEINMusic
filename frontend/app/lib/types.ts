@@ -44,7 +44,7 @@ export interface VapidKeyResponse {
   vapid_public_key: string | null;
 }
 
-export type NotificationKind = "like" | "comment" | "follow";
+export type NotificationKind = "like" | "comment" | "follow" | "system";
 
 export interface SocialNotification {
   id: number;

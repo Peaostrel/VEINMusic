@@ -2,6 +2,7 @@
 
 import { Megaphone, Trash2, Zap } from "lucide-react";
 import type { AdminPanelState } from "../useAdminPanel";
+import BroadcastPanel from "../components/BroadcastPanel";
 
 export default function AnnouncementsTab({
   announcements,
@@ -206,6 +207,7 @@ export default function AnnouncementsTab({
           ))}
         </div>
       </div>
+      <BroadcastPanel />
     </div>
   );
 }

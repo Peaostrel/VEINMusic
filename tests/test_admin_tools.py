@@ -349,6 +349,7 @@ def test_system_status(admin_client, tmp_path, monkeypatch):
     assert data["backups"]["count"] == 2
     assert data["backups"]["latest"]["name"] == "veinmusic-2.dump"
     assert data["backups"]["bytes"] == 30
+    assert data["backups"]["latest"]["age_hours"] <= 0.1
     assert data["database"]["dialect"] in ("sqlite", "postgresql")
     assert data["uploads"]["available"] is True
     assert set(data["worker"]["cron"]) == set(system_status.CRON_JOBS)

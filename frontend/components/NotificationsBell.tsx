@@ -11,6 +11,7 @@ const KIND_ICON: Record<SocialNotification["kind"], string> = {
   like: "❤️",
   comment: "💬",
   follow: "👤",
+  system: "📢",
 };
 
 function timeAgo(iso: string | null): string {
@@ -132,7 +133,9 @@ export default function NotificationsBell() {
               {data.items.map((n) => (
                 <li key={n.id}>
                   <Link
-                    href={`/user/${n.actor.username}`}
+                    href={
+                      n.kind === "system" ? "/" : `/user/${n.actor.username}`
+                    }
                     onClick={() => setOpen(false)}
                     className={`flex gap-3 px-4 py-3 hover:bg-white/5 transition-colors ${n.is_read ? "" : "bg-white/[0.03]"}`}
                   >
@@ -143,7 +146,7 @@ export default function NotificationsBell() {
                       <span className="block text-white break-words">
                         {n.text}
                       </span>
-                      {n.message && (
+                      {n.message && n.kind !== "system" && (
                         <span className="block text-gray-300 text-xs mt-0.5 truncate">
                           «{n.message}»
                         </span>

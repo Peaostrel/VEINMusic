@@ -35,8 +35,9 @@ def backups_status(backup_dir: str) -> dict[str, Any]:
     latest = None
     if dumps:
         st = dumps[0].stat()
-        latest = {"name": dumps[0].name, "bytes": st.st_size,
-                  "created_at": datetime.fromtimestamp(st.st_mtime, UTC).isoformat()}
+        created = datetime.fromtimestamp(st.st_mtime, UTC)
+        latest = {"name": dumps[0].name, "bytes": st.st_size, "created_at": created.isoformat(),
+                  "age_hours": round((datetime.now(UTC) - created).total_seconds() / 3600, 1)}
     return {"available": True, "count": len(dumps), "latest": latest,
             "bytes": sum(e.stat().st_size for e in dumps)}
 

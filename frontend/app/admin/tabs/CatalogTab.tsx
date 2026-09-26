@@ -1,11 +1,11 @@
 "use client";
 
-import { Users, Disc3, Search } from "lucide-react";
+import { Users, Disc3 } from "lucide-react";
 import type { AdminPanelState } from "../useAdminPanel";
+import BlacklistPanel from "../components/BlacklistPanel";
+import TrackBrowser from "../components/TrackBrowser";
 
 export default function CatalogTab({
-  trackSearch,
-  setTrackSearch,
   sourceTrackId,
   setSourceTrackId,
   targetTrackId,
@@ -16,7 +16,6 @@ export default function CatalogTab({
   setTargetArtist,
   handleMergeTracks,
   handleMergeArtists,
-  filteredTracks,
 }: AdminPanelState) {
   return (
     <div className="space-y-8">
@@ -119,49 +118,8 @@ export default function CatalogTab({
         </form>
       </div>
 
-      {/* Tracks Browser */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Поиск по названию или исполнителю..."
-              value={trackSearch}
-              onChange={(e) => setTrackSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-[#141418] border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-red-500"
-            />
-          </div>
-          <span className="text-xs text-gray-400 font-mono">
-            Треков: {filteredTracks.length}
-          </span>
-        </div>
-
-        <div className="bg-[#141418] border border-white/5 rounded-2xl overflow-hidden max-h-[500px] overflow-y-auto custom-scrollbar">
-          <table className="w-full text-left text-xs text-gray-300">
-            <thead className="bg-[#0f0f12] text-gray-400 font-mono uppercase text-[11px] sticky top-0 z-10 border-b border-white/5">
-              <tr>
-                <th className="py-3 px-4">ID</th>
-                <th className="py-3 px-4">Трек</th>
-                <th className="py-3 px-4">Исполнитель</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {filteredTracks.slice(0, 150).map((t) => (
-                <tr key={t.id} className="hover:bg-white/[0.02] transition">
-                  <td className="py-2.5 px-4 font-mono text-gray-400">
-                    #{t.id}
-                  </td>
-                  <td className="py-2.5 px-4 font-bold text-white">
-                    {t.title}
-                  </td>
-                  <td className="py-2.5 px-4 text-gray-400">{t.artist}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <BlacklistPanel />
+      <TrackBrowser />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { API_URL } from "@/app/lib/api";
 import type {
@@ -18,10 +18,13 @@ import type {
 export type AdminTab =
   | "overview"
   | "users"
+  | "moderation"
   | "antifraud"
   | "catalog"
   | "gamification"
-  | "announcements";
+  | "announcements"
+  | "system"
+  | "audit";
 
 /** All state, data loading and actions of the admin panel. */
 export function useAdminPanel() {
@@ -48,7 +51,6 @@ export function useAdminPanel() {
 
   // Search & Filter States
   const [userSearch, setUserSearch] = useState("");
-  const [trackSearch, setTrackSearch] = useState("");
 
   // Catalog Merge Form State
   const [sourceTrackId, setSourceTrackId] = useState("");
@@ -81,9 +83,12 @@ export function useAdminPanel() {
 
   const API_BASE = API_URL;
 
+  // Only the first load shows the full-screen spinner; refreshes after an
+  // action happen in the background (an open user card stays open)
+  const loadedOnce = useRef(false);
   const loadAllData = async () => {
     try {
-      setLoading(true);
+      if (!loadedOnce.current) setLoading(true);
       const [
         statsRes,
         healthRes,
@@ -150,6 +155,7 @@ export function useAdminPanel() {
         setXpMultiplier(d.multiplier || 1.0);
       }
 
+      loadedOnce.current = true;
       setLoading(false);
     } catch (e) {
       setError(
@@ -538,12 +544,6 @@ export function useAdminPanel() {
       Boolean(u.display_name?.toLowerCase().includes(userSearch.toLowerCase())),
   );
 
-  const filteredTracks = tracks.filter(
-    (t) =>
-      t.title.toLowerCase().includes(trackSearch.toLowerCase()) ||
-      t.artist.toLowerCase().includes(trackSearch.toLowerCase()),
-  );
-
   return {
     router,
     activeTab,
@@ -578,8 +578,6 @@ export function useAdminPanel() {
     setXpMultiplier,
     userSearch,
     setUserSearch,
-    trackSearch,
-    setTrackSearch,
     sourceTrackId,
     setSourceTrackId,
     targetTrackId,
@@ -615,7 +613,6 @@ export function useAdminPanel() {
     handleCreateFlag,
     handleFlushCache,
     filteredUsers,
-    filteredTracks,
   };
 }
 
