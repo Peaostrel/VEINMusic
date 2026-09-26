@@ -288,6 +288,7 @@ export default function ExportTab({
             <button
               type="submit"
               disabled={busy || !listenbrainzToken.trim()}
+              aria-label="Подключить ListenBrainz"
               className={`${buttonBase} bg-[var(--accent)] text-[var(--text-on-accent)]`}
             >
               Подключить
@@ -340,6 +341,7 @@ export default function ExportTab({
             <button
               type="submit"
               disabled={busy || !librefmKey.trim()}
+              aria-label="Подключить Libre.fm"
               className={`${buttonBase} bg-[var(--accent)] text-[var(--text-on-accent)]`}
             >
               Подключить

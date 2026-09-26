@@ -35,10 +35,13 @@ SPOTIFY_REDIRECT_URI = os.getenv(
     "SPOTIFY_REDIRECT_URI",
     "http://127.0.0.1:8000/auth/spotify/callback")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+# Sign-ups per IP; the end-to-end test run raises it because every test
+# registers a fresh account from the same address.
+REGISTER_RATE_LIMIT = os.getenv("REGISTER_RATE_LIMIT", "3/minute")
 
 
 @router.post("/register", responses={400: {"description": "Bad Request"}})
-@limiter.limit("3/minute")
+@limiter.limit(REGISTER_RATE_LIMIT)
 def register(request: Request, data: UserCreate, response: Response,
              db: Annotated[Session, Depends(get_db)]):
     data.username = data.username.lower()

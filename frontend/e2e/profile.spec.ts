@@ -1,21 +1,12 @@
 import { test, expect } from "@playwright/test";
+import { signUp } from "./helpers";
 
 test.describe("Profile Page Flow", () => {
   let testUser: string;
-  const testPassword = "testpassword123";
 
   test.beforeEach(async ({ page }) => {
-    testUser = `testuser_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-    // Register the user first to ensure they exist
-    await page.goto("/auth");
-    await page
-      .getByRole("button", { name: /Нет аккаунта\? Зарегистрироваться/i })
-      .click();
-    await page.locator("#auth-username").fill(testUser);
-    await page.locator("#auth-password").fill(testPassword);
-    await page.getByRole("button", { name: "СОЗДАТЬ АККАУНТ" }).click();
-    await page.getByRole("button", { name: "ВОЙТИ В СИСТЕМУ" }).click();
-    await page.waitForURL(`**/user/${testUser}`);
+    testUser = await signUp(page, "testuser");
+    await page.goto(`/user/${testUser}`);
   });
 
   test("should load profile successfully and show base elements", async ({

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Radio, Users, Plus, Disc, ArrowRight } from "lucide-react";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { API_URL } from "@/app/lib/api";
+import Dialog from "@/components/Dialog";
 
 interface RoomInfo {
   room_id: string;
@@ -72,7 +73,10 @@ export default function ListenTogetherLobby() {
     if (loading) {
       return (
         <div className="py-20 flex flex-col items-center justify-center gap-4 text-gray-400 font-bold">
-          <div className="animate-spin border-4 border-red-500 border-t-transparent rounded-full w-10 h-10"></div>
+          <div
+            aria-hidden="true"
+            className="animate-spin border-4 border-red-500 border-t-transparent rounded-full w-10 h-10"
+          ></div>
           Поиск активных комнат...
         </div>
       );
@@ -163,7 +167,7 @@ export default function ListenTogetherLobby() {
         <div>
           <div className="flex items-center gap-3">
             <div className="p-3 bg-red-500/10 rounded-2xl border border-red-500/20 text-red-500">
-              <Radio className="w-8 h-8 animate-pulse" />
+              <Radio className="w-8 h-8 animate-pulse" aria-hidden="true" />
             </div>
             <div>
               <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight">
@@ -181,14 +185,18 @@ export default function ListenTogetherLobby() {
           onClick={() => setShowCreateModal(true)}
           className="flex items-center gap-2 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white font-black px-6 py-3.5 rounded-2xl shadow-lg shadow-red-600/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-sm"
         >
-          <Plus className="w-5 h-5" />
+          <Plus className="w-5 h-5" aria-hidden="true" />
           Создать комнату
         </button>
       </div>
 
       {/* Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <Dialog
+          label="Создание комнаты"
+          onClose={() => setShowCreateModal(false)}
+          className="backdrop-blur-sm"
+        >
           <div className="bg-[#141416] border border-white/10 p-6 md:p-8 rounded-3xl max-w-md w-full shadow-2xl">
             <h3 className="text-2xl font-black text-white mb-2">
               Создание комнаты
@@ -199,10 +207,14 @@ export default function ListenTogetherLobby() {
             </p>
             <form onSubmit={handleCreateRoom} className="space-y-4">
               <div>
-                <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                <label
+                  htmlFor="room-name"
+                  className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2"
+                >
                   Название комнаты
-                </span>
+                </label>
                 <input
+                  id="room-name"
                   type="text"
                   value={newRoomName}
                   onChange={(e) => setNewRoomName(e.target.value)}
@@ -228,7 +240,7 @@ export default function ListenTogetherLobby() {
               </div>
             </form>
           </div>
-        </div>
+        </Dialog>
       )}
 
       {/* Rooms Grid */}

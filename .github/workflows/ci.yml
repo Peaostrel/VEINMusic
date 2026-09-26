@@ -206,6 +206,8 @@ jobs:
         env:
           DATABASE_URL: 'sqlite:///./e2e_test.db'
           REDIS_URL: 'redis://localhost:6379'
+          # Every test signs up a fresh account from the same IP
+          REGISTER_RATE_LIMIT: '1000/minute'
         run: |
           nohup uvicorn app.main:app --host 127.0.0.1 --port 8000 > backend.log 2>&1 &
           sleep 5 # Wait for backend to start
@@ -213,7 +215,11 @@ jobs:
       - name: Start Frontend Server & Run Playwright
         working-directory: frontend
         env:
-          NEXT_PUBLIC_API_URL: 'http://127.0.0.1:8000'
+          # Same site as the frontend (localhost), otherwise the browser drops
+          # the SameSite=Strict session cookie and no test is signed in
+          NEXT_PUBLIC_API_URL: 'http://localhost:8000'
+          # The admin spec grants the role with `python -m app.cli`
+          E2E_DATABASE_URL: 'sqlite:///./e2e_test.db'
         run: |
           nohup npm run dev &
           while ! curl -s http://127.0.0.1:3000 > /dev/null; do sleep 1; done
