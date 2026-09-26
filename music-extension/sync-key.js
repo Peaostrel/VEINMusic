@@ -1,6 +1,11 @@
-// Проверяем, что мы реально на сайте VEIN, а не где-то еще
-const allowedHosts = ['localhost', '127.0.0.1', 'music.vein.guru'];
-if (allowedHosts.includes(window.location.hostname)) {
+// Проверяем, что мы реально на сайте VEIN, а не где-то еще. Локально
+// доверяем только фронтенду на порту 3000: любая другая локальная страница
+// могла бы подсунуть расширению чужой ключ.
+function isVeinSite(loc) {
+    if (loc.hostname === 'music.vein.guru') return loc.protocol === 'https:';
+    return (loc.hostname === 'localhost' || loc.hostname === '127.0.0.1') && loc.port === '3000';
+}
+if (isVeinSite(window.location)) {
     console.log("🔥 [VEIN] Скрипт синхронизации расширения внедрен на: " + window.location.href);
 
     // Сразу ставим клеймо, чтобы сайт знал, что расширение установлено

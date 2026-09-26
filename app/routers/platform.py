@@ -7,10 +7,12 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Request,
 )
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
+from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.core.websockets import manager
 from app.database import get_db
@@ -23,6 +25,10 @@ from app.schemas import (
 )
 
 router = APIRouter(tags=["platform"])
+
+# Each notification goes to every subscription of the user, so their number
+# is capped (the oldest are dropped): browsers re-subscribe on their own.
+MAX_PUSH_SUBSCRIPTIONS_PER_USER = 10
 
 # --- GET /api/error/rate-limited ---
 
@@ -108,7 +114,9 @@ def get_vapid_key():
 
 @router.post("/api/push/subscribe", responses={400: {"description": "Invalid endpoint"},
                                                503: {"description": "Web Push is not configured"}})
+@limiter.limit("10/minute")
 def subscribe_push(
+    request: Request,
     payload: PushSubscribeRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
@@ -133,6 +141,8 @@ def subscribe_push(
         existing.user_id = current_user.id  # type: ignore[assignment]
         existing.p256dh = payload.p256dh  # type: ignore[assignment]
         existing.auth = payload.auth  # type: ignore[assignment]
+        # counts as the newest subscription again for the per-user cap
+        existing.created_at = datetime.now(UTC)  # type: ignore[assignment]
     else:
         new_sub = PushSubscription(
             user_id=current_user.id,
@@ -141,6 +151,19 @@ def subscribe_push(
             auth=payload.auth,
         )
         db.add(new_sub)
+    db.flush()
+
+    stale = (
+        db.query(PushSubscription.id)
+        .filter(PushSubscription.user_id == current_user.id)
+        .order_by(PushSubscription.created_at.desc(), PushSubscription.id.desc())
+        .offset(MAX_PUSH_SUBSCRIPTIONS_PER_USER)
+        .all()
+    )
+    if stale:
+        db.query(PushSubscription).filter(
+            PushSubscription.id.in_([row.id for row in stale]),
+        ).delete(synchronize_session=False)
 
     db.commit()
     return {"status": "ok", "message": "Подписка на Web Push успешно оформлена"}
@@ -162,7 +185,9 @@ def unsubscribe_push(
 
 
 @router.post("/api/push/send-test")
+@limiter.limit("3/minute")
 async def send_test_push(
+    request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):

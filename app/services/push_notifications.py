@@ -155,7 +155,15 @@ async def notify_user_push(user_id: int, title: str, body: str, url: str, db: Se
     """Notify all devices of a user. Returns the number of delivered messages."""
     if not is_enabled():
         return 0
-    subs = db.query(PushSubscription).filter(PushSubscription.user_id == user_id).all()
+    # The subscribe endpoint keeps at most 10 per user; the limit here also
+    # bounds subscriptions left over from before that cap existed.
+    subs = (
+        db.query(PushSubscription)
+        .filter(PushSubscription.user_id == user_id)
+        .order_by(PushSubscription.id.desc())
+        .limit(10)
+        .all()
+    )
     sent = 0
     for s in subs:
         if await send_push_notification(s, title, body, url, db=db):

@@ -1,9 +1,33 @@
 
-from typing import Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, BeforeValidator, Field
 
 SyncPrivacy = Literal["all", "followers", "none"]
+
+
+def _truncate(limit: int):
+    """Cut over-long strings instead of rejecting them: a real track with a
+    very long name should still be scrobbled, just not stored in full."""
+    def cut(value: Any) -> Any:
+        return value[:limit] if isinstance(value, str) else value
+    return BeforeValidator(cut)
+
+
+def _clamp_seconds(value: Any) -> Any:
+    """Keep playback positions/durations within 0..24h (players occasionally
+    report negative or absurd values; the scrobble is still worth keeping)."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return int(min(max(value, 0), 86400))
+    return value
+
+
+Seconds = Annotated[int | None, BeforeValidator(_clamp_seconds)]
+
+# Scrobbles feed a catalog shared by all users, so their text is bounded
+TrackText = Annotated[str, _truncate(300)]
+OptionalTrackText = Annotated[str | None, _truncate(300)]
+OptionalUrl = Annotated[str | None, _truncate(2048)]
 
 
 class UserCreate(BaseModel):
@@ -15,15 +39,15 @@ class ScrobbleData(BaseModel):
     # api_key parameter is removed since we use cookies now, but we'll keep it
     # optional for extension compatibility if needed
     api_key: str | None = None
-    title: str
-    artist: str
-    cover_url: str | None = None
-    track_url: str | None = None
-    album: str | None = None
-    source: str
-    progress_sec: int | None = 0
+    title: TrackText
+    artist: TrackText
+    cover_url: OptionalUrl = None
+    track_url: OptionalUrl = None
+    album: OptionalTrackText = None
+    source: Annotated[str, _truncate(32)]
+    progress_sec: Seconds = 0
     is_playing: bool | None = True
-    duration: int | None = 0
+    duration: Seconds = 0
 
 
 class ProfileUpdate(BaseModel):

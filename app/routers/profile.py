@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
@@ -58,13 +59,41 @@ def _validate_url(url: str | None):
         raise HTTPException(400, "Invalid URL")
 
 
+SOCIAL_NETWORKS = {"telegram", "vk", "steam", "github", "instagram"}
+MAX_SOCIAL_LINKS = 10
+_SOCIAL_USERNAME_RE = re.compile(r"^[A-Za-z0-9_.\-]{1,64}$")
+
+
+def _normalize_social_links(raw: str) -> str:
+    """Keep only known networks and plain usernames: the profile page builds
+    the link from them, so a free-form value could point anywhere."""
+    try:
+        items = json.loads(raw)
+    except json.JSONDecodeError:
+        raise HTTPException(400, "Некорректный список соцсетей")
+    if not isinstance(items, list) or len(items) > MAX_SOCIAL_LINKS:
+        raise HTTPException(400, f"Можно указать до {MAX_SOCIAL_LINKS} соцсетей")
+    clean: list[dict[str, object]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            raise HTTPException(400, "Некорректный список соцсетей")
+        network = str(item.get("network", "")).lower()
+        username = str(item.get("username", "")).strip().lstrip("@")
+        if network not in SOCIAL_NETWORKS or not _SOCIAL_USERNAME_RE.match(username):
+            raise HTTPException(
+                400, "Соцсеть: укажите ник из латинских букв, цифр, «_», «.» или «-»")
+        item_id = item.get("id")
+        clean.append({
+            "id": item_id if isinstance(item_id, (int, str)) else len(clean),
+            "network": network,
+            "username": username,
+        })
+    return json.dumps(clean, ensure_ascii=False)
+
+
 def _validate_and_set_social(profile, social_links: str | None):
     if social_links is not None:
-        try:
-            json.loads(social_links)
-            profile.social_links = social_links
-        except json.JSONDecodeError:
-            pass
+        profile.social_links = _normalize_social_links(social_links)
 
 
 def _update_profile_fields(profile, data: ProfileUpdate):

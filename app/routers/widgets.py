@@ -311,13 +311,23 @@ def get_og_achievement_card(
     db: Annotated[Session, Depends(get_db)],
 ):
     """Generate 1200x630 social share card for an unlocked achievement."""
-    from app.models import Achievement
+    from app.models import Achievement, UserAchievement
     from app.services.og_image import generate_achievement_card_svg
 
     user = db.query(User).filter(User.username == username).first()
     ach = db.query(Achievement).filter(Achievement.id == achievement_id).first()
+    # Only a public profile that really unlocked the achievement gets a
+    # personalised card; otherwise anyone could forge "X unlocked Y" images.
+    unlocked = bool(
+        user and ach
+        and not (user.profile and user.profile.is_private)
+        and db.query(UserAchievement).filter(
+            UserAchievement.user_id == user.id,
+            UserAchievement.achievement_id == ach.id,
+        ).first() is not None
+    )
 
-    if not user or not ach:
+    if not unlocked or ach is None:
         svg_content = generate_achievement_card_svg(username, "Достижение", "VEIN Music Gamification", "🏆", 0)
         return Response(content=svg_content, media_type=SVG_UTF8_MEDIA_TYPE)
 

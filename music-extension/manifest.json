@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "VEIN Music Tracker",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Универсальный скроблер треков для VEIN Music.",
   
   "browser_specific_settings": {

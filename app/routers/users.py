@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.constants import USER_NOT_FOUND
 from app.core.rate_limit import limiter
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_current_user_optional
 from app.database import get_db
 from app.models import (
     Achievement,
@@ -206,7 +206,8 @@ def get_comments(scrobble_id: int, request: Request, db: Annotated[Session, Depe
 @router.get("/api/follow-stats/{viewer}/{profile}",
             responses={404: {"description": "User not found"}})
 def get_follow_stats(viewer: str, profile: str,
-                     db: Annotated[Session, Depends(get_db)]):
+                     db: Annotated[Session, Depends(get_db)],
+                     current_user: Annotated[User | None, Depends(get_current_user_optional)]):
     target = db.query(User).filter(User.username == profile).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
@@ -214,13 +215,13 @@ def get_follow_stats(viewer: str, profile: str,
         Follow.following_id == target.id).count()
     following_count = db.query(Follow).filter(
         Follow.follower_id == target.id).count()
+    # `is_following` is only answered for the signed-in user: taking the
+    # viewer from the URL would reveal who follows whom for any two accounts.
     is_following = False
-    if viewer != 'null':
-        viewer_user = db.query(User).filter(User.username == viewer).first()
-        if viewer_user:
-            is_following = db.query(Follow).filter(
-                Follow.follower_id == viewer_user.id,
-                Follow.following_id == target.id).first() is not None
+    if current_user is not None and current_user.username == viewer:
+        is_following = db.query(Follow).filter(
+            Follow.follower_id == current_user.id,
+            Follow.following_id == target.id).first() is not None
     return {
         "followers": followers_count,
         "following": following_count,
@@ -231,7 +232,7 @@ def get_follow_stats(viewer: str, profile: str,
             responses={404: {"description": "User not found"}})
 def get_follow_stats_fallback(
         profile: str, db: Annotated[Session, Depends(get_db)]):
-    return get_follow_stats("null", profile, db)
+    return get_follow_stats("null", profile, db, None)
 
 
 def _user_cards(users: list[User], db: Session) -> list[dict]:

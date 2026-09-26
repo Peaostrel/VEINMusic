@@ -28,7 +28,9 @@ ORIGIN = {"Origin": "http://localhost:3000"}
 def _register(client, username: str) -> str:
     resp = client.post("/auth/register", json={"username": username, "password": TEST_PASSWORD})
     assert resp.status_code == 200, resp.text
-    return resp.json()["api_key"]
+    # A session token: full access, unlike the personal key in the response
+    # body, which is limited to sending scrobbles and reading.
+    return client.cookies.get("api_key")
 
 
 def _auth(key: str) -> dict:
@@ -343,11 +345,19 @@ def test_together_ws_rejects_foreign_origin(client):
 
 
 def test_together_only_host_controls_playback(client):
-    with client.websocket_connect("/ws/together/party", headers=ORIGIN) as host_ws:
-        host_state = host_ws.receive_json()
-        assert host_state["host"] == host_state["you"]
+    # Chat is for signed-in listeners only, so both sides are real accounts
+    _register(client, "partyhost")
+    host_token = client.cookies.get("api_key")
+    client.cookies.clear()
+    _register(client, "partyguest")
+    guest_token = client.cookies.get("api_key")
+    client.cookies.clear()
 
-        with client.websocket_connect("/ws/together/party", headers=ORIGIN) as guest_ws:
+    with client.websocket_connect(f"/ws/together/party?token={host_token}", headers=ORIGIN) as host_ws:
+        host_state = host_ws.receive_json()
+        assert host_state["host"] == host_state["you"] == "partyhost"
+
+        with client.websocket_connect(f"/ws/together/party?token={guest_token}", headers=ORIGIN) as guest_ws:
             guest_state = guest_ws.receive_json()
             assert guest_state["you"] != guest_state["host"]
             host_ws.receive_json()  # USER_JOINED

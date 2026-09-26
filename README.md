@@ -186,6 +186,8 @@ docker compose up -d --build
 опрос Spotify/Яндекса) и фронтенд. Проверка состояния: `GET /health`.
 
 ### 3а. Локальная разработка без Docker для кода
+Для работы по обычному http поставьте в `.env` значение `ENVIRONMENT=development`
+(в продакшене должно оставаться `production`).
 ```bash
 # Только базы данных
 docker compose up -d db redis

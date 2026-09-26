@@ -127,7 +127,7 @@ def test_followers_list_has_no_n_plus_one(client):
     def register(name):
         r = client.post("/auth/register", json={"username": name, "password": TEST_PASSWORD})
         assert r.status_code == 200
-        return r.json()["api_key"]
+        return client.cookies.get("api_key")  # session token (full access)
 
     register("popular")
     keys = [register(f"fan{i}") for i in range(6)]

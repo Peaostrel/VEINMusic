@@ -8,6 +8,7 @@ from typing import Annotated
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
+from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
 from app.core import login_guard
@@ -87,16 +88,17 @@ def register(request: Request, data: UserCreate, response: Response,
 def login(request: Request, data: UserCreate, response: Response,
           db: Annotated[Session, Depends(get_db)]):
     data.username = data.username.lower()
-    locked_for = login_guard.seconds_until_unlocked(data.username)
+    client_ip = get_remote_address(request)
+    locked_for = login_guard.seconds_until_unlocked(data.username, client_ip)
     if locked_for:
         raise HTTPException(
             429, f"Слишком много неудачных попыток входа. Попробуйте через {max(locked_for // 60, 1)} мин.")
 
     user = db.query(User).filter(User.username == data.username).first()
     if not user or not verify_password(data.password, str(user.hashed_password)):
-        login_guard.register_failure(data.username)
+        login_guard.register_failure(data.username, client_ip)
         raise HTTPException(400, "Неверный логин/пароль")
-    login_guard.reset(data.username)
+    login_guard.reset(data.username, client_ip)
 
     # Set signed session token in cookie
     session_token = create_session_token(
