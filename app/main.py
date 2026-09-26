@@ -25,6 +25,7 @@ from app.routers import (
     developer,
     devices,
     extended,
+    geo,
     lastfm_connect,
     notifications,
     profile,
@@ -163,6 +164,7 @@ app.include_router(devices.router)
 app.include_router(account.router)
 app.include_router(notifications.router)
 app.include_router(lastfm_connect.router)
+app.include_router(geo.router)
 
 
 @app.get("/health", tags=["health"], responses={503: {"description": "A dependency is down"}})

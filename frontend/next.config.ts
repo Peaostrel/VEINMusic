@@ -11,8 +11,6 @@ const connectSrc = [
   apiUrl.replace(/^http/, "ws"),
   `ws://${wsHost}`,
   `wss://${wsHost}`,
-  "https://restcountries.com",
-  "https://nominatim.openstreetmap.org",
 ];
 
 const contentSecurityPolicy = [

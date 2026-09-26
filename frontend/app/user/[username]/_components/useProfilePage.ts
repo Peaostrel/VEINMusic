@@ -5,7 +5,8 @@ import type { getRankInfo, getNextRankInfo } from "@/app/lib/ranks";
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { API_URL, wsUrl } from "@/app/lib/api";
-import { useCountries, useProfileTheme, useAccentColor } from "./hooks";
+import { useCountries } from "@/app/lib/geo";
+import { useProfileTheme, useAccentColor } from "./hooks";
 import { fetchAndShowNotifications } from "./notifications";
 import type {
   AchievementInfo,

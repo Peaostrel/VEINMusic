@@ -63,12 +63,14 @@ def get_from_cache(key: str, ttl: int = 300):
     return None
 
 
-def set_to_cache(key: str, data: Any):
+def set_to_cache(key: str, data: Any, expire: int = 3600):
+    """Store `data`; Redis drops it after `expire` seconds (get_from_cache's
+    ttl decides freshness, so expire should be at least that ttl)."""
     now = time.time()
     entry = {'data': data, 'ts': now}
     if redis_client:
         try:
-            redis_client.set(KEY_PREFIX + key, json.dumps(entry), ex=3600)
+            redis_client.set(KEY_PREFIX + key, json.dumps(entry), ex=expire)
             return
         except Exception as e:
             import logging

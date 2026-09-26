@@ -17,21 +17,27 @@ export default function Navbar() {
   useSiteTheme(pathname);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("username");
-    if (!isValidUser(storedUser)) return;
-    setUsername(storedUser);
-    fetch(`${API_URL}/api/user/${storedUser}`, { credentials: "include" })
-      .then((res) => res.json())
-      .then((data: NavUser) => {
-        setUserProfile(data);
-        // Only apply the DB theme on first load; don't override a theme
-        // the user has already chosen this session.
-        if (data.theme && !localStorage.getItem("site_theme")) {
-          localStorage.setItem("site_theme", data.theme);
-          globalThis.dispatchEvent(new Event("theme_update"));
-        }
-      })
-      .catch(() => {});
+    const loadUser = () => {
+      const storedUser = localStorage.getItem("username");
+      if (!isValidUser(storedUser)) return;
+      setUsername(storedUser);
+      fetch(`${API_URL}/api/user/${storedUser}`, { credentials: "include" })
+        .then((res) => res.json())
+        .then((data: NavUser) => {
+          setUserProfile(data);
+          // Only apply the DB theme on first load; don't override a theme
+          // the user has already chosen this session.
+          if (data.theme && !localStorage.getItem("site_theme")) {
+            localStorage.setItem("site_theme", data.theme);
+            globalThis.dispatchEvent(new Event("theme_update"));
+          }
+        })
+        .catch(() => {});
+    };
+    loadUser();
+    // Settings dispatch this after saving the profile
+    globalThis.addEventListener("profile_update", loadUser);
+    return () => globalThis.removeEventListener("profile_update", loadUser);
   }, []);
 
   const handleLogout = async () => {
