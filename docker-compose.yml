@@ -100,8 +100,11 @@ services:
       # IPs of the reverse proxy allowed to set X-Forwarded-For (for correct
       # client IPs in rate limiting). Use the proxy's address, not "*".
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
+      # Read-only view of the db-backup dumps for the admin system status
+      BACKUP_DIR: /backups
     volumes:
       - uploads:/app/uploads
+      - db_backups:/backups:ro
     depends_on:
       db:
         condition: service_healthy

@@ -28,6 +28,7 @@ from app.schemas import (
     AchUpdate,
     LevelUpdate,
 )
+from app.services import audit
 from app.services.achievements import (
     _enrich_achievement_data,
     _format_achievement_data,
@@ -105,6 +106,7 @@ async def create_achievement(data: AchCreate, db: Annotated[Session, Depends(
             target_image=t_img,
             reward_xp=data.reward_xp,
             rule_meta=meta_text))
+    audit.record(db, admin, "achievement.create", data.name, rule=data.rule_type, value=val)
     db.commit()
     return {"status": "ok"}
 
@@ -130,27 +132,37 @@ async def update_achievement(ach_id: int,
         data.rule_type, target_val, val, t_img, meta_text
     )
     ach.name, ach.description, ach.icon, ach.rule_type, ach.rule_value, ach.rule_target, ach.target_image, ach.reward_xp, ach.rule_meta = data.name, data.description, data.icon, data.rule_type, val, target_val, t_img, data.reward_xp, meta_text  # type: ignore[assignment]
+    audit.record(db, admin, "achievement.update", data.name, rule=data.rule_type, value=val)
     db.commit()
     return {"status": "ok"}
 
 
 # --- DELETE /api/admin/achievements/{ach_id} ---
-@router.delete("/api/admin/achievements/{ach_id}")
+@router.delete("/api/admin/achievements/{ach_id}", responses={404: {"description": "Achievement not found"}})
 def delete_achievement(ach_id: int, db: Annotated[Session, Depends(
         get_db)], admin: Annotated[User, Depends(get_admin_user)]):
+    ach = db.query(Achievement).filter(Achievement.id == ach_id).first()
+    if not ach:
+        raise HTTPException(404, "Достижение не найдено")
+    audit.record(db, admin, "achievement.delete", ach.name)
     db.query(UserAchievement).filter(
         UserAchievement.achievement_id == ach_id).delete()
-    db.query(Achievement).filter(Achievement.id == ach_id).delete()
+    db.delete(ach)
     db.commit()
     return {"status": "ok"}
 
 
 # --- DELETE /api/admin/tracks/{track_id} ---
-@router.delete("/api/admin/tracks/{track_id}")
+@router.delete("/api/admin/tracks/{track_id}", responses={404: {"description": "Track not found"}})
 def delete_track(track_id: int, db: Annotated[Session, Depends(
         get_db)], admin: Annotated[User, Depends(get_admin_user)]):
-    db.query(Scrobble).filter(Scrobble.track_id == track_id).delete()
-    db.query(Track).filter(Track.id == track_id).delete()
+    track = db.query(Track).filter(Track.id == track_id).first()
+    if not track:
+        raise HTTPException(404, "Трек не найден")
+    scrobbles = db.query(Scrobble).filter(Scrobble.track_id == track_id).delete()
+    audit.record(db, admin, "catalog.delete_track", f"#{track_id}",
+                 track=f"{track.artist} — {track.title}", scrobbles=scrobbles)
+    db.delete(track)
     db.commit()
     return {"status": "ok"}
 
@@ -178,6 +190,7 @@ def assign_achievement(target_username: str,
                 achievement_id=data.achievement_id))
         user.integration.bonus_xp = int(
             user.integration.bonus_xp or 0) + int(ach.reward_xp or 0)
+        audit.record(db, admin, "achievement.grant", target_username, achievement=ach.name)
         db.commit()
     return {"status": "ok"}
 
@@ -204,6 +217,8 @@ def remove_achievement_from_user(target_username: str,
         if ach:
             target.integration.bonus_xp = (
                 target.integration.bonus_xp or 0) - (ach.reward_xp or 0)
+        audit.record(db, admin, "achievement.revoke", target_username,
+                     achievement=ach.name if ach else achievement_id)
         db.delete(ua)
         db.commit()
     return {"status": "ok"}
@@ -225,11 +240,14 @@ def update_user_level(target_username: str,
     if data.new_level <= 0 or data.new_level > 10000:
         raise HTTPException(status_code=400,
                             detail="Уровень должен быть от 1 до 10000")
-    count_scrobbles = db.query(Scrobble).join(Track).filter(
+    # The level comes from total XP (earned per play + bonus), so the bonus
+    # makes up the difference to the requested level
+    earned_xp = db.query(func.coalesce(func.sum(Scrobble.xp_earned), 0)).join(Track).filter(
         Scrobble.user_id == target.id,
-        Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85).count()
+        Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85).scalar() or 0
     target.integration.bonus_xp = max(
-        0, ((data.new_level - 1) * 100) - count_scrobbles)
+        0, ((data.new_level - 1) * 100) - int(earned_xp))
+    audit.record(db, admin, "user.level", target_username, level=data.new_level)
     db.commit()
     return {"status": "ok"}
 
@@ -241,7 +259,8 @@ def wipe_user_scrobbles(target_username: str, db: Annotated[Session, Depends(
         get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     target = db.query(User).filter(User.username == target_username).first()
     if not target:
-        raise HTTPException(404)
-    db.query(Scrobble).filter(Scrobble.user_id == target.id).delete()
+        raise HTTPException(404, USER_NOT_FOUND)
+    removed = db.query(Scrobble).filter(Scrobble.user_id == target.id).delete()
+    audit.record(db, admin, "user.wipe_scrobbles", target_username, scrobbles=removed)
     db.commit()
     return {"status": "ok"}

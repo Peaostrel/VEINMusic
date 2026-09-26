@@ -2,7 +2,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -36,7 +36,7 @@ from app.schemas import (
     UserRoleRequest,
     VerifyUserRequest,
 )
-from app.services import cache, runtime_settings
+from app.services import audit, cache, runtime_settings
 from app.services.antifraud import get_all_suspicious_users
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -150,6 +150,7 @@ def reset_fraudulent_xp(
 
     target.is_flagged_antifraud = True  # type: ignore[assignment]
     target.antifraud_reason = f"Сброс опыта администратором @{admin.username} за накрутку"  # type: ignore[assignment]
+    audit.record(db, admin, "antifraud.reset_xp", target_username)
     db.commit()
     return {"status": "ok", "message": f"Опыт пользователя @{target_username} успешно сброшен"}
 
@@ -163,6 +164,7 @@ def unflag_user_antifraud(
         raise HTTPException(404, USER_NOT_FOUND)
     target.is_flagged_antifraud = False  # type: ignore[assignment]
     target.antifraud_reason = None  # type: ignore[assignment]
+    audit.record(db, admin, "antifraud.unflag", target_username)
     db.commit()
     return {"status": "ok", "message": f"Флаг подозрительного аккаунта снят с @{target_username}"}
 
@@ -183,6 +185,7 @@ def toggle_user_ban(
     target.is_banned = data.is_banned  # type: ignore[assignment]
     if data.is_banned:
         revoke_all_sessions(target)
+    audit.record(db, admin, "user.ban" if data.is_banned else "user.unban", target_username)
     db.commit()
     return {"status": "ok", "is_banned": target.is_banned}
 
@@ -201,6 +204,7 @@ def update_user_role(
     if not target:
         raise HTTPException(404, USER_NOT_FOUND)
 
+    audit.record(db, admin, "user.role", target_username, old=target.role, new=data.role)
     target.role = data.role  # type: ignore[assignment]
     db.commit()
     return {"status": "ok", "role": target.role}
@@ -219,7 +223,8 @@ def reset_user_profile(
         target.profile.cover_url = None
         target.profile.bio = "Профиль сброшен модерацией"
         target.profile.display_name = target.username
-        db.commit()
+    audit.record(db, admin, "user.reset_profile", target_username)
+    db.commit()
     return {"status": "ok", "message": "Профиль очищен"}
 
 
@@ -235,7 +240,8 @@ def toggle_user_verification(
         raise HTTPException(404, USER_NOT_FOUND)
     if target_user.integration:
         target_user.integration.is_verified = data.is_verified
-        db.commit()
+    audit.record(db, admin, "user.verify", target_username, is_verified=data.is_verified)
+    db.commit()
     return {"status": "ok", "is_verified": target_user.integration.is_verified if target_user.integration else False}
 
 
@@ -248,6 +254,7 @@ def delete_user(target_username: str, db: Annotated[Session, Depends(get_db)], a
         raise HTTPException(400, "Нельзя удалить разработчика")
     from app.services import notifications
     notifications.delete_for_user(db, int(target.id))
+    audit.record(db, admin, "user.delete", target_username)
     db.delete(target)
     db.commit()
     return {"status": "ok"}
@@ -286,6 +293,8 @@ def merge_catalog_items(
         db.add(alias)
 
         # 3. Delete old source track
+        audit.record(db, admin, "catalog.merge_tracks", f"#{source_track.id} → #{target_track.id}",
+                     source=f"{source_track.artist} — {source_track.title}", scrobbles=reassigned_count)
         db.delete(source_track)
         db.commit()
 
@@ -304,6 +313,7 @@ def merge_catalog_items(
         tracks_to_update = db.query(Track).filter(func.lower(Track.artist) == func.lower(src_art)).all()
         for t in tracks_to_update:
             t.artist = tgt_art  # type: ignore[assignment]
+        audit.record(db, admin, "catalog.merge_artists", f"{src_art} → {tgt_art}", tracks=len(tracks_to_update))
         db.commit()
 
         return {
@@ -315,7 +325,8 @@ def merge_catalog_items(
 
 
 @router.post("/cache/flush", responses={500: {"description": "Internal Server Error"}})
-async def flush_system_cache(admin: Annotated[User, Depends(get_admin_user)]):
+async def flush_system_cache(db: Annotated[Session, Depends(get_db)],
+                             admin: Annotated[User, Depends(get_admin_user)]):
     """Drop cached responses (leaderboard, discovery, taste twins…) and the
     cached runtime settings, so the next requests are computed afresh."""
     try:
@@ -323,6 +334,8 @@ async def flush_system_cache(admin: Annotated[User, Depends(get_admin_user)]):
     except Exception:
         raise HTTPException(500, "Ошибка сброса системного кэша")
     runtime_settings.invalidate()
+    audit.record(db, admin, "system.cache_flush", removed=removed)
+    db.commit()
     return {"status": "ok", "removed": removed, "message": f"Кэш сброшен (записей: {removed})"}
 
 
@@ -352,6 +365,7 @@ def create_avatar_frame(
         is_active=data.is_active,
     )
     db.add(frame)
+    audit.record(db, admin, "frame.create", data.code, name=data.name)
     db.commit()
     db.refresh(frame)
     return {"status": "ok", "frame": frame}
@@ -383,6 +397,7 @@ def update_avatar_frame(
     if data.is_active is not None:
         frame.is_active = data.is_active  # type: ignore[assignment]
 
+    audit.record(db, admin, "frame.update", frame.code, **data.model_dump(exclude_none=True))
     db.commit()
     db.refresh(frame)
     return {"status": "ok", "frame": frame}
@@ -395,6 +410,7 @@ def delete_avatar_frame(
     frame = db.query(AvatarFrame).filter(AvatarFrame.id == frame_id).first()
     if not frame:
         raise HTTPException(404, "Рамка не найдена")
+    audit.record(db, admin, "frame.delete", frame.code)
     db.delete(frame)
     db.commit()
     return {"status": "ok"}
@@ -411,6 +427,7 @@ def set_xp_multiplier(
     admin: Annotated[User, Depends(get_admin_user)],
 ):
     """Scales the XP of plays counted from now on (already earned XP is kept)."""
+    audit.record(db, admin, "economy.multiplier", multiplier=data.multiplier)
     value = runtime_settings.set_xp_multiplier(db, data.multiplier)
     return {"status": "ok", "multiplier": value, "message": f"Множитель опыта установлен на x{value:g}"}
 
@@ -515,6 +532,7 @@ def create_announcement(
         is_active=data.is_active,
     )
     db.add(announcement)
+    audit.record(db, admin, "announcement.create", data.title)
     db.commit()
     db.refresh(announcement)
     return {"status": "ok", "announcement": announcement}
@@ -540,6 +558,7 @@ def update_announcement(
     if data.is_active is not None:
         ann.is_active = data.is_active  # type: ignore[assignment]
 
+    audit.record(db, admin, "announcement.update", ann.title, **data.model_dump(exclude_none=True))
     db.commit()
     db.refresh(ann)
     return {"status": "ok", "announcement": ann}
@@ -552,6 +571,7 @@ def delete_announcement(
     ann = db.query(SystemAnnouncement).filter(SystemAnnouncement.id == announcement_id).first()
     if not ann:
         raise HTTPException(404, "Объявление не найдено")
+    audit.record(db, admin, "announcement.delete", ann.title)
     db.delete(ann)
     db.commit()
     return {"status": "ok"}
@@ -573,6 +593,7 @@ def create_feature_flag(
 
     flag = FeatureFlag(key=data.key, description=data.description, is_enabled=data.is_enabled)
     db.add(flag)
+    audit.record(db, admin, "flag.create", data.key, is_enabled=data.is_enabled)
     db.commit()
     db.refresh(flag)
     runtime_settings.invalidate()
@@ -595,6 +616,7 @@ def update_feature_flag(
         flag.description = data.description  # type: ignore[assignment]
     flag.updated_at = datetime.now(UTC)  # type: ignore[assignment]
 
+    audit.record(db, admin, "flag.update", key, is_enabled=data.is_enabled)
     db.commit()
     db.refresh(flag)
     runtime_settings.invalidate()
@@ -606,6 +628,7 @@ def delete_feature_flag(key: str, db: Annotated[Session, Depends(get_db)], admin
     flag = db.query(FeatureFlag).filter(FeatureFlag.key == key).first()
     if not flag:
         raise HTTPException(404, "Фича-флаг не найден")
+    audit.record(db, admin, "flag.delete", key)
     db.delete(flag)
     db.commit()
     runtime_settings.invalidate()
@@ -638,6 +661,7 @@ def create_blacklist_filter(
         is_active=True,
     )
     db.add(new_filter)
+    audit.record(db, admin, "blacklist.create", data.pattern, type=data.filter_type)
     db.commit()
     db.refresh(new_filter)
     return {"status": "ok", "filter": new_filter}
@@ -653,6 +677,7 @@ def delete_blacklist_filter(
     f = db.query(BlacklistFilter).filter(BlacklistFilter.id == filter_id).first()
     if not f:
         raise HTTPException(404, "Фильтр не найден")
+    audit.record(db, admin, "blacklist.delete", f.pattern)
     db.delete(f)
     db.commit()
     return {"status": "ok"}
@@ -686,6 +711,7 @@ async def retry_lastfm_import_job(
         raise HTTPException(400, "Повторить можно только незавершённую задачу")
     job.status = "pending"  # type: ignore[assignment]
     job.error_log = None  # type: ignore[assignment]
+    audit.record(db, admin, "import.retry", f"#{job_id}", user_id=job.user_id)
     db.commit()
     # Resumes from the last imported page
     from app.services.lastfm_import import enqueue_import
@@ -701,3 +727,20 @@ async def list_admin_together_rooms(
 ):
     """List live Listen Together rooms and metrics."""
     return {"rooms": await manager.get_active_rooms_info()}
+
+
+# ─── AUDIT LOG ────────────────────────────────────────────────────────────────
+
+@router.get("/audit")
+def list_audit_log(
+    db: Annotated[Session, Depends(get_db)],
+    admin: Annotated[User, Depends(get_admin_user)],
+    action: Annotated[str | None, Query(max_length=64)] = None,
+    admin_username: Annotated[str | None, Query(alias="admin", max_length=64)] = None,
+    target: Annotated[str | None, Query(max_length=128)] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+):
+    """Admin actions, newest first."""
+    return audit.list_entries(db, action=action, admin=admin_username, target=target,
+                              limit=limit, offset=offset)

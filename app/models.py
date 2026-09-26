@@ -33,6 +33,8 @@ class User(Base):
     # Bumped to revoke all session tokens ("log out everywhere", bans)
     session_version = Column(Integer, default=0, server_default=text("0"), nullable=False)
     antifraud_reason = Column(String, nullable=True)
+    # NULL for accounts created before this column existed
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=True, index=True)
 
     profile = relationship(
         "UserProfile",
@@ -346,6 +348,19 @@ class FeatureFlag(Base):
         DateTime(
             timezone=True), default=lambda: datetime.now(
             UTC))
+
+
+class AdminAuditLog(Base):
+    """Who in the admin panel did what, and to whom."""
+    __tablename__ = "admin_audit_log"
+    id = Column(Integer, primary_key=True, index=True)
+    admin_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="SET NULL"), nullable=True, index=True)
+    # Kept so the entry stays readable after the admin account is deleted
+    admin_username = Column(String(64), nullable=False)
+    action = Column(String(64), nullable=False, index=True)
+    target = Column(String(128), nullable=True, index=True)
+    details = Column(String(2000), nullable=True)  # JSON
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False, index=True)
 
 
 class SystemSetting(Base):

@@ -21,6 +21,7 @@ from app.models import User
 from app.routers import (
     account,
     admin,
+    admin_tools,
     auth,
     developer,
     devices,
@@ -157,6 +158,7 @@ app.include_router(auth.router)
 app.include_router(profile.router)
 app.include_router(scrobbling.router)
 app.include_router(admin.router)
+app.include_router(admin_tools.router)
 app.include_router(extended.router)
 app.include_router(widgets.router)
 app.include_router(developer.router)

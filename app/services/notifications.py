@@ -18,7 +18,9 @@ logger = logging.getLogger(__name__)
 KIND_LIKE = "like"
 KIND_COMMENT = "comment"
 KIND_FOLLOW = "follow"
-KINDS = {KIND_LIKE, KIND_COMMENT, KIND_FOLLOW}
+# Announcements sent from the admin panel; the actor is the sending admin
+KIND_SYSTEM = "system"
+KINDS = {KIND_LIKE, KIND_COMMENT, KIND_FOLLOW, KIND_SYSTEM}
 
 MAX_LIST = 50
 EXCERPT_LENGTH = 120
@@ -71,7 +73,9 @@ def delete_for_user(db: Session, user_id: int) -> None:
     ).delete(synchronize_session=False)
 
 
-def _describe(kind: str, actor: str, track_title: Optional[str]) -> str:
+def _describe(kind: str, actor: str, track_title: Optional[str], message: Optional[str] = None) -> str:
+    if kind == KIND_SYSTEM:
+        return message or ""
     target = f"«{track_title}»" if track_title else "ваше прослушивание"
     if kind == KIND_LIKE:
         return f"{actor} оценил(а) {target}"
@@ -98,7 +102,7 @@ def list_for_user(db: Session, user_id: int, limit: int = MAX_LIST) -> dict[str,
         items.append({
             "id": n.id,
             "kind": n.kind,
-            "text": _describe(str(n.kind), str(actor.username), title),
+            "text": _describe(str(n.kind), str(actor.username), title, n.message),
             "message": n.message,
             "actor": {
                 "username": actor.username,
