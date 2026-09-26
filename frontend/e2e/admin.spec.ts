@@ -57,8 +57,11 @@ test.describe("Admin panel", () => {
     await expect(card).toBeHidden();
 
     await openTab(page, "Журнал");
-    await expect(page.getByRole("cell", { name: "user.level" })).toBeVisible();
-    await expect(page.getByText("level: 7")).toBeVisible();
+    // Newest first; earlier runs against the same database may have more
+    await expect(
+      page.getByRole("cell", { name: "user.level" }).first(),
+    ).toBeVisible();
+    await expect(page.getByText("level: 7").first()).toBeVisible();
   });
 
   test("system, moderation and catalog tabs load", async ({ page }) => {
