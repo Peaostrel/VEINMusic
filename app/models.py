@@ -509,3 +509,22 @@ class DeviceAuthorization(Base):
     user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     expires_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class Notification(Base):
+    """Social notification for `user_id`: someone liked or commented on one
+    of their scrobbles, or started following them."""
+    __tablename__ = "notifications"
+    __table_args__ = (
+        Index("ix_notifications_user_unread", "user_id", "is_read", "created_at"),
+    )
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=False)
+    actor_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=False, index=True)
+    kind = Column(String(16), nullable=False)  # like, comment, follow
+    scrobble_id = Column(Integer, ForeignKey("scrobbles.id", ondelete="CASCADE"), nullable=True, index=True)
+    message = Column(String(200), nullable=True)  # comment excerpt
+    is_read = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+    actor = relationship("User", foreign_keys=[actor_id])

@@ -246,6 +246,8 @@ def delete_user(target_username: str, db: Annotated[Session, Depends(get_db)], a
         raise HTTPException(404, USER_NOT_FOUND)
     if target.role == "admin":
         raise HTTPException(400, "Нельзя удалить разработчика")
+    from app.services import notifications
+    notifications.delete_for_user(db, int(target.id))
     db.delete(target)
     db.commit()
     return {"status": "ok"}

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { API_URL } from "@/app/lib/api";
+import NotificationsBell from "@/components/NotificationsBell";
 
 export const THEMES = {
   classic: {
@@ -504,6 +505,7 @@ export default function Navbar() {
               <span className="text-lg">🏆</span>{" "}
               <span className="hidden md:inline ml-1">Топ</span>
             </Link>
+            {isValidUser(username) && <NotificationsBell />}
             {isValidUser(username) ? (
               <div className="relative" ref={dropdownRef}>
                 <div

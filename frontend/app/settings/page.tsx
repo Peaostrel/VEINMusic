@@ -19,6 +19,7 @@ import ThemeTab from "./tabs/ThemeTab";
 import PrivacyTab from "./tabs/PrivacyTab";
 import IntegrationsTab from "./tabs/IntegrationsTab";
 import SecurityTab from "./tabs/SecurityTab";
+import ExportTab from "./tabs/ExportTab";
 
 const LOCAL_COUNTRIES = [
   { name: "Россия", code: "RU", flag: "🇷🇺" },
@@ -201,6 +202,13 @@ function SettingsContent() {
     if (searchParams.get("spotify") === "success") {
       setStatus("✅ Spotify успешно привязан!");
       setActiveTab("integrations");
+    }
+    if (searchParams.get("tab") === "export") {
+      setActiveTab("export");
+      const result = searchParams.get("status");
+      if (result === "lastfm_connected") setStatus("✅ Last.fm подключён");
+      else if (result === "lastfm_error")
+        setStatus("❌ Не удалось подключить Last.fm");
     }
 
     const username = localStorage.getItem("username");
@@ -551,6 +559,7 @@ function SettingsContent() {
     if (tab === "theme") return "Оформление";
     if (tab === "privacy") return "Приватность";
     if (tab === "security") return "Безопасность и данные";
+    if (tab === "export") return "Экспорт и вебхуки";
     return "Интеграции";
   };
 
@@ -623,6 +632,7 @@ function SettingsContent() {
             "privacy",
             "security",
             "integrations",
+            "export",
           ].map((tab) => (
             <button
               key={tab}
@@ -638,6 +648,8 @@ function SettingsContent() {
         <main className="flex-grow bg-[#1e1e1e]/60 backdrop-blur-md rounded-xl border border-white/5 shadow-lg relative overflow-hidden mb-20">
           {activeTab === "security" ? (
             <SecurityTab />
+          ) : activeTab === "export" ? (
+            <ExportTab initialStatus={status} />
           ) : activeTab === "integrations" ? (
             <IntegrationsTab
               data={data}

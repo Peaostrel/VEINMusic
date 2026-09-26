@@ -25,6 +25,8 @@ from app.routers import (
     developer,
     devices,
     extended,
+    lastfm_connect,
+    notifications,
     profile,
     scrobbling,
     widgets,
@@ -158,6 +160,8 @@ app.include_router(widgets.router)
 app.include_router(developer.router)
 app.include_router(devices.router)
 app.include_router(account.router)
+app.include_router(notifications.router)
+app.include_router(lastfm_connect.router)
 
 
 @app.get("/health", tags=["health"], responses={503: {"description": "A dependency is down"}})
@@ -243,14 +247,19 @@ def _is_sync_allowed(target_user, sender_username: str, db: Session) -> bool:
     return False
 
 
-async def _handle_sync_request(target: str, sender_username: str):
+def _sync_request_allowed(target: str, sender_username: str) -> bool:
     from app.models import User
     db = SessionLocal()
     try:
         target_user = db.query(User).filter(User.username == target).first()
-        allowed = bool(target_user and _is_sync_allowed(target_user, sender_username, db))
+        return bool(target_user and _is_sync_allowed(target_user, sender_username, db))
     finally:
         db.close()
+
+
+async def _handle_sync_request(target: str, sender_username: str):
+    # DB work runs in a thread so the event loop keeps serving other sockets
+    allowed = await anyio.to_thread.run_sync(_sync_request_allowed, target, sender_username)
     if allowed:
         await manager.broadcast_to_user(target, {
             "type": "SYNC_INVITE",
@@ -264,7 +273,8 @@ async def websocket_route(websocket: WebSocket, username: str):
         await websocket.close(code=4003)
         return
 
-    authenticated_username = _get_ws_authenticated_username(websocket)
+    # DB lookup (and PBKDF2 for personal keys) off the event loop
+    authenticated_username = await anyio.to_thread.run_sync(_get_ws_authenticated_username, websocket)
 
     # Enforce authentication: only the owner can connect to their own websocket
     if not authenticated_username or authenticated_username != username:
@@ -391,7 +401,7 @@ async def together_websocket_route(websocket: WebSocket, room_id: str):
         await websocket.close(code=4003)
         return
 
-    authenticated_username = _get_ws_authenticated_username(websocket)
+    authenticated_username = await anyio.to_thread.run_sync(_get_ws_authenticated_username, websocket)
     username = authenticated_username or f"Guest_{secrets.token_hex(3)}"
 
     await websocket.accept()

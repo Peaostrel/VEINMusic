@@ -72,6 +72,30 @@ async def import_lastfm(ctx: dict[str, Any], job_id: int) -> None:
     await run_import_job(job_id)
 
 
+async def send_social_push(ctx: dict[str, Any], notification_id: int) -> None:
+    """ARQ job: deliver a like/comment/follow notification as Web Push."""
+    from app.services.notifications import send_social_push as deliver
+    await deliver(notification_id)
+
+
+def _cleanup_uploads_sync() -> int:
+    from app.routers.media import UPLOADS_DIR
+    from app.services.uploads_cleanup import cleanup_orphan_uploads
+    db = SessionLocal()
+    try:
+        return cleanup_orphan_uploads(db, UPLOADS_DIR)
+    finally:
+        db.close()
+
+
+async def cleanup_uploads(ctx: dict[str, Any]) -> None:
+    """arq cron job: delete uploaded images nothing refers to any more."""
+    try:
+        await asyncio.to_thread(_cleanup_uploads_sync)
+    except Exception as e:
+        logger.warning(f"[Worker] Upload cleanup failed: {e}")
+
+
 async def cloud_poll(ctx: dict[str, Any]) -> None:
     """arq cron job: poll Spotify / Yandex for currently playing tracks."""
     from app.services.cloud_scrobbling import poll_once
@@ -96,11 +120,14 @@ class WorkerSettings:
         async_dispatch_webhook,
         async_export_scrobble,
         import_lastfm,
+        send_social_push,
     ]
     cron_jobs: ClassVar[list] = [
         # Every 30 seconds; poll_once itself takes a Redis lock, so several
         # workers never poll the same accounts concurrently.
         cron(cloud_poll, second={0, 30}, run_at_startup=True, unique=True, timeout=25),
+        # Daily, at a quiet hour
+        cron(cleanup_uploads, hour={4}, minute={17}, unique=True, timeout=600),
     ]
     redis_settings = RedisSettings.from_dsn(REDIS_URL)
     on_startup = startup

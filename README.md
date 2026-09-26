@@ -183,7 +183,19 @@ docker compose up -d --build
 ```
 Поднимаются PostgreSQL, Redis, API (миграции применяются автоматически при старте),
 фоновый воркер arq (достижения, вебхуки, экспорт скробблов, импорт Last.fm,
-опрос Spotify/Яндекса) и фронтенд. Проверка состояния: `GET /health`.
+опрос Spotify/Яндекса, ночная очистка неиспользуемых загрузок) и фронтенд.
+Проверка состояния: `GET /health`.
+
+**Резервные копии.** Сервис `db-backup` раз в сутки делает `pg_dump` в том
+`db_backups` и хранит копии `BACKUP_KEEP_DAYS` дней (по умолчанию 7).
+Восстановление:
+```bash
+docker compose exec db-backup ls /backups
+docker compose exec -T db-backup pg_restore --clean --if-exists \
+  -d veinmusic /backups/<файл>.dump
+```
+Копии лежат на том же сервере: для защиты от потери диска периодически
+забирайте их на другое хранилище.
 
 ### 3а. Локальная разработка без Docker для кода
 Для работы по обычному http поставьте в `.env` значение `ENVIRONMENT=development`

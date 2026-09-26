@@ -28,6 +28,7 @@ from app.models import (
     UserAchievement,
     Webhook,
 )
+from app.services import notifications
 
 router = APIRouter(prefix="/api/account", tags=["account"])
 
@@ -141,6 +142,7 @@ def delete_account(request: Request, payload: AccountDeleteRequest, response: Re
                                      DeviceAuthorization, LastfmImportJob)
     for model in owned_models:
         db.query(model).filter(model.user_id == user_id).delete(synchronize_session=False)
+    notifications.delete_for_user(db, int(user_id))
     db.delete(current_user)
     db.commit()
     response.delete_cookie("api_key")
