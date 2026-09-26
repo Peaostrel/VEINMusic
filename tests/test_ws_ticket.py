@@ -12,6 +12,11 @@ def _register(client, username: str) -> None:
     assert resp.status_code == 200
 
 
+def _open_socket(client, url: str) -> None:
+    with client.websocket_connect(url, headers=ORIGIN):
+        pass
+
+
 def test_ticket_roundtrip_and_expiry():
     ticket = issue_ticket("some.user", now=1000)
     assert verify_ticket(ticket, now=1000) == "some.user"
@@ -46,8 +51,9 @@ def test_profile_socket_accepts_ticket_without_cookie(client):
     # A ticket for one user does not open another user's socket
     _register(client, "otheruser")
     client.cookies.clear()
+    url = f"/ws/otheruser?ticket={ticket}"
     with pytest.raises(WebSocketDisconnect):
-        client.websocket_connect(f"/ws/otheruser?ticket={ticket}", headers=ORIGIN).__enter__()
+        _open_socket(client, url)
 
 
 def test_room_socket_identifies_user_by_ticket(client):
