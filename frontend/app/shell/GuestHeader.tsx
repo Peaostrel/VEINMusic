@@ -43,16 +43,18 @@ export default function GuestHeader({
             />
             <Link
               href="/auth"
-              className="hidden text-sm text-fg-2 hover:text-fg sm:block"
+              className={`${btn.secondary} h-9 px-3.5 text-sm sm:border-0 sm:px-0 sm:text-fg-2 sm:hover:bg-transparent sm:hover:text-fg`}
             >
               Войти
             </Link>
-            <Link
-              href="/auth?mode=register"
-              className={`${btn.primary} h-9 px-3.5`}
-            >
-              Создать профиль
-            </Link>
+            <span className="hidden sm:block">
+              <Link
+                href="/auth?mode=register"
+                className={`${btn.primary} h-9 px-3.5`}
+              >
+                Создать профиль
+              </Link>
+            </span>
           </>
         )}
       </div>

@@ -11,12 +11,15 @@ import type { ReactNode } from "react";
 const btnBase =
   "inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 whitespace-nowrap";
 
+/** Button looks. Combine a variant with a size: `${btn.primary} ${btn.md}`. */
 export const btn = {
-  primary: `${btnBase} h-10 px-4 bg-accent text-on-accent hover:brightness-110`,
-  secondary: `${btnBase} h-10 px-4 border border-line text-fg hover:bg-surface-2`,
-  ghost: `${btnBase} h-10 px-3 text-fg-2 hover:bg-surface-2 hover:text-fg`,
-  danger: `${btnBase} h-10 px-4 border border-danger-line text-danger hover:bg-[#2a1b1b]`,
-  small: "h-8 px-3 text-[13px]",
+  primary: `${btnBase} bg-accent text-on-accent hover:brightness-110`,
+  secondary: `${btnBase} border border-line text-fg hover:bg-surface-2`,
+  ghost: `${btnBase} text-fg-2 hover:bg-surface-2 hover:text-fg`,
+  danger: `${btnBase} border border-danger-line text-danger hover:bg-[#2a1b1b]`,
+  sm: "h-8 px-3 text-[13px]",
+  md: "h-10 px-4",
+  lg: "h-12 px-5 text-[15px]",
   icon: `${btnBase} h-9 w-9 text-fg-2 hover:bg-surface-2 hover:text-fg`,
 };
 
