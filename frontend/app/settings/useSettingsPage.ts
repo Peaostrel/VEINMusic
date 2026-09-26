@@ -35,13 +35,6 @@ export const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
   { id: "export", label: "Экспорт и вебхуки" },
 ];
 
-const SHOWCASE_LOCK_MS = 30 * 24 * 60 * 60 * 1000;
-
-function isFieldLocked(updatedAt: string | null): boolean {
-  if (!updatedAt) return false;
-  return Date.now() < new Date(updatedAt).getTime() + SHOWCASE_LOCK_MS;
-}
-
 function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : "Ошибка";
 }
@@ -250,6 +243,16 @@ export function useSettingsPage() {
       data.country && data.city
         ? `${data.country}, ${data.city}`
         : data.country || data.city || "";
+    // Showcase favorites give bonus XP and change at most once in 30 days
+    // (per field). Send only the ones actually edited, so saving the other
+    // settings never touches them.
+    const showcase: Record<string, string> = {};
+    if (data.favArtist !== (userProfile?.favorite_artist || ""))
+      showcase.favorite_artist = data.favArtist;
+    if (data.favTrack !== (userProfile?.favorite_track || ""))
+      showcase.favorite_track = data.favTrack;
+    if (data.favAlbum !== (userProfile?.favorite_album || ""))
+      showcase.favorite_album = data.favAlbum;
 
     try {
       const res = await fetch(`${API_URL}/api/profile/update`, {
@@ -265,9 +268,7 @@ export function useSettingsPage() {
           favorite_genre: data.favoriteGenre,
           equipment: data.equipment,
           theme: data.theme,
-          favorite_artist: data.favArtist,
-          favorite_track: data.favTrack,
-          favorite_album: data.favAlbum,
+          ...showcase,
           avatar_frame: data.avatarFrame,
           is_private: data.isPrivate,
           hidden_artists: data.hiddenArtists,
@@ -410,11 +411,6 @@ export function useSettingsPage() {
     }
   };
 
-  const isShowcaseLocked =
-    isFieldLocked(data.favArtistUpdatedAt) ||
-    isFieldLocked(data.favTrackUpdatedAt) ||
-    isFieldLocked(data.favAlbumUpdatedAt);
-
   return {
     data,
     updateData,
@@ -454,6 +450,5 @@ export function useSettingsPage() {
     saveYandexToken,
     handleDisconnect,
     startLastfmImport,
-    isSaveDisabled: activeTab === "showcase" && isShowcaseLocked,
   };
 }

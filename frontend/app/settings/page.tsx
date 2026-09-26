@@ -21,7 +21,7 @@ import { SETTINGS_TABS, useSettingsPage } from "./useSettingsPage";
 
 function SettingsContent() {
   const s = useSettingsPage();
-  const { data, updateData, activeTab, status, isSaveDisabled } = s;
+  const { data, updateData, activeTab, status } = s;
 
   if (s.loading) return <Loading label="Загружаем настройки…" />;
 
@@ -77,12 +77,8 @@ function SettingsContent() {
 
         <div className="sticky bottom-0 z-10 -mx-1 mt-8 flex items-center justify-between gap-4 border-t border-line-soft bg-bg/95 px-1 py-4">
           <StatusText text={status} />
-          <button
-            type="submit"
-            disabled={isSaveDisabled}
-            className={`${btn.primary} ${btn.md} ml-auto`}
-          >
-            {isSaveDisabled ? "Заблокировано" : "Сохранить всё"}
+          <button type="submit" className={`${btn.primary} ${btn.md} ml-auto`}>
+            Сохранить всё
           </button>
         </div>
       </form>

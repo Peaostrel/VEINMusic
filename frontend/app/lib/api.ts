@@ -80,3 +80,43 @@ export async function apiJson<T>(path: string, init: ApiInit = {}): Promise<T> {
   }
   return (await res.json()) as T;
 }
+
+/**
+ * Opens a WebSocket to the API. Signed-in pages pass `authed`: the socket
+ * then carries a one-minute ticket, because not every browser sends the
+ * SameSite=Strict session cookie with a WebSocket handshake to the API
+ * subdomain. `setup` wires the handlers; the returned function cancels a
+ * pending connection or closes an open one (use it as the effect cleanup).
+ */
+export function openSocket(
+  path: string,
+  setup: (ws: WebSocket) => void,
+  { authed = false }: { authed?: boolean } = {},
+): () => void {
+  let ws: WebSocket | null = null;
+  let cancelled = false;
+
+  const connect = async () => {
+    let url = wsUrl(path);
+    if (authed) {
+      try {
+        const { ticket } = await apiJson<{ ticket: string }>(
+          "/auth/ws-ticket",
+          { method: "POST", json: {} },
+        );
+        url += `${url.includes("?") ? "&" : "?"}ticket=${encodeURIComponent(ticket)}`;
+      } catch {
+        // Signed out or offline: connect as a guest
+      }
+    }
+    if (cancelled) return;
+    ws = new WebSocket(url);
+    setup(ws);
+  };
+  connect();
+
+  return () => {
+    cancelled = true;
+    ws?.close();
+  };
+}

@@ -142,6 +142,14 @@ def logout_all(response: Response,
     return {"message": "Вы вышли на всех устройствах"}
 
 
+@router.post("/ws-ticket")
+def ws_ticket(current_user: Annotated[User, Depends(get_current_user)]):
+    """One-minute ticket for opening a WebSocket as the signed-in user
+    (passed as ?ticket=…; see app/core/ws_ticket.py)."""
+    from app.core.ws_ticket import TICKET_TTL_SEC, issue_ticket
+    return {"ticket": issue_ticket(str(current_user.username)), "expires_in": TICKET_TTL_SEC}
+
+
 SPOTIFY_STATE_COOKIE = "spotify_auth_state"
 
 

@@ -19,38 +19,56 @@ from app.utils import sanitize_text
 router = APIRouter(prefix="/api/profile", tags=["profile"])
 
 
+FAVORITE_LOCK = timedelta(days=30)
+
+
+def _as_utc(value: datetime) -> datetime:
+    # SQLite returns naive datetimes even for timezone-aware columns
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
 async def _update_favorite(user_profile, field_value, field_name, entity_type):
+    """Set one showcase favorite. Returns True when the value changed.
+
+    Picking a new favorite locks that field (only that one) for 30 days.
+    The settings form always sends all three favorites, and an empty input
+    comes as "" while the column holds NULL: both mean "not set", so they
+    must not count as a change.
+    """
     if field_value is None:
         return False
 
-    current_val = getattr(user_profile, field_name)
-    if field_value == current_val:
+    new_value = field_value.strip()
+    current_val = getattr(user_profile, field_name) or ""
+    if new_value == current_val:
         return False
 
     updated_at = getattr(user_profile, f"{field_name}_updated_at")
-    if updated_at and datetime.now(UTC) < updated_at + timedelta(days=30):
+    if new_value and updated_at and datetime.now(UTC) < _as_utc(updated_at) + FAVORITE_LOCK:
         raise HTTPException(400, "Вы можете изменить это поле только раз в 30 дней.")
 
-    if field_value.strip() == "":
+    if not new_value:
+        # Clearing is always allowed and does not start a new lock
         setattr(user_profile, field_name, None)
         setattr(user_profile, f"{field_name}_cover", None)
         setattr(user_profile, f"{field_name}_url", None)
-    else:
-        title, cover, url = await search_metadata(field_value, entity_type)
-        setattr(user_profile, field_name, sanitize_text(title or field_value))
-        setattr(
-            user_profile,
-            f"{field_name}_cover",
-            cover or getattr(
-                user_profile,
-                f"{field_name}_cover"))
-        setattr(
-            user_profile,
-            f"{field_name}_url",
-            url or getattr(
-                user_profile,
-                f"{field_name}_url"))
+        return True
 
+    title, cover, url = await search_metadata(new_value, entity_type)
+    setattr(user_profile, field_name, sanitize_text(title or new_value))
+    setattr(
+        user_profile,
+        f"{field_name}_cover",
+        cover or getattr(
+            user_profile,
+            f"{field_name}_cover"))
+    setattr(
+        user_profile,
+        f"{field_name}_url",
+        url or getattr(
+            user_profile,
+            f"{field_name}_url"))
+    setattr(user_profile, f"{field_name}_updated_at", datetime.now(UTC))
     return True
 
 
@@ -127,15 +145,9 @@ async def update_profile(request: Request, data: ProfileUpdate, db: Annotated[Se
         get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
 
-    changed1 = await _update_favorite(user.profile, data.favorite_artist, 'favorite_artist', 'artist')
-    changed2 = await _update_favorite(user.profile, data.favorite_track, 'favorite_track', 'track')
-    changed3 = await _update_favorite(user.profile, data.favorite_album, 'favorite_album', 'album')
-
-    if changed1 or changed2 or changed3:
-        now = datetime.now(UTC)
-        user.profile.favorite_artist_updated_at = now
-        user.profile.favorite_track_updated_at = now
-        user.profile.favorite_album_updated_at = now
+    await _update_favorite(user.profile, data.favorite_artist, 'favorite_artist', 'artist')
+    await _update_favorite(user.profile, data.favorite_track, 'favorite_track', 'track')
+    await _update_favorite(user.profile, data.favorite_album, 'favorite_album', 'album')
 
     _update_profile_fields(user.profile, data)
 

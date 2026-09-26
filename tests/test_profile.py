@@ -175,3 +175,68 @@ def test_admin_restrictions(client, db):
     client.cookies.set("api_key", admin_token)
     resp = client.get("/api/admin/stats")
     assert resp.status_code == 200
+
+
+def _profile(username):
+    db = SessionLocal()
+    try:
+        return db.query(User).filter(User.username == username).first().profile
+    finally:
+        db.close()
+
+
+def test_saving_settings_twice_with_empty_showcase(auth_client, auth_user):
+    """The settings form sends empty favorites as "". That used to count as
+    a change against NULL and lock the whole showcase, so the second save
+    of a brand-new account failed with "only once in 30 days"."""
+    form = {"display_name": "Name", "location": "Россия",
+            "favorite_artist": "", "favorite_track": "", "favorite_album": ""}
+    assert auth_client.post("/api/profile/update", json=form).status_code == 200
+
+    form["location"] = "Россия, Балашов"
+    resp = auth_client.post("/api/profile/update", json=form)
+    assert resp.status_code == 200, resp.text
+
+    profile = _profile("profileuser")
+    assert profile.location == "Россия, Балашов"
+    assert profile.favorite_artist_updated_at is None
+    assert profile.favorite_track_updated_at is None
+    assert profile.favorite_album_updated_at is None
+
+
+def test_showcase_lock_is_per_field(auth_client, auth_user):
+    with patch("app.routers.profile.search_metadata",
+               return_value=("Джизус", None, None)):
+        resp = auth_client.post("/api/profile/update", json={
+            "favorite_artist": "джизус", "favorite_track": "", "favorite_album": ""})
+        assert resp.status_code == 200
+        profile = _profile("profileuser")
+        assert profile.favorite_artist == "Джизус"
+        assert profile.favorite_artist_updated_at is not None
+        assert profile.favorite_track_updated_at is None
+
+        # Resending the stored value is not a change
+        resp = auth_client.post("/api/profile/update", json={
+            "favorite_artist": "Джизус", "favorite_track": "", "favorite_album": ""})
+        assert resp.status_code == 200
+
+    # Another field is still free even though the artist is locked
+    with patch("app.routers.profile.search_metadata",
+               return_value=("Демиург", None, None)):
+        resp = auth_client.post("/api/profile/update", json={
+            "favorite_artist": "Джизус", "favorite_track": "Демиург", "favorite_album": ""})
+        assert resp.status_code == 200
+    assert _profile("profileuser").favorite_track == "Демиург"
+
+    # Replacing the locked artist is refused
+    resp = auth_client.post("/api/profile/update", json={"favorite_artist": "Other"})
+    assert resp.status_code == 400
+    assert "30 дней" in resp.json()["detail"]
+
+    # Clearing is allowed and does not start a new lock
+    resp = auth_client.post("/api/profile/update", json={"favorite_album": ""})
+    assert resp.status_code == 200
+    resp = auth_client.post("/api/profile/update", json={"favorite_track": ""})
+    assert resp.status_code == 200
+    profile = _profile("profileuser")
+    assert profile.favorite_track is None

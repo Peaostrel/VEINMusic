@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Pause, Play, Send } from "lucide-react";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
-import { wsUrl } from "@/app/lib/api";
+import { openSocket } from "@/app/lib/api";
+import { isValidUser } from "@/app/lib/theme";
 import { plural } from "@/app/lib/plural";
 import { Avatar, Meter, btn, inputOnCard } from "@/components/ui";
 
@@ -62,59 +63,60 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
   // Connect to WebSocket
   useEffect(() => {
     const safeRoomId = encodeURIComponent(roomId);
-    const ws = new WebSocket(wsUrl(`/ws/together/${safeRoomId}`));
-    socketRef.current = ws;
+    const setup = (ws: WebSocket) => {
+      socketRef.current = ws;
 
-    ws.onopen = () => {
-      setConnected(true);
-    };
+      ws.onopen = () => {
+        setConnected(true);
+      };
 
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === "ROOM_STATE") {
-          setListeners(data.listeners || []);
-          setHost(data.host || "");
-          setMe(data.you || "");
-          if (data.current_track) {
-            setTrack({
-              ...data.current_track,
-              cover_url: sanitizeImageUrl(data.current_track.cover_url) || "",
-            });
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "ROOM_STATE") {
+            setListeners(data.listeners || []);
+            setHost(data.host || "");
+            setMe(data.you || "");
+            if (data.current_track) {
+              setTrack({
+                ...data.current_track,
+                cover_url: sanitizeImageUrl(data.current_track.cover_url) || "",
+              });
+            }
+            if (data.chat_history) setChatMessages(data.chat_history);
+          } else if (data.type === "USER_JOINED" || data.type === "USER_LEFT") {
+            setListeners(data.listeners || []);
+          } else if (data.type === "TRACK_SYNC") {
+            if (data.track) {
+              setTrack({
+                ...data.track,
+                cover_url: sanitizeImageUrl(data.track.cover_url) || "",
+              });
+            }
+          } else if (data.type === "PLAYBACK_CONTROL") {
+            setTrack((prev) => ({
+              ...prev,
+              is_playing: data.is_playing,
+              progress_sec: data.progress_sec,
+              updated_at: Date.now() / 1000,
+            }));
+          } else if (data.type === "CHAT_MESSAGE") {
+            setChatMessages((prev) => [
+              ...prev,
+              { from: data.from, text: data.text, timestamp: data.timestamp },
+            ]);
           }
-          if (data.chat_history) setChatMessages(data.chat_history);
-        } else if (data.type === "USER_JOINED" || data.type === "USER_LEFT") {
-          setListeners(data.listeners || []);
-        } else if (data.type === "TRACK_SYNC") {
-          if (data.track) {
-            setTrack({
-              ...data.track,
-              cover_url: sanitizeImageUrl(data.track.cover_url) || "",
-            });
-          }
-        } else if (data.type === "PLAYBACK_CONTROL") {
-          setTrack((prev) => ({
-            ...prev,
-            is_playing: data.is_playing,
-            progress_sec: data.progress_sec,
-            updated_at: Date.now() / 1000,
-          }));
-        } else if (data.type === "CHAT_MESSAGE") {
-          setChatMessages((prev) => [
-            ...prev,
-            { from: data.from, text: data.text, timestamp: data.timestamp },
-          ]);
+        } catch (e) {
+          console.warn("WS error:", e);
         }
-      } catch (e) {
-        console.warn("WS error:", e);
-      }
-    };
+      };
 
-    ws.onclose = () => setConnected(false);
-
-    return () => {
-      ws.close();
+      ws.onclose = () => setConnected(false);
     };
+    // Signed-in listeners are identified by name; guests join anonymously
+    return openSocket(`/ws/together/${safeRoomId}`, setup, {
+      authed: isValidUser(localStorage.getItem("username")),
+    });
   }, [roomId]);
 
   // Smooth progress bar calculation

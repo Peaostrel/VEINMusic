@@ -1,5 +1,5 @@
 // VEINMusic PWA Service Worker
-const CACHE_NAME = "veinmusic-cache-v4";
+const CACHE_NAME = "veinmusic-cache-v5";
 const PRECACHE_URLS = [
   "/",
   "/manifest.json",
@@ -36,24 +36,21 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  const url = new URL(event.request.url);
+  const { request } = event;
+  const url = new URL(request.url);
 
-  // Network-first for API requests and websockets
-  if (url.pathname.startsWith("/api") || url.protocol.startsWith("ws")) {
-    event.respondWith(
-      fetch(event.request).catch(() => {
-        return new Response(JSON.stringify({ error: "Offline" }), {
-          headers: { "Content-Type": "application/json" },
-        });
-      }),
-    );
+  // Only this site's own GET requests are cached. Everything else (the API
+  // on its subdomain, avatars from other hosts, POSTs) goes straight to the
+  // network: fetching it from here would be subject to the site's CSP
+  // connect-src and fail for image hosts.
+  if (request.method !== "GET" || url.origin !== self.location.origin) {
     return;
   }
 
-  // Stale-while-revalidate for static assets and pages
+  // Stale-while-revalidate for pages and static assets
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request)
+    caches.match(request).then((cachedResponse) => {
+      const fetchPromise = fetch(request)
         .then((networkResponse) => {
           if (
             networkResponse?.status === 200 &&
@@ -61,12 +58,13 @@ self.addEventListener("fetch", (event) => {
           ) {
             const responseToCache = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseToCache);
+              cache.put(request, responseToCache);
             });
           }
           return networkResponse;
         })
-        .catch(() => cachedResponse);
+        // Offline and nothing cached: a network error, never `undefined`
+        .catch(() => cachedResponse || Response.error());
 
       return cachedResponse || fetchPromise;
     }),
