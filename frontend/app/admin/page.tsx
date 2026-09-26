@@ -10,17 +10,26 @@ import {
   RotateCcw,
   Server,
   RefreshCw,
+  MessageSquareWarning,
+  Cpu,
+  ScrollText,
 } from "lucide-react";
+import { useState } from "react";
 import OverviewTab from "./tabs/OverviewTab";
 import UsersTab from "./tabs/UsersTab";
 import AntifraudTab from "./tabs/AntifraudTab";
 import CatalogTab from "./tabs/CatalogTab";
 import GamificationTab from "./tabs/GamificationTab";
 import AnnouncementsTab from "./tabs/AnnouncementsTab";
+import ModerationTab from "./tabs/ModerationTab";
+import SystemTab from "./tabs/SystemTab";
+import AuditTab from "./tabs/AuditTab";
+import UserCard from "./components/UserCard";
 import { type AdminTab, useAdminPanel } from "./useAdminPanel";
 
 export default function AdminPanel() {
   const admin = useAdminPanel();
+  const [openUser, setOpenUser] = useState<string | null>(null);
   const {
     router,
     activeTab,
@@ -120,6 +129,11 @@ export default function AdminPanel() {
                   : ""),
               icon: ShieldAlert,
             },
+            {
+              id: "moderation",
+              label: "Модерация",
+              icon: MessageSquareWarning,
+            },
             { id: "catalog", label: "Каталог и Дедупликация", icon: Disc3 },
             { id: "gamification", label: "Геймификация и Рамки", icon: Trophy },
             {
@@ -127,6 +141,8 @@ export default function AdminPanel() {
               label: "Оповещения и Флаги",
               icon: Megaphone,
             },
+            { id: "system", label: "Система", icon: Cpu },
+            { id: "audit", label: "Журнал", icon: ScrollText },
           ] satisfies { id: AdminTab; label: string; icon: unknown }[]
         ).map((tab) => {
           const Icon = tab.icon;
@@ -153,11 +169,27 @@ export default function AdminPanel() {
       {/* ─── TAB 1: OVERVIEW & SYSTEM HEALTH ─────────────────────────────────── */}
 
       {admin.activeTab === "overview" && <OverviewTab {...admin} />}
-      {admin.activeTab === "users" && <UsersTab {...admin} />}
+      {admin.activeTab === "users" && (
+        <UsersTab {...admin} onOpenUser={setOpenUser} />
+      )}
+      {admin.activeTab === "moderation" && (
+        <ModerationTab onOpenUser={setOpenUser} />
+      )}
       {admin.activeTab === "antifraud" && <AntifraudTab {...admin} />}
       {admin.activeTab === "catalog" && <CatalogTab {...admin} />}
       {admin.activeTab === "gamification" && <GamificationTab {...admin} />}
       {admin.activeTab === "announcements" && <AnnouncementsTab {...admin} />}
+      {admin.activeTab === "system" && <SystemTab />}
+      {admin.activeTab === "audit" && <AuditTab />}
+
+      {openUser && (
+        <UserCard
+          username={openUser}
+          achievements={admin.achievements}
+          onClose={() => setOpenUser(null)}
+          onChanged={admin.loadAllData}
+        />
+      )}
     </div>
   );
 }

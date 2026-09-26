@@ -1,4 +1,5 @@
 import type { UserInfo } from "@/app/lib/types";
+import { useFeature } from "@/app/lib/featureFlags";
 import LastfmImportStatus from "../components/LastfmImportStatus";
 import type { SettingsData, UpdateData } from "../types";
 
@@ -31,6 +32,7 @@ export default function IntegrationsTab({
   copied,
   API_URL,
 }: Readonly<IntegrationsTabProps>) {
+  const importEnabled = useFeature("lastfm_import");
   return (
     <div className="p-6 md:p-8 space-y-6">
       <h2 className="text-2xl font-bold text-white">Интеграции</h2>
@@ -207,7 +209,9 @@ export default function IntegrationsTab({
               <button
                 type="button"
                 onClick={startLastfmImport}
-                className="flex-1 bg-[#D51007] text-white font-bold py-2 rounded-lg text-xs"
+                disabled={!importEnabled}
+                title={importEnabled ? undefined : "Импорт временно отключён"}
+                className="flex-1 bg-[#D51007] text-white font-bold py-2 rounded-lg text-xs disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Импорт
               </button>

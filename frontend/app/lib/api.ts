@@ -58,6 +58,15 @@ async function errorMessage(res: Response): Promise<string> {
   try {
     const data = await res.json();
     if (typeof data?.detail === "string") return data.detail;
+    // FastAPI validation errors: [{ loc, msg, type }, …]
+    if (Array.isArray(data?.detail)) {
+      const messages = data.detail
+        .map((d: { msg?: unknown }) =>
+          typeof d?.msg === "string" ? d.msg : "",
+        )
+        .filter(Boolean);
+      if (messages.length > 0) return messages.join("; ");
+    }
   } catch {
     // not JSON
   }

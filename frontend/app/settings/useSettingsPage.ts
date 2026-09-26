@@ -13,7 +13,7 @@ import {
   type SocialLink,
   type UpdateData,
 } from "./types";
-import { useLocationSuggestions } from "./useLocationSuggestions";
+import { useLocationSuggestions } from "@/app/lib/geo";
 import { fixImageUrl, getCroppedImg } from "./utils";
 
 export type SettingsTab =
@@ -78,6 +78,27 @@ export function useSettingsPage() {
   const updateData: UpdateData = (key, value) =>
     setData((prev) => ({ ...prev, [key]: value }));
 
+  /** Load the profile into the form. Resolves false when it isn't available. */
+  const loadProfile = async (username: string): Promise<boolean> => {
+    const [userRes, statsRes] = await Promise.all([
+      fetch(`${API_URL}/api/user/${username}`, { credentials: "include" }),
+      fetch(`${API_URL}/api/stats/${username}`, { credentials: "include" }),
+    ]);
+    if (!userRes.ok || !statsRes.ok) return false;
+    const u: UserInfo = await userRes.json();
+    const s: { total_xp?: number; total_scrobbles?: number } =
+      await statsRes.json();
+    setUserProfile(u);
+    setLevel(Math.floor((s.total_xp || s.total_scrobbles || 0) / 100) + 1);
+    setData(settingsFromProfile(u));
+    try {
+      setSocialLinks(JSON.parse(u.social_links || "[]"));
+    } catch (e) {
+      console.error(e);
+    }
+    return true;
+  };
+
   useEffect(() => {
     if (searchParams.get("spotify") === "success") {
       setStatus("✅ Spotify успешно привязан!");
@@ -96,34 +117,15 @@ export function useSettingsPage() {
       router.push("/auth");
       return;
     }
-
-    Promise.all([
-      fetch(`${API_URL}/api/user/${username}`, { credentials: "include" }),
-      fetch(`${API_URL}/api/stats/${username}`, { credentials: "include" }),
-    ])
-      .then(async ([userRes, statsRes]) => {
-        if (!userRes.ok || !statsRes.ok) {
+    loadProfile(username)
+      .then((ok) => {
+        if (!ok) {
           localStorage.removeItem("username");
           router.push("/auth");
-          return;
         }
-        const u: UserInfo = await userRes.json();
-        const s: { total_xp?: number; total_scrobbles?: number } =
-          await statsRes.json();
-        setUserProfile(u);
-        setLevel(Math.floor((s.total_xp || s.total_scrobbles || 0) / 100) + 1);
-        setData(settingsFromProfile(u));
-        try {
-          setSocialLinks(JSON.parse(u.social_links || "[]"));
-        } catch (e) {
-          console.error(e);
-        }
-        setLoading(false);
       })
-      .catch((error) => {
-        console.error(error);
-        setLoading(false);
-      });
+      .catch((error) => console.error(error))
+      .finally(() => setLoading(false));
   }, [router, searchParams]);
 
   const onSelectFile = (
@@ -286,11 +288,13 @@ export function useSettingsPage() {
       }
       localStorage.setItem("site_theme", data.theme);
       globalThis.dispatchEvent(new Event("theme_update"));
+      // Refresh the form from the server (showcase locks, cleaned values)
+      // and tell the navbar to reload the avatar and name
+      const username = localStorage.getItem("username");
+      if (username) await loadProfile(username);
+      globalThis.dispatchEvent(new Event("profile_update"));
       setStatus("✅ Успешно!");
-      setTimeout(() => {
-        setStatus("");
-        window.location.reload();
-      }, 1000);
+      setTimeout(() => setStatus(""), 3000);
     } catch (err) {
       setStatus("❌ " + errorMessage(err));
     }

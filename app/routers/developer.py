@@ -13,6 +13,7 @@ from app.core.security import DEVELOPER_KEY_SCOPES, get_current_user, hash_devel
 from app.database import get_db
 from app.models import ApiKey, ExternalSyncConfig, User, Webhook
 from app.schemas import ApiKeyCreate, ExternalSyncUpdate, WebhookCreate
+from app.services.runtime_settings import require_feature
 from app.services.webhooks import MAX_WEBHOOKS_PER_USER, send_test_ping
 
 router = APIRouter(prefix="/api/developer", tags=["developer"])
@@ -146,7 +147,9 @@ def list_webhooks(
     ]
 
 
-@router.post("/webhooks", responses={400: {"description": "Invalid webhook URL or too many webhooks"}})
+@router.post("/webhooks", dependencies=[Depends(require_feature("webhooks"))],
+             responses={400: {"description": "Invalid webhook URL or too many webhooks"},
+                        503: {"description": "Webhooks are switched off"}})
 @limiter.limit("10/hour")
 def create_webhook(
     request: Request,
@@ -201,7 +204,9 @@ def delete_webhook(
     return {"status": "ok", "message": "Вебхук успешно удален"}
 
 
-@router.post("/webhooks/{webhook_id}/test", responses={404: {"description": "Webhook Not Found"}})
+@router.post("/webhooks/{webhook_id}/test", dependencies=[Depends(require_feature("webhooks"))],
+             responses={404: {"description": "Webhook Not Found"},
+                        503: {"description": "Webhooks are switched off"}})
 @limiter.limit("5/minute")
 async def test_webhook(
     request: Request,

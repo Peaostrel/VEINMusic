@@ -2,6 +2,7 @@
 
 import { Users, Disc3, Server, Zap, Flame, Radio } from "lucide-react";
 import type { AdminPanelState } from "../useAdminPanel";
+import AnalyticsCharts from "../components/AnalyticsCharts";
 
 export default function OverviewTab({
   tracks,
@@ -14,6 +15,7 @@ export default function OverviewTab({
 }: AdminPanelState) {
   return (
     <div className="space-y-6">
+      <AnalyticsCharts />
       {/* Quick Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-[#141418] border border-white/5 p-5 rounded-2xl">
@@ -102,7 +104,9 @@ export default function OverviewTab({
           </h3>
           <p className="text-gray-400 text-xs">
             Увеличьте опыт за скробблы для всех пользователей платформы
-            (например, в честь выходных или ивентов).
+            (например, в честь выходных или ивентов). Действует на
+            прослушивания, засчитанные после изменения; уже набранный опыт не
+            пересчитывается.
           </p>
 
           <div className="flex items-center gap-3">

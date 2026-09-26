@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useFeature } from "@/app/lib/featureFlags";
 import { API_URL, ApiError, apiJson } from "@/app/lib/api";
 import type {
   CreatedWebhook,
@@ -112,6 +113,7 @@ export default function ExportTab({
   );
   const [newSecret, setNewSecret] = useState<CreatedWebhook | null>(null);
   const [busy, setBusy] = useState(false);
+  const webhooksEnabled = useFeature("webhooks");
 
   const load = useCallback(async () => {
     try {
@@ -357,6 +359,12 @@ export default function ExportTab({
             подписаны заголовком <code>X-VEIN-Signature</code> (HMAC-SHA256
             секретом вебхука). До 10 вебхуков.
           </p>
+          {!webhooksEnabled && (
+            <p className="text-xs font-bold text-yellow-400 mt-2">
+              Вебхуки временно отключены администратором: события не
+              отправляются, новые вебхуки создать нельзя.
+            </p>
+          )}
         </div>
 
         {newSecret && (
@@ -419,7 +427,12 @@ export default function ExportTab({
             />
             <button
               type="submit"
-              disabled={busy || !hookUrl.trim() || hookEvents.length === 0}
+              disabled={
+                busy ||
+                !webhooksEnabled ||
+                !hookUrl.trim() ||
+                hookEvents.length === 0
+              }
               className={`${buttonBase} bg-[var(--accent)] text-[var(--text-on-accent)]`}
             >
               Добавить вебхук

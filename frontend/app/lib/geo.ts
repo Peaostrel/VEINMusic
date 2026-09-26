@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Country } from "./types";
+import { API_URL } from "@/app/lib/api";
+import type { Country } from "@/app/lib/types";
+
+// Countries and cities come from the API (/api/geo/*), which queries
+// restcountries.com and OpenStreetMap and caches the answers, so visitors'
+// browsers never contact those services directly.
 
 /** Shown until the full list from restcountries.com has loaded. */
 export const LOCAL_COUNTRIES: Country[] = [
@@ -39,103 +44,61 @@ export const LOCAL_COUNTRIES: Country[] = [
   { name: "Австралия", code: "AU", flag: "🇦🇺" },
 ];
 
-interface RestCountry {
-  name: { common: string };
-  translations?: { rus?: { common?: string } };
-  cca2: string;
-  flag: string;
+let countriesRequest: Promise<Country[]> | null = null;
+
+function loadCountries(): Promise<Country[]> {
+  countriesRequest ??= fetch(`${API_URL}/api/geo/countries`)
+    .then((res) => (res.ok ? res.json() : []))
+    .then((data: unknown) => (Array.isArray(data) ? (data as Country[]) : []))
+    .catch(() => []);
+  return countriesRequest.then((list) => {
+    if (list.length === 0) countriesRequest = null; // try again next time
+    return list;
+  });
 }
 
-interface NominatimPlace {
-  name?: string;
-  importance?: number;
-  address?: { city?: string; town?: string; village?: string };
-}
-
-function extractCityName(item: NominatimPlace): string {
-  const addr = item.address || {};
-  const name = addr.city || addr.town || addr.village || item.name || "";
-  return name
-    .split(",")[0]
-    .replace(
-      /(сельсовет|городское поселение|муниципальное образование|район|станция|платформа|парк)/gi,
-      "",
-    )
-    .trim();
-}
-
-function matchesQuery(name: string, query: string): boolean {
-  if (!name || name.length < 2) return false;
-  const q = query.toLowerCase();
-  const n = name.toLowerCase();
-  return n.includes(q) || q.includes(n);
-}
-
-function processCities(places: NominatimPlace[], query: string): string[] {
-  const sorted = [...places].toSorted(
-    (a, b) => (b.importance || 0) - (a.importance || 0),
-  );
-  return Array.from(
-    new Set(sorted.map(extractCityName).filter((n) => matchesQuery(n, query))),
-  ).slice(0, 10);
-}
-
-function processCountries(raw: unknown): Country[] {
-  if (!Array.isArray(raw)) return [];
-  return (raw as RestCountry[])
-    .map((c) => ({
-      name: c.translations?.rus?.common || c.name.common,
-      code: c.cca2,
-      flag: c.flag,
-    }))
-    .toSorted((a, b) => a.name.localeCompare(b.name));
+/** All countries (a short built-in list until the full one has loaded). */
+export function useCountries(): Country[] {
+  const [countries, setCountries] = useState<Country[]>(LOCAL_COUNTRIES);
+  useEffect(() => {
+    let active = true;
+    loadCountries().then((list) => {
+      if (active && list.length > 0) setCountries(list);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+  return countries;
 }
 
 /** Country list and city suggestions for the location fields. */
 export function useLocationSuggestions(country: string, city: string) {
-  const [countries, setCountries] = useState<Country[]>(LOCAL_COUNTRIES);
+  const countries = useCountries();
   const [cities, setCities] = useState<string[]>([]);
-  const [countryCode, setCountryCode] = useState("");
 
-  useEffect(() => {
-    fetch(
-      "https://restcountries.com/v3.1/all?fields=name,translations,cca2,flag",
-    )
-      .then((r) => r.json())
-      .then((d) => {
-        const list = processCountries(d);
-        if (list.length > 0) setCountries(list);
-      })
-      .catch((error) => console.error(error));
-  }, []);
-
-  useEffect(() => {
-    if (!country || countries.length === 0) return;
-    const found = countries.find(
+  const countryCode =
+    countries.find(
       (c) => c.name.toLowerCase().trim() === country.toLowerCase().trim(),
-    );
-    if (found) setCountryCode(found.code);
-  }, [country, countries]);
+    )?.code ?? "";
 
   useEffect(() => {
-    if (!countryCode || city.length < 2) {
+    if (!countryCode || city.trim().length < 2) {
       setCities([]);
       return;
     }
     let active = true;
-    setCities([]);
     const delay = setTimeout(() => {
-      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(city)}&format=json&accept-language=ru&addressdetails=1&countrycodes=${countryCode.toLowerCase()}&limit=20`;
-      fetch(url)
-        .then((r) => r.json())
-        .then((d) => {
-          if (active && Array.isArray(d)) setCities(processCities(d, city));
+      const params = new URLSearchParams({ country: countryCode, q: city });
+      fetch(`${API_URL}/api/geo/cities?${params}`)
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data: unknown) => {
+          if (active) setCities(Array.isArray(data) ? (data as string[]) : []);
         })
-        .catch((error) => {
-          console.error(error);
+        .catch(() => {
           if (active) setCities([]);
         });
-    }, 500);
+    }, 400);
     return () => {
       active = false;
       clearTimeout(delay);

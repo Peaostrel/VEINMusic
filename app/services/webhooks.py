@@ -71,6 +71,9 @@ async def dispatch_webhook_event(
     db: Session,
 ) -> None:
     """Dispatch webhook event to all active user webhooks subscribed to this event."""
+    from app.services.runtime_settings import is_feature_enabled
+    if not is_feature_enabled("webhooks", db):
+        return
     webhooks = db.query(Webhook).filter(
         Webhook.user_id == user_id,
         Webhook.is_active == True,  # noqa: E712

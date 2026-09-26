@@ -146,12 +146,21 @@ async def _run_social_push_job(notification_id: int) -> None:
         logging.exception("Social notification push failed")
 
 
+async def _run_broadcast_push_job(title: str, body: str, url: str, user_ids=None) -> None:
+    from app.services.broadcast import send_broadcast_push
+    try:
+        await send_broadcast_push(title, body, url, user_ids)
+    except Exception:
+        logging.exception("Broadcast push failed")
+
+
 # In-process fallbacks for async jobs when the arq worker is unavailable
 _ASYNC_JOB_FALLBACKS: dict[str, Callable[..., Coroutine[Any, Any, None]]] = {
     'async_dispatch_webhook': _run_webhook_job,
     'async_export_scrobble': _run_export_job,
     'import_lastfm': _run_lastfm_import_job,
     'send_social_push': _run_social_push_job,
+    'broadcast_push': _run_broadcast_push_job,
 }
 
 

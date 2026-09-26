@@ -7,6 +7,7 @@ import {
   Ban,
   RotateCcw,
   Search,
+  IdCard,
 } from "lucide-react";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { getUserRoleBadge } from "../types";
@@ -22,7 +23,8 @@ export default function UsersTab({
   handleResetProfile,
   handleDeleteUser,
   filteredUsers,
-}: AdminPanelState) {
+  onOpenUser,
+}: AdminPanelState & { onOpenUser: (username: string) => void }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
@@ -70,12 +72,16 @@ export default function UsersTab({
                         )}
                       />
                       <div>
-                        <div className="font-bold text-white flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => onOpenUser(u.username)}
+                          className="font-bold text-white flex items-center gap-1.5 hover:text-red-300"
+                        >
                           @{u.username}
                           {u.is_verified && (
                             <CheckCircle className="w-3.5 h-3.5 text-blue-400 inline" />
                           )}
-                        </div>
+                        </button>
                         <div className="text-[11px] text-gray-400">
                           {u.display_name || "Без имени"}
                         </div>
@@ -114,6 +120,15 @@ export default function UsersTab({
                   </td>
                   <td className="py-3.5 px-4 text-right">
                     <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => onOpenUser(u.username)}
+                        className="p-2 hover:bg-white/10 rounded-lg text-gray-200 transition"
+                        title="Карточка пользователя"
+                        aria-label={`Карточка @${u.username}`}
+                      >
+                        <IdCard className="w-4 h-4" aria-hidden="true" />
+                      </button>
                       <button
                         type="button"
                         onClick={() =>

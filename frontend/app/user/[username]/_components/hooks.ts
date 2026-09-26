@@ -2,38 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { setProfileTheme } from "@/app/lib/theme";
-import type { Country } from "@/app/lib/types";
-
-interface RestCountry {
-  name: { common: string };
-  translations?: { rus?: { common?: string } };
-  cca2: string;
-  flag: string;
-}
-
-export function useCountries() {
-  const [countries, setCountries] = useState<Country[]>([]);
-  useEffect(() => {
-    fetch(
-      "https://restcountries.com/v3.1/all?fields=name,translations,cca2,flag",
-    )
-      .then((r) => r.json())
-      .then((d) => {
-        if (Array.isArray(d)) {
-          const list = d.map((c: RestCountry) => ({
-            name: c.translations?.rus?.common || c.name.common,
-            code: c.cca2,
-            flag: c.flag,
-          }));
-          setCountries(list);
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to fetch countries", err);
-      });
-  }, []);
-  return countries;
-}
 
 export function useProfileTheme(theme: string | undefined) {
   useEffect(() => {

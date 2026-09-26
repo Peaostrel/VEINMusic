@@ -21,16 +21,19 @@ from app.models import User
 from app.routers import (
     account,
     admin,
+    admin_tools,
     auth,
     developer,
     devices,
     extended,
+    geo,
     lastfm_connect,
     notifications,
     profile,
     scrobbling,
     widgets,
 )
+from app.services import runtime_settings
 from app.services.cloud_scrobbling import poll_external_services
 from app.services.scrobble_processor import process_scrobble
 
@@ -155,6 +158,7 @@ app.include_router(auth.router)
 app.include_router(profile.router)
 app.include_router(scrobbling.router)
 app.include_router(admin.router)
+app.include_router(admin_tools.router)
 app.include_router(extended.router)
 app.include_router(widgets.router)
 app.include_router(developer.router)
@@ -162,6 +166,7 @@ app.include_router(devices.router)
 app.include_router(account.router)
 app.include_router(notifications.router)
 app.include_router(lastfm_connect.router)
+app.include_router(geo.router)
 
 
 @app.get("/health", tags=["health"], responses={503: {"description": "A dependency is down"}})
@@ -399,6 +404,9 @@ async def _handle_room_message(room_id: str, username: str, data: dict, state: d
 async def together_websocket_route(websocket: WebSocket, room_id: str):
     if not _is_ws_origin_allowed(websocket) or not _ROOM_ID_RE.match(room_id):
         await websocket.close(code=4003)
+        return
+    if not await anyio.to_thread.run_sync(runtime_settings.is_feature_enabled, "listen_together"):
+        await websocket.close(code=4010)  # switched off by an admin
         return
 
     authenticated_username = await anyio.to_thread.run_sync(_get_ws_authenticated_username, websocket)

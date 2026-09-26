@@ -1,7 +1,8 @@
 "use client";
 
-import { Trophy, Trash2, Sparkles } from "lucide-react";
+import { Trash2, Sparkles } from "lucide-react";
 import type { AdminPanelState } from "../useAdminPanel";
+import AchievementsManager from "../components/AchievementsManager";
 
 export default function GamificationTab({
   achievements,
@@ -10,6 +11,7 @@ export default function GamificationTab({
   setNewFrame,
   handleCreateFrame,
   handleDeleteFrame,
+  loadAllData,
 }: AdminPanelState) {
   return (
     <div className="space-y-8">
@@ -134,35 +136,11 @@ export default function GamificationTab({
         </div>
       </div>
 
-      {/* Achievements Summary */}
-      <div className="space-y-4 pt-6 border-t border-white/5">
-        <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
-          <Trophy className="w-4 h-4 text-purple-400" />
-          Активные достижения платформы ({achievements.length})
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-          {achievements.map((ach) => (
-            <div
-              key={ach.id}
-              className="bg-[#141418] border border-white/5 p-3.5 rounded-xl flex items-center gap-3"
-            >
-              <div className="w-10 h-10 rounded-lg bg-black/40 border border-white/10 flex items-center justify-center text-xl shrink-0">
-                {ach.icon || "🏆"}
-              </div>
-              <div className="min-w-0">
-                <div className="font-bold text-white text-xs truncate">
-                  {ach.name}
-                </div>
-                <div className="text-[11px] text-gray-400 truncate">
-                  {ach.description}
-                </div>
-                <div className="text-[10px] text-emerald-400 font-mono font-bold mt-0.5">
-                  +{ach.reward_xp} XP
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+      <div className="pt-6 border-t border-white/5">
+        <AchievementsManager
+          achievements={achievements}
+          onChanged={loadAllData}
+        />
       </div>
     </div>
   );

@@ -94,6 +94,20 @@ async def cleanup_uploads(ctx: dict[str, Any]) -> None:
         await asyncio.to_thread(_cleanup_uploads_sync)
     except Exception as e:
         logger.warning(f"[Worker] Upload cleanup failed: {e}")
+    await _mark_cron_run(ctx, "cleanup_uploads")
+
+
+async def _mark_cron_run(ctx: dict[str, Any], job: str) -> None:
+    from app.services.system_status import mark_cron_run
+    if ctx.get("redis") is not None:
+        await mark_cron_run(ctx["redis"], job)
+
+
+async def broadcast_push(ctx: dict[str, Any], title: str, body: str, url: str,
+                         user_ids: list[int] | None = None) -> None:
+    """ARQ job: Web Push announcement from the admin panel."""
+    from app.services.broadcast import send_broadcast_push
+    await send_broadcast_push(title, body, url, user_ids)
 
 
 async def cloud_poll(ctx: dict[str, Any]) -> None:
@@ -101,6 +115,7 @@ async def cloud_poll(ctx: dict[str, Any]) -> None:
     from app.services.cloud_scrobbling import poll_once
     from app.services.scrobble_processor import process_scrobble
     await poll_once(process_scrobble)
+    await _mark_cron_run(ctx, "cloud_poll")
 
 
 async def startup(ctx: dict[str, Any]) -> None:
@@ -121,6 +136,7 @@ class WorkerSettings:
         async_export_scrobble,
         import_lastfm,
         send_social_push,
+        broadcast_push,
     ]
     cron_jobs: ClassVar[list] = [
         # Every 30 seconds; poll_once itself takes a Redis lock, so several

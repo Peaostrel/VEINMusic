@@ -23,20 +23,22 @@ except Exception as e:
 
 CACHE: dict[str, Any] = {}
 MAX_CACHE_SIZE = 500
+# Namespaces the keys in Redis so clear_all() drops only this cache
+KEY_PREFIX = "cache:"
 
 
 def _get_from_redis(key: str, ttl: int):
     if not redis_client:
         return None
     try:
-        val = redis_client.get(key)
+        val = redis_client.get(KEY_PREFIX + key)
         if val is not None:
             entry = json.loads(str(val))
             if time.time() - entry.get('ts', 0) < ttl:
                 return entry.get('data')
             else:
                 try:
-                    redis_client.delete(key)
+                    redis_client.delete(KEY_PREFIX + key)
                 except Exception:
                     pass
         return None
@@ -61,12 +63,14 @@ def get_from_cache(key: str, ttl: int = 300):
     return None
 
 
-def set_to_cache(key: str, data: Any):
+def set_to_cache(key: str, data: Any, expire: int = 3600):
+    """Store `data`; Redis drops it after `expire` seconds (get_from_cache's
+    ttl decides freshness, so expire should be at least that ttl)."""
     now = time.time()
     entry = {'data': data, 'ts': now}
     if redis_client:
         try:
-            redis_client.set(key, json.dumps(entry), ex=3600)
+            redis_client.set(KEY_PREFIX + key, json.dumps(entry), ex=expire)
             return
         except Exception as e:
             import logging
@@ -81,3 +85,24 @@ def set_to_cache(key: str, data: Any):
             oldest_key = min(CACHE.keys(), key=lambda k: CACHE[k]['ts'])
             del CACHE[oldest_key]
     CACHE[key] = entry
+
+
+def delete_from_cache(key: str) -> None:
+    CACHE.pop(key, None)
+    if redis_client:
+        try:
+            redis_client.delete(KEY_PREFIX + key)
+        except Exception as e:
+            import logging
+            logging.warning(f"Redis error in delete_from_cache: {e}")
+
+
+def clear_all() -> int:
+    """Drop every cached entry (Redis and in-memory). Returns the count."""
+    removed = len(CACHE)
+    CACHE.clear()
+    if redis_client:
+        keys = list(redis_client.scan_iter(match=KEY_PREFIX + "*", count=500))
+        if keys:
+            removed += int(redis_client.delete(*keys))  # type: ignore[arg-type]
+    return removed
