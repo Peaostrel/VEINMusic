@@ -6,7 +6,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { API_URL, wsUrl } from "@/app/lib/api";
 import { useCountries } from "@/app/lib/geo";
-import { useProfileTheme, useAccentColor } from "./hooks";
+import { useProfileTheme } from "./hooks";
 import { fetchAndShowNotifications } from "./notifications";
 import type {
   AchievementInfo,
@@ -81,7 +81,6 @@ export function useProfilePage() {
 
   const countries = useCountries();
   useProfileTheme(data.user?.theme);
-  const accentColor = useAccentColor(data.history[0]?.cover_url);
 
   const [error, setError] = useState("");
   const [recs, setRecs] = useState<ArtistRecommendation[]>([]);
@@ -387,7 +386,6 @@ export function useProfilePage() {
     isLogged,
     setIsLogged,
     countries,
-    accentColor,
     error,
     setError,
     recs,

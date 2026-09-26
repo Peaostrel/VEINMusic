@@ -1,5 +1,7 @@
 "use client";
 
+import { Headphones, MapPin, Speaker } from "lucide-react";
+import { Meter } from "@/components/ui";
 import {
   getArtistUrl,
   getTrackUrl,
@@ -8,7 +10,6 @@ import {
   getNetworkLabel,
   getSocialUrl,
 } from "./profileUtils";
-import type { getNextRankInfo } from "@/app/lib/ranks";
 import type {
   Country,
   SocialLink,
@@ -18,291 +19,224 @@ import type {
 
 export interface ProfileStatsSectionProps {
   u: UserInfo;
-  progressPercent: number;
-  xpInCurrentLevel: number;
-  nextRank: ReturnType<typeof getNextRankInfo>;
   taste: TasteMatch | null;
   socialLinks: SocialLink[];
   countries: Country[];
   favoriteAlbumRedirectUrl: string;
 }
 
+function Fact({
+  icon,
+  label,
+  children,
+}: Readonly<{
+  icon: React.ReactNode;
+  label: string;
+  children: React.ReactNode;
+}>) {
+  return (
+    <div className="flex items-center gap-2.5 rounded-lg border border-line px-3 py-2">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-2 text-fg-2">
+        {icon}
+      </span>
+      <span className="flex flex-col">
+        <span className="text-[11px] text-fg-3">{label}</span>
+        <span className="text-[13px] font-medium">{children}</span>
+      </span>
+    </div>
+  );
+}
+
+function ShowcaseCard({
+  kind,
+  title,
+  href,
+  cover,
+  round = false,
+}: Readonly<{
+  kind: string;
+  title: string;
+  href: string;
+  cover?: string | null;
+  round?: boolean;
+}>) {
+  const shape = round ? "rounded-full" : "rounded-lg";
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-4 rounded-xl border border-line bg-surface p-4 transition-colors hover:bg-surface-2"
+    >
+      {cover ? (
+        <img
+          src={cover}
+          alt=""
+          className={`h-16 w-16 shrink-0 object-cover ${shape}`}
+        />
+      ) : (
+        <span className={`h-16 w-16 shrink-0 bg-surface-2 ${shape}`} />
+      )}
+      <span className="flex min-w-0 flex-col gap-1">
+        <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-fg-3">
+          {kind}
+        </span>
+        <span className="break-words text-[15px] font-medium leading-snug">
+          {title}
+        </span>
+      </span>
+    </a>
+  );
+}
+
+/** Taste match, links, facts (location, genre, gear) and the showcase. */
 export function ProfileStatsSection({
   u,
-  progressPercent,
-  xpInCurrentLevel,
-  nextRank,
   taste,
   socialLinks,
   countries,
   favoriteAlbumRedirectUrl,
 }: Readonly<ProfileStatsSectionProps>) {
-  return (
-    <div className="px-6 md:px-10 pb-8">
-      <div className="max-w-md bg-[#121212]/50 p-3 rounded-xl border border-white/5 backdrop-blur-sm mb-5 shadow-lg mx-auto md:mx-0">
-        <div className="flex justify-between text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-wider">
-          <span className="flex items-center gap-1">
-            {nextRank ? (
-              <>
-                До ранга{" "}
-                <span className="text-[var(--accent)]">{nextRank.name}</span>
-              </>
-            ) : (
-              "Максимальный ранг"
-            )}
-          </span>
-          <span>
-            {xpInCurrentLevel} / 100 XP
-            {u.streak >= 7 && (
-              <span
-                className="text-orange-400 ml-1 font-black"
-                title="Стрик 7+ дней дает +10% опыта!"
-              >
-                <span className="animate-fire">🔥</span> +10%
-              </span>
-            )}
-          </span>
-        </div>
-        <div className="w-full bg-black/80 h-3 rounded-full overflow-hidden border border-white/10">
-          <div
-            className="bg-[var(--accent)] shadow-[0_0_15px_var(--accent-glow-strong)] h-full relative transition-all duration-1000"
-            style={{ width: `${progressPercent}%` }}
-          >
-            <div className="absolute top-0 left-0 w-full h-full bg-white/20 animate-pulse"></div>
-          </div>
-        </div>
-      </div>
+  let location: React.ReactNode = null;
+  if (u.location) {
+    const [countryName = "", cityName = ""] = u.location
+      .split(",")
+      .map((s: string) => s.trim());
+    const code = getCountryCode(countryName, countries);
+    const flagUrl = code
+      ? `https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/${code.toLowerCase()}.svg`
+      : null;
+    location = (
+      <Fact
+        label="Местоположение"
+        icon={
+          flagUrl ? (
+            <img
+              src={flagUrl}
+              alt=""
+              className="h-full w-full scale-125 object-cover"
+            />
+          ) : (
+            <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+          )
+        }
+      >
+        {countryName}
+        {cityName ? `, ${cityName}` : ""}
+      </Fact>
+    );
+  }
 
-      {taste?.match !== undefined && (
-        <div className="inline-flex items-center gap-3 bg-[#1DB954]/10 border border-[#1DB954]/40 px-4 py-2 rounded-lg mb-5 shadow-lg backdrop-blur-sm hover:scale-105 transition-transform">
-          <span className="text-2xl drop-shadow-[0_0_5px_#1DB954] animate-fire">
-            🔥
-          </span>
-          <div className="text-left">
-            <p className="text-[10px] text-[#1DB954] font-bold uppercase tracking-wider">
-              Совместимость вкусов
-            </p>
-            <p className="text-white font-bold text-sm">
-              {taste.match}%
-              <span className="text-gray-400 font-normal text-xs ml-1">
-                (
+  const links = socialLinks
+    .map((link) => ({ link, href: getSocialUrl(link.network, link.username) }))
+    .filter((x): x is { link: SocialLink; href: string } => Boolean(x.href));
+  const hasFacts = Boolean(location || u.favorite_genre || u.equipment);
+  const hasShowcase = Boolean(
+    u.favorite_artist || u.favorite_track || u.favorite_album,
+  );
+
+  if (!taste?.match && !links.length && !hasFacts && !hasShowcase) return null;
+
+  return (
+    <div className="flex flex-col gap-6">
+      {(taste?.match !== undefined || links.length > 0 || hasFacts) && (
+        <div className="flex flex-wrap items-stretch gap-2">
+          {taste?.match !== undefined && (
+            <div className="flex min-w-[220px] flex-col justify-center gap-1.5 rounded-lg border border-line px-3 py-2">
+              <span className="flex items-baseline justify-between gap-3 text-[11px] text-fg-3">
+                Совместимость вкусов
+                <span className="font-mono text-[13px] text-fg">
+                  {taste.match}%
+                </span>
+              </span>
+              <Meter value={taste.match} />
+              <span className="truncate text-[11px] text-fg-3">
                 {taste.common_artists?.length > 0
                   ? taste.common_artists.join(", ")
-                  : "пока нет общих"}
-                )
+                  : "пока нет общих артистов"}
               </span>
-            </p>
-          </div>
+            </div>
+          )}
+          {location}
+          {u.favorite_genre && (
+            <Fact
+              label="Жанр"
+              icon={<Headphones className="h-3.5 w-3.5" aria-hidden="true" />}
+            >
+              {u.favorite_genre}
+            </Fact>
+          )}
+          {u.equipment && (
+            <Fact
+              label="Аппаратура"
+              icon={<Speaker className="h-3.5 w-3.5" aria-hidden="true" />}
+            >
+              {u.equipment}
+            </Fact>
+          )}
+          {links.map(({ link, href }) => (
+            <a
+              key={link.id}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-[13px] text-fg-2 transition-colors hover:bg-surface-2 hover:text-fg [&_svg]:h-4 [&_svg]:w-4"
+            >
+              {SocialIcons[link.network as keyof typeof SocialIcons]}
+              {getNetworkLabel(link.network)}
+            </a>
+          ))}
         </div>
       )}
 
-      {socialLinks.length > 0 && (
-        <div className="flex flex-wrap justify-center md:justify-start gap-3 mb-6">
-          {socialLinks.map((link) => {
-            const href = getSocialUrl(link.network, link.username);
-            if (!href) return null;
-            return (
-              <a
-                key={link.id}
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-
-                className="flex items-center gap-2 bg-[#121212]/50 hover:bg-[var(--accent)] hover:text-[var(--text-on-accent)] text-white px-4 py-2 rounded-lg text-sm transition-all border border-white/5 hover:border-transparent backdrop-blur-sm shadow-md group"
-              >
-                {SocialIcons[link.network as keyof typeof SocialIcons]}
-                <span className="font-bold">
-                  {getNetworkLabel(link.network)}
-                </span>
-              </a>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="flex flex-wrap justify-center md:justify-start gap-4 mb-8">
-        {u.location &&
-          (() => {
-            const parts = u.location.split(",").map((s: string) => s.trim());
-            const countryName = parts[0] || "";
-            const cityName = parts[1] || "";
-            const code = getCountryCode(countryName, countries);
-            const flagUrl = code
-              ? `https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/${code.toLowerCase()}.svg`
-              : null;
-
-            return (
-              <div className="flex items-center gap-3 bg-white/5 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] group hover:border-[var(--accent)]/50 transition-all duration-300 w-fit">
-                <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-full overflow-hidden bg-white/5 group-hover:scale-110 transition-transform">
-                  {flagUrl ? (
-                    <img
-                      src={flagUrl}
-                      alt={countryName}
-                      className="w-full h-full object-cover shadow-sm scale-110"
-                    />
-                  ) : (
-                    <span className="text-xl">📍</span>
-                  )}
-                </div>
-                <div className="flex flex-col text-left">
-                  <span className="text-[9px] text-gray-400 uppercase tracking-[0.2em] font-black leading-none mb-1">
-                    Местоположение
-                  </span>
-                  <span className="text-sm font-bold text-white leading-none tracking-wide">
-                    {countryName}
-                    {cityName ? `, ${cityName}` : ""}
-                  </span>
-                </div>
-              </div>
-            );
-          })()}
-        {u.favorite_genre && (
-          <div className="flex items-center gap-3 bg-white/5 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] group hover:border-[var(--accent)]/50 transition-all duration-300 w-fit">
-            <span className="text-xl drop-shadow-md group-hover:scale-110 transition-transform">
-              🎧
-            </span>
-            <div className="flex flex-col text-left">
-              <span className="text-[9px] text-gray-400 uppercase tracking-[0.2em] font-black leading-none mb-1">
-                Жанр
-              </span>
-              <span className="text-sm font-bold text-white leading-none tracking-wide">
-                {u.favorite_genre}
-              </span>
-            </div>
-          </div>
-        )}
-        {u.equipment && (
-          <div className="flex items-center gap-3 bg-white/5 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] group hover:border-[var(--accent)]/50 transition-all duration-300 w-fit">
-            <span className="text-xl drop-shadow-md group-hover:scale-110 transition-transform">
-              🔊
-            </span>
-            <div className="flex flex-col text-left">
-              <span className="text-[9px] text-gray-400 uppercase tracking-[0.2em] font-black leading-none mb-1">
-                Аппаратура
-              </span>
-              <span className="text-sm font-bold text-white leading-none tracking-wide">
-                {u.equipment}
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {(u.favorite_artist || u.favorite_track || u.favorite_album) && (
-        <div className="mt-8 pt-6 border-t border-white/5 text-left">
-          <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">
-            Музыкальная витрина
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {hasShowcase && (
+        <section
+          aria-labelledby="showcase-title"
+          className="flex flex-col gap-3"
+        >
+          <h2 id="showcase-title" className="text-base font-semibold">
+            Витрина
+          </h2>
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             {u.favorite_artist && (
-              <div className="bg-white/5 backdrop-blur-md p-5 rounded-2xl border border-white/10 hover:border-[var(--accent)]/40 transition-all duration-500 shadow-xl flex flex-col justify-between gap-4">
-                <div className="flex items-start gap-4">
-                  {u.favorite_artist_cover ? (
-                    <img
-                      src={u.favorite_artist_cover}
-                      className="w-20 h-20 rounded-full object-cover shadow-lg shrink-0"
-                      alt="Artist"
-                    />
-                  ) : (
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-3xl text-yellow-500 shadow-inner shrink-0">
-                      🎤
-                    </div>
-                  )}
-                  <div className="flex-grow min-w-0">
-                    <span className="inline-block text-[9px] font-black uppercase tracking-wider text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded-full border border-cyan-400/20 mb-1.5">
-                      Артист
-                    </span>
-                    <a
-                      href={
-                        u.favorite_artist_url && u.favorite_artist_url !== "#"
-                          ? u.favorite_artist_url
-                          : getArtistUrl(u.favorite_artist, "yandex")
-                      }
-                      target="_blank"
-                      rel="noopener noreferrer"
-
-                      className="block font-black text-white hover:text-[var(--accent-text)] text-base leading-tight break-words"
-                    >
-                      {u.favorite_artist}
-                    </a>
-                  </div>
-                </div>
-              </div>
+              <ShowcaseCard
+                kind="Артист"
+                title={u.favorite_artist}
+                cover={u.favorite_artist_cover}
+                round
+                href={
+                  u.favorite_artist_url && u.favorite_artist_url !== "#"
+                    ? u.favorite_artist_url
+                    : getArtistUrl(u.favorite_artist, "yandex")
+                }
+              />
             )}
-
             {u.favorite_track && (
-              <div className="bg-white/5 backdrop-blur-md p-5 rounded-2xl border border-white/10 hover:border-[var(--accent)]/40 transition-all duration-500 shadow-xl flex flex-col justify-between gap-4">
-                <div className="flex items-start gap-4">
-                  {u.favorite_track_cover ? (
-                    <img
-                      src={u.favorite_track_cover}
-                      className="w-20 h-20 rounded-xl object-cover shadow-lg shrink-0"
-                      alt="Track"
-                    />
-                  ) : (
-                    <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-3xl text-yellow-500 shadow-inner shrink-0">
-                      🎵
-                    </div>
-                  )}
-                  <div className="flex-grow min-w-0">
-                    <span className="inline-block text-[9px] font-black uppercase tracking-wider text-purple-400 bg-purple-400/10 px-2 py-0.5 rounded-full border border-purple-400/20 mb-1.5">
-                      Трек
-                    </span>
-                    <a
-                      href={
-                        u.favorite_track_url && u.favorite_track_url !== "#"
-                          ? u.favorite_track_url
-                          : getTrackUrl({
-                              artist: u.favorite_artist || "",
-                              title: u.favorite_track,
-                              source: "yandex",
-                            })
-                      }
-                      target="_blank"
-                      rel="noopener noreferrer"
-
-                      className="block font-black text-white hover:text-[var(--accent-text)] text-base leading-tight break-words"
-                    >
-                      {u.favorite_track}
-                    </a>
-                  </div>
-                </div>
-              </div>
+              <ShowcaseCard
+                kind="Трек"
+                title={u.favorite_track}
+                cover={u.favorite_track_cover}
+                href={
+                  u.favorite_track_url && u.favorite_track_url !== "#"
+                    ? u.favorite_track_url
+                    : getTrackUrl({
+                        artist: u.favorite_artist || "",
+                        title: u.favorite_track,
+                        source: "yandex",
+                      })
+                }
+              />
             )}
-
             {u.favorite_album && (
-              <div className="bg-white/5 backdrop-blur-md p-5 rounded-2xl border border-white/10 hover:border-[var(--accent)]/40 transition-all duration-500 shadow-xl flex flex-col justify-between gap-4">
-                <div className="flex items-start gap-4">
-                  {u.favorite_album_cover ? (
-                    <img
-                      src={u.favorite_album_cover}
-                      className="w-20 h-20 rounded-xl object-cover shadow-lg shrink-0"
-                      alt="Album"
-                    />
-                  ) : (
-                    <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-3xl text-yellow-500 shadow-inner shrink-0">
-                      💿
-                    </div>
-                  )}
-                  <div className="flex-grow min-w-0">
-                    <span className="inline-block text-[9px] font-black uppercase tracking-wider text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20 mb-1.5">
-                      Альбом
-                    </span>
-                    <a
-                      href={favoriteAlbumRedirectUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-
-                      className="block font-black text-white hover:text-[var(--accent-text)] text-base leading-tight break-words"
-                    >
-                      {u.favorite_album}
-                    </a>
-                  </div>
-                </div>
-              </div>
+              <ShowcaseCard
+                kind="Альбом"
+                title={u.favorite_album}
+                cover={u.favorite_album_cover}
+                href={favoriteAlbumRedirectUrl}
+              />
             )}
           </div>
-        </div>
+        </section>
       )}
     </div>
   );

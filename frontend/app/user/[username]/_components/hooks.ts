@@ -10,28 +10,6 @@ export function useProfileTheme(theme: string | undefined) {
   }, [theme]);
 }
 
-export function useAccentColor(coverUrl: string | undefined) {
-  const [accentColor, setAccentColor] = useState<string>("");
-  useEffect(() => {
-    if (!coverUrl) return;
-
-    const img = new Image();
-    img.crossOrigin = "Anonymous";
-    img.src = coverUrl;
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      canvas.width = 1;
-      canvas.height = 1;
-      ctx.drawImage(img, 0, 0, 1, 1);
-      const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-      setAccentColor(`rgb(${r}, ${g}, ${b})`);
-    };
-  }, [coverUrl]);
-  return accentColor;
-}
-
 /** Current time, refreshed every `intervalMs` (null until mounted). */
 export function useNow(intervalMs = 30_000): number | null {
   const [now, setNow] = useState<number | null>(null);

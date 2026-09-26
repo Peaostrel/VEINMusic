@@ -1,74 +1,48 @@
 "use client";
 
+import { X } from "lucide-react";
+import Dialog from "@/components/Dialog";
 import { FollowModalContent } from "./FollowModalContent";
 import type { ProfileViewProps } from "./useProfilePage";
+
+const CLOSED = {
+  isOpen: false,
+  type: "",
+  title: "",
+  users: [],
+  loading: false,
+};
 
 export function FollowModal({
   router,
   followModal,
   setFollowModal,
 }: ProfileViewProps) {
+  if (!followModal.isOpen) return null;
+  const close = () => setFollowModal(CLOSED);
   return (
-    <>
-      {followModal.isOpen && (
-        <dialog
-          open
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm border-0 bg-transparent outline-none w-full h-full"
-        >
+    <Dialog label={followModal.title || "Подписки"} onClose={close}>
+      <div className="flex max-h-[80vh] w-full max-w-[400px] flex-col overflow-hidden rounded-2xl border border-line bg-surface">
+        <div className="flex items-center justify-between border-b border-line px-5 py-4">
+          <h2 className="text-base font-semibold">{followModal.title}</h2>
           <button
             type="button"
-            className="absolute inset-0 w-full h-full cursor-default border-none bg-transparent outline-none"
+            onClick={close}
             aria-label="Закрыть"
-            onClick={() =>
-              setFollowModal({
-                isOpen: false,
-                type: "",
-                title: "",
-                users: [],
-                loading: false,
-              })
-            }
+            className="rounded p-1 text-fg-3 hover:text-fg"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2">
+          <FollowModalContent
+            loading={followModal.loading}
+            users={followModal.users}
+            router={router}
+            onClose={close}
           />
-          <div className="bg-[#1a1a1a] rounded-2xl w-[400px] max-h-[80vh] shadow-2xl overflow-hidden relative border border-white/10 p-0 flex flex-col">
-            <div className="p-4 border-b border-white/5 flex justify-between items-center bg-[#121212]">
-              <h3 className="text-lg font-black text-[var(--accent-text)] uppercase tracking-wider">
-                {followModal.title}
-              </h3>
-              <button
-                type="button"
-                onClick={() =>
-                  setFollowModal({
-                    isOpen: false,
-                    type: "",
-                    title: "",
-                    users: [],
-                    loading: false,
-                  })
-                }
-                className="text-gray-400 hover:text-white transition-colors text-xl font-black border-none bg-transparent outline-none"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="overflow-y-auto p-2 custom-scrollbar flex-grow bg-[#121212]/50 backdrop-blur-sm">
-              <FollowModalContent
-                loading={followModal.loading}
-                users={followModal.users}
-                router={router}
-                onClose={() =>
-                  setFollowModal({
-                    isOpen: false,
-                    type: "",
-                    title: "",
-                    users: [],
-                    loading: false,
-                  })
-                }
-              />
-            </div>
-          </div>
-        </dialog>
-      )}
-    </>
+        </div>
+      </div>
+    </Dialog>
   );
 }

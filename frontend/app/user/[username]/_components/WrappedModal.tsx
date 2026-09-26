@@ -1,81 +1,87 @@
 "use client";
 
+import Dialog from "@/components/Dialog";
+import { LogoTile, Wordmark } from "@/components/brand";
 import { VerifiedBadge } from "@/components/UserBadges";
-import type { ProfileViewProps } from "./useProfilePage";
+import { Meter, btn } from "@/components/ui";
 import { fallbackOnce } from "@/app/lib/img";
+import { formatNumber } from "@/app/lib/plural";
+import type { ProfileViewProps } from "./useProfilePage";
 
+/** Story-sized card to screenshot and share. */
 export function WrappedModal({
   data,
   showWrapped,
   setShowWrapped,
   u,
   fallbackAvatar,
+  currentLevel,
 }: ProfileViewProps) {
+  if (!showWrapped) return null;
+  const artists = data.stats.top_artists?.slice(0, 5) ?? [];
+  const max = artists[0]?.plays || 1;
   return (
-    <>
-      {showWrapped && (
-        <dialog
-          open
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm border-0 bg-transparent outline-none w-full h-full"
-        >
-          <button
-            type="button"
-            className="absolute inset-0 w-full h-full cursor-default border-none bg-transparent outline-none"
-            aria-label="Закрыть"
-            onClick={() => setShowWrapped(false)}
-          />
-          <div className="bg-[#1a1a1a] rounded-2xl w-[400px] h-[600px] shadow-2xl overflow-hidden relative border border-white/10 p-6 flex flex-col justify-between z-10">
-            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-[var(--accent)]/20 to-transparent opacity-50 z-0 pointer-events-none"></div>
-            <div className="z-10 text-center relative">
-              <div
-                className={`w-24 h-24 mx-auto bg-[#333] rounded-full overflow-hidden border-4 border-[var(--accent)] shadow-[0_0_20px_var(--accent-glow)] mb-4`}
-              >
-                <img
-                  src={u.avatar_url || fallbackAvatar}
-                  className="w-full h-full object-cover"
-                  alt={u.display_name}
-                  onError={fallbackOnce(fallbackAvatar)}
-                />
-              </div>
-              <h2 className="text-3xl font-black text-white flex items-center justify-center">
-                {u.display_name}{" "}
-                <VerifiedBadge role={u.role} isVerified={u.is_verified} />
-              </h2>
-              <p className="text-[var(--accent-text)] font-bold mt-1">
-                @VEIN Music
-              </p>
-            </div>
-            <div className="z-10 bg-[#121212]/80 p-4 rounded-xl border border-white/5 backdrop-blur-md">
-              <h3 className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-3">
-                Любимые артисты
-              </h3>
-              {data.stats.top_artists?.slice(0, 3).map((a) => (
-                <div
-                  key={a.artist}
-                  className="flex justify-between items-center mb-2 border-l-2 border-[var(--accent)] pl-2"
-                >
-                  <span className="font-bold truncate text-sm text-white">
-                    {a.artist}
-                  </span>
-                  <span className="text-xs text-gray-400 shrink-0">
-                    {a.plays} plays
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className="z-10 text-center text-xs text-gray-400 mt-4">
-              Сделай скриншот и закинь в сторис! <br />
-              <button
-                type="button"
-                onClick={() => setShowWrapped(false)}
-                className="text-[var(--accent-text)] mt-2 hover:underline font-bold border-none bg-transparent outline-none"
-              >
-                Закрыть
-              </button>
-            </div>
+    <Dialog label="Карточка профиля" onClose={() => setShowWrapped(false)}>
+      <div className="flex flex-col items-center gap-4">
+        <div className="flex h-[600px] w-[360px] max-w-full flex-col justify-between rounded-2xl border border-line bg-surface p-7">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <img
+              src={u.avatar_url || fallbackAvatar}
+              alt=""
+              onError={fallbackOnce(fallbackAvatar)}
+              className="h-24 w-24 rounded-full bg-surface-2 object-cover"
+            />
+            <h2 className="flex items-center justify-center text-2xl font-semibold tracking-[-0.02em]">
+              {u.display_name}
+              <VerifiedBadge role={u.role} isVerified={u.is_verified} />
+            </h2>
+            <span className="font-mono text-xs text-fg-3">
+              ур. {currentLevel} ·{" "}
+              {formatNumber(data.stats.total_scrobbles || 0)} прослушиваний
+            </span>
           </div>
-        </dialog>
-      )}
-    </>
+
+          <section className="flex flex-col gap-3">
+            <h3 className="font-mono text-[11px] uppercase tracking-[0.06em] text-fg-3">
+              Любимые артисты
+            </h3>
+            <ol className="flex flex-col gap-3">
+              {artists.map((a, i) => (
+                <li
+                  key={a.artist}
+                  className="grid grid-cols-[16px_minmax(0,1fr)_40px] items-center gap-3"
+                >
+                  <span className="font-mono text-xs text-fg-3">{i + 1}</span>
+                  <span className="flex min-w-0 flex-col gap-1.5">
+                    <span className="truncate text-sm font-medium">
+                      {a.artist}
+                    </span>
+                    <Meter value={a.plays} max={max} accent={i === 0} />
+                  </span>
+                  <span className="text-right font-mono text-xs text-fg-2">
+                    {a.plays}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          <div className="flex items-center justify-center gap-2">
+            <LogoTile size={22} />
+            <Wordmark className="text-sm" />
+          </div>
+        </div>
+        <p className="text-center text-xs text-fg-3">
+          Сделайте скриншот и поделитесь в сторис
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowWrapped(false)}
+          className={`${btn.secondary} ${btn.md}`}
+        >
+          Закрыть
+        </button>
+      </div>
+    </Dialog>
   );
 }

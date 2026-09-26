@@ -1,5 +1,8 @@
 "use client";
 
+import { X } from "lucide-react";
+import Dialog from "@/components/Dialog";
+import { Loading, Meter } from "@/components/ui";
 import type { ProfileViewProps } from "./useProfilePage";
 
 export function CompatibilityModal({
@@ -8,111 +11,82 @@ export function CompatibilityModal({
   setCompatModalOpen,
   compatLoading,
 }: ProfileViewProps) {
+  if (!compatModalOpen) return null;
+  const close = () => setCompatModalOpen(false);
   return (
-    <>
-      {compatModalOpen && (
-        <dialog
-          open
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm border-0 bg-transparent outline-none w-full h-full"
-        >
+    <Dialog label="Музыкальная совместимость" onClose={close}>
+      <div className="flex w-full max-w-md flex-col gap-6 rounded-2xl border border-line bg-surface p-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold">Музыкальная совместимость</h2>
           <button
             type="button"
-            className="absolute inset-0 w-full h-full cursor-default border-none bg-transparent outline-none"
+            onClick={close}
             aria-label="Закрыть"
-            onClick={() => setCompatModalOpen(false)}
-          />
-          <div className="bg-[#141416] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden relative border border-purple-500/30 p-6 z-10 animate-in fade-in zoom-in duration-200">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-black text-purple-400 uppercase tracking-wider flex items-center gap-2">
-                ⚡ Музыкальная совместимость
-              </h3>
-              <button
-                type="button"
-                onClick={() => setCompatModalOpen(false)}
-                className="text-gray-400 hover:text-white transition-colors text-xl font-black border-none bg-transparent outline-none cursor-pointer"
-              >
-                ✕
-              </button>
+            className="rounded p-1 text-fg-3 hover:text-fg"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+
+        {compatLoading && <Loading label="Сравниваем прослушивания…" />}
+
+        {!compatLoading && compatibility && (
+          <>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-baseline justify-between">
+                <span className="font-mono text-4xl font-medium">
+                  {compatibility.score}%
+                </span>
+                <span className="text-sm text-fg-2">{compatibility.tier}</span>
+              </div>
+              <Meter value={compatibility.score} height={4} />
             </div>
 
-            {compatLoading && (
-              <div className="py-12 flex flex-col items-center justify-center gap-3 text-purple-300">
-                <div className="animate-spin border-2 border-purple-500 border-t-transparent rounded-full w-8 h-8"></div>
-                <p className="text-xs font-mono">
-                  Анализируем скробблы и жанры...
-                </p>
-              </div>
-            )}
+            {compatibility.common_artists &&
+              compatibility.common_artists.length > 0 && (
+                <section className="flex flex-col gap-2">
+                  <h3 className="text-xs text-fg-2">Общие артисты</h3>
+                  <ul className="flex max-h-36 flex-wrap gap-2 overflow-y-auto">
+                    {compatibility.common_artists.map((item) => (
+                      <li
+                        key={item.artist}
+                        className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-xs"
+                      >
+                        {item.artist}
+                        <span className="font-mono text-[11px] text-fg-3">
+                          {item.total_plays}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
 
-            {!compatLoading && compatibility && (
-              <div className="space-y-6">
-                <div className="flex items-center justify-center gap-6 bg-black/40 p-4 rounded-xl border border-white/5">
-                  <div className="relative flex items-center justify-center w-24 h-24 rounded-full border-4 border-purple-500 bg-purple-950/30 shadow-[0_0_25px_rgba(168,85,247,0.3)]">
-                    <span className="text-2xl font-black text-white">
-                      {compatibility.score}%
-                    </span>
-                  </div>
-                  <div>
-                    <div className="text-xs text-purple-400 uppercase font-mono font-bold tracking-wider mb-1">
-                      Уровень связи
-                    </div>
-                    <div className="text-lg font-black text-white">
-                      {compatibility.tier}
-                    </div>
-                  </div>
-                </div>
+            {compatibility.common_genres &&
+              compatibility.common_genres.length > 0 && (
+                <section className="flex flex-col gap-2">
+                  <h3 className="text-xs text-fg-2">Общие жанры</h3>
+                  <ul className="flex flex-wrap gap-2">
+                    {compatibility.common_genres.map((g: string) => (
+                      <li
+                        key={g}
+                        className="rounded-md bg-surface-2 px-2.5 py-1 text-xs text-fg-2"
+                      >
+                        {g}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+          </>
+        )}
 
-                {compatibility.common_artists &&
-                  compatibility.common_artists.length > 0 && (
-                    <div>
-                      <h4 className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-2">
-                        Общие артисты
-                      </h4>
-                      <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto custom-scrollbar">
-                        {compatibility.common_artists.map((item) => (
-                          <span
-                            key={item.artist}
-                            className="bg-white/5 border border-white/10 px-3 py-1 rounded-lg text-xs font-medium text-white flex items-center gap-1.5"
-                          >
-                            <span>🎵 {item.artist}</span>
-                            <span className="text-[10px] text-purple-400 font-mono">
-                              ({item.total_plays} пл.)
-                            </span>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                {compatibility.common_genres &&
-                  compatibility.common_genres.length > 0 && (
-                    <div>
-                      <h4 className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-2">
-                        Общие жанры
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {compatibility.common_genres.map((g: string) => (
-                          <span
-                            key={g}
-                            className="bg-purple-950/40 border border-purple-500/30 px-2.5 py-1 rounded-md text-xs font-medium text-purple-200"
-                          >
-                            #{g}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-              </div>
-            )}
-
-            {!compatLoading && !compatibility && (
-              <div className="text-center py-8 text-gray-400 text-sm">
-                Войдите в аккаунт, чтобы сравнить ваши музыкальные вкусы!
-              </div>
-            )}
-          </div>
-        </dialog>
-      )}
-    </>
+        {!compatLoading && !compatibility && (
+          <p className="py-6 text-center text-sm text-fg-2">
+            Войдите в аккаунт, чтобы сравнить вкусы.
+          </p>
+        )}
+      </div>
+    </Dialog>
   );
 }

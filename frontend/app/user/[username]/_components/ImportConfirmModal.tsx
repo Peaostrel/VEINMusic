@@ -1,5 +1,7 @@
 "use client";
 
+import Dialog from "@/components/Dialog";
+import { btn } from "@/components/ui";
 import type { ProfileViewProps } from "./useProfilePage";
 
 export function ImportConfirmModal({
@@ -7,41 +9,35 @@ export function ImportConfirmModal({
   setShowImportConfirm,
   executeLastfmImport,
 }: ProfileViewProps) {
+  if (!showImportConfirm) return null;
   return (
-    <>
-      {showImportConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="relative w-full max-w-sm bg-[#121212] p-6 rounded-2xl border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)] text-center animate-in fade-in zoom-in duration-200">
-            <h2 className="text-xl font-black text-white mb-4">
-              Подтверждение импорта
-            </h2>
-            <p className="text-gray-400 text-sm mb-6">
-              История из Last.fm будет импортирована в фоне. Повторный импорт
-              добавит{" "}
-              <span className="text-[var(--accent)] font-bold">
-                только новые прослушивания
-              </span>
-              , дубликатов не будет. Продолжить?
-            </p>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setShowImportConfirm(false)}
-                className="flex-1 px-4 py-2.5 rounded-xl font-bold text-gray-300 bg-white/5 hover:bg-white/10 transition-colors"
-              >
-                Отмена
-              </button>
-              <button
-                type="button"
-                onClick={executeLastfmImport}
-                className="flex-1 px-4 py-2.5 rounded-xl font-black text-[var(--text-on-accent)] bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] hover:scale-105 transition-transform"
-              >
-                Перенести
-              </button>
-            </div>
-          </div>
+    <Dialog
+      label="Импорт из Last.fm"
+      onClose={() => setShowImportConfirm(false)}
+    >
+      <div className="flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-line bg-surface p-6">
+        <h2 className="text-lg font-semibold">Импорт из Last.fm</h2>
+        <p className="text-sm leading-relaxed text-fg-2">
+          История из Last.fm перенесётся в фоне. Повторный импорт добавит только
+          новые прослушивания — дубликатов не будет.
+        </p>
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setShowImportConfirm(false)}
+            className={`${btn.secondary} ${btn.md}`}
+          >
+            Отмена
+          </button>
+          <button
+            type="button"
+            onClick={executeLastfmImport}
+            className={`${btn.primary} ${btn.md}`}
+          >
+            Перенести
+          </button>
         </div>
-      )}
-    </>
+      </div>
+    </Dialog>
   );
 }

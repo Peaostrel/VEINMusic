@@ -6,7 +6,9 @@
  * премиальные карточки локации/жанров/аппаратуры.
  */
 "use client";
+import Link from "next/link";
 import { API_URL } from "@/app/lib/api";
+import { Loading, btn } from "@/components/ui";
 import { getRankInfo, getNextRankInfo } from "@/app/lib/ranks";
 import { ProfileActions } from "./_components/ProfileActions";
 import { ProfileHeaderSection } from "./_components/ProfileHeaderSection";
@@ -19,18 +21,31 @@ import { CompatibilityModal } from "./_components/CompatibilityModal";
 import { ProfileMainGrid } from "./_components/ProfileMainGrid";
 import { useProfilePage } from "./_components/useProfilePage";
 
+function StatusScreen({
+  title,
+  children,
+}: Readonly<{ title: string; children: React.ReactNode }>) {
+  return (
+    <div className="mx-auto flex max-w-md flex-col items-center gap-3 px-4 py-24 text-center">
+      <h1 className="text-2xl font-semibold tracking-[-0.02em]">{title}</h1>
+      <p className="text-sm text-fg-2">{children}</p>
+      <Link href="/" className={`${btn.secondary} ${btn.md} mt-4`}>
+        На главную
+      </Link>
+    </div>
+  );
+}
+
 export default function Profile() {
   const profile = useProfilePage();
   const {
     username,
-    router,
     data,
     loading,
     setShowWrapped,
     isMyProfile,
     isLogged,
     countries,
-    accentColor,
     error,
     handleShowCompatibility,
     mood,
@@ -43,33 +58,13 @@ export default function Profile() {
 
   if (error)
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center pt-24 px-4 text-center">
-        <div className="text-6xl mb-6">🔍</div>
-        <h1 className="text-4xl font-black text-white mb-2 uppercase tracking-tighter">
-          Профиль не найден
-        </h1>
-        <p className="text-gray-400 font-bold max-w-md">
-          Пользователя с никнеймом{" "}
-          <span className="text-[#ffcc00]">@{username}</span> не существует в
-          нашей базе данных.
-        </p>
-        <button
-          type="button"
-          onClick={() => router.push("/")}
-          className="mt-8 bg-white/5 hover:bg-white/10 text-white font-bold px-8 py-3 rounded-xl border border-white/10 transition-all"
-        >
-          На главную
-        </button>
-      </div>
+      <StatusScreen title="Профиль не найден">
+        Пользователя <span className="font-mono text-fg">@{username}</span> нет
+        в нашей базе.
+      </StatusScreen>
     );
 
-  if (loading || !data.user)
-    return (
-      <div className="min-h-screen text-[var(--accent-text)] flex flex-col items-center justify-center gap-4 font-bold text-2xl animate-pulse">
-        <div className="animate-spin border-4 border-[var(--accent-text)] border-t-transparent rounded-full w-12 h-12"></div>
-        Подключение к базе...
-      </div>
-    );
+  if (loading || !data.user) return <Loading label="Загружаем профиль…" />;
 
   const u = data.user;
   const fallbackAvatar = `https://api.dicebear.com/9.x/micah/svg?seed=${username}&backgroundColor=transparent`;
@@ -91,23 +86,10 @@ export default function Profile() {
 
   if (u.is_private)
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center pt-24 px-4 text-center">
-        <div className="text-6xl mb-6">🔒</div>
-        <h1 className="text-4xl font-black text-white mb-2 uppercase tracking-tighter">
-          Это приватный профиль
-        </h1>
-        <p className="text-gray-400 font-bold max-w-md">
-          Пользователь ограничил доступ к своей статистике и истории
-          прослушиваний.
-        </p>
-        <button
-          type="button"
-          onClick={() => router.push("/")}
-          className="mt-8 bg-white/5 hover:bg-white/10 text-white font-bold px-8 py-3 rounded-xl border border-white/10 transition-all"
-        >
-          На главную
-        </button>
-      </div>
+      <StatusScreen title="Это приватный профиль">
+        Пользователь ограничил доступ к своей статистике и истории
+        прослушиваний.
+      </StatusScreen>
     );
 
   const favoriteArtistQuery = u.favorite_artist ? `${u.favorite_artist} ` : "";
@@ -139,99 +121,63 @@ export default function Profile() {
   };
 
   return (
-    <div
-      className="max-w-6xl mx-auto relative px-4 md:px-0"
-      style={{ "--dynamic-accent": accentColor } as React.CSSProperties}
-    >
-      <style>{`
-        @keyframes fireFlicker {
-          0%, 100% { transform: scale(1) rotate(-3deg); filter: drop-shadow(0 0 5px rgba(255, 100, 0, 0.4)); }
-          50% { transform: scale(1.15) rotate(3deg); filter: drop-shadow(0 0 12px rgba(255, 100, 0, 0.9)); }
-        }
-        .animate-fire {
-          display: inline-block;
-          transform-origin: bottom center;
-          animation: fireFlicker 1s infinite ease-in-out;
-        }
-        :root {
-          --accent: var(--dynamic-accent, #ffcc00);
-        }
-      `}</style>
+    <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-10 px-4 py-8 sm:px-8 lg:px-12 lg:py-10">
       <ProfileToasts {...view} />
-
       <WrappedModal {...view} />
-
       <ImportConfirmModal {...view} />
-
       <FollowModal {...view} />
-
       <CompatibilityModal {...view} />
 
-      <ProfileActions
-        isLogged={isLogged}
-        isMyProfile={isMyProfile}
-        isFollowing={data.followStats.is_following}
-        hasImportedLastfm={Boolean(data.user?.has_imported_lastfm)}
-        username={username as string}
-        importLoading={importLoading}
-        onFollow={handleFollow}
-        onImport={handleLastfmImport}
-        onShowWrapped={() => setShowWrapped(true)}
-        onListenTogether={() =>
-          wsRef.current?.send(
-            JSON.stringify({ type: "SYNC_REQUEST", target: username }),
-          )
-        }
-        onShowCompatibility={handleShowCompatibility}
-        router={router}
-      />
-
-      {error && (
-        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl text-center font-bold animate-pulse backdrop-blur-md">
-          ⚠️ {error}
-        </div>
+      {u.cover_url && (
+        <div
+          aria-hidden="true"
+          className="-mb-4 h-32 rounded-xl bg-surface bg-cover bg-center md:h-44"
+          style={{ backgroundImage: `url(${u.cover_url})` }}
+        />
       )}
 
-      <div className="rounded-2xl shadow-2xl border border-white/5 relative mb-12 bg-[#121212]/80 backdrop-blur-md">
-        {/* Блок Обложки (чистый баннер без затемнений текста) */}
-        <div className="w-full h-40 md:h-64 rounded-t-2xl relative overflow-hidden bg-[#1a1a1a]">
-          {u.cover_url ? (
-            <div
-              className="absolute inset-0 bg-cover bg-center"
-              style={{ backgroundImage: `url(${u.cover_url})` }}
-            ></div>
-          ) : (
-            <div className="absolute inset-0 bg-gradient-to-br from-[#282828] to-[#1e1e1e]"></div>
-          )}
-          {/* Очень легкий градиент внизу баннера для слияния, не мешающий картинке */}
-          <div className="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-[rgba(18,18,18,0.9)] to-transparent pointer-events-none"></div>
-        </div>
+      <ProfileHeaderSection
+        u={u}
+        username={username as string}
+        fallbackAvatar={fallbackAvatar}
+        currentLevel={currentLevel}
+        rankTitle={rank.title}
+        mood={mood}
+        followers={data.followStats.followers}
+        following={data.followStats.following}
+        openFollowModal={openFollowModal}
+        displayedAchs={displayedAchs}
+        xpInCurrentLevel={xpInCurrentLevel}
+        nextRank={nextRank}
+        totalScrobbles={data.stats.total_scrobbles || 0}
+        actions={
+          <ProfileActions
+            isLogged={isLogged}
+            isMyProfile={isMyProfile}
+            isFollowing={data.followStats.is_following}
+            hasImportedLastfm={Boolean(data.user?.has_imported_lastfm)}
+            username={username as string}
+            importLoading={importLoading}
+            onFollow={handleFollow}
+            onImport={handleLastfmImport}
+            onShowWrapped={() => setShowWrapped(true)}
+            onListenTogether={() =>
+              wsRef.current?.send(
+                JSON.stringify({ type: "SYNC_REQUEST", target: username }),
+              )
+            }
+            onShowCompatibility={handleShowCompatibility}
+          />
+        }
+      />
 
-        <ProfileHeaderSection
-          u={u}
-          username={username as string}
-          fallbackAvatar={fallbackAvatar}
-          currentLevel={currentLevel}
-          rankTitle={rank.title}
-          mood={mood}
-          followers={data.followStats.followers}
-          following={data.followStats.following}
-          openFollowModal={openFollowModal}
-          displayedAchs={displayedAchs}
-          router={router}
-        />
-
-        <ProfileStatsSection
-          u={u}
-          progressPercent={progressPercent}
-          xpInCurrentLevel={xpInCurrentLevel}
-          nextRank={nextRank}
-          taste={data.taste}
-          socialLinks={socialLinks}
-          countries={countries}
-          favoriteAlbumRedirectUrl={favoriteAlbumRedirectUrl}
-        />
-      </div>
+      <ProfileStatsSection
+        u={u}
+        taste={data.taste}
+        socialLinks={socialLinks}
+        countries={countries}
+        favoriteAlbumRedirectUrl={favoriteAlbumRedirectUrl}
+      />
 
       <ProfileMainGrid {...view} />
     </div>

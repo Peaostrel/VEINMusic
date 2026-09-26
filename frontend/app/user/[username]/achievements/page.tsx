@@ -1,7 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { useParams } from "next/navigation";
 import { API_URL } from "@/app/lib/api";
+import { Avatar, EmptyState, Loading, Meter, btn } from "@/components/ui";
 import type { AchievementInfo } from "@/app/lib/types";
 
 /** GET /api/achievements/all/{username} */
@@ -13,14 +15,6 @@ interface AchievementsResponse {
 }
 
 type DescriptionNode = string | React.ReactElement;
-
-function getRarityStyle(rarity: number): string {
-  if (rarity < 10)
-    return "bg-orange-500/10 text-orange-400 border-orange-500/20";
-  if (rarity < 30)
-    return "bg-purple-500/10 text-purple-400 border-purple-500/20";
-  return "bg-white/5 text-gray-400 border-white/5";
-}
 
 function parseMarkdownForNode(
   node: DescriptionNode,
@@ -49,7 +43,7 @@ function parseMarkdownForNode(
         target="_blank"
         rel="noopener noreferrer"
 
-        className="text-[var(--accent)] hover:underline font-bold"
+        className="text-accent hover:underline"
       >
         {link.linkText}
       </a>,
@@ -145,7 +139,7 @@ function renderDescriptionWithLinks(
             target="_blank"
             rel="noopener noreferrer"
 
-            className="text-[var(--accent)] hover:underline font-bold"
+            className="text-accent hover:underline"
           >
             {matchedWord}
           </a>,
@@ -172,7 +166,6 @@ function renderDescriptionWithLinks(
 
 export default function AchievementsPage() {
   const username = useParams()?.username;
-  const router = useRouter();
   const [data, setData] = useState<AchievementsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -196,28 +189,18 @@ export default function AchievementsPage() {
       });
   }, [username]);
 
-  if (loading)
-    return (
-      <output className="min-h-screen text-[var(--accent)] flex flex-col items-center justify-center gap-4 font-bold text-2xl animate-pulse">
-        <div
-          aria-hidden="true"
-          className="animate-spin border-4 border-[var(--accent)] border-t-transparent rounded-full w-12 h-12"
-        ></div>
-        Загрузка достижений...
-      </output>
-    );
+  if (loading) return <Loading label="Загружаем достижения…" />;
 
   if (error || !data?.user)
     return (
-      <div className="min-h-screen text-red-500 flex flex-col items-center justify-center font-bold text-2xl gap-4">
-        <div>Ошибка загрузки или Пользователь не найден</div>
-        <button
-          type="button"
-          onClick={() => router.push("/")}
-          className="px-5 py-2.5 bg-white/10 text-white rounded-xl text-sm font-black hover:bg-white/20 transition-colors"
-        >
+      <div className="mx-auto flex max-w-md flex-col items-center gap-3 px-4 py-24 text-center">
+        <h1 className="text-2xl font-semibold">Не удалось загрузить</h1>
+        <p className="text-sm text-fg-2">
+          Пользователь не найден или сервер не ответил.
+        </p>
+        <Link href="/" className={`${btn.secondary} ${btn.md} mt-4`}>
           На главную
-        </button>
+        </Link>
       </div>
     );
 
@@ -225,216 +208,138 @@ export default function AchievementsPage() {
     data.total_count > 0 ? (data.earned_count / data.total_count) * 100 : 0;
 
   return (
-    <div className="min-h-screen relative font-sans pt-8 pb-20">
-      <div className="max-w-5xl mx-auto px-4">
-        <div className="flex items-center gap-6 mb-10">
-          <button
-            type="button"
-            onClick={() => router.push(`/user/${username}`)}
-            aria-label="Назад в профиль"
-            className="bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 text-white transition-all shrink-0 p-3.5 rounded-xl shadow-lg backdrop-blur-sm group"
-          >
-            <svg
-              className="w-6 h-6 group-hover:-translate-x-1 transition-transform"
-              aria-hidden="true"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2.5"
-                d="M10 19l-7-7m0 0l7-7m-7 7h18"
-              ></path>
-            </svg>
-          </button>
-          <div className="flex items-center gap-5 bg-[#121212]/50 backdrop-blur-md border border-white/5 p-3 pr-8 rounded-2xl shadow-xl">
-            <img
-              src={
-                data.user.avatar_url ||
-                `https://api.dicebear.com/9.x/micah/svg?seed=${username}&backgroundColor=transparent`
-              }
-              className="w-16 h-16 rounded-xl object-cover border-2 border-[var(--accent)] shadow-[0_0_10px_var(--accent-glow)] bg-[#1a1a1a]"
-              alt=""
-            />
-            <div>
-              <h1 className="text-2xl font-black text-white tracking-wide">
-                {data.user.display_name}
-              </h1>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-[var(--accent)] text-xs font-bold uppercase tracking-widest">
-                  Достижения
-                </span>
-                <span
-                  className="text-gray-400 text-xs font-mono"
-                  aria-hidden="true"
-                >
-                  •
-                </span>
-                <span className="text-gray-400 text-xs font-bold">
-                  @{data.user.username}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-[#121212]/80 backdrop-blur-md rounded-2xl p-6 mb-8 shadow-2xl border border-white/5">
-          <div className="flex justify-between items-end mb-4">
-            <div>
-              <div className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mb-1">
-                Прогресс
-              </div>
-              <div className="text-lg font-black text-white">
-                Получено{" "}
-                <span className="text-[var(--accent)] mx-1">
-                  {data.earned_count}
-                </span>{" "}
-                из {data.total_count}
-              </div>
-            </div>
-            <div className="text-3xl font-black text-[var(--accent)] drop-shadow-[0_0_8px_var(--accent-glow)]">
-              {Math.round(progressPercent)}%
-            </div>
-          </div>
-          <div
-            className="w-full bg-black/80 h-4 rounded-full overflow-hidden border border-white/10 p-0.5"
-            aria-hidden="true"
-          >
-            <div
-              className="bg-[var(--accent)] h-full rounded-full shadow-[0_0_10px_var(--accent-glow)] relative transition-all duration-1000"
-              style={{ width: `${progressPercent}%` }}
-            >
-              <div className="absolute top-0 left-0 w-full h-full bg-white/20 animate-pulse rounded-full"></div>
-            </div>
-          </div>
-          <progress
-            className="sr-only"
-            aria-label="Прогресс достижений"
-            max={100}
-            value={Math.round(progressPercent)}
+    <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-7 px-4 py-8 sm:px-8 lg:px-12 lg:py-10">
+      <header className="flex flex-col gap-3">
+        <Link
+          href={`/user/${username}`}
+          className="self-start text-[13px] text-fg-2 hover:text-fg"
+        >
+          ← Профиль
+        </Link>
+        <div className="flex items-center gap-4">
+          <Avatar
+            src={data.user.avatar_url}
+            seed={String(username)}
+            size={48}
           />
+          <div className="flex flex-col">
+            <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.02em]">
+              {data.user.display_name}
+            </h1>
+            <span className="text-sm text-fg-2">
+              Достижения ·{" "}
+              <span className="font-mono text-fg-3">@{data.user.username}</span>
+            </span>
+          </div>
         </div>
+      </header>
 
-        <div className="grid grid-cols-1 gap-4">
-          {data.achievements.map((a) => {
-            const currentVal = a.current_progress || 0;
-            const targetVal = Number(a.target_value) || 1;
-            const progressRatio = Math.min(currentVal / targetVal, 1);
+      <section
+        aria-label="Прогресс"
+        className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-5"
+      >
+        <div className="flex items-baseline justify-between gap-4">
+          <p className="text-sm text-fg-2">
+            Получено{" "}
+            <span className="font-mono text-fg">{data.earned_count}</span> из{" "}
+            <span className="font-mono text-fg">{data.total_count}</span>
+          </p>
+          <span className="font-mono text-2xl font-medium">
+            {Math.round(progressPercent)}%
+          </span>
+        </div>
+        <Meter value={progressPercent} height={4} />
+        <progress
+          className="sr-only"
+          aria-label="Прогресс достижений"
+          max={100}
+          value={Math.round(progressPercent)}
+        />
+      </section>
 
-            return (
-              <div
-                key={a.id}
-                className={`relative overflow-hidden flex flex-col md:flex-row items-start md:items-center gap-5 p-5 rounded-2xl border transition-all duration-300 ${
-                  a.is_earned
-                    ? "bg-[#121212]/60 hover:bg-[#1a1a1a]/90 border-[var(--accent)]/30 hover:border-[var(--accent)]/50 shadow-[0_0_15px_var(--accent-glow)]"
-                    : "bg-black/40 border-transparent hover:border-white/5 opacity-75 grayscale hover:grayscale-0"
-                }`}
-              >
-                <div
-                  className={`w-20 h-20 shrink-0 rounded-xl flex items-center justify-center text-4xl shadow-inner border relative overflow-hidden ${a.is_earned ? "bg-[#1a1a1a] border-[var(--accent)]/20" : "bg-black border-white/5"}`}
+      {data.achievements.length === 0 && (
+        <EmptyState title="Достижений пока нет">
+          Администраторы ещё не завели ни одного достижения.
+        </EmptyState>
+      )}
+
+      <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {data.achievements.map((a) => {
+          const currentVal = a.current_progress || 0;
+          const targetVal = Number(a.target_value) || 1;
+          const showProgress =
+            !a.is_earned && a.rule_type !== "manual" && targetVal > 0;
+          return (
+            <li
+              key={a.id}
+              className={`flex flex-col gap-3 rounded-xl border p-4 ${
+                a.is_earned ? "border-line bg-surface" : "border-line-soft"
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <span
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-2 text-2xl ${a.is_earned ? "" : "opacity-40 grayscale"}`}
                 >
                   {a.target_image ? (
                     <img
                       src={a.target_image}
-                      className="w-full h-full object-contain"
+                      className="h-full w-full object-cover"
                       alt=""
                       onError={(e) => {
                         e.currentTarget.style.display = "none";
                       }}
                     />
                   ) : (
-                    <span className="drop-shadow-lg" aria-hidden="true">
-                      {a.icon}
+                    <span aria-hidden="true">{a.icon}</span>
+                  )}
+                </span>
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3
+                      className={`text-sm font-medium ${a.is_earned ? "text-fg" : "text-fg-2"}`}
+                    >
+                      {a.name}
+                    </h3>
+                    <span
+                      className={`shrink-0 font-mono text-[11px] ${a.is_earned ? "text-accent" : "text-fg-3"}`}
+                    >
+                      {a.is_earned
+                        ? new Date(`${a.earned_at}Z`).toLocaleDateString(
+                            "ru-RU",
+                            { day: "numeric", month: "short", year: "numeric" },
+                          )
+                        : "Заблокировано"}
                     </span>
-                  )}
-                  {!a.is_earned && (
-                    <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"></div>
-                  )}
-                </div>
-
-                <div className="flex-grow w-full md:w-auto">
-                  {/* Сделали мягкий белый для названия */}
-                  <h3
-                    className={`text-xl font-black leading-tight mb-1 ${a.is_earned ? "text-gray-200" : "text-gray-400"}`}
-                  >
-                    {a.name}
-                  </h3>
-                  <div className="mb-3 max-w-2xl">
-                    <p
-                      className={`text-sm leading-relaxed ${a.is_earned ? "text-gray-300" : "text-gray-400"}`}
-                    >
-                      {renderDescriptionWithLinks(
-                        a.description || "",
-                        a.rule_meta ?? null,
-                        a.rule_target ?? null,
-                        a.name,
-                      )}
-                    </p>
                   </div>
-
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider border ${getRarityStyle(a.rarity ?? 0)}`}
-                    >
-                      <svg
-                        className="w-3.5 h-3.5"
-                        aria-hidden="true"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                      >
-                        <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" />
-                      </svg>
-                      Есть у {a.rarity ?? 0}% пользователей
-                    </div>
-
-                    {!a.is_earned &&
-                      a.rule_type !== "manual" &&
-                      targetVal > 0 && (
-                        <div className="flex-grow w-full max-w-[200px]">
-                          <div className="flex justify-between text-[10px] text-gray-400 font-bold mb-1 tracking-wider uppercase">
-                            <span>Прогресс</span>
-                            <span>
-                              {currentVal} / {targetVal}
-                            </span>
-                          </div>
-                          <div className="w-full bg-black/60 h-1.5 rounded-full overflow-hidden border border-white/5">
-                            <div
-                              className="bg-gray-400 h-full rounded-full transition-all duration-500"
-                              style={{ width: `${progressRatio * 100}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      )}
-                  </div>
-                </div>
-
-                <div className="shrink-0 md:ml-auto md:text-right w-full md:w-auto mt-2 md:mt-0 flex flex-row md:flex-col items-center md:items-end justify-between md:justify-center border-t md:border-t-0 md:border-l border-white/5 pt-4 md:pt-0 md:pl-6">
-                  {a.is_earned ? (
-                    <>
-                      <div className="text-[10px] text-[var(--accent)] font-bold uppercase tracking-widest mb-1.5">
-                        Разблокировано
-                      </div>
-                      {/* Сделали мягкий белый для даты */}
-                      <div className="text-sm font-black text-gray-200 bg-[var(--accent)]/20 px-3 py-1.5 rounded-lg border border-[var(--accent)]/30 shadow-[0_0_10px_var(--accent-glow)]">
-                        {new Date(`${a.earned_at}Z`).toLocaleDateString(
-                          "ru-RU",
-                          { day: "numeric", month: "short", year: "numeric" },
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-xs text-gray-400 font-black uppercase tracking-widest bg-black/50 px-4 py-2 rounded-lg border border-white/5 w-full md:w-auto text-center">
-                      Заблокировано
-                    </div>
-                  )}
+                  <p className="text-[13px] leading-relaxed text-fg-2">
+                    {renderDescriptionWithLinks(
+                      a.description || "",
+                      a.rule_meta ?? null,
+                      a.rule_target ?? null,
+                      a.name,
+                    )}
+                  </p>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </div>
+              {showProgress && (
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex justify-between font-mono text-[11px] text-fg-3">
+                    <span>прогресс</span>
+                    <span>
+                      {currentVal} / {targetVal}
+                    </span>
+                  </div>
+                  <Meter value={currentVal} max={targetVal} accent={false} />
+                </div>
+              )}
+              <span className="mt-auto font-mono text-[11px] text-fg-3">
+                есть у {a.rarity ?? 0}% слушателей
+                {a.reward_xp > 0 ? ` · +${a.reward_xp} XP` : ""}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
