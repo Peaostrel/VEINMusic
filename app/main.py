@@ -37,6 +37,9 @@ setup_observability("api")
 background_tasks: set[asyncio.Task] = set()
 logger = logging.getLogger(__name__)
 
+# Value of SECRET_KEY in .env.example (must never reach a running server)
+ENV_EXAMPLE_SECRET_KEY = "change_me_to_a_long_random_string"
+
 
 def _migrate_plaintext_api_keys() -> None:
     """Hash legacy plain-text API keys (anything that is not a 64-char hex digest)."""
@@ -71,7 +74,12 @@ async def lifespan(app: FastAPI):
         Base.metadata.create_all(bind=engine)
 
     from app.core.security import SECRET_KEY
-    insecure_keys = {"super-secret-vein-key-change-it-in-production", "change_me_to_a_long_random_string"}
+    # The .env.example placeholder can only get here by copying the example
+    # file unchanged, so it is refused in every environment. The built-in
+    # default (no SECRET_KEY at all) is tolerated only outside production.
+    if SECRET_KEY == ENV_EXAMPLE_SECRET_KEY:
+        raise RuntimeError("SECRET_KEY still has the placeholder value from .env.example: set a random key")
+    insecure_keys = {"super-secret-vein-key-change-it-in-production", ENV_EXAMPLE_SECRET_KEY}
     if os.getenv("ENVIRONMENT") == "production" and (SECRET_KEY in insecure_keys or len(SECRET_KEY) < 32):
         raise RuntimeError("CRITICAL SECURITY ERROR: SECRET_KEY is a default/weak value in production!")
 
@@ -324,6 +332,8 @@ async def _handle_room_message(room_id: str, username: str, data: dict, state: d
         })
 
     elif msg_type == "CHAT_MESSAGE":
+        if state.get("is_guest"):
+            return  # guests may listen, but only signed-in users can chat
         now = time.time()
         if now - state["last_chat"] < 0.5:
             return  # simple per-connection flood protection
@@ -368,7 +378,8 @@ async def together_websocket_route(websocket: WebSocket, room_id: str):
         await websocket.close(code=4003)
         return
 
-    username = _get_ws_authenticated_username(websocket) or f"Guest_{secrets.token_hex(3)}"
+    authenticated_username = _get_ws_authenticated_username(websocket)
+    username = authenticated_username or f"Guest_{secrets.token_hex(3)}"
 
     await websocket.accept()
     room = await manager.join_room(room_id, username, websocket)
@@ -386,7 +397,7 @@ async def together_websocket_route(websocket: WebSocket, room_id: str):
         "listeners": room["listeners"],
     }, exclude_user=username)
 
-    state = {"last_chat": 0.0}
+    state = {"last_chat": 0.0, "is_guest": authenticated_username is None}
     try:
         while True:
             data = await websocket.receive_json()

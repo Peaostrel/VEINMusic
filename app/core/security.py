@@ -117,6 +117,11 @@ def hash_developer_key(token: str) -> str:
 # Scopes that can be granted to developer API keys ("vm_..." tokens)
 DEVELOPER_KEY_SCOPES = {"scrobble:write", "profile:read", "profile:write"}
 
+# The personal API key (issued at registration / in settings, handed to the
+# browser extension and the desktop client) only needs to send scrobbles and
+# read data. Limiting it means a leaked key can't change the account.
+PERSONAL_KEY_SCOPES = "scrobble:write,profile:read"
+
 # Account-management areas that are never reachable with a developer API key,
 # regardless of its scopes (keys must not be able to mint keys, etc.)
 _DEV_KEY_FORBIDDEN_PREFIXES = (
@@ -159,7 +164,7 @@ def _authenticate_user(token: str, db: Session) -> User | None:
 
 
 def _authenticate_user_with_scopes(token: str, db: Session) -> tuple[User | None, str | None]:
-    """Authenticate a token. Returns (user, scopes); scopes is None for full-access tokens."""
+    """Authenticate a token. Returns (user, scopes); scopes is None for session tokens."""
     # Check if this is a developer API key (prefix 'vm_')
     if token.startswith("vm_"):
         from app.models import ApiKey
@@ -175,26 +180,29 @@ def _authenticate_user_with_scopes(token: str, db: Session) -> tuple[User | None
             return user, str(api_key_obj.scopes or "")
         return None, None
 
-    return _authenticate_full_access_token(token, db), None
+    if ":" in token:
+        return _authenticate_session_token(token, db), None
+    return _authenticate_personal_key(token, db), PERSONAL_KEY_SCOPES
 
 
 def _as_aware(dt: Any) -> datetime:
     return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
 
 
-def _authenticate_full_access_token(token: str, db: Session) -> User | None:
-    if ":" in token:
-        try:
-            user_id_str = token.split(":")[0]
-            user = db.query(User).filter(User.id == int(user_id_str)).first()
-            if user and verify_session_token(token, user):
-                return user
-        except Exception:  # NOSONAR
-            pass
-    else:
-        hashed_token = hashlib.pbkdf2_hmac('sha256', token.encode('utf-8'), SECRET_KEY.encode(), 100000).hex()
-        return db.query(User).filter(User.api_key == hashed_token).first()
+def _authenticate_session_token(token: str, db: Session) -> User | None:
+    try:
+        user_id_str = token.split(":")[0]
+        user = db.query(User).filter(User.id == int(user_id_str)).first()
+        if user and verify_session_token(token, user):
+            return user
+    except Exception:  # NOSONAR
+        pass
     return None
+
+
+def _authenticate_personal_key(token: str, db: Session) -> User | None:
+    hashed_token = hashlib.pbkdf2_hmac('sha256', token.encode('utf-8'), SECRET_KEY.encode(), 100000).hex()
+    return db.query(User).filter(User.api_key == hashed_token).first()
 
 
 def _check_csrf(request: Request, from_cookie: bool):

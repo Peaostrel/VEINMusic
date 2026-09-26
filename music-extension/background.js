@@ -82,13 +82,26 @@ function flushOfflineQueue() {
     });
 }
 
+const SCROBBLE_MIN_INTERVAL_MS = 5000;
+let lastScrobbleSent = { key: '', playing: null, at: 0 };
+
+function shouldSendScrobble(payload) {
+    if (!payload || typeof payload !== 'object') return false;
+    const key = `${payload.source}|${payload.artist}|${payload.title}`;
+    const playing = Boolean(payload.is_playing);
+    const now = Date.now();
+    const changed = key !== lastScrobbleSent.key || playing !== lastScrobbleSent.playing;
+    if (!changed && now - lastScrobbleSent.at < SCROBBLE_MIN_INTERVAL_MS) return false;
+    lastScrobbleSent = { key, playing, at: now };
+    return true;
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    // Security: Verify sender domain to prevent API key theft from malicious sites
-    const senderUrl = sender.tab ? new URL(sender.tab.url) : null;
-    const isTrusted = senderUrl && (
-        senderUrl.hostname === "music.vein.guru" || 
-        senderUrl.hostname === "localhost" || 
-        senderUrl.hostname === "127.0.0.1"
+    // Security: only the VEIN site may change the stored key (see sync-key.js)
+    const senderUrl = sender.tab?.url ? new URL(sender.tab.url) : null;
+    const isTrusted = Boolean(senderUrl) && (
+        (senderUrl.hostname === "music.vein.guru" && senderUrl.protocol === "https:") ||
+        ((senderUrl.hostname === "localhost" || senderUrl.hostname === "127.0.0.1") && senderUrl.port === "3000")
     );
 
     // 1. Принимаем ключи с сайта
@@ -108,8 +121,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.log('[VEIN] Ключи стерты по запросу с сайта.');
     }
 
-    // 3. Отправляем трек на сервер или сохраняем в оффлайн-очередь
-    if (request.type === 'SCROBBLE') {
+    // 3. Отправляем трек на сервер или сохраняем в оффлайн-очередь.
+    // Вкладка присылает состояние каждые 800 мс; серверу достаточно сигнала
+    // раз в несколько секунд (он учитывает паузы между сигналами до 35 с),
+    // поэтому одинаковые сигналы чаще раза в 5 секунд не отправляем.
+    if (request.type === 'SCROBBLE' && shouldSendScrobble(request.data)) {
         chrome.storage.local.get(['apiUrl', 'apiKey'], (settings) => {
             const API_BASE = veinApiBase(settings);
             const apiKey = settings.apiKey;

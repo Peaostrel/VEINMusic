@@ -5,16 +5,19 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from app.core.rate_limit import limiter
 from app.core.security import DEVELOPER_KEY_SCOPES, get_current_user, hash_developer_key
 from app.database import get_db
 from app.models import ApiKey, ExternalSyncConfig, User, Webhook
 from app.schemas import ApiKeyCreate, ExternalSyncUpdate, WebhookCreate
-from app.services.webhooks import dispatch_webhook_event
+from app.services.webhooks import MAX_WEBHOOKS_PER_USER, send_test_ping
 
 router = APIRouter(prefix="/api/developer", tags=["developer"])
+
+MAX_ACTIVE_API_KEYS = 25
 
 
 def _hash_key(plain_key: str) -> str:
@@ -49,8 +52,10 @@ def list_api_keys(
     ]
 
 
-@router.post("/keys", responses={400: {"description": "Invalid scopes"}})
+@router.post("/keys", responses={400: {"description": "Invalid scopes or too many keys"}})
+@limiter.limit("10/hour")
 def create_api_key(
+    request: Request,
     payload: ApiKeyCreate,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
@@ -64,6 +69,12 @@ def create_api_key(
             f"Недопустимые scopes: {', '.join(invalid) or '(пусто)'}. "
             f"Доступные: {', '.join(sorted(DEVELOPER_KEY_SCOPES))}, *")
     normalized_scopes = ",".join(dict.fromkeys(requested_scopes))
+
+    active_keys = db.query(ApiKey).filter(
+        ApiKey.user_id == current_user.id, ApiKey.is_active == True).count()  # noqa: E712
+    if active_keys >= MAX_ACTIVE_API_KEYS:
+        raise HTTPException(
+            400, f"Слишком много активных ключей (максимум {MAX_ACTIVE_API_KEYS}). Отзовите ненужные.")
 
     raw_secret = secrets.token_urlsafe(32)
     key_prefix = f"vm_{raw_secret[:6]}"
@@ -135,8 +146,10 @@ def list_webhooks(
     ]
 
 
-@router.post("/webhooks", responses={400: {"description": "Invalid webhook URL"}})
+@router.post("/webhooks", responses={400: {"description": "Invalid webhook URL or too many webhooks"}})
+@limiter.limit("10/hour")
 def create_webhook(
+    request: Request,
     payload: WebhookCreate,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
@@ -148,6 +161,9 @@ def create_webhook(
             400,
             "URL вебхука должен быть публичным http(s) адресом "
             "(внутренние и приватные адреса запрещены)")
+    if db.query(Webhook).filter(Webhook.user_id == current_user.id).count() >= MAX_WEBHOOKS_PER_USER:
+        raise HTTPException(
+            400, f"Можно создать не больше {MAX_WEBHOOKS_PER_USER} вебхуков. Удалите ненужные.")
     secret = secrets.token_hex(24)
     wh = Webhook(
         user_id=current_user.id,
@@ -186,7 +202,9 @@ def delete_webhook(
 
 
 @router.post("/webhooks/{webhook_id}/test", responses={404: {"description": "Webhook Not Found"}})
+@limiter.limit("5/minute")
 async def test_webhook(
+    request: Request,
     webhook_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
@@ -196,12 +214,7 @@ async def test_webhook(
     if not wh:
         raise HTTPException(404, "Вебхук не найден")
 
-    await dispatch_webhook_event(
-        event_name="ping.test",
-        data={"message": "VEINMusic Webhook Test Ping", "username": current_user.username},
-        user_id=int(current_user.id),
-        db=db,
-    )
+    await send_test_ping(wh, str(current_user.username))
     return {"status": "ok", "message": f"Тестовое событие отправлено на {wh.url}"}
 
 

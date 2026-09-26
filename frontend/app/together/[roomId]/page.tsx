@@ -46,6 +46,8 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
   const [listeners, setListeners] = useState<string[]>([]);
   const [host, setHost] = useState("");
   const [me, setMe] = useState("");
+  // The server names unauthenticated listeners "Guest_…" (real usernames are lowercase)
+  const isGuest = me.startsWith("Guest_");
   const [track, setTrack] = useState<TrackState>({
     title: "Ожидание трека от DJ...",
     artist: "VEIN Music",
@@ -382,25 +384,34 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
             <div ref={chatEndRef} />
           </div>
 
-          {/* Chat Input */}
-          <form
-            onSubmit={handleSendChat}
-            className="mt-4 flex gap-2 pt-2 border-t border-white/5"
-          >
-            <input
-              type="text"
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              placeholder="Написать в чат..."
-              className="flex-grow bg-[#1e1e24] border border-white/10 rounded-xl px-3 py-2 text-white placeholder-gray-500 text-xs focus:outline-none focus:border-red-500"
-            />
-            <button
-              type="submit"
-              className="bg-red-600 hover:bg-red-500 text-white p-2.5 rounded-xl transition-colors shrink-0 cursor-pointer"
+          {/* Chat Input (signed-in listeners only; guests just listen) */}
+          {isGuest ? (
+            <p className="mt-4 pt-2 border-t border-white/5 text-xs text-gray-500">
+              <a href="/auth" className="text-red-400 underline">
+                Войдите
+              </a>
+              , чтобы писать в чат.
+            </p>
+          ) : (
+            <form
+              onSubmit={handleSendChat}
+              className="mt-4 flex gap-2 pt-2 border-t border-white/5"
             >
-              <Send className="w-4 h-4" />
-            </button>
-          </form>
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Написать в чат..."
+                className="flex-grow bg-[#1e1e24] border border-white/10 rounded-xl px-3 py-2 text-white placeholder-gray-500 text-xs focus:outline-none focus:border-red-500"
+              />
+              <button
+                type="submit"
+                className="bg-red-600 hover:bg-red-500 text-white p-2.5 rounded-xl transition-colors shrink-0 cursor-pointer"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </div>

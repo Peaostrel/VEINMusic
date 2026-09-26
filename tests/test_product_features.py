@@ -18,7 +18,9 @@ ORIGIN = {"Origin": "http://localhost:3000"}
 def _register(client, username: str) -> str:
     resp = client.post("/auth/register", json={"username": username, "password": TEST_PASSWORD})
     assert resp.status_code == 200, resp.text
-    return resp.json()["api_key"]
+    # A session token: full access, unlike the personal key in the response
+    # body, which is limited to sending scrobbles and reading.
+    return client.cookies.get("api_key")
 
 
 # --- Device pairing -----------------------------------------------------------

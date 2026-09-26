@@ -10,10 +10,12 @@ from fastapi import (
     Depends,
     File,
     HTTPException,
+    Request,
     UploadFile,
 )
 from fastapi.responses import FileResponse
 
+from app.core.rate_limit import credential_key, limiter
 from app.core.security import get_current_user
 from app.models import (
     User,
@@ -56,8 +58,10 @@ def _save_file_sync(file_path: str, content: bytes):
 # --- POST /api/upload ---
 @router.post("/api/upload",
              responses={400: {"description": "Invalid file type or file too large"}})
-async def upload_file(current_user: Annotated[User, Depends(
-        get_current_user)], file: Annotated[UploadFile, File()]):
+@limiter.limit("30/hour", key_func=credential_key)
+async def upload_file(request: Request,
+                      current_user: Annotated[User, Depends(get_current_user)],
+                      file: Annotated[UploadFile, File()]):
     import anyio
     # Security: Validate file type
     allowed_types = [MIME_IMAGE_JPEG, MIME_IMAGE_PNG, MIME_IMAGE_WEBP, MIME_IMAGE_GIF]

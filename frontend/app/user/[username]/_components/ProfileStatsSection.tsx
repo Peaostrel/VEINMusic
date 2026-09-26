@@ -6,6 +6,7 @@ import {
   SocialIcons,
   getCountryCode,
   getNetworkLabel,
+  getSocialUrl,
 } from "./profileUtils";
 
 export interface ProfileStatsSectionProps {
@@ -91,14 +92,12 @@ export function ProfileStatsSection({
       {socialLinks.length > 0 && (
         <div className="flex flex-wrap justify-center md:justify-start gap-3 mb-6">
           {socialLinks.map((link: any) => {
+            const href = getSocialUrl(link.network, link.username);
+            if (!href) return null;
             return (
               <a
                 key={link.id}
-                href={
-                  link.network.toLowerCase() === "telegram"
-                    ? `https://t.me/${link.username}`
-                    : `https://${link.network}.com/${link.username}`
-                }
+                href={href}
                 target="_blank"
                 rel="noopener noreferrer"
 

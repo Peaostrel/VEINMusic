@@ -196,3 +196,18 @@ export function getNetworkLabel(net: string): string {
   if (lower === "github") return "GitHub";
   return net.charAt(0).toUpperCase() + net.slice(1);
 }
+
+const SOCIAL_URL_PREFIXES: Record<string, string> = {
+  telegram: "https://t.me/",
+  vk: "https://vk.com/",
+  steam: "https://steamcommunity.com/id/",
+  github: "https://github.com/",
+  instagram: "https://instagram.com/",
+};
+
+/** Profile link for a known network, or null (unknown networks aren't shown). */
+export function getSocialUrl(network: string, username: string): string | null {
+  const prefix = SOCIAL_URL_PREFIXES[String(network).toLowerCase()];
+  if (!prefix || !username) return null;
+  return prefix + encodeURIComponent(String(username).replace(/^@/, ""));
+}

@@ -15,7 +15,9 @@ ORIGIN = {"Origin": "http://localhost:3000"}
 def _register(client, username: str) -> str:
     resp = client.post("/auth/register", json={"username": username, "password": TEST_PASSWORD})
     assert resp.status_code == 200, resp.text
-    return resp.json()["api_key"]
+    # A session token: full access, unlike the personal key in the response
+    # body, which is limited to sending scrobbles and reading.
+    return client.cookies.get("api_key")
 
 
 def test_logout_all_revokes_existing_sessions(client):
@@ -53,10 +55,13 @@ def test_ban_revokes_sessions(client, db):
     assert client.get("/api/notifications/bannedsess").status_code == 401
 
 
+TEST_CLIENT_IP = "testclient"  # request.client.host of Starlette's TestClient
+
+
 def test_account_locked_after_repeated_failures(client):
     _register(client, "lockme")
     client.cookies.clear()
-    login_guard.reset("lockme")
+    login_guard.reset("lockme", TEST_CLIENT_IP)
     try:
         for _ in range(login_guard.MAX_FAILED_ATTEMPTS):
             resp = client.post("/auth/login", json={"username": "lockme", "password": "wrong-pass"})
@@ -65,8 +70,32 @@ def test_account_locked_after_repeated_failures(client):
         resp = client.post("/auth/login", json={"username": "lockme", "password": TEST_PASSWORD})
         assert resp.status_code == 429
     finally:
-        login_guard.reset("lockme")
+        login_guard.reset("lockme", TEST_CLIENT_IP)
     assert client.post("/auth/login", json={"username": "lockme", "password": TEST_PASSWORD}).status_code == 200
+
+
+def test_lockout_from_one_ip_does_not_lock_the_owner_elsewhere():
+    login_guard.reset("owner", "203.0.113.5")
+    login_guard.reset("owner", "198.51.100.7")
+    try:
+        for _ in range(login_guard.MAX_FAILED_ATTEMPTS):
+            login_guard.register_failure("owner", "203.0.113.5")
+        assert login_guard.seconds_until_unlocked("owner", "203.0.113.5") > 0
+        # the real owner logging in from another address is not affected
+        assert login_guard.seconds_until_unlocked("owner", "198.51.100.7") == 0
+    finally:
+        login_guard.reset("owner", "203.0.113.5")
+
+
+def test_distributed_guessing_locks_the_account_everywhere():
+    login_guard.reset("target", "198.51.100.7")
+    try:
+        for i in range(login_guard.MAX_FAILED_ATTEMPTS_TOTAL):
+            login_guard.register_failure("target", f"203.0.113.{i % 250}")
+        assert login_guard.seconds_until_unlocked("target", "198.51.100.7") > 0
+    finally:
+        for i in range(250):
+            login_guard.reset("target", f"203.0.113.{i}")
 
 
 def test_short_password_rejected(client):

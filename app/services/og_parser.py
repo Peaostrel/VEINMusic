@@ -4,6 +4,8 @@ import urllib.parse
 
 import httpx
 
+from app.core.safe_http import UnsafeURLError, pinned_request
+
 logger = logging.getLogger(__name__)
 
 HTTPS_PREFIX = "https://"
@@ -115,7 +117,11 @@ async def _resolve_url_metadata(client: httpx.AsyncClient, current_url: str) -> 
             return title, img, None
 
     try:
-        resp = await client.get(clean_url)
+        # Pinned to the vetted IP: a DNS answer that changes between the
+        # is_safe_url() check and the request can't redirect it internally.
+        resp = await pinned_request(
+            "GET", clean_url, timeout=5.0,
+            headers={"User-Agent": client.headers.get("User-Agent", "Mozilla/5.0")})
         if 300 <= resp.status_code < 400 and 'Location' in resp.headers:
             next_url = resp.headers['Location']
             if not next_url.startswith('http'):
@@ -127,7 +133,7 @@ async def _resolve_url_metadata(client: httpx.AsyncClient, current_url: str) -> 
         if resp.status_code == 200:
             t_gen, i_gen = _parse_generic_html(resp.text)
             return t_gen, i_gen, None
-    except httpx.RequestError:
+    except (httpx.RequestError, UnsafeURLError):
         pass
     return None, None, None
 
