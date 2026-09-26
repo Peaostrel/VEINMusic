@@ -11,6 +11,9 @@ set -euo pipefail
 
 [[ "$(id -u)" -eq 0 ]] || { echo "Run as root" >&2; exit 1; }
 
+# Never stop silently: name the line that failed
+trap 'echo "!! setup-server.sh failed at line $LINENO" >&2' ERR
+
 REPO_URL="${REPO_URL:-https://github.com/Peaostrel/VEINMusic.git}"
 BRANCH="${BRANCH:-VEIN}"
 APP_DIR="${APP_DIR:-/opt/veinmusic}"
@@ -44,7 +47,8 @@ fi
 systemctl enable --now docker
 
 echo "==> Firewall (SSH, HTTP, HTTPS)"
-ssh_port="$(sshd -T 2>/dev/null | awk '/^port /{print $2; exit}')"
+# `sshd -T` fails on some images (e.g. no /run/sshd yet); fall back to 22
+ssh_port="$( (sshd -T 2>/dev/null || true) | awk '/^port /{print $2; exit}')"
 ufw allow "${ssh_port:-22}/tcp"
 ufw allow 80/tcp
 ufw allow 443/tcp
