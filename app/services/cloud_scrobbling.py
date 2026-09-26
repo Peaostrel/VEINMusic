@@ -11,6 +11,10 @@ from app.models import User
 
 logger = logging.getLogger(__name__)
 
+# A queue track counts as playing until its length plus this margin (one poll
+# interval and a bit) has passed since the queue last changed
+YANDEX_PLAYING_MARGIN_SEC = 45
+
 # We will import process_scrobble locally or pass it as a callback to
 # avoid circular imports.
 
@@ -117,8 +121,12 @@ def _parse_yandex_now_playing(data: dict):
     }
 
 
-async def _fetch_yandex_track_info(client, track_id, headers, process_func, db, user, is_playing=True):
+async def _fetch_yandex_track_info(client, track_id, headers, process_func, db, user,
+                                   changed_at: datetime | None = None):
     t_resp = await client.post("https://api.music.yandex.net/tracks", data={"track-ids": [track_id]}, headers=headers, timeout=5.0)
+    if t_resp.status_code != 200:
+        logger.warning(f"Yandex /tracks answered {t_resp.status_code} for user {user.username}")
+        return
     t_info = t_resp.json().get("result", [])
     if not t_info:
         return
@@ -134,31 +142,51 @@ async def _fetch_yandex_track_info(client, track_id, headers, process_func, db, 
     albums = t_info.get("albums", [])
     album = albums[0].get("title") if albums else None
 
+    progress, is_playing = _estimate_queue_position(changed_at, duration)
     await process_func(
         db, user, title, artist, cover,
-        track_url, "yandex", 0, is_playing,
+        track_url, "yandex", progress, is_playing,
         duration, album
     )
 
 
-def _is_queue_playing(active_queue: dict) -> bool:
+def _queue_changed_at(active_queue: dict) -> datetime | None:
     modified_str = active_queue.get("modified")
     if not modified_str:
-        return True
+        return None
     try:
-        modified_dt = datetime.fromisoformat(modified_str.replace("Z", "+00:00"))
-        return (datetime.now(UTC) - modified_dt).total_seconds() < 60
-    except Exception:
-        return True
+        return datetime.fromisoformat(modified_str.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _estimate_queue_position(changed_at: datetime | None, duration: int,
+                             now: datetime | None = None) -> tuple[int, bool]:
+    """(progress_sec, is_playing) of the current queue track.
+
+    Yandex updates the queue's `modified` when the current track changes,
+    not while it plays. So the track counts as playing until its length (plus
+    a margin for the poll interval) has passed since that change, and the
+    progress is the time since the change. Treating it as stopped a minute
+    after the change, as before, meant no track longer than ~70 s ever
+    reached the listen threshold.
+    """
+    if changed_at is None:
+        return 0, True
+    elapsed = int(((now or datetime.now(UTC)) - changed_at).total_seconds())
+    if elapsed < 0:
+        return 0, True
+    track_len = duration if duration > 0 else 180
+    return min(elapsed, track_len), elapsed < track_len + YANDEX_PLAYING_MARGIN_SEC
 
 
 async def _handle_active_yandex_queue(client: httpx.AsyncClient, active_queue: dict, headers: dict, process_func, db: Session, user: User):
     q_id = active_queue.get("id")
     if not q_id:
         return
-    is_playing = _is_queue_playing(active_queue)
     q_resp = await client.get(f"https://api.music.yandex.net/queues/{q_id}", headers=headers, timeout=5.0)
     if q_resp.status_code != 200:
+        logger.warning(f"Yandex /queues/<id> answered {q_resp.status_code} for user {user.username}")
         return
     q_result = q_resp.json().get("result", {})
     current_idx = q_result.get("currentIndex")
@@ -168,7 +196,8 @@ async def _handle_active_yandex_queue(client: httpx.AsyncClient, active_queue: d
         track_obj = tracks[current_idx]
         track_id = track_obj.get("trackId")
         if track_id:
-            await _fetch_yandex_track_info(client, track_id, headers, process_func, db, user, is_playing)
+            await _fetch_yandex_track_info(client, track_id, headers, process_func, db, user,
+                                           _queue_changed_at(active_queue))
 
 
 async def sync_yandex_status(user: User, db: Session, process_func):
@@ -184,13 +213,19 @@ async def sync_yandex_status(user: User, db: Session, process_func):
             if resp.status_code in (401, 403):
                 logger.warning(f"Yandex OAuth token invalid or expired for user {user.username}")
                 return
-            if resp.status_code == 200:
-                queues = resp.json().get("result", {}).get("queues", [])
-                if queues:
-                    queues.sort(key=lambda x: x.get("modified", ""), reverse=True)
-                    await _handle_active_yandex_queue(client, queues[0], headers, process_func, db, user)
+            if resp.status_code != 200:
+                logger.warning(f"Yandex /queues answered {resp.status_code} for user {user.username}")
+                return
+            queues = resp.json().get("result", {}).get("queues", [])
+            if not queues:
+                logger.info(f"Yandex returned no play queues for user {user.username}")
+            else:
+                queues.sort(key=lambda x: x.get("modified", ""), reverse=True)
+                await _handle_active_yandex_queue(client, queues[0], headers, process_func, db, user)
         except Exception as e:
             logger.warning(f"Yandex sync error for user {user.username}: {e}")
+
+
 POLL_CONCURRENCY = 5
 POLL_INTERVAL_SEC = 30
 POLL_LOCK_KEY = "cloud_poll_lock"

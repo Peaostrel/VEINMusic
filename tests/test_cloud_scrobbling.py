@@ -1,7 +1,7 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -95,12 +95,27 @@ def test_parse_yandex_now_playing():
     assert cs._parse_yandex_now_playing({"result": {"nowPlaying": {"track": "x"}}}) is None
 
 
-def test_is_queue_playing():
+def test_queue_changed_at():
     now = datetime.now(UTC)
-    assert cs._is_queue_playing({})
-    assert cs._is_queue_playing({"modified": "not a date"})
-    assert cs._is_queue_playing({"modified": now.isoformat().replace("+00:00", "Z")})
-    assert not cs._is_queue_playing({"modified": (now - timedelta(minutes=5)).isoformat()})
+    assert cs._queue_changed_at({}) is None
+    assert cs._queue_changed_at({"modified": "not a date"}) is None
+    assert cs._queue_changed_at({"modified": now.isoformat().replace("+00:00", "Z")}) == now
+
+
+def test_estimate_queue_position():
+    now = datetime(2026, 9, 27, 12, 0, tzinfo=UTC)
+    est = cs._estimate_queue_position
+    assert est(None, 200, now) == (0, True)
+    assert est(now + timedelta(seconds=5), 200, now) == (0, True)  # clock skew
+    # A 200 s track still plays two minutes after it started: the old
+    # 60-second rule stopped counting here, so long tracks never scored
+    assert est(now - timedelta(seconds=120), 200, now) == (120, True)
+    # Within the margin after its end it still counts (poll interval)...
+    assert est(now - timedelta(seconds=230), 200, now) == (200, True)
+    # ...but not later: the queue is idle
+    assert est(now - timedelta(minutes=10), 200, now) == (200, False)
+    # Unknown length: assume 3 minutes
+    assert est(now - timedelta(seconds=100), 0, now) == (100, True)
 
 
 def _yandex_handler(queue_status=200, queues=None, current_index=1):
@@ -130,7 +145,8 @@ def test_yandex_sync_processes_current_track():
         asyncio.run(cs.sync_yandex_status(user, db, process))
     process.assert_awaited_once_with(
         db, user, "YT", "YA", "https://y/400x400", "https://music.yandex.ru/track/2",
-        "yandex", 0, True, 120, "YAlb")
+        "yandex", ANY, True, 120, "YAlb")
+    assert process.await_args.args[7] < 5  # the queue changed just now
 
 
 @pytest.mark.parametrize("kwargs", [
