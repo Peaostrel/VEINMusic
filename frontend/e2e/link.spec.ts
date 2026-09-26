@@ -42,7 +42,9 @@ test.describe("Device linking (/link)", () => {
     const { device_code, user_code } = await newDeviceCode(page);
     await page.goto(`/link?code=${user_code}`);
     await page.getByRole("button", { name: "Отклонить" }).click();
-    await expect(page.getByText("Подключение отклонено.")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Подключение отклонено" }),
+    ).toBeVisible();
 
     const token = await page.request.post(`${API_URL}/api/devices/token`, {
       data: { device_code },

@@ -26,7 +26,9 @@ export default function StatusText({
     Icon = AlertTriangle;
   }
   return (
-    <output className={`flex items-center gap-1.5 text-[13px] ${tone} ${className}`}>
+    <output
+      className={`flex items-center gap-1.5 text-[13px] ${tone} ${className}`}
+    >
       {Icon && <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
       {body}
     </output>

@@ -1,31 +1,58 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Check, Copy } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
 import { useFeature } from "@/app/lib/featureFlags";
+import { isValidUser } from "@/app/lib/theme";
+import { Segmented, btn, input, label } from "@/components/ui";
+
+type Mode = "login" | "register";
+
+const nextSteps = [
+  ["Поставьте расширение", "Chrome, Edge или Firefox"],
+  ["Подтвердите устройство", "Код из расширения вводится на сайте"],
+  ["Включите музыку", "Первые треки появятся в профиле через пару секунд"],
+];
+
+/** Page to open after signing in: the one that sent the user here, or the profile. */
+function afterLoginUrl(username: string): string {
+  const next = sessionStorage.getItem("vein_after_login");
+  sessionStorage.removeItem("vein_after_login");
+  if (next?.startsWith("/") && !next.startsWith("//")) return next;
+  return `/user/${encodeURIComponent(username)}`;
+}
+
+function go(url: string) {
+  // Full load: the shell re-reads the signed-in state from scratch
+  globalThis.location.href = url;
+}
 
 export default function Auth() {
-  const [isLogin, setIsLogin] = useState(true);
+  const [mode, setMode] = useState<Mode>("login");
   const registrationOpen = useFeature("registration");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [step, setStep] = useState("form");
   const [apiKey, setApiKey] = useState("");
+  const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
+  const isLogin = mode === "login";
+
   useEffect(() => {
-    const storedUser = localStorage.getItem("username");
-    if (storedUser) {
-      setUsername(storedUser);
-      setStep("success");
+    const stored = localStorage.getItem("username");
+    if (isValidUser(stored)) {
+      go("/");
+      return;
     }
+    const wanted = new URLSearchParams(globalThis.location.search).get("mode");
+    if (wanted === "register") setMode("register");
   }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
-
     const endpoint = isLogin ? "/auth/login" : "/auth/register";
-
     try {
       const res = await fetch(`${API_URL}${endpoint}`, {
         method: "POST",
@@ -33,15 +60,12 @@ export default function Auth() {
         credentials: "include",
         body: JSON.stringify({ username, password }),
       });
-
       const data = await res.json();
-
       if (!res.ok) {
-        setError(data.detail || "Ошибка. Проверь данные.");
+        setError(data.detail || "Неверный логин или пароль.");
         setLoading(false);
         return;
       }
-
       localStorage.setItem("username", data.username);
       globalThis.dispatchEvent(new Event("themeChanged"));
 
@@ -58,165 +82,201 @@ export default function Auth() {
           },
           globalThis.location.origin,
         );
+        setLoading(false);
+        return;
       }
-
-      setStep("success");
+      go(afterLoginUrl(data.username));
     } catch (err) {
       console.error(err);
-      setError("Ошибка сети. Бэкенд не отвечает.");
+      setError("Сервер не отвечает. Попробуйте ещё раз.");
       setLoading(false);
     }
   };
 
+  const copyKey = async () => {
+    try {
+      await navigator.clipboard.writeText(apiKey);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  let submitLabel = isLogin ? "Войти" : "Создать аккаунт";
+  if (loading) submitLabel = "Подождите…";
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <main className="w-full max-w-md">
-        {step === "form" ? (
-          <div className="bg-[#1a1a1a] border border-white/5 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-50"></div>
-
-            <h1 className="text-3xl font-black text-white text-center mb-2 tracking-tight">
-              {isLogin ? "С ВОЗВРАЩЕНИЕМ" : "НОВАЯ КРОВЬ"}
-            </h1>
-            <p className="text-gray-400 text-center text-sm mb-8 font-medium">
-              {isLogin
-                ? "Введи свои данные для входа в систему"
-                : "Зарегистрируйся, чтобы начать отслеживать музыку"}
-            </p>
-
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div>
-                <label
-                  htmlFor="auth-username"
-                  className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2"
-                >
-                  Логин
-                </label>
-                <input
-                  id="auth-username"
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--accent)] transition-colors"
-                  placeholder="tvoibro"
-                  required
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="auth-password"
-                  className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2"
-                >
-                  Пароль
-                </label>
-                <input
-                  id="auth-password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--accent)] transition-colors"
-                  placeholder="••••••••"
-                  minLength={isLogin ? undefined : 8}
-                  autoComplete={isLogin ? "current-password" : "new-password"}
-                  required
-                />
-                {!isLogin && (
-                  <p className="text-xs text-gray-400 mt-2">
-                    Минимум 8 символов.
-                  </p>
-                )}
-              </div>
-
-              {error && (
-                <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-sm font-bold text-center">
-                  {error}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-[var(--accent)] text-[#121212] font-black py-4 rounded-xl hover:scale-[1.02] transition-transform shadow-[0_0_15px_var(--accent-glow)] disabled:opacity-50 disabled:hover:scale-100 mt-4 text-lg flex items-center justify-center gap-3"
-              >
-                {loading && (
-                  <div className="animate-spin border-3 border-[#121212] border-t-transparent rounded-full w-5 h-5"></div>
-                )}
-                {(() => {
-                  if (loading) return "ПОДОЖДИ...";
-                  if (isLogin) return "ВОЙТИ";
-                  return "СОЗДАТЬ АККАУНТ";
-                })()}
-              </button>
-            </form>
-
-            <div className="mt-8 text-center">
-              {registrationOpen || !isLogin ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsLogin(!isLogin);
-                    setError("");
-                  }}
-                  className="text-sm text-gray-400 hover:text-white transition-colors font-medium"
-                >
-                  {isLogin
-                    ? "Нет аккаунта? Зарегистрироваться"
-                    : "Уже есть аккаунт? Войти"}
-                </button>
-              ) : (
-                <p className="text-sm text-gray-400">
-                  Регистрация новых аккаунтов временно закрыта.
-                </p>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="bg-[#1a1a1a] border border-white/5 rounded-2xl p-8 shadow-2xl text-center">
-            <h2 className="text-2xl font-black text-white mb-2">
-              ПРОВЕРКА СВЯЗИ
-            </h2>
-            <p className="text-gray-400 text-sm mb-6">
-              Твой личный API ключ для работы:
-            </p>
-
-            <div
-              className="bg-[#121212] border border-white/10 font-mono text-sm p-4 rounded-xl mb-6 select-all overflow-x-auto shadow-inner"
-              style={{ color: "var(--accent)" }}
+    <div className="mx-auto flex w-full max-w-[900px] flex-col items-center gap-16 px-4 py-16 md:flex-row md:items-start md:justify-center md:gap-24 md:py-24">
+      {apiKey ? (
+        <section
+          aria-labelledby="key-title"
+          className="flex w-full max-w-[440px] flex-col gap-5"
+        >
+          <span className="inline-flex h-[26px] items-center gap-2 self-start rounded-full border border-line px-2.5 text-xs text-ok">
+            <Check className="h-3.5 w-3.5" aria-hidden="true" />
+            Аккаунт создан
+          </span>
+          <h1
+            id="key-title"
+            className="text-[26px] font-semibold tracking-[-0.02em]"
+          >
+            Ваш API-ключ
+          </h1>
+          <p className="text-sm leading-relaxed text-fg-2">
+            Он нужен расширению и сторонним плеерам. Мы показываем его один раз
+            — сохраните сейчас. Новый ключ можно выпустить в настройках, старый
+            при этом перестанет работать.
+          </p>
+          <div className="flex gap-2">
+            <code className="flex h-11 min-w-0 flex-1 items-center truncate rounded-lg border border-line bg-surface px-3.5 font-mono text-[13px] select-all">
+              {apiKey}
+            </code>
+            <button
+              type="button"
+              onClick={copyKey}
+              className={`${btn.secondary} h-11 px-4`}
             >
-              {apiKey ||
-                "Ключ показывается только один раз при создании. Новый ключ можно сгенерировать в настройках."}
-            </div>
-
-            <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-5 mb-8 flex items-center justify-center gap-3">
-              <span className="text-2xl">⚡</span>
-              <span className="text-green-400 font-bold">
-                Система готова к работе!
-              </span>
-            </div>
-
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => {
-                  // Return to the page that sent the user here (e.g. /link)
-                  const next = sessionStorage.getItem("vein_after_login");
-                  sessionStorage.removeItem("vein_after_login");
-                  if (next && next.startsWith("/") && !next.startsWith("//")) {
-                    globalThis.location.href = next;
-                    return;
-                  }
-                  const safeUsername = encodeURIComponent(username);
-                  globalThis.location.href = `/user/${safeUsername}`;
-                }}
-                className="w-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] text-[#121212] font-black py-4 rounded-xl transition-all text-lg shadow-[0_0_20px_var(--accent-glow)] hover:scale-[1.02]"
-              >
-                ВОЙТИ В СИСТЕМУ
-              </button>
-            </div>
+              <Copy className="h-4 w-4" aria-hidden="true" />
+              {copied ? "Скопировано" : "Копировать"}
+            </button>
           </div>
-        )}
-      </main>
+          <button
+            type="button"
+            onClick={() => go(afterLoginUrl(username))}
+            className={`${btn.primary} ${btn.lg}`}
+          >
+            Я сохранил, дальше
+          </button>
+        </section>
+      ) : (
+        <form
+          onSubmit={handleSubmit}
+          aria-labelledby="auth-title"
+          className="flex w-full max-w-[380px] flex-col gap-5"
+        >
+          {(registrationOpen || !isLogin) && (
+            <Segmented
+              label="Вход или регистрация"
+              value={mode}
+              onChange={(m) => {
+                setMode(m);
+                setError("");
+              }}
+              options={[
+                { id: "login", label: "Вход" },
+                { id: "register", label: "Регистрация" },
+              ]}
+            />
+          )}
+          <div className="flex flex-col gap-1.5">
+            <h1
+              id="auth-title"
+              className="text-[26px] font-semibold tracking-[-0.02em]"
+            >
+              {isLogin ? "С возвращением" : "Новый профиль"}
+            </h1>
+            <p className="text-sm text-fg-2">
+              {isLogin
+                ? "Войдите, чтобы увидеть свою музыку."
+                : "Регистрация занимает 10 секунд."}
+            </p>
+          </div>
+          <div>
+            <label htmlFor="auth-username" className={label}>
+              Логин
+            </label>
+            <input
+              id="auth-username"
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className={`${input} h-11 font-mono`}
+              placeholder="masha_l"
+              autoComplete="username"
+              required
+            />
+          </div>
+          <div>
+            <div className="flex items-baseline justify-between">
+              <label htmlFor="auth-password" className={label}>
+                Пароль
+              </label>
+              {!isLogin && (
+                <span className="text-xs text-fg-3">минимум 8 символов</span>
+              )}
+            </div>
+            <input
+              id="auth-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={`${input} h-11`}
+              placeholder="••••••••"
+              minLength={isLogin ? undefined : 8}
+              autoComplete={isLogin ? "current-password" : "new-password"}
+              required
+            />
+          </div>
+          {error && (
+            <p
+              role="alert"
+              className="rounded-lg border border-danger-line px-3 py-2.5 text-[13px] text-danger"
+            >
+              {error}
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={loading}
+            className={`${btn.primary} ${btn.lg}`}
+          >
+            {submitLabel}
+          </button>
+          {!registrationOpen && isLogin && (
+            <p className="text-[13px] text-fg-3">
+              Регистрация новых аккаунтов временно закрыта.
+            </p>
+          )}
+          <p className="text-[13px] text-fg-3">
+            {isLogin ? "Действуют наши" : "Создавая аккаунт, вы принимаете"}{" "}
+            <a href="/terms" className="text-fg-2 underline underline-offset-2">
+              условия
+            </a>{" "}
+            и{" "}
+            <a
+              href="/privacy"
+              className="text-fg-2 underline underline-offset-2"
+            >
+              политику конфиденциальности
+            </a>
+            .
+          </p>
+        </form>
+      )}
+
+      <aside
+        aria-label="Что дальше"
+        className="flex w-full max-w-[380px] flex-col gap-4 border-line-soft md:w-[320px] md:border-l md:pl-10"
+      >
+        <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-fg-3">
+          после входа
+        </span>
+        <ol className="flex flex-col gap-4">
+          {nextSteps.map(([title, text], i) => (
+            <li key={title} className="grid grid-cols-[28px_1fr] gap-2.5">
+              <span
+                className={`font-mono text-[13px] ${i === 0 ? "text-accent" : "text-fg-3"}`}
+              >
+                0{i + 1}
+              </span>
+              <span className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium">{title}</span>
+                <span className="text-[13px] text-fg-2">{text}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      </aside>
     </div>
   );
 }
