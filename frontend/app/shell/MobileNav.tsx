@@ -7,7 +7,7 @@ import AccountMenu from "./AccountMenu";
 import { navItems } from "./nav";
 import type { NavUser } from "./types";
 
-const TAB_IDS = ["feed", "top", "together", "stats", "profile"];
+const TAB_IDS = new Set(["feed", "top", "together", "stats", "profile"]);
 const SHORT_LABEL: Record<string, string> = { together: "Вместе" };
 
 /** Phone header: mark, bell and account button. */
@@ -43,7 +43,7 @@ export function MobileTabBar({
   username,
   active,
 }: Readonly<{ username: string; active: string | null }>) {
-  const tabs = navItems(username).filter((i) => TAB_IDS.includes(i.id));
+  const tabs = navItems(username).filter((i) => TAB_IDS.has(i.id));
   return (
     <nav
       aria-label="Разделы"

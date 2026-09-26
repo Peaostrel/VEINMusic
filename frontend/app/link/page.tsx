@@ -234,15 +234,15 @@ function LinkDevice() {
             <ul className="flex flex-col gap-2.5 px-5 py-4 text-[13px]">
               <li className="flex gap-2.5 text-fg">
                 <span className="w-3 font-mono text-ok">+</span>
-                Отправлять ваши прослушивания
+                <span>Отправлять ваши прослушивания</span>
               </li>
               <li className="flex gap-2.5 text-fg">
                 <span className="w-3 font-mono text-ok">+</span>
-                Читать ваш профиль
+                <span>Читать ваш профиль</span>
               </li>
               <li className="flex gap-2.5 text-fg-3">
                 <span className="w-3 font-mono">−</span>
-                Не сможет менять пароль и настройки
+                <span>Не сможет менять пароль и настройки</span>
               </li>
             </ul>
           </div>

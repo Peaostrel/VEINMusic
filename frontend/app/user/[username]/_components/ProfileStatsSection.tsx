@@ -144,7 +144,7 @@ export function ProfileStatsSection({
           {taste?.match !== undefined && (
             <div className="flex min-w-[220px] flex-col justify-center gap-1.5 rounded-lg border border-line px-3 py-2">
               <span className="flex items-baseline justify-between gap-3 text-[11px] text-fg-3">
-                Совместимость вкусов
+                <span>Совместимость вкусов</span>
                 <span className="font-mono text-[13px] text-fg">
                   {taste.match}%
                 </span>

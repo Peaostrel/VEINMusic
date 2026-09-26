@@ -170,7 +170,7 @@ export default function GlobalFeed() {
                 className={`absolute top-[3px] h-4 w-4 rounded-full transition-all ${autoRefresh ? "left-[21px] bg-on-accent" : "left-[3px] bg-fg-2"}`}
               />
             </span>
-            Автообновление
+            <span>Автообновление</span>
           </button>
         }
       />

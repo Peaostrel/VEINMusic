@@ -40,6 +40,11 @@ interface FeedItem {
 const EXTENSION_URL =
   "https://github.com/Peaostrel/VEINMusic/tree/VEIN/music-extension";
 const WEEKDAYS = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+
+/** Short weekday of a "YYYY-MM-DD" date (UTC). */
+function weekday(date: string): string {
+  return WEEKDAYS[new Date(date + "T00:00:00Z").getUTCDay()];
+}
 const QUIET_WEEK = 20;
 
 const features = [
@@ -191,12 +196,10 @@ function WeekCard({ week }: Readonly<{ week: Week | null }>) {
       ) : (
         <div
           role="img"
-          aria-label={`Прослушивания по дням: ${days
-            .map(
-              (d) =>
-                `${WEEKDAYS[new Date(`${d.date}T00:00:00Z`).getUTCDay()]} ${d.plays}`,
-            )
-            .join(", ")}`}
+          aria-label={
+            "Прослушивания по дням: " +
+            days.map((d) => weekday(d.date) + " " + d.plays).join(", ")
+          }
           className="flex h-[104px] items-end gap-1.5"
         >
           {days.map((d, i) => {
@@ -218,7 +221,7 @@ function WeekCard({ week }: Readonly<{ week: Week | null }>) {
                   }}
                 />
                 <span className="font-mono text-[10px] text-fg-3">
-                  {WEEKDAYS[new Date(`${d.date}T00:00:00Z`).getUTCDay()]}
+                  {weekday(d.date)}
                 </span>
               </div>
             );

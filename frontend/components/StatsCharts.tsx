@@ -42,10 +42,11 @@ export function BarStrip({
   );
   const max = Math.max(1, ...entries.map(([, v]) => v));
   const peak = highlight ?? entries.find(([, v]) => v === max)?.[0];
+  const summary = entries.map(([k, v]) => k + " " + v).join(", ");
   return (
     <div
       role="img"
-      aria-label={`${label}: ${entries.map(([k, v]) => `${k} ${v}`).join(", ")}`}
+      aria-label={`${label}: ${summary}`}
       className="flex flex-col gap-2"
     >
       <div className="flex items-end gap-[3px]" style={{ height }}>
@@ -111,7 +112,7 @@ export function GenreCloud({ data }: Readonly<{ data: CountMap }>) {
   const parts = top.map((g, i) => ({
     ...g,
     pct: Math.round((g.value / total) * 100),
-    color: RAMP[i] ?? RAMP[RAMP.length - 1],
+    color: RAMP[i] ?? RAMP.at(-1),
   }));
   return (
     <div className="flex flex-col gap-3.5">

@@ -10,9 +10,8 @@ export function ProfileToasts({ toasts, removeToast }: ProfileViewProps) {
       className="pointer-events-none fixed right-4 top-4 z-[90] flex flex-col gap-3"
     >
       {toasts.map((t) => (
-        <div
+        <output
           key={t.id}
-          role="status"
           className="pointer-events-auto relative flex w-80 items-center gap-3.5 rounded-xl border border-line bg-surface-2 p-3.5 pr-9 shadow-[0_12px_32px_rgba(0,0,0,0.45)]"
         >
           <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface text-2xl">
@@ -44,7 +43,7 @@ export function ProfileToasts({ toasts, removeToast }: ProfileViewProps) {
           >
             <X className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
-        </div>
+        </output>
       ))}
     </div>
   );

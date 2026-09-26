@@ -183,7 +183,9 @@ function YourWeek({
       </dl>
       <div
         role="img"
-        aria-label={`По дням: ${days.map((d) => `${d.label} ${d.plays}`).join(", ")}`}
+        aria-label={
+          "По дням: " + days.map((d) => d.label + " " + d.plays).join(", ")
+        }
         className="flex h-12 items-end gap-1.5"
       >
         {days.map((d, i) => (

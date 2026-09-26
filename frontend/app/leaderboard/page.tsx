@@ -193,16 +193,19 @@ function MyPlace({ rank }: Readonly<{ rank: MyRank | null }>) {
   );
 }
 
-const rules: React.ReactNode[] = [
-  "Опыт даётся за трек, дослушанный до 85% длины.",
-  "Каждые 100 XP — новый уровень.",
-  <>
-    Накрутка прослушиваний — бан, см.{" "}
-    <Link href="/terms" className="underline underline-offset-2">
-      условия
-    </Link>
-    .
-  </>,
+const rules: [string, React.ReactNode][] = [
+  ["xp", "Опыт даётся за трек, дослушанный до 85% длины."],
+  ["level", "Каждые 100 XP — новый уровень."],
+  [
+    "ban",
+    <>
+      Накрутка прослушиваний — бан, см.{" "}
+      <Link href="/terms" className="underline underline-offset-2">
+        условия
+      </Link>
+      {"."}
+    </>,
+  ],
 ];
 
 export default function Leaderboard() {
@@ -279,8 +282,8 @@ export default function Leaderboard() {
             Как считается опыт
           </h2>
           <ol className="flex flex-col gap-2.5 text-[13px] leading-normal text-fg-2">
-            {rules.map((r, i) => (
-              <li key={i} className="grid grid-cols-[22px_1fr] gap-2">
+            {rules.map(([id, r], i) => (
+              <li key={id} className="grid grid-cols-[22px_1fr] gap-2">
                 <span className="font-mono text-fg-3">0{i + 1}</span>
                 <span>{r}</span>
               </li>

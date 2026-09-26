@@ -27,6 +27,92 @@ function go(url: string) {
   globalThis.location.href = url;
 }
 
+function NextSteps() {
+  return (
+    <aside
+      aria-label="Что дальше"
+      className="flex w-full max-w-[380px] flex-col gap-4 border-line-soft md:w-[320px] md:border-l md:pl-10"
+    >
+      <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-fg-3">
+        после входа
+      </span>
+      <ol className="flex flex-col gap-4">
+        {nextSteps.map(([title, text], i) => (
+          <li key={title} className="grid grid-cols-[28px_1fr] gap-2.5">
+            <span
+              className={`font-mono text-[13px] ${i === 0 ? "text-accent" : "text-fg-3"}`}
+            >
+              0{i + 1}
+            </span>
+            <span className="flex flex-col gap-0.5">
+              <span className="text-sm font-medium">{title}</span>
+              <span className="text-[13px] text-fg-2">{text}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </aside>
+  );
+}
+
+/** Shown once after registration: the raw key is never returned again. */
+function ApiKeyStep({
+  apiKey,
+  onDone,
+}: Readonly<{ apiKey: string; onDone: () => void }>) {
+  const [copied, setCopied] = useState(false);
+  const copyKey = async () => {
+    try {
+      await navigator.clipboard.writeText(apiKey);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+  return (
+    <section
+      aria-labelledby="key-title"
+      className="flex w-full max-w-[440px] flex-col gap-5"
+    >
+      <span className="inline-flex h-[26px] items-center gap-2 self-start rounded-full border border-line px-2.5 text-xs text-ok">
+        <Check className="h-3.5 w-3.5" aria-hidden="true" />
+        Аккаунт создан
+      </span>
+      <h1
+        id="key-title"
+        className="text-[26px] font-semibold tracking-[-0.02em]"
+      >
+        Ваш API-ключ
+      </h1>
+      <p className="text-sm leading-relaxed text-fg-2">
+        Он нужен расширению и сторонним плеерам. Мы показываем его один раз —
+        сохраните сейчас. Новый ключ можно выпустить в настройках, старый при
+        этом перестанет работать.
+      </p>
+      <div className="flex gap-2">
+        <code className="flex h-11 min-w-0 flex-1 items-center truncate rounded-lg border border-line bg-surface px-3.5 font-mono text-[13px] select-all">
+          {apiKey}
+        </code>
+        <button
+          type="button"
+          onClick={copyKey}
+          className={`${btn.secondary} h-11 px-4`}
+        >
+          <Copy className="h-4 w-4" aria-hidden="true" />
+          {copied ? "Скопировано" : "Копировать"}
+        </button>
+      </div>
+      <button
+        type="button"
+        onClick={onDone}
+        className={`${btn.primary} ${btn.lg}`}
+      >
+        Я сохранил, дальше
+      </button>
+    </section>
+  );
+}
+
 export default function Auth() {
   const [mode, setMode] = useState<Mode>("login");
   const registrationOpen = useFeature("registration");
@@ -34,7 +120,6 @@ export default function Auth() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [apiKey, setApiKey] = useState("");
-  const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const isLogin = mode === "login";
 
@@ -93,61 +178,16 @@ export default function Auth() {
     }
   };
 
-  const copyKey = async () => {
-    try {
-      await navigator.clipboard.writeText(apiKey);
-      setCopied(true);
-    } catch {
-      setCopied(false);
-    }
-  };
-
   let submitLabel = isLogin ? "Войти" : "Создать аккаунт";
   if (loading) submitLabel = "Подождите…";
 
   return (
     <div className="mx-auto flex w-full max-w-[900px] flex-col items-center gap-16 px-4 py-16 md:flex-row md:items-start md:justify-center md:gap-24 md:py-24">
       {apiKey ? (
-        <section
-          aria-labelledby="key-title"
-          className="flex w-full max-w-[440px] flex-col gap-5"
-        >
-          <span className="inline-flex h-[26px] items-center gap-2 self-start rounded-full border border-line px-2.5 text-xs text-ok">
-            <Check className="h-3.5 w-3.5" aria-hidden="true" />
-            Аккаунт создан
-          </span>
-          <h1
-            id="key-title"
-            className="text-[26px] font-semibold tracking-[-0.02em]"
-          >
-            Ваш API-ключ
-          </h1>
-          <p className="text-sm leading-relaxed text-fg-2">
-            Он нужен расширению и сторонним плеерам. Мы показываем его один раз
-            — сохраните сейчас. Новый ключ можно выпустить в настройках, старый
-            при этом перестанет работать.
-          </p>
-          <div className="flex gap-2">
-            <code className="flex h-11 min-w-0 flex-1 items-center truncate rounded-lg border border-line bg-surface px-3.5 font-mono text-[13px] select-all">
-              {apiKey}
-            </code>
-            <button
-              type="button"
-              onClick={copyKey}
-              className={`${btn.secondary} h-11 px-4`}
-            >
-              <Copy className="h-4 w-4" aria-hidden="true" />
-              {copied ? "Скопировано" : "Копировать"}
-            </button>
-          </div>
-          <button
-            type="button"
-            onClick={() => go(afterLoginUrl(username))}
-            className={`${btn.primary} ${btn.lg}`}
-          >
-            Я сохранил, дальше
-          </button>
-        </section>
+        <ApiKeyStep
+          apiKey={apiKey}
+          onDone={() => go(afterLoginUrl(username))}
+        />
       ) : (
         <form
           onSubmit={handleSubmit}
@@ -249,34 +289,12 @@ export default function Auth() {
             >
               политику конфиденциальности
             </a>
-            .
+            {"."}
           </p>
         </form>
       )}
 
-      <aside
-        aria-label="Что дальше"
-        className="flex w-full max-w-[380px] flex-col gap-4 border-line-soft md:w-[320px] md:border-l md:pl-10"
-      >
-        <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-fg-3">
-          после входа
-        </span>
-        <ol className="flex flex-col gap-4">
-          {nextSteps.map(([title, text], i) => (
-            <li key={title} className="grid grid-cols-[28px_1fr] gap-2.5">
-              <span
-                className={`font-mono text-[13px] ${i === 0 ? "text-accent" : "text-fg-3"}`}
-              >
-                0{i + 1}
-              </span>
-              <span className="flex flex-col gap-0.5">
-                <span className="text-sm font-medium">{title}</span>
-                <span className="text-[13px] text-fg-2">{text}</span>
-              </span>
-            </li>
-          ))}
-        </ol>
-      </aside>
+      <NextSteps />
     </div>
   );
 }
