@@ -70,9 +70,9 @@ function EditTrack({
     <Dialog label={`Трек #${track.id}`} onClose={onClose}>
       <form
         onSubmit={save}
-        className="bg-[#141418] border border-white/10 rounded-2xl w-full max-w-lg p-6 space-y-3 text-left"
+        className="bg-surface border border-line rounded-xl w-full max-w-lg p-6 space-y-3 text-left"
       >
-        <h2 className="text-base font-black text-white">
+        <h2 className="text-base font-semibold text-fg">
           Трек #{track.id} · {track.plays} прослушиваний
         </h2>
         {FIELDS.map(({ key, label, type }) => (
@@ -138,7 +138,7 @@ export default function TrackBrowser() {
       <div className="flex items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
           <Search
-            className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2"
+            className="w-4 h-4 text-fg-2 absolute left-3.5 top-1/2 -translate-y-1/2"
             aria-hidden="true"
           />
           <input
@@ -153,14 +153,14 @@ export default function TrackBrowser() {
             className={`${inputClass} pl-10 py-2.5 text-sm`}
           />
         </div>
-        <span className="text-xs text-gray-400 font-mono">
+        <span className="text-xs text-fg-2 font-mono">
           Треков: {data?.total ?? "…"}
         </span>
       </div>
       <Notice text={notice} />
-      <div className="bg-[#141418] border border-white/5 rounded-2xl overflow-x-auto">
-        <table className="w-full text-left text-xs text-gray-300">
-          <thead className="bg-[#0f0f12] text-gray-400 font-mono uppercase text-[11px] border-b border-white/5">
+      <div className="bg-surface border border-line-soft rounded-xl overflow-x-auto">
+        <table className="w-full text-left text-xs text-fg-2">
+          <thead className="bg-[#0f0f12] text-fg-2 font-mono text-[11px] border-b border-line-soft">
             <tr>
               <th className="py-3 px-4">ID</th>
               <th className="py-3 px-4">Трек</th>
@@ -173,12 +173,12 @@ export default function TrackBrowser() {
           <tbody className="divide-y divide-white/5">
             {(data?.items ?? []).map((t) => (
               <tr key={t.id} className="hover:bg-white/[0.02]">
-                <td className="py-2.5 px-4 font-mono text-gray-400">#{t.id}</td>
+                <td className="py-2.5 px-4 font-mono text-fg-2">#{t.id}</td>
                 <td className="py-2.5 px-4">
-                  <div className="font-bold text-white">{t.title}</div>
-                  <div className="text-gray-400">{t.artist}</div>
+                  <div className="font-medium text-fg">{t.title}</div>
+                  <div className="text-fg-2">{t.artist}</div>
                 </td>
-                <td className="py-2.5 px-4 text-gray-400">
+                <td className="py-2.5 px-4 text-fg-2">
                   {t.album || "—"}
                   {t.genre && (
                     <div className="text-[10px] font-mono">{t.genre}</div>
@@ -193,7 +193,7 @@ export default function TrackBrowser() {
                     type="button"
                     onClick={() => setEditing(t)}
                     aria-label={`Изменить трек ${t.id}`}
-                    className="p-2 hover:bg-white/10 rounded-lg text-blue-300"
+                    className="p-2 hover:bg-line rounded-lg text-fg-2"
                   >
                     <Pencil className="w-4 h-4" aria-hidden="true" />
                   </button>
@@ -201,7 +201,7 @@ export default function TrackBrowser() {
                     type="button"
                     onClick={() => remove(t)}
                     aria-label={`Удалить трек ${t.id}`}
-                    className="p-2 hover:bg-red-500/20 rounded-lg text-red-400"
+                    className="p-2 hover:bg-[#2a1b1b] rounded-lg text-danger"
                   >
                     <Trash2 className="w-4 h-4" aria-hidden="true" />
                   </button>

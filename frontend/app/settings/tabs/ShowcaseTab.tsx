@@ -32,29 +32,27 @@ export default function ShowcaseTab({
   const albumLock = getLockInfo(data.favAlbumUpdatedAt);
 
   return (
-    <div className="p-6 md:p-8 space-y-6">
-      <h2 className="text-xl font-bold mb-4 text-[var(--accent-text)]">
-        Витрина профиля
-      </h2>
-      <p className="text-xs text-gray-400 mb-4 leading-relaxed">
+    <div className="space-y-6">
+      <h2 className="text-lg font-semibold text-fg mb-4">Витрина профиля</h2>
+      <p className="text-xs text-fg-2 mb-4 leading-relaxed">
         Настройте свои музыкальные редкости. Они будут отображаться в красивой
         секции на вашей публичной странице. Внимание: менять любимого артиста,
         трек и альбом можно не чаще 1 раза в 30 дней!
       </p>
 
-      <div className="bg-[#121212]/50 p-5 rounded-xl border border-white/5 space-y-6">
+      <div className="bg-surface p-5 rounded-xl border border-line-soft space-y-6">
         {/* АРТИСТ */}
         <div className="space-y-3">
           <div className="flex justify-between items-center">
             <label
               htmlFor="fav-artist"
-              className="block text-sm font-bold text-gray-300"
+              className="block text-sm font-medium text-fg-2"
             >
-              🎤 Любимый артист
+              Любимый артист
             </label>
             {artistLock.isLocked && (
-              <span className="text-xs font-bold text-red-400 bg-red-400/10 px-2 py-1 rounded">
-                🔒 Заблокировано (осталось {artistLock.daysLeft} дн.)
+              <span className="text-xs font-medium text-danger px-2 py-1 rounded">
+                Можно сменить через {artistLock.daysLeft} дн.
               </span>
             )}
           </div>
@@ -64,23 +62,23 @@ export default function ShowcaseTab({
             onChange={(val) => updateData("favArtist", val)}
             entityType="artist"
             disabled={artistLock.isLocked}
-            className={`w-full p-3 rounded-lg text-white border border-white/5 transition-colors outline-none ${artistLock.isLocked ? "bg-[#1f1f1f] opacity-60 cursor-not-allowed" : "bg-[#282828]/80 focus:border-[var(--accent)]"}`}
+            className={`w-full p-3 rounded-lg text-fg border border-line-soft transition-colors outline-none ${artistLock.isLocked ? "bg-[#1f1f1f] opacity-60 cursor-not-allowed" : "bg-surface-2 focus:border-fg-3"}`}
             placeholder="Имя артиста (начните вводить...)"
           />
         </div>
 
         {/* ТРЕК */}
-        <div className="pt-6 border-t border-white/5 space-y-3">
+        <div className="pt-6 border-t border-line-soft space-y-3">
           <div className="flex justify-between items-center">
             <label
               htmlFor="fav-track"
-              className="block text-sm font-bold text-gray-300"
+              className="block text-sm font-medium text-fg-2"
             >
-              🎵 Любимый трек
+              Любимый трек
             </label>
             {trackLock.isLocked && (
-              <span className="text-xs font-bold text-red-400 bg-red-400/10 px-2 py-1 rounded">
-                🔒 Заблокировано (осталось {trackLock.daysLeft} дн.)
+              <span className="text-xs font-medium text-danger px-2 py-1 rounded">
+                Можно сменить через {trackLock.daysLeft} дн.
               </span>
             )}
           </div>
@@ -90,23 +88,23 @@ export default function ShowcaseTab({
             onChange={(val) => updateData("favTrack", val)}
             entityType="track"
             disabled={trackLock.isLocked}
-            className={`w-full p-3 rounded-lg text-white border border-white/5 transition-colors outline-none ${trackLock.isLocked ? "bg-[#1f1f1f] opacity-60 cursor-not-allowed" : "bg-[#282828]/80 focus:border-[var(--accent)]"}`}
+            className={`w-full p-3 rounded-lg text-fg border border-line-soft transition-colors outline-none ${trackLock.isLocked ? "bg-[#1f1f1f] opacity-60 cursor-not-allowed" : "bg-surface-2 focus:border-fg-3"}`}
             placeholder="Имя артиста и название трека (например: Король и Шут — Лесник)"
           />
         </div>
 
         {/* АЛЬБОМ */}
-        <div className="pt-6 border-t border-white/5 space-y-3">
+        <div className="pt-6 border-t border-line-soft space-y-3">
           <div className="flex justify-between items-center">
             <label
               htmlFor="fav-album"
-              className="block text-sm font-bold text-gray-300"
+              className="block text-sm font-medium text-fg-2"
             >
-              💿 Любимый альбом
+              Любимый альбом
             </label>
             {albumLock.isLocked && (
-              <span className="text-xs font-bold text-red-400 bg-red-400/10 px-2 py-1 rounded">
-                🔒 Заблокировано (осталось {albumLock.daysLeft} дн.)
+              <span className="text-xs font-medium text-danger px-2 py-1 rounded">
+                Можно сменить через {albumLock.daysLeft} дн.
               </span>
             )}
           </div>
@@ -116,7 +114,7 @@ export default function ShowcaseTab({
             onChange={(val) => updateData("favAlbum", val)}
             entityType="album"
             disabled={albumLock.isLocked}
-            className={`w-full p-3 rounded-lg text-white border border-white/5 transition-colors outline-none ${albumLock.isLocked ? "bg-[#1f1f1f] opacity-60 cursor-not-allowed" : "bg-[#282828]/80 focus:border-[var(--accent)]"}`}
+            className={`w-full p-3 rounded-lg text-fg border border-line-soft transition-colors outline-none ${albumLock.isLocked ? "bg-[#1f1f1f] opacity-60 cursor-not-allowed" : "bg-surface-2 focus:border-fg-3"}`}
             placeholder="Имя артиста и название альбома (начните вводить...)"
           />
         </div>

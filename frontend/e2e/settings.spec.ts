@@ -11,7 +11,7 @@ test.describe("Settings", () => {
 
     await page.getByLabel("Отображаемое Имя").fill("E2E Display Name");
     await page.getByRole("button", { name: "Сохранить всё" }).click();
-    await expect(page.getByText("✅ Успешно!")).toBeVisible();
+    await expect(page.getByText("Успешно!")).toBeVisible();
 
     await page.goto(`/user/${username}`);
     await expect(page.getByText("E2E Display Name").first()).toBeVisible();
@@ -60,7 +60,7 @@ test.describe("Settings", () => {
     await expect(
       page.getByRole("button", { name: "Экспорт и вебхуки" }),
     ).toHaveAttribute("aria-current", "page");
-    await expect(page.getByText("✅ Last.fm подключён")).toBeVisible();
+    await expect(page.getByText("Last.fm подключён")).toBeVisible();
     await expect(
       page.getByRole("link", { name: "Подключить Last.fm" }),
     ).toHaveAttribute("href", /\/api\/integrations\/lastfm\/connect$/);

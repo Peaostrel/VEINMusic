@@ -108,6 +108,10 @@ async def get_track_genre(url: str) -> str | None:
     return None
 
 
+_RU_MONTHS = ("янв", "фев", "мар", "апр", "мая", "июн",
+              "июл", "авг", "сен", "окт", "ноя", "дек")
+
+
 def format_history_item(
         scrobble,
         track,
@@ -132,7 +136,7 @@ def format_history_item(
     elif diff.total_seconds() < 86400:
         rel_time = f"{int(diff.total_seconds() // 3600)}ч назад"
     else:
-        rel_time = played_time.strftime("%d %b")
+        rel_time = f"{played_time.day} {_RU_MONTHS[played_time.month - 1]}"
 
     data = {
         "id": scrobble.id,

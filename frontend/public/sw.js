@@ -1,5 +1,5 @@
 // VEINMusic PWA Service Worker
-const CACHE_NAME = "veinmusic-cache-v3";
+const CACHE_NAME = "veinmusic-cache-v4";
 const PRECACHE_URLS = [
   "/",
   "/manifest.json",

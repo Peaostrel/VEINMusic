@@ -2,22 +2,22 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiJson, type ApiInit } from "@/app/lib/api";
+import StatusText from "@/components/StatusText";
 
 // Shared building blocks of the admin panel tabs
 
 export const panelClass =
-  "bg-[#141418] border border-white/5 p-5 rounded-2xl space-y-4";
+  "rounded-xl border border-line bg-surface p-5 space-y-4";
 export const inputClass =
-  "w-full px-3 py-2 bg-black/40 border border-white/10 rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none focus:border-red-500";
-export const labelClass =
-  "block text-[10px] font-mono text-gray-400 uppercase mb-1";
+  "w-full h-9 rounded-lg border border-line bg-bg px-3 text-[13px] text-fg placeholder:text-fg-3 outline-none transition-colors focus:border-fg-3";
+export const labelClass = "mb-1.5 block text-xs text-fg-2";
 
 const buttonBase =
-  "px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
+  "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
 export const buttonClass = {
-  primary: `${buttonBase} bg-red-600 hover:bg-red-500 text-white`,
-  secondary: `${buttonBase} bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200`,
-  danger: `${buttonBase} bg-red-950/60 hover:bg-red-900/60 border border-red-500/30 text-red-300`,
+  primary: `${buttonBase} bg-accent text-on-accent hover:brightness-110`,
+  secondary: `${buttonBase} border border-line text-fg hover:bg-surface-2`,
+  danger: `${buttonBase} border border-danger-line text-danger hover:bg-[#2a1b1b]`,
 };
 
 export function PanelTitle({
@@ -25,7 +25,7 @@ export function PanelTitle({
   children,
 }: Readonly<{ icon?: React.ReactNode; children: React.ReactNode }>) {
   return (
-    <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+    <h3 className="flex items-center gap-2 text-sm font-semibold text-fg [&_svg]:h-4 [&_svg]:w-4 [&_svg]:text-fg-3">
       {icon}
       {children}
     </h3>
@@ -74,15 +74,9 @@ export function useNotice() {
   return { notice, setNotice, run };
 }
 
+/** Message line under an admin form ("✅ …" / "❌ …" shown as an icon). */
 export function Notice({ text }: Readonly<{ text: string }>) {
-  if (!text) return null;
-  return (
-    <output
-      className={`block text-xs font-bold ${text.startsWith("❌") ? "text-red-400" : "text-emerald-400"}`}
-    >
-      {text}
-    </output>
-  );
+  return <StatusText text={text} className="text-xs" />;
 }
 
 /** Loads a JSON resource and reloads when `path` changes. */
@@ -139,7 +133,7 @@ export function Pager({
   return (
     <nav
       aria-label="Страницы"
-      className="flex items-center justify-end gap-2 text-xs text-gray-400"
+      className="flex items-center justify-end gap-2 text-xs text-fg-2"
     >
       <button
         type="button"

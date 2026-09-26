@@ -21,18 +21,18 @@ export default function AnnouncementsTab({
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
       {/* Announcements Manager */}
       <div className="space-y-4">
-        <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
-          <Megaphone className="w-4 h-4 text-blue-400" />
+        <h3 className="text-sm font-semibold text-fg flex items-center gap-2">
+          <Megaphone className="w-4 h-4 text-fg-2" />
           Глобальные системные оповещения
         </h3>
 
         <form
           onSubmit={handleCreateAnnouncement}
-          className="bg-[#141418] border border-white/5 p-5 rounded-2xl space-y-3"
+          className="bg-surface border border-line-soft p-5 rounded-xl space-y-3"
         >
           <div className="grid grid-cols-3 gap-2">
             <div className="col-span-2">
-              <span className="block text-[10px] font-mono text-gray-400 uppercase">
+              <span className="block text-[10px] font-mono text-fg-2">
                 Заголовок
               </span>
               <input
@@ -42,28 +42,26 @@ export default function AnnouncementsTab({
                 onChange={(e) =>
                   setNewAnn({ ...newAnn, title: e.target.value })
                 }
-                className="w-full mt-1 px-3 py-2 bg-black/40 border border-white/10 rounded-xl text-xs text-white"
+                className="w-full mt-1 px-3 py-2 bg-bg border border-line rounded-xl text-xs text-fg"
                 required
               />
             </div>
             <div>
-              <span className="block text-[10px] font-mono text-gray-400 uppercase">
-                Тип
-              </span>
+              <span className="block text-[10px] font-mono text-fg-2">Тип</span>
               <select
                 value={newAnn.type}
                 onChange={(e) => setNewAnn({ ...newAnn, type: e.target.value })}
-                className="w-full mt-1 px-3 py-2 bg-black/40 border border-white/10 rounded-xl text-xs text-white"
+                className="w-full mt-1 px-3 py-2 bg-bg border border-line rounded-xl text-xs text-fg"
               >
-                <option value="info">Info (Синий)</option>
-                <option value="warning">Warning (Желтый)</option>
-                <option value="alert">Alert (Красный)</option>
+                <option value="info">Информация</option>
+                <option value="warning">Предупреждение</option>
+                <option value="alert">Важное</option>
               </select>
             </div>
           </div>
 
           <div>
-            <span className="block text-[10px] font-mono text-gray-400 uppercase">
+            <span className="block text-[10px] font-mono text-fg-2">
               Текст сообщения
             </span>
             <textarea
@@ -73,14 +71,14 @@ export default function AnnouncementsTab({
                 setNewAnn({ ...newAnn, message: e.target.value })
               }
               rows={2}
-              className="w-full mt-1 px-3 py-2 bg-black/40 border border-white/10 rounded-xl text-xs text-white resize-none"
+              className="w-full mt-1 px-3 py-2 bg-bg border border-line rounded-xl text-xs text-fg resize-none"
               required
             />
           </div>
 
           <button
             type="submit"
-            className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs transition cursor-pointer"
+            className="w-full py-2.5 bg-accent text-on-accent hover:brightness-110 font-medium rounded-xl text-xs transition cursor-pointer"
           >
             Опубликовать оповещение
           </button>
@@ -90,18 +88,18 @@ export default function AnnouncementsTab({
           {announcements.map((ann) => (
             <div
               key={ann.id}
-              className="bg-[#141418] border border-white/5 p-4 rounded-2xl flex items-center justify-between gap-4"
+              className="bg-surface border border-line-soft p-4 rounded-xl flex items-center justify-between gap-4"
             >
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-white text-xs">
+                  <span className="font-medium text-fg text-xs">
                     {ann.title}
                   </span>
-                  <span className="px-2 py-0.2 rounded font-mono text-[9px] uppercase bg-white/5 text-gray-400">
+                  <span className="px-2 py-0.2 rounded font-mono text-[9px] bg-surface-2 text-fg-2">
                     {ann.type}
                   </span>
                 </div>
-                <p className="text-xs text-gray-400 mt-1">{ann.message}</p>
+                <p className="text-xs text-fg-2 mt-1">{ann.message}</p>
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
@@ -110,10 +108,10 @@ export default function AnnouncementsTab({
                   onClick={() =>
                     handleToggleAnnouncement(ann.id, ann.is_active)
                   }
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
                     ann.is_active
-                      ? "bg-emerald-950/60 border border-emerald-500/40 text-emerald-400"
-                      : "bg-white/5 text-gray-400"
+                      ? "border border-line text-ok"
+                      : "bg-surface-2 text-fg-2"
                   }`}
                 >
                   {ann.is_active ? "Активно" : "Скрыто"}
@@ -121,7 +119,7 @@ export default function AnnouncementsTab({
                 <button
                   type="button"
                   onClick={() => handleDeleteAnnouncement(ann.id)}
-                  className="p-1.5 hover:bg-red-500/20 text-red-400 rounded-lg transition cursor-pointer"
+                  className="p-1.5 hover:bg-[#2a1b1b] text-danger rounded-lg transition cursor-pointer"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -133,17 +131,17 @@ export default function AnnouncementsTab({
 
       {/* Feature Flags Manager */}
       <div className="space-y-4">
-        <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
-          <Zap className="w-4 h-4 text-amber-400" />
+        <h3 className="text-sm font-semibold text-fg flex items-center gap-2">
+          <Zap className="w-4 h-4 text-accent" />
           Динамические Feature Flags
         </h3>
 
         <form
           onSubmit={handleCreateFlag}
-          className="bg-[#141418] border border-white/5 p-5 rounded-2xl space-y-3"
+          className="bg-surface border border-line-soft p-5 rounded-xl space-y-3"
         >
           <div>
-            <span className="block text-[10px] font-mono text-gray-400 uppercase">
+            <span className="block text-[10px] font-mono text-fg-2">
               Ключ флага (slug)
             </span>
             <input
@@ -151,12 +149,12 @@ export default function AnnouncementsTab({
               placeholder="enable_listen_together"
               value={newFlag.key}
               onChange={(e) => setNewFlag({ ...newFlag, key: e.target.value })}
-              className="w-full mt-1 px-3 py-2 bg-black/40 border border-white/10 rounded-xl text-xs text-white font-mono"
+              className="w-full mt-1 px-3 py-2 bg-bg border border-line rounded-xl text-xs text-fg font-mono"
               required
             />
           </div>
           <div>
-            <span className="block text-[10px] font-mono text-gray-400 uppercase">
+            <span className="block text-[10px] font-mono text-fg-2">
               Описание
             </span>
             <input
@@ -166,12 +164,12 @@ export default function AnnouncementsTab({
               onChange={(e) =>
                 setNewFlag({ ...newFlag, description: e.target.value })
               }
-              className="w-full mt-1 px-3 py-2 bg-black/40 border border-white/10 rounded-xl text-xs text-white"
+              className="w-full mt-1 px-3 py-2 bg-bg border border-line rounded-xl text-xs text-fg"
             />
           </div>
           <button
             type="submit"
-            className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl text-xs transition cursor-pointer"
+            className="w-full py-2.5 bg-accent text-on-accent hover:brightness-110 font-medium rounded-xl text-xs transition cursor-pointer"
           >
             + Добавить фича-флаг
           </button>
@@ -181,13 +179,13 @@ export default function AnnouncementsTab({
           {featureFlags.map((flag) => (
             <div
               key={flag.id}
-              className="bg-[#141418] border border-white/5 p-4 rounded-2xl flex items-center justify-between gap-4"
+              className="bg-surface border border-line-soft p-4 rounded-xl flex items-center justify-between gap-4"
             >
               <div>
-                <div className="font-mono font-bold text-white text-xs">
+                <div className="font-mono font-medium text-fg text-xs">
                   {flag.key}
                 </div>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs text-fg-2 mt-0.5">
                   {flag.description || "Без описания"}
                 </p>
               </div>
@@ -195,13 +193,13 @@ export default function AnnouncementsTab({
               <button
                 type="button"
                 onClick={() => handleToggleFlag(flag.key, flag.is_enabled)}
-                className={`px-3.5 py-1.5 rounded-xl font-mono text-xs font-bold transition cursor-pointer ${
+                className={`px-3.5 py-1.5 rounded-xl font-mono text-xs font-medium transition cursor-pointer ${
                   flag.is_enabled
-                    ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/20"
-                    : "bg-white/10 text-gray-400 hover:bg-white/20"
+                    ? "bg-line text-fg"
+                    : "bg-line text-fg-2 hover:bg-line"
                 }`}
               >
-                {flag.is_enabled ? "ВКЛЮЧЕНО" : "ОТКЛ"}
+                {flag.is_enabled ? "включено" : "выключено"}
               </button>
             </div>
           ))}

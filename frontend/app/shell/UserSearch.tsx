@@ -2,12 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Search } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
-import { LvlBadge, VerifiedBadge } from "@/components/UserBadges";
+import { Avatar } from "@/components/ui";
+import { VerifiedBadge } from "@/components/UserBadges";
 import type { NavUser } from "./types";
 
 /** Profile search box with a results dropdown. */
-export default function UserSearch() {
+export default function UserSearch({
+  className = "",
+  id = "vein-search",
+}: Readonly<{ className?: string; id?: string }>) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<NavUser[]>([]);
@@ -43,61 +48,44 @@ export default function UserSearch() {
   }, [query]);
 
   const showResults = isOpen && results.length > 0;
+  const listId = `${id}-results`;
 
   return (
-    <div className="flex-grow max-w-md relative" ref={ref}>
-      <div className="relative">
-        <span
-          className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400"
-          aria-hidden="true"
-        >
-          🔍
-        </span>
-        {/* Dummy inputs to trick Firefox/Chrome autofill */}
-        <input
-          type="text"
-          style={{ display: "none" }}
-          tabIndex={-1}
-          aria-hidden="true"
-        />
-        <input
-          type="password"
-          style={{ display: "none" }}
-          tabIndex={-1}
-          aria-hidden="true"
-        />
-
+    <div className={`relative ${className}`} ref={ref}>
+      <label className="flex h-9 items-center gap-2 rounded-lg border border-line px-2.5 text-fg-3 transition-colors focus-within:border-fg-3">
+        <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
         <input
           type="search"
-          id="vein_music_search_v2"
-          name="vein_music_search_v2"
-          placeholder="Поиск профилей..."
+          id={id}
+          name={id}
+          placeholder="Поиск людей"
           aria-label="Поиск профилей"
+          aria-controls={showResults ? listId : undefined}
+          aria-expanded={showResults}
+          role="combobox"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
             setIsOpen(true);
           }}
-          onFocus={(e) => {
-            e.target.removeAttribute("readonly");
+          onFocus={() => {
             if (results.length > 0 || query.length >= 2) setIsOpen(true);
           }}
           onKeyDown={(e) => {
             if (e.key === "Escape") setIsOpen(false);
           }}
-          readOnly
           autoComplete="off"
           spellCheck="false"
           autoCorrect="off"
           autoCapitalize="none"
-          className="w-full bg-[#1a1a1a]/80 border border-white/10 text-white text-sm rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-[var(--accent)] transition-colors backdrop-blur-md"
+          className="min-w-0 flex-1 bg-transparent text-[13px] text-fg placeholder:text-fg-3 outline-none [&::-webkit-search-cancel-button]:hidden"
         />
-      </div>
+      </label>
       {showResults && (
         <ul
-          id="navbar-search-results"
+          id={listId}
           aria-label="Результаты поиска"
-          className="absolute top-full left-0 right-0 mt-2 bg-[#1e1e1e]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50"
+          className="absolute left-0 top-full z-50 mt-1.5 w-full min-w-[260px] overflow-hidden rounded-lg border border-line bg-surface-2 py-1 shadow-[0_12px_32px_rgba(0,0,0,0.45)]"
         >
           {results.map((u) => (
             <li key={u.username}>
@@ -108,32 +96,24 @@ export default function UserSearch() {
                   setQuery("");
                   router.push(`/user/${u.username}`);
                 }}
-                className="w-full flex items-center gap-3 p-3 hover:bg-white/10 focus:bg-white/10 cursor-pointer transition-colors border-b border-white/5 last:border-0 text-left font-normal bg-transparent outline-none"
+                className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-line"
               >
-                <div className="w-9 h-9 rounded-full overflow-hidden bg-black shrink-0">
-                  <img
-                    src={
-                      u.avatar_url ||
-                      `https://api.dicebear.com/9.x/micah/svg?seed=${u.username}&backgroundColor=transparent`
-                    }
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="truncate flex-grow">
-                  <div className="font-bold text-white text-sm truncate flex items-center gap-1">
-                    {u.display_name}{" "}
+                <Avatar src={u.avatar_url} seed={u.username} size={30} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1 truncate text-[13px] font-medium text-fg">
+                    <span className="truncate">
+                      {u.display_name || u.username}
+                    </span>
                     <VerifiedBadge
                       role={u.role}
                       isVerified={u.is_verified}
                       sizeClass="w-3.5 h-3.5"
                     />
-                    <LvlBadge level={u.level || 1} />
-                  </div>
-                  <div className="text-xs text-gray-400 truncate">
-                    @{u.username}
-                  </div>
-                </div>
+                  </span>
+                  <span className="block truncate font-mono text-[11px] text-fg-3">
+                    @{u.username} · ур. {u.level || 1}
+                  </span>
+                </span>
               </button>
             </li>
           ))}

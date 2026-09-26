@@ -268,6 +268,8 @@ export interface TasteTwin {
 
 /** GET /api/leaderboard entry. */
 export interface LeaderboardEntry {
+  /** Global place (1-based) */
+  rank: number;
   username: string;
   display_name: string;
   avatar_url: string | null;
@@ -277,6 +279,14 @@ export interface LeaderboardEntry {
   is_verified: boolean;
   role: string;
   theme: string;
+}
+
+/** GET /api/leaderboard/me */
+export interface MyRank {
+  rank: number | null;
+  total: number;
+  total_xp: number;
+  ahead: { username: string; display_name: string; gap_xp: number } | null;
 }
 
 export interface TasteMatch {

@@ -10,10 +10,8 @@ test.describe("Authentication Flow", () => {
     // Switch to registration mode (retried: the first click can land
     // before the dev server has hydrated the page)
     await expect(async () => {
-      await page
-        .getByRole("button", { name: /Нет аккаунта\? Зарегистрироваться/i })
-        .click();
-      await expect(page.locator("h1")).toHaveText("НОВАЯ КРОВЬ", {
+      await page.getByRole("tab", { name: "Регистрация" }).click();
+      await expect(page.locator("h1")).toHaveText("Новый профиль", {
         timeout: 1000,
       });
     }).toPass();
@@ -23,31 +21,27 @@ test.describe("Authentication Flow", () => {
     await page.locator("#auth-password").fill(testPassword);
 
     // Submit
-    await page.getByRole("button", { name: "СОЗДАТЬ АККАУНТ" }).click();
+    await page.getByRole("button", { name: "Создать аккаунт" }).click();
 
-    // Verify success screen is shown with API key
-    await expect(page.locator("h2")).toHaveText("ПРОВЕРКА СВЯЗИ");
-    await expect(page.locator("text=Система готова к работе!")).toBeVisible();
+    // The API key is shown once, right after registration
+    await expect(page.locator("h1")).toHaveText("Ваш API-ключ");
+    await expect(page.getByText("Аккаунт создан")).toBeVisible();
 
-    // Click 'ВОЙТИ В СИСТЕМУ' and verify redirect
-    await page.getByRole("button", { name: "ВОЙТИ В СИСТЕМУ" }).click();
+    // Continue and verify redirect
+    await page.getByRole("button", { name: "Я сохранил, дальше" }).click();
     await expect(page).toHaveURL(`/user/${testUser}`);
   });
 
-  test("should login an existing user successfully", async ({ page }) => {
+  test("should show an error for a wrong password", async ({ page }) => {
     await page.goto("/auth");
 
-    // Verify header
-    await expect(page.locator("h1")).toHaveText("С ВОЗВРАЩЕНИЕМ");
+    await expect(page.locator("h1")).toHaveText("С возвращением");
 
-    // Fill form
-    await page.locator("#auth-username").fill("testuser"); // We assume a default testuser exists, or we use the previously created one if tests run sequentially, but they run parallel. We'll use a generic one and just check for error or success.
+    await page.locator("#auth-username").fill("testuser");
     await page.locator("#auth-password").fill("wrongpassword");
 
-    // Submit
-    await page.getByRole("button", { name: "ВОЙТИ" }).click();
+    await page.getByRole("button", { name: "Войти", exact: true }).click();
 
-    // Verify error message for wrong password
-    await expect(page.locator(".bg-red-500\\/10")).toBeVisible();
+    await expect(page.locator("form").getByRole("alert")).toBeVisible();
   });
 });

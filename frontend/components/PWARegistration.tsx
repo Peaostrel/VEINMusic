@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
+import { LogoTile } from "@/components/brand";
 
 /** Chromium's install prompt event (not in the DOM typings). */
 interface BeforeInstallPromptEvent extends Event {
@@ -52,29 +53,25 @@ export default function PWARegistration() {
   if (!showInstallBanner) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
+    <div className="fixed bottom-20 right-4 z-50 flex max-w-sm flex-col gap-2 lg:bottom-4">
       {showInstallBanner && (
-        <div className="bg-[#18181b]/95 backdrop-blur-md border border-white/10 p-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-500 to-amber-600 flex items-center justify-center text-black font-black shrink-0">
-            V
-          </div>
+        <div className="flex items-center gap-3 rounded-xl border border-line bg-surface-2 p-4 shadow-[0_12px_32px_rgba(0,0,0,0.45)]">
+          <LogoTile size={40} />
           <div className="flex-grow min-w-0">
-            <p className="text-white font-bold text-sm">Установить VEINMusic</p>
-            <p className="text-gray-400 text-xs">
-              Быстрый доступ и оффлайн-режим
-            </p>
+            <p className="text-sm font-medium text-fg">Установить VEINMusic</p>
+            <p className="text-xs text-fg-2">Быстрый доступ и оффлайн-режим</p>
           </div>
           <button
             type="button"
             onClick={handleInstallClick}
-            className="bg-yellow-500 hover:bg-yellow-400 text-black px-3 py-1.5 rounded-lg text-xs font-black shrink-0 transition-colors"
+            className="h-8 shrink-0 rounded-lg bg-accent px-3 text-xs font-medium text-on-accent hover:brightness-110"
           >
             Установить
           </button>
           <button
             type="button"
             onClick={() => setShowInstallBanner(false)}
-            className="text-gray-400 hover:text-white shrink-0 p-1"
+            className="shrink-0 rounded p-1 text-fg-3 hover:text-fg"
             aria-label="Закрыть"
           >
             <X className="w-4 h-4" aria-hidden="true" />

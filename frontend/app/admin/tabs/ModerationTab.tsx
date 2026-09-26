@@ -52,7 +52,7 @@ export default function ModerationTab({
         <PanelTitle
           icon={
             <MessageSquareWarning
-              className="w-4 h-4 text-red-500"
+              className="w-4 h-4 text-danger"
               aria-hidden="true"
             />
           }
@@ -92,20 +92,20 @@ export default function ModerationTab({
         {(data?.items ?? []).map((c) => (
           <li
             key={c.id}
-            className="bg-[#141418] border border-white/5 rounded-xl p-4 flex flex-col sm:flex-row gap-3 sm:items-start"
+            className="bg-surface border border-line-soft rounded-xl p-4 flex flex-col sm:flex-row gap-3 sm:items-start"
           >
             <div className="flex-1 min-w-0 space-y-1">
-              <div className="text-xs text-gray-400 flex flex-wrap items-center gap-2">
+              <div className="text-xs text-fg-2 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={() => onOpenUser(c.author.username)}
-                  className="font-bold text-white hover:text-red-300 inline-flex items-center gap-1"
+                  className="font-medium text-fg hover:text-accent inline-flex items-center gap-1"
                 >
                   <UserRound className="w-3.5 h-3.5" aria-hidden="true" />@
                   {c.author.username}
                 </button>
                 {c.author.is_banned && (
-                  <span className="px-1.5 rounded bg-red-950/80 text-red-400 text-[10px] font-bold">
+                  <span className="px-1.5 rounded text-danger text-[10px] font-medium">
                     БАН
                   </span>
                 )}
@@ -119,7 +119,7 @@ export default function ModerationTab({
                   </span>
                 )}
               </div>
-              <p className="text-sm text-gray-100 break-words whitespace-pre-wrap">
+              <p className="text-sm text-fg break-words whitespace-pre-wrap">
                 {c.content}
               </p>
             </div>
@@ -134,7 +134,7 @@ export default function ModerationTab({
           </li>
         ))}
         {data?.items.length === 0 && (
-          <li className="text-center text-gray-400 text-xs py-6">
+          <li className="text-center text-fg-2 text-xs py-6">
             Комментариев нет
           </li>
         )}

@@ -1,49 +1,291 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
 import { Heart, MessageCircle, Users } from "lucide-react";
-
-import { getPlatformIcon } from "../utils/formatters";
 
 import About from "./about/page";
 import { API_URL } from "@/app/lib/api";
+import { formatNumber, plural } from "@/app/lib/plural";
+import { isValidUser } from "@/app/lib/theme";
 import type { TasteTwin } from "@/app/lib/types";
 import { useVisiblePolling } from "@/app/lib/usePolling";
+import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
+import { sourceLabel } from "@/utils/formatters";
+import {
+  Avatar,
+  EmptyState,
+  Meter,
+  PageHeader,
+  PlayingBars,
+  Segmented,
+} from "@/components/ui";
 
 const FEED_POLL_MS = 15000;
+const WEEKDAYS = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
 
 interface FeedItem {
   id: number;
   username: string;
+  avatar_url?: string | null;
   cover_url?: string;
   source: string;
   title: string;
   artist: string;
+  relative_time?: string;
   likes_count: number;
   comments_count: number;
   listening_with?: string[];
   is_playing?: boolean;
 }
 
+interface WeekStats {
+  total_scrobbles: number;
+  total_time_min: number;
+  unique_artists: number;
+  unique_tracks: number;
+  activity_graph: Record<string, number>;
+}
+
+type FeedTab = "global" | "friends";
+
+function Cover({ src }: Readonly<{ src?: string }>) {
+  const url = sanitizeImageUrl(src);
+  return url ? (
+    <img src={url} alt="" className="h-12 w-12 rounded object-cover" />
+  ) : (
+    <span className="block h-12 w-12 rounded bg-surface-2" />
+  );
+}
+
+function FeedRow({
+  item,
+  liked,
+  onLike,
+}: Readonly<{ item: FeedItem; liked: boolean; onLike: () => void }>) {
+  return (
+    <li className="grid grid-cols-[48px_minmax(0,1fr)] items-center gap-x-4 gap-y-2 border-b border-line-soft px-1 py-3.5 sm:grid-cols-[48px_minmax(0,1fr)_170px_110px]">
+      <Cover src={item.cover_url} />
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <div className="flex min-w-0 items-center gap-2">
+          {item.is_playing && (
+            <span className="flex shrink-0 items-center gap-1.5 font-mono text-[11px] text-accent">
+              <PlayingBars /> играет
+            </span>
+          )}
+          <span className="truncate text-[15px] font-medium">{item.title}</span>
+        </div>
+        <span className="truncate text-[13px] text-fg-2">{item.artist}</span>
+        {item.listening_with && item.listening_with.length > 0 && (
+          <span className="flex items-center gap-1 text-xs text-fg-3">
+            <Users className="h-3 w-3" aria-hidden="true" />
+            вместе с {item.listening_with[0]}
+          </span>
+        )}
+      </div>
+      <Link
+        href={`/user/${item.username}`}
+        className="col-start-2 flex min-w-0 items-center gap-2 sm:col-start-auto"
+      >
+        <Avatar src={item.avatar_url} seed={item.username} size={28} />
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate text-[13px]">{item.username}</span>
+          <span className="truncate font-mono text-[11px] text-fg-3">
+            {sourceLabel(item.source)}
+            {item.relative_time ? ` · ${item.relative_time}` : ""}
+          </span>
+        </span>
+      </Link>
+      <div className="col-start-2 flex gap-1 sm:col-start-auto sm:justify-end">
+        <button
+          type="button"
+          onClick={onLike}
+          aria-pressed={liked}
+          aria-label={`Нравится: ${item.likes_count || 0}`}
+          className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2 font-mono text-xs transition-colors hover:bg-surface-2 ${
+            liked ? "text-accent" : "text-fg-2"
+          }`}
+        >
+          <Heart
+            className={`h-4 w-4 ${liked ? "fill-current" : ""}`}
+            aria-hidden="true"
+          />
+          {item.likes_count || 0}
+        </button>
+        <Link
+          href={`/user/${item.username}`}
+          aria-label={`Комментарии: ${item.comments_count || 0}`}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 font-mono text-xs text-fg-2 transition-colors hover:bg-surface-2"
+        >
+          <MessageCircle className="h-4 w-4" aria-hidden="true" />
+          {item.comments_count || 0}
+        </Link>
+      </div>
+    </li>
+  );
+}
+
+function YourWeek({
+  username,
+  stats,
+}: Readonly<{ username: string; stats: WeekStats | null }>) {
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    return {
+      key,
+      label: WEEKDAYS[d.getDay()],
+      plays: stats?.activity_graph?.[key] ?? 0,
+    };
+  });
+  const max = Math.max(1, ...days.map((d) => d.plays));
+  const hours = Math.round((stats?.total_time_min ?? 0) / 60);
+  const cells = [
+    {
+      value: formatNumber(stats?.total_scrobbles ?? 0),
+      label: plural(
+        stats?.total_scrobbles ?? 0,
+        "прослушивание",
+        "прослушивания",
+        "прослушиваний",
+      ),
+    },
+    { value: `${hours} ч`, label: "музыки" },
+    {
+      value: formatNumber(stats?.unique_artists ?? 0),
+      label: plural(
+        stats?.unique_artists ?? 0,
+        "артист",
+        "артиста",
+        "артистов",
+      ),
+    },
+    {
+      value: formatNumber(stats?.unique_tracks ?? 0),
+      label: plural(stats?.unique_tracks ?? 0, "трек", "трека", "треков"),
+    },
+  ];
+  return (
+    <section
+      aria-labelledby="week-title"
+      className="flex flex-col gap-3.5 rounded-xl border border-line bg-surface p-5"
+    >
+      <h2 id="week-title" className="text-sm font-semibold">
+        Ваша неделя
+      </h2>
+      <dl className="grid grid-cols-2 gap-4">
+        {cells.map((c) => (
+          <div key={c.label} className="flex flex-col-reverse gap-0.5">
+            <dt className="text-xs text-fg-2">{c.label}</dt>
+            <dd className="font-mono text-2xl font-medium">{c.value}</dd>
+          </div>
+        ))}
+      </dl>
+      <div
+        role="img"
+        aria-label={
+          "По дням: " + days.map((d) => d.label + " " + d.plays).join(", ")
+        }
+        className="flex h-12 items-end gap-1.5"
+      >
+        {days.map((d, i) => (
+          <div key={d.key} className="flex flex-1 flex-col items-center gap-1">
+            <div
+              className={`w-full rounded-sm ${i === 6 ? "bg-accent" : "bg-bar"}`}
+              style={{ height: Math.max(2, Math.round((d.plays / max) * 30)) }}
+            />
+            <span className="font-mono text-[10px] text-fg-3">{d.label}</span>
+          </div>
+        ))}
+      </div>
+      <Link
+        href={`/user/${username}/stats`}
+        className="text-[13px] text-accent"
+      >
+        Вся статистика →
+      </Link>
+    </section>
+  );
+}
+
+function Twins({ twins }: Readonly<{ twins: TasteTwin[] }>) {
+  return (
+    <section aria-labelledby="twins-title" className="flex flex-col gap-3">
+      <div className="flex items-baseline justify-between">
+        <h2 id="twins-title" className="text-sm font-semibold">
+          Музыкальные двойники
+        </h2>
+        <span className="text-xs text-fg-3">по общим артистам</span>
+      </div>
+      <ul className="flex flex-col gap-2.5">
+        {twins.map((t) => (
+          <li key={t.username}>
+            <Link
+              href={`/user/${t.username}`}
+              className="grid grid-cols-[32px_minmax(0,1fr)_44px] items-center gap-2.5 rounded-md"
+            >
+              <Avatar src={t.avatar_url} seed={t.username} size={32} />
+              <span className="flex min-w-0 flex-col gap-1.5">
+                <span className="truncate text-[13px]">
+                  {t.display_name || t.username}{" "}
+                  <span className="text-fg-3">
+                    · {t.common_artists.slice(0, 2).join(", ")}
+                  </span>
+                </span>
+                <Meter value={t.match} />
+              </span>
+              <span className="text-right font-mono text-[13px]">
+                {t.match}%
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function SkeletonRows() {
+  return (
+    <ul aria-hidden="true" className="border-t border-line-soft">
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <li
+          key={i}
+          className="grid grid-cols-[48px_minmax(0,1fr)] items-center gap-4 border-b border-line-soft px-1 py-3.5"
+        >
+          <span className="h-12 w-12 animate-pulse rounded bg-surface-2" />
+          <span className="flex flex-col gap-2">
+            <span className="h-3 w-48 animate-pulse rounded bg-surface-2" />
+            <span className="h-3 w-28 animate-pulse rounded bg-surface-2" />
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export default function Home() {
-  const router = useRouter();
   const [globalHistory, setGlobalHistory] = useState<FeedItem[]>([]);
   const [friendsHistory, setFriendsHistory] = useState<FeedItem[]>([]);
   const [twins, setTwins] = useState<TasteTwin[]>([]);
+  const [week, setWeek] = useState<WeekStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeFeed, setActiveFeed] = useState("global");
+  const [activeFeed, setActiveFeed] = useState<FeedTab>("global");
   const [username, setUsername] = useState<string | null>(null);
+  const [checked, setChecked] = useState(false);
+  const [liked, setLiked] = useState<Set<number>>(new Set());
 
   useEffect(() => {
-    setUsername(localStorage.getItem("username"));
+    const u = localStorage.getItem("username");
+    setUsername(isValidUser(u) ? u : null);
+    setChecked(true);
   }, []);
 
   const fetchFeed = useCallback(async () => {
     const user = localStorage.getItem("username");
+    if (!isValidUser(user)) return;
     try {
-      if (activeFeed === "friends" && user) {
+      if (activeFeed === "friends") {
         const res = await fetch(`${API_URL}/api/friends-history/${user}`, {
           credentials: "include",
         });
@@ -64,22 +306,33 @@ export default function Home() {
   }, [activeFeed]);
 
   // Only the visible feed, only while the tab is shown
-  useVisiblePolling(fetchFeed, FEED_POLL_MS);
+  useVisiblePolling(fetchFeed, FEED_POLL_MS, Boolean(username));
 
-  // Taste twins change slowly (and are cached on the server): load once
+  // Taste twins and the week change slowly: load once
   useEffect(() => {
     if (!username) return;
-    fetch(
-      `${API_URL}/api/discovery/taste-twins?username=${encodeURIComponent(username)}`,
-      { credentials: "include" },
-    )
+    const q = encodeURIComponent(username);
+    fetch(`${API_URL}/api/discovery/taste-twins?username=${q}`, {
+      credentials: "include",
+    })
       .then((res) => res.json())
       .then((data) => setTwins(Array.isArray(data) ? data : []))
       .catch((e) => console.error(e));
+    fetch(`${API_URL}/api/detailed-stats/${q}?period=7d`, {
+      credentials: "include",
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then(setWeek)
+      .catch(() => {});
   }, [username]);
 
-  const toggleLike = async (e: React.MouseEvent, scrobbleId: number) => {
-    e.stopPropagation();
+  const toggleLike = async (scrobbleId: number) => {
+    setLiked((prev) => {
+      const next = new Set(prev);
+      if (next.has(scrobbleId)) next.delete(scrobbleId);
+      else next.add(scrobbleId);
+      return next;
+    });
     try {
       await fetch(`${API_URL}/api/scrobble/${scrobbleId}/like`, {
         method: "POST",
@@ -92,235 +345,88 @@ export default function Home() {
     }
   };
 
-  const rawFeed = activeFeed === "global" ? globalHistory : friendsHistory;
-  const currentFeed = Array.isArray(rawFeed) ? rawFeed : [];
+  // Before localStorage is read (and on the server) render both: the
+  // html[data-auth] flag set in <head> shows the right one without a flash.
+  if (!checked)
+    return (
+      <>
+        <div className="guest-only">
+          <About />
+        </div>
+        <div className="auth-only mx-auto w-full max-w-[1180px] px-4 py-10 sm:px-8 lg:px-12">
+          <SkeletonRows />
+        </div>
+      </>
+    );
+  if (!username) return <About />;
 
-  if (!username && !loading) {
-    return <About />;
-  }
+  const currentFeed = activeFeed === "global" ? globalHistory : friendsHistory;
+
+  let feedBody: React.ReactNode;
+  if (loading) feedBody = <SkeletonRows />;
+  else if (currentFeed.length === 0)
+    feedBody =
+      activeFeed === "friends" ? (
+        <EmptyState title="Тут пока пусто">
+          Подпишитесь на кого-нибудь, чтобы видеть здесь их треки.
+        </EmptyState>
+      ) : (
+        <EmptyState title="Пока тихо">
+          Включите музыку — ваш трек появится здесь первым.
+        </EmptyState>
+      );
+  else
+    feedBody = (
+      <ol className="border-t border-line-soft">
+        {currentFeed.map((item) => (
+          <FeedRow
+            key={item.id}
+            item={item}
+            liked={liked.has(item.id)}
+            onLike={() => toggleLike(item.id)}
+          />
+        ))}
+      </ol>
+    );
 
   return (
-    <div className="max-w-6xl mx-auto flex flex-col items-center">
-      <div className="w-full py-8 md:py-12 px-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 border-b border-white/5 mb-8">
-        <div>
-          <h1 className="text-3xl font-black text-white mb-1 flex items-center gap-2">
-            Лента активности 🎧
-          </h1>
-          <p className="text-gray-400 text-sm">
-            Смотри, что слушают прямо сейчас.
-          </p>
-        </div>
+    <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-10 px-4 py-8 sm:px-8 lg:flex-row lg:px-12 lg:py-10">
+      <section
+        aria-labelledby="feed-title"
+        className="flex min-w-0 flex-1 flex-col gap-5"
+      >
+        <PageHeader
+          id="feed-title"
+          title="Лента"
+          subtitle="Что слушают прямо сейчас"
+          actions={
+            <Segmented
+              label="Чья лента"
+              value={activeFeed}
+              onChange={(v) => {
+                setLoading(true);
+                setActiveFeed(v);
+              }}
+              options={[
+                { id: "global", label: "Все" },
+                { id: "friends", label: "Подписки" },
+              ]}
+            />
+          }
+        />
+        {feedBody}
+        <Link
+          href="/feed"
+          className="self-start text-[13px] text-fg-2 hover:text-fg"
+        >
+          Вся лента с фильтрами →
+        </Link>
+      </section>
 
-        <div className="flex items-center gap-3 shrink-0">
-          <Link
-            href={`/user/${username}`}
-            className="bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] text-white font-bold px-5 py-2.5 rounded-xl hover:scale-105 transition-all shadow-[0_0_15px_var(--accent-glow)] text-sm flex items-center justify-center"
-          >
-            Мой Профиль
-          </Link>
-          <Link
-            href="/leaderboard"
-            className="bg-white/5 border border-white/10 text-white font-bold px-5 py-2.5 rounded-xl hover:bg-white/10 transition-all text-sm flex items-center justify-center"
-          >
-            Зал славы 🏆
-          </Link>
-        </div>
-      </div>
-
-      <div className="w-full mt-12 mb-20 px-4">
-        <div className="flex items-center gap-6 mb-8 border-b border-white/5 pb-2">
-          <button
-            type="button"
-            onClick={() => setActiveFeed("global")}
-            className={`text-2xl font-black pb-2 border-b-2 transition-all ${activeFeed === "global" ? "border-[var(--accent)] text-white" : "border-transparent text-gray-400 hover:text-gray-300"}`}
-          >
-            Глобальная лента
-          </button>
-          {username && (
-            <button
-              type="button"
-              onClick={() => setActiveFeed("friends")}
-              className={`text-2xl font-black pb-2 border-b-2 transition-all flex items-center gap-2 ${activeFeed === "friends" ? "border-[var(--accent)] text-white" : "border-transparent text-gray-400 hover:text-gray-300"}`}
-            >
-              Лента друзей
-              {activeFeed === "friends" && (
-                <span className="w-2.5 h-2.5 rounded-full bg-[var(--accent)] animate-pulse shadow-[0_0_10px_var(--accent-glow-strong)]"></span>
-              )}
-            </button>
-          )}
-        </div>
-
-        <div className="flex flex-col lg:flex-row gap-8">
-          <div className="flex-grow">
-            {(() => {
-              if (loading)
-                return (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 opacity-50">
-                    {[1, 2, 3, 4, 5, 6].map((i) => (
-                      <div
-                        key={i}
-                        className="h-32 bg-[#1e1e1e] rounded-2xl animate-pulse"
-                      ></div>
-                    ))}
-                  </div>
-                );
-              if (activeFeed === "friends" && friendsHistory.length === 0)
-                return (
-                  <div className="bg-[#1e1e1e]/50 backdrop-blur-md border border-white/5 p-10 rounded-2xl text-center text-gray-400 font-bold">
-                    Тут пусто. Подпишись на кого-нибудь, чтобы видеть их треки
-                    здесь!
-                  </div>
-                );
-              if (currentFeed.length === 0)
-                return (
-                  <div className="bg-[#1e1e1e]/50 backdrop-blur-md border border-white/5 p-10 rounded-2xl text-center text-gray-400 font-bold">
-                    Пока тихо... Врубай музыку!
-                  </div>
-                );
-              return (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <AnimatePresence mode="popLayout">
-                    {currentFeed.map((item, idx) => (
-                      <motion.div
-                        layout
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        key={item.id || idx}
-                        className="bg-[#1a1a1a]/80 backdrop-blur-sm border border-white/5 p-4 rounded-2xl flex flex-col gap-4 hover:bg-[#1f1f1f] hover:border-[var(--accent)]/30 hover:-translate-y-1 hover:shadow-[0_10px_25px_-5px_var(--accent-glow-strong)] transition-all duration-300 group cursor-pointer relative overflow-hidden"
-                        onClick={() => {
-                          router.push(`/user/${item.username}`);
-                        }}
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className="w-16 h-16 bg-black rounded-xl overflow-hidden shrink-0 shadow-lg relative">
-                            {item.cover_url ? (
-                              <img
-                                src={item.cover_url}
-                                alt="Cover"
-                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                              />
-                            ) : (
-                              <div className="w-full h-full bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-lg text-yellow-500/80 shadow-inner group-hover:scale-110 transition-transform duration-500">
-                                🎵
-                              </div>
-                            )}
-                            {item.is_playing && (
-                              <div className="absolute inset-0 bg-[var(--accent)]/10 animate-pulse flex items-center justify-center">
-                                <div className="flex gap-0.5 items-end h-3">
-                                  <div className="w-0.5 bg-[var(--accent)] animate-[music-bar_0.8s_ease-in-out_infinite]"></div>
-                                  <div className="w-0.5 bg-[var(--accent)] animate-[music-bar_1.2s_ease-in-out_infinite]"></div>
-                                  <div className="w-0.5 bg-[var(--accent)] animate-[music-bar_1.0s_ease-in-out_infinite]"></div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                          <div className="truncate flex-grow">
-                            <div className="font-bold text-white truncate group-hover:text-[var(--accent)] transition-colors flex items-center gap-1.5 mb-0.5">
-                              {getPlatformIcon(item.source)}
-                              {item.title}
-                            </div>
-                            <div className="text-xs text-gray-400 truncate mb-1">
-                              {item.artist}
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <div className="text-[10px] text-gray-400 uppercase tracking-wider font-black">
-                                @{item.username}
-                              </div>
-                              {item.listening_with &&
-                                item.listening_with.length > 0 && (
-                                  <div className="flex items-center gap-1 text-[10px] font-bold text-[var(--accent-text)] bg-[var(--accent)]/10 px-2 py-0.5 rounded-full border border-[var(--accent)]/20 animate-pulse">
-                                    <Users className="w-2.5 h-2.5" />
-                                    Слушает с {item.listening_with[0]}
-                                  </div>
-                                )}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-4 pt-3 border-t border-white/5 mt-1">
-                          <button
-                            type="button"
-                            onClick={(e) => toggleLike(e, item.id)}
-                            className="flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-red-500 transition-colors group/like"
-                          >
-                            <Heart
-                              className={`w-4 h-4 ${item.likes_count > 0 ? "fill-red-500 text-red-500" : ""}`}
-                            />
-                            {item.likes_count || 0}
-                          </button>
-                          <button
-                            type="button"
-                            className="flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-[var(--accent)] transition-colors"
-                          >
-                            <MessageCircle className="w-4 h-4" />
-                            {item.comments_count || 0}
-                          </button>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                </div>
-              );
-            })()}
-          </div>
-
-          <div className="w-full lg:w-80 shrink-0 space-y-6">
-            {username && twins.length > 0 && (
-              <div className="bg-[#121212]/80 backdrop-blur-md border border-white/5 rounded-2xl p-6 shadow-xl sticky top-24">
-                <h3 className="text-lg font-black text-white mb-6 flex items-center gap-2">
-                  <Users
-                    className="w-5 h-5 text-[var(--accent)]"
-                    aria-hidden="true"
-                  />{" "}
-                  Taste Twins
-                </h3>
-                <div className="space-y-6">
-                  {twins.map((twin) => (
-                    <Link
-                      href={`/user/${twin.username}`}
-                      key={twin.username}
-                      className="block group"
-                    >
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white/5 group-hover:border-[var(--accent)] transition-all">
-                          <img
-                            src={
-                              twin.avatar_url ||
-                              `https://api.dicebear.com/9.x/micah/svg?seed=${twin.username}&backgroundColor=transparent`
-                            }
-                            className="w-full h-full object-cover"
-                            alt=""
-                          />
-                        </div>
-                        <div className="flex-grow">
-                          <div className="font-bold text-sm text-white group-hover:text-[var(--accent)] transition-colors">
-                            {twin.display_name}
-                          </div>
-                          <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                            @{twin.username}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-sm font-black text-[var(--accent)]">
-                            {twin.match}%
-                          </div>
-                          <div className="text-[8px] text-gray-400 font-bold uppercase">
-                            MATCH
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-[10px] text-gray-400 italic">
-                        Общие: {twin.common_artists.join(", ")}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      <aside className="flex w-full shrink-0 flex-col gap-6 lg:w-[320px] lg:pt-1.5">
+        <YourWeek username={username} stats={week} />
+        {twins.length > 0 && <Twins twins={twins} />}
+      </aside>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { Plus, X } from "lucide-react";
 import type {
   Country,
   ImageField,
@@ -45,31 +46,28 @@ export default function GeneralTab({
   removeSocialLink,
 }: Readonly<GeneralTabProps>) {
   return (
-    <div className="p-6 md:p-8 space-y-6">
+    <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="col-span-1 md:col-span-2 mb-4">
           <label
             htmlFor="cover-upload"
-            className="block text-sm font-bold text-gray-300 mb-2"
+            className="mb-1.5 block text-xs text-fg-2"
           >
             Визуальное оформление
           </label>
-          <div className="relative w-full rounded-xl bg-[#282828]/30 border-2 border-dashed border-white/10 hover:border-[var(--accent)] transition-colors group mb-10">
+          <div className="relative w-full rounded-xl bg-surface-2 border-2 border-dashed border-line hover:border-line transition-colors group mb-10">
             <label
               htmlFor="cover-upload"
               className="block w-full h-32 md:h-48 cursor-pointer overflow-hidden rounded-xl relative"
             >
               {data.coverUrl ? (
                 <div
-                  className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
+                  className="absolute inset-0 bg-cover bg-center transition-transform duration-500"
                   style={{ backgroundImage: `url(${data.coverUrl})` }}
                 ></div>
               ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 group-hover:text-[var(--accent-text)] transition-colors">
-                  <span className="text-4xl mb-2" aria-hidden="true">
-                    🏞️
-                  </span>
-                  <span className="font-bold">Загрузить обложку</span>
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-fg-2 group-hover:text-fg transition-colors">
+                  <span className="font-medium">Загрузить обложку</span>
                 </div>
               )}
               <input
@@ -82,7 +80,7 @@ export default function GeneralTab({
             </label>
             <label
               htmlFor="avatar-upload"
-              className="absolute -bottom-8 left-6 md:left-10 w-24 h-24 md:w-28 md:h-28 rounded-full bg-[#1e1e1e] border-4 border-[#1e1e1e] cursor-pointer overflow-hidden shadow-2xl group/avatar z-10 hover:border-[var(--accent)]"
+              className="absolute -bottom-8 left-6 md:left-10 w-24 h-24 md:w-28 md:h-28 rounded-full bg-surface border-4 border-bg cursor-pointer overflow-hidden group/avatar z-10 hover:border-line"
             >
               {data.avatarUrl ? (
                 <img
@@ -94,7 +92,7 @@ export default function GeneralTab({
                 <img
                   src={`https://api.dicebear.com/9.x/micah/svg?seed=${username || "default"}&backgroundColor=transparent`}
                   alt="Аватар"
-                  className="w-full h-full object-cover group-hover/avatar:scale-110 transition-transform bg-[#282828]"
+                  className="w-full h-full object-cover group-hover/avatar:scale-110 transition-transform bg-surface-2"
                 />
               )}
               <input
@@ -110,7 +108,7 @@ export default function GeneralTab({
         <div>
           <label
             htmlFor="display-name"
-            className="block text-sm font-bold text-gray-300 mb-2"
+            className="mb-1.5 block text-xs text-fg-2"
           >
             Отображаемое Имя
           </label>
@@ -118,13 +116,13 @@ export default function GeneralTab({
             id="display-name"
             value={data.displayName}
             onChange={(e) => updateData("displayName", e.target.value)}
-            className="w-full p-3 rounded bg-[#282828]/50 border border-white/10 focus:border-[var(--accent)] text-white focus:outline-none transition-colors"
+            className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-fg placeholder:text-fg-3 outline-none transition-colors focus:border-fg-3"
           />
         </div>
         <div>
           <label
             htmlFor="country-select"
-            className="block text-sm font-bold text-gray-300 mb-2"
+            className="mb-1.5 block text-xs text-fg-2"
           >
             Страна
           </label>
@@ -132,7 +130,7 @@ export default function GeneralTab({
             id="country-select"
             value={data.country}
             onChange={(e) => updateData("country", e.target.value)}
-            className="w-full p-3 rounded bg-[#282828]/50 border border-white/10 focus:border-[var(--accent)] text-white outline-none appearance-none cursor-pointer"
+            className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-fg placeholder:text-fg-3 outline-none transition-colors focus:border-fg-3 cursor-pointer"
           >
             <option value="">Выберите страну...</option>
             {countries.map((c) => (
@@ -145,7 +143,7 @@ export default function GeneralTab({
         <div>
           <label
             htmlFor="city-input"
-            className="block text-sm font-bold text-gray-300 mb-2"
+            className="mb-1.5 block text-xs text-fg-2"
           >
             Город
           </label>
@@ -157,10 +155,10 @@ export default function GeneralTab({
               onFocus={() => setIsCityInputFocused(true)}
               onBlur={() => setTimeout(() => setIsCityInputFocused(false), 200)}
               placeholder="Введите название..."
-              className="w-full p-3 rounded bg-[#282828]/50 border border-white/10 focus:border-[var(--accent)] text-white focus:outline-none"
+              className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-fg placeholder:text-fg-3 outline-none transition-colors focus:border-fg-3"
             />
             {isCityInputFocused && cities.length > 0 && (
-              <div className="absolute top-full left-0 right-0 bg-[#121212] border border-[var(--accent)]/50 rounded-lg mt-1 z-[100] max-h-60 overflow-y-auto shadow-2xl">
+              <div className="absolute top-full left-0 right-0 bg-surface border border-accent rounded-lg mt-1 z-[100] max-h-60 overflow-y-auto">
                 {cities.map((c) => (
                   <button
                     type="button"
@@ -169,7 +167,7 @@ export default function GeneralTab({
                       updateData("city", c);
                       setIsCityInputFocused(false);
                     }}
-                    className="w-full text-left p-4 hover:bg-[var(--accent)] hover:text-[var(--text-on-accent)] cursor-pointer text-sm border-b border-white/5 last:border-none transition-all"
+                    className="w-full text-left p-4 hover:bg-[var(--accent)] hover:text-[var(--text-on-accent)] cursor-pointer text-sm border-b border-line-soft last:border-none transition-all"
                   >
                     {c}
                   </button>
@@ -182,7 +180,7 @@ export default function GeneralTab({
       <div>
         <label
           htmlFor="bio-textarea"
-          className="block text-sm font-bold text-gray-300 mb-2"
+          className="mb-1.5 block text-xs text-fg-2"
         >
           О себе
         </label>
@@ -191,12 +189,12 @@ export default function GeneralTab({
           value={data.bio}
           onChange={(e) => updateData("bio", e.target.value)}
           rows={3}
-          className="w-full p-3 rounded bg-[#282828]/50 border border-white/10 focus:border-[var(--accent)] text-white focus:outline-none resize-none transition-colors"
+          className="w-full resize-none rounded-lg border border-line bg-surface px-3 py-2.5 text-sm leading-relaxed text-fg outline-none transition-colors focus:border-fg-3"
         ></textarea>
       </div>
 
-      <div className="pt-6 border-t border-white/5 space-y-4">
-        <span className="block text-sm font-bold text-gray-300">
+      <div className="pt-6 border-t border-line-soft space-y-4">
+        <span className="block text-sm font-medium text-fg-2">
           Социальные сети
         </span>
 
@@ -205,7 +203,7 @@ export default function GeneralTab({
             {socialLinks.map((link) => (
               <div
                 key={link.id}
-                className="flex gap-3 items-center bg-[#121212]/30 p-3 rounded-lg border border-white/5"
+                className="flex gap-3 items-center bg-surface p-3 rounded-lg border border-line-soft"
               >
                 <select
                   aria-label="Соцсеть"
@@ -213,7 +211,7 @@ export default function GeneralTab({
                   onChange={(e) =>
                     updateSocialLink(link.id, "network", e.target.value)
                   }
-                  className="p-2.5 rounded bg-[#282828] text-white border border-white/10 outline-none text-sm cursor-pointer"
+                  className="h-10 cursor-pointer rounded-lg border border-line bg-surface px-3 text-sm text-fg outline-none"
                 >
                   <option value="telegram">Telegram</option>
                   <option value="vk">VK</option>
@@ -230,22 +228,22 @@ export default function GeneralTab({
                   }
                   placeholder="Никнейм/ID"
                   aria-label="Никнейм или ID"
-                  className="flex-grow p-2.5 rounded bg-[#282828]/50 border border-white/10 text-white outline-none focus:border-[var(--accent)] text-sm"
+                  className="h-10 min-w-0 flex-grow rounded-lg border border-line bg-surface px-3 text-sm text-fg outline-none focus:border-fg-3"
                 />
 
                 <button
                   type="button"
                   onClick={() => removeSocialLink(link.id)}
                   aria-label="Удалить ссылку"
-                  className="p-2.5 bg-red-900/20 text-red-400 border border-red-900/30 rounded-lg hover:bg-red-900/40 transition-colors text-sm font-bold"
+                  className="p-2.5 text-danger border border-danger-line rounded-lg hover:bg-[#2a1b1b] transition-colors text-sm font-medium"
                 >
-                  ✕
+                  <X className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-fg-2">
             Социальные сети пока не привязаны.
           </p>
         )}
@@ -253,9 +251,10 @@ export default function GeneralTab({
         <button
           type="button"
           onClick={addSocialLink}
-          className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold px-4 py-2 rounded-lg text-xs transition-all flex items-center gap-1.5"
+          className="bg-surface-2 hover:bg-line border border-line text-fg font-medium px-4 py-2 rounded-lg text-xs transition-all flex items-center gap-1.5"
         >
-          ➕ Добавить ссылку
+          <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+          Добавить ссылку
         </button>
       </div>
     </div>

@@ -2,14 +2,88 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { Check, LogIn, Monitor, X } from "lucide-react";
 import { ApiError, apiJson } from "@/app/lib/api";
 import type { DeviceCodeInfo } from "@/app/lib/types";
+import { btn } from "@/components/ui";
 
 type Step = "enter" | "confirm" | "approved" | "denied" | "login";
+
+const STEPS = ["Код", "Доступ", "Готово"];
 
 function normalizeCode(code: string): string {
   const raw = code.toUpperCase().replace(/[^A-Z0-9]/g, "");
   return raw.length === 8 ? `${raw.slice(0, 4)}-${raw.slice(4)}` : raw;
+}
+
+/** Formats while typing: "k7qm2" → "K7QM-2". */
+function formatTyped(value: string): string {
+  const raw = value
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 8);
+  return raw.length > 4 ? `${raw.slice(0, 4)}-${raw.slice(4)}` : raw;
+}
+
+function stepIndex(step: Step): number {
+  if (step === "confirm") return 1;
+  if (step === "approved" || step === "denied") return 2;
+  return 0;
+}
+
+function Steps({ current }: Readonly<{ current: number }>) {
+  return (
+    <ol aria-label="Шаги" className="flex gap-2 font-mono text-xs">
+      {STEPS.map((label, i) => {
+        let tone = "border-line text-fg-3";
+        if (i === current) tone = "border-accent bg-surface-2 text-fg";
+        else if (i < current) tone = "border-line text-fg-2";
+        return (
+          <li
+            key={label}
+            aria-current={i === current ? "step" : undefined}
+            className={`inline-flex h-[26px] items-center rounded-full border px-2.5 ${tone}`}
+          >
+            {i + 1} {label}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function Result({
+  ok,
+  title,
+  text,
+  onRestart,
+}: Readonly<{
+  ok: boolean;
+  title: string;
+  text: string;
+  onRestart: () => void;
+}>) {
+  const Icon = ok ? Check : X;
+  return (
+    <section className="flex w-full max-w-[420px] flex-col items-center gap-4 text-center">
+      <span
+        className={`flex h-[52px] w-[52px] items-center justify-center rounded-full ${
+          ok ? "bg-[#1f2e27] text-ok" : "bg-[#2e1f1f] text-danger"
+        }`}
+      >
+        <Icon className="h-6 w-6" strokeWidth={2.2} aria-hidden="true" />
+      </span>
+      <h1 className="text-2xl font-semibold tracking-[-0.02em]">{title}</h1>
+      <p className="text-sm leading-relaxed text-fg-2">{text}</p>
+      <button
+        type="button"
+        onClick={onRestart}
+        className={`${btn.secondary} ${btn.md} mt-2`}
+      >
+        Подключить другое устройство
+      </button>
+    </section>
+  );
 }
 
 function LinkDevice() {
@@ -54,6 +128,7 @@ function LinkDevice() {
 
   const decide = async (approve: boolean) => {
     if (!info) return;
+    setError("");
     setBusy(true);
     try {
       await apiJson("/api/devices/approve", {
@@ -68,104 +143,171 @@ function LinkDevice() {
     }
   };
 
+  const restart = () => {
+    setCode("");
+    setInfo(null);
+    setError("");
+    setStep("enter");
+  };
+
+  const expires = info
+    ? new Date(info.expires_at).toLocaleTimeString("ru-RU", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "";
+
+  const errorLine = error && (
+    <p role="alert" className="text-[13px] text-danger">
+      {error}
+    </p>
+  );
+
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 pt-24 pb-12">
-      <div className="w-full max-w-md bg-[#1a1a1a] border border-white/5 rounded-2xl p-8 shadow-2xl space-y-6">
-        <div>
-          <h1 className="text-2xl font-black text-white">
+    <div className="flex flex-col items-center gap-10 px-4 pt-16 pb-20 md:pt-24">
+      {step !== "login" && <Steps current={stepIndex(step)} />}
+
+      {step === "enter" && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            lookup(normalizeCode(code));
+          }}
+          className="flex w-full max-w-[420px] flex-col gap-5 text-center"
+        >
+          <div className="flex flex-col gap-2">
+            <h1 className="text-2xl font-semibold tracking-[-0.02em]">
+              Подключение устройства
+            </h1>
+            <p className="text-sm text-fg-2">
+              Введите код, который показывает расширение VEIN. Код действует 10
+              минут.
+            </p>
+          </div>
+          <input
+            value={code}
+            onChange={(e) => setCode(formatTyped(e.target.value))}
+            placeholder="ABCD-2345"
+            aria-label="Код устройства"
+            autoComplete="one-time-code"
+            autoCapitalize="characters"
+            spellCheck={false}
+            maxLength={9}
+            className="h-16 rounded-[10px] border border-[#2e3034] bg-surface text-center font-mono text-[26px] tracking-[0.18em] uppercase outline-none placeholder:text-fg-3/50 focus:border-accent sm:text-[30px]"
+          />
+          {errorLine}
+          <button
+            type="submit"
+            disabled={busy || normalizeCode(code).length !== 9}
+            className={`${btn.primary} ${btn.lg}`}
+          >
+            Продолжить
+          </button>
+        </form>
+      )}
+
+      {step === "confirm" && info && (
+        <section
+          aria-labelledby="confirm-title"
+          className="flex w-full max-w-[440px] flex-col gap-5"
+        >
+          <h1
+            id="confirm-title"
+            className="text-center text-2xl font-semibold tracking-[-0.02em]"
+          >
+            Разрешить доступ?
+          </h1>
+          <div className="rounded-xl border border-line bg-surface">
+            <div className="flex items-center gap-3 border-b border-line-soft px-5 py-4">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-fg-2">
+                <Monitor className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="truncate text-sm font-medium">
+                  {info.client_name}
+                </span>
+                <span className="font-mono text-xs text-fg-3">
+                  код {info.user_code} · до {expires}
+                </span>
+              </span>
+            </div>
+            <ul className="flex flex-col gap-2.5 px-5 py-4 text-[13px]">
+              <li className="flex gap-2.5 text-fg">
+                <span className="w-3 font-mono text-ok">+</span>
+                <span>Отправлять ваши прослушивания</span>
+              </li>
+              <li className="flex gap-2.5 text-fg">
+                <span className="w-3 font-mono text-ok">+</span>
+                <span>Читать ваш профиль</span>
+              </li>
+              <li className="flex gap-2.5 text-fg-3">
+                <span className="w-3 font-mono">−</span>
+                <span>Не сможет менять пароль и настройки</span>
+              </li>
+            </ul>
+          </div>
+          <p className="text-[13px] leading-relaxed text-fg-3">
+            Устройство получит отдельный ключ. Отозвать его можно в настройках,
+            раздел «Безопасность и данные».
+          </p>
+          {errorLine}
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => decide(false)}
+              disabled={busy}
+              className={`${btn.secondary} ${btn.lg} flex-1`}
+            >
+              Отклонить
+            </button>
+            <button
+              type="button"
+              onClick={() => decide(true)}
+              disabled={busy}
+              className={`${btn.primary} ${btn.lg} flex-1`}
+            >
+              Разрешить
+            </button>
+          </div>
+        </section>
+      )}
+
+      {step === "approved" && (
+        <Result
+          ok
+          title="Устройство подключено"
+          text="Можно вернуться в расширение — оно уже отправляет прослушивания."
+          onRestart={restart}
+        />
+      )}
+      {step === "denied" && (
+        <Result
+          ok={false}
+          title="Подключение отклонено"
+          text="Расширение не получило доступ. Если это были вы, начните заново."
+          onRestart={restart}
+        />
+      )}
+
+      {step === "login" && (
+        <section className="flex w-full max-w-[420px] flex-col items-center gap-4 text-center">
+          <span className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-surface-2 text-fg-2">
+            <LogIn className="h-6 w-6" aria-hidden="true" />
+          </span>
+          <h1 className="text-2xl font-semibold tracking-[-0.02em]">
             Подключение устройства
           </h1>
-          <p className="text-sm text-gray-400 mt-1">
-            Введите код, который показывает расширение VEIN Music.
+          <p className="text-sm text-fg-2">
+            Чтобы подтвердить устройство, войдите в аккаунт.
           </p>
-        </div>
-
-        {step === "enter" && (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              lookup(normalizeCode(code));
-            }}
-            className="space-y-4"
-          >
-            <input
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="ABCD-2345"
-              aria-label="Код устройства"
-              autoComplete="off"
-              maxLength={12}
-              className="w-full bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-center text-2xl font-mono tracking-[0.3em] text-white uppercase focus:outline-none focus:border-[var(--accent)]"
-            />
-            <button
-              type="submit"
-              disabled={busy || normalizeCode(code).length !== 9}
-              className="w-full bg-[var(--accent)] text-[var(--text-on-accent)] font-black py-3 rounded-xl disabled:opacity-50"
-            >
-              Продолжить
-            </button>
-          </form>
-        )}
-
-        {step === "confirm" && info && (
-          <div className="space-y-4">
-            <p className="text-white">
-              Разрешить <b>{info.client_name}</b> отправлять ваши прослушивания
-              и читать профиль?
-            </p>
-            <p className="text-xs text-gray-400">
-              Код {info.user_code}. Устройство получит отдельный ключ, который
-              можно отозвать в настройках (раздел «Безопасность и данные»).
-            </p>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => decide(true)}
-                disabled={busy}
-                className="flex-1 bg-[var(--accent)] text-[var(--text-on-accent)] font-black py-3 rounded-xl disabled:opacity-50"
-              >
-                Разрешить
-              </button>
-              <button
-                type="button"
-                onClick={() => decide(false)}
-                disabled={busy}
-                className="flex-1 bg-white/5 border border-white/10 text-white font-bold py-3 rounded-xl"
-              >
-                Отклонить
-              </button>
-            </div>
-          </div>
-        )}
-
-        {step === "approved" && (
-          <p className="text-green-400 font-bold">
-            ✅ Устройство подключено. Можно вернуться в расширение.
+          <a href="/auth" className={`${btn.primary} ${btn.lg} mt-2 w-full`}>
+            Войти
+          </a>
+          <p className="text-[13px] text-fg-3">
+            После входа вы вернётесь на эту страницу.
           </p>
-        )}
-        {step === "denied" && (
-          <p className="text-gray-300 font-bold">Подключение отклонено.</p>
-        )}
-        {step === "login" && (
-          <div className="space-y-4">
-            <p className="text-gray-300">
-              Чтобы подтвердить устройство, войдите в аккаунт.
-            </p>
-            <a
-              href="/auth"
-              className="block text-center w-full bg-[var(--accent)] text-[var(--text-on-accent)] font-black py-3 rounded-xl"
-            >
-              Войти
-            </a>
-          </div>
-        )}
-
-        {error && (
-          <p className="text-red-400 text-sm font-bold" role="alert">
-            {error}
-          </p>
-        )}
-      </div>
+        </section>
+      )}
     </div>
   );
 }

@@ -15,13 +15,13 @@ import {
   useNotice,
 } from "../ui";
 
-const section = "bg-black/30 border border-white/5 rounded-xl p-4 space-y-2";
-const sectionTitle = "text-[11px] font-mono text-gray-400 uppercase";
+const section = "bg-bg border border-line-soft rounded-xl p-4 space-y-2";
+const sectionTitle = "text-[11px] font-mono text-fg-2";
 
 function Flag({ on, label }: Readonly<{ on: boolean; label: string }>) {
   return (
     <span
-      className={`px-2 py-0.5 rounded text-[10px] font-bold ${on ? "bg-emerald-950/60 text-emerald-300" : "bg-white/5 text-gray-400"}`}
+      className={`px-2 py-0.5 rounded text-[10px] font-medium ${on ? "text-ok" : "bg-surface-2 text-fg-2"}`}
     >
       {label}: {on ? "да" : "нет"}
     </span>
@@ -65,7 +65,7 @@ export default function UserCard({
   if (!data) {
     return (
       <Dialog label={`Пользователь @${username}`} onClose={onClose}>
-        <div className="bg-[#141418] rounded-2xl p-8 text-sm text-gray-300">
+        <div className="bg-surface rounded-xl p-8 text-sm text-fg-2">
           {error ? `❌ ${error}` : "Загрузка…"}
         </div>
       </Dialog>
@@ -77,7 +77,7 @@ export default function UserCard({
 
   return (
     <Dialog label={`Пользователь @${username}`} onClose={onClose}>
-      <div className="bg-[#141418] border border-white/10 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 space-y-4 text-left">
+      <div className="bg-surface border border-line rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 space-y-4 text-left">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-4 min-w-0">
             <img
@@ -86,41 +86,41 @@ export default function UserCard({
                 `https://api.dicebear.com/9.x/micah/svg?seed=${user.username}&backgroundColor=transparent`
               }
               alt=""
-              className="w-14 h-14 rounded-xl object-cover bg-black"
+              className="w-14 h-14 rounded-xl object-cover bg-bg"
             />
             <div className="min-w-0">
-              <h2 className="text-lg font-black text-white truncate">
+              <h2 className="text-lg font-semibold text-fg truncate">
                 @{user.username}{" "}
-                <span className="text-gray-400 font-normal">
+                <span className="text-fg-2 font-normal">
                   {user.display_name}
                 </span>
               </h2>
-              <div className="flex flex-wrap gap-1.5 mt-1 text-[10px] font-bold">
-                <span className="px-2 py-0.5 rounded bg-white/5 text-gray-300 font-mono">
+              <div className="flex flex-wrap gap-1.5 mt-1 text-[10px] font-medium">
+                <span className="px-2 py-0.5 rounded bg-surface-2 text-fg-2 font-mono">
                   {user.role}
                 </span>
                 {user.is_banned && (
-                  <span className="px-2 py-0.5 rounded bg-red-950/80 text-red-400">
+                  <span className="px-2 py-0.5 rounded text-danger">
                     ЗАБЛОКИРОВАН
                   </span>
                 )}
                 {user.is_flagged && (
-                  <span className="px-2 py-0.5 rounded bg-amber-950/80 text-amber-400">
+                  <span className="px-2 py-0.5 rounded text-accent">
                     АНТИФРОД
                   </span>
                 )}
                 {integration.is_verified && (
-                  <span className="px-2 py-0.5 rounded bg-blue-950/80 text-blue-300">
+                  <span className="px-2 py-0.5 rounded text-fg-2">
                     ВЕРИФИЦИРОВАН
                   </span>
                 )}
                 {user.is_private && (
-                  <span className="px-2 py-0.5 rounded bg-white/5 text-gray-300">
+                  <span className="px-2 py-0.5 rounded bg-surface-2 text-fg-2">
                     ПРИВАТНЫЙ
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-gray-400 mt-1">
+              <p className="text-[11px] text-fg-2 mt-1">
                 ID {user.id} · регистрация: {formatDateTime(user.created_at)}
                 {user.location && ` · ${user.location}`}
               </p>
@@ -130,14 +130,14 @@ export default function UserCard({
             type="button"
             onClick={onClose}
             aria-label="Закрыть"
-            className="p-2 text-gray-400 hover:text-white"
+            className="p-2 text-fg-2 hover:text-fg"
           >
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
         {user.antifraud_reason && (
-          <p className="text-xs text-amber-300 bg-amber-950/30 rounded-lg p-2">
+          <p className="text-xs text-accent rounded-lg p-2">
             {user.antifraud_reason}
           </p>
         )}
@@ -154,9 +154,9 @@ export default function UserCard({
             ["Комментарии", stats.comments],
             ["Серия дней", integration.current_streak],
           ].map(([label, value]) => (
-            <div key={label} className="bg-black/30 rounded-xl p-2">
-              <div className="text-base font-black text-white">{value}</div>
-              <div className="text-[10px] text-gray-400 uppercase">{label}</div>
+            <div key={label} className="bg-bg rounded-xl p-2">
+              <div className="text-base font-semibold text-fg">{value}</div>
+              <div className="text-[10px] text-fg-2">{label}</div>
             </div>
           ))}
         </div>
@@ -295,21 +295,21 @@ export default function UserCard({
               <Flag on={data.export.listenbrainz} label="→ ListenBrainz" />
               <Flag on={data.export.librefm} label="→ Libre.fm" />
             </div>
-            <p className="text-[11px] text-gray-400">
+            <p className="text-[11px] text-fg-2">
               Last.fm: {integration.lastfm_username || "—"} · синхронизация:{" "}
               {formatDateTime(integration.last_sync)} · push-подписок:{" "}
               {data.push_subscriptions}
             </p>
             {data.webhooks.map((w) => (
-              <p key={w.id} className="text-[11px] text-gray-300 break-all">
-                🔗 {w.url} {!w.is_active && "(выключен)"}
+              <p key={w.id} className="text-[11px] text-fg-2 break-all">
+                {w.url} {!w.is_active && "(выключен)"}
               </p>
             ))}
             {data.imports.map((j) => (
-              <p key={j.id} className="text-[11px] text-gray-300">
+              <p key={j.id} className="text-[11px] text-fg-2">
                 Импорт #{j.id} ({j.lastfm_username}): {j.status},{" "}
                 {j.imported_tracks}/{j.total_tracks}
-                {j.error && <span className="text-red-300"> — {j.error}</span>}
+                {j.error && <span className="text-danger"> — {j.error}</span>}
               </p>
             ))}
           </div>
@@ -317,7 +317,7 @@ export default function UserCard({
           <div className={section}>
             <div className={sectionTitle}>API-ключи и устройства</div>
             {data.api_keys.length === 0 && (
-              <p className="text-xs text-gray-400">Ключей нет</p>
+              <p className="text-xs text-fg-2">Ключей нет</p>
             )}
             {data.api_keys.map((k) => (
               <div
@@ -326,12 +326,12 @@ export default function UserCard({
               >
                 <div className="min-w-0">
                   <div
-                    className={`font-bold truncate ${k.is_active ? "text-white" : "text-gray-500 line-through"}`}
+                    className={`font-medium truncate ${k.is_active ? "text-fg" : "text-fg-3 line-through"}`}
                   >
                     {k.name}{" "}
-                    <span className="font-mono text-gray-400">{k.prefix}…</span>
+                    <span className="font-mono text-fg-2">{k.prefix}…</span>
                   </div>
-                  <div className="text-[10px] text-gray-400">
+                  <div className="text-[10px] text-fg-2">
                     использован: {formatDateTime(k.last_used_at)}
                   </div>
                 </div>
@@ -363,13 +363,13 @@ export default function UserCard({
             {data.achievements.map((a) => (
               <span
                 key={a.id}
-                className="inline-flex items-center gap-1 bg-white/5 rounded-lg px-2 py-1 text-xs text-gray-200"
+                className="inline-flex items-center gap-1 bg-surface-2 rounded-lg px-2 py-1 text-xs text-fg"
               >
                 {a.icon} {a.name}
                 <button
                   type="button"
                   aria-label={`Снять достижение ${a.name}`}
-                  className="text-gray-400 hover:text-red-400"
+                  className="text-fg-2 hover:text-danger"
                   onClick={() =>
                     act(
                       () =>
@@ -422,17 +422,17 @@ export default function UserCard({
 
         <div className={section}>
           <div className={sectionTitle}>Последние прослушивания</div>
-          <table className="w-full text-left text-xs text-gray-300">
+          <table className="w-full text-left text-xs text-fg-2">
             <tbody className="divide-y divide-white/5">
               {data.recent_scrobbles.map((s) => (
                 <tr key={s.id}>
-                  <td className="py-1.5 pr-3 font-mono text-gray-400 whitespace-nowrap">
+                  <td className="py-1.5 pr-3 font-mono text-fg-2 whitespace-nowrap">
                     {formatDateTime(s.played_at)}
                   </td>
                   <td className="py-1.5 pr-3">
                     {s.artist} — {s.title}
                   </td>
-                  <td className="py-1.5 pr-3 font-mono text-gray-400">
+                  <td className="py-1.5 pr-3 font-mono text-fg-2">
                     {s.source}
                   </td>
                   <td className="py-1.5 font-mono text-right whitespace-nowrap">
@@ -443,7 +443,7 @@ export default function UserCard({
             </tbody>
           </table>
           {data.recent_scrobbles.length === 0 && (
-            <p className="text-xs text-gray-400">Прослушиваний нет</p>
+            <p className="text-xs text-fg-2">Прослушиваний нет</p>
           )}
         </div>
       </div>

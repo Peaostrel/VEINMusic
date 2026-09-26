@@ -1,214 +1,211 @@
 "use client";
 
-import { getPlatformIcon } from "../../../../utils/formatters";
-import { getSafeUrl, getArtistUrl, getTrackUrl } from "./profileUtils";
-import { HistoryItem } from "./HistoryItem";
+import { Meter } from "@/components/ui";
+import { getSafeUrl, getTrackUrl } from "./profileUtils";
+import { ArtistLinks, HistoryItem } from "./HistoryItem";
 import type { ProfileViewProps } from "./useProfilePage";
 import { useNow } from "./hooks";
 
+function Cover({
+  src,
+  round = false,
+  size = 40,
+}: Readonly<{ src?: string | null; round?: boolean; size?: number }>) {
+  const style = { width: size, height: size };
+  const shape = round ? "rounded-full" : "rounded";
+  return src ? (
+    <img
+      src={getSafeUrl(src)}
+      alt=""
+      className={`shrink-0 object-cover ${shape}`}
+      style={style}
+    />
+  ) : (
+    <span className={`shrink-0 bg-surface-2 ${shape}`} style={style} />
+  );
+}
+
 export function ProfileMainGrid({ data, recs, wrapped }: ProfileViewProps) {
   const now = useNow();
+  const topArtists = data.stats.top_artists ?? [];
+  const topTracks = data.stats.top_tracks ?? [];
+  const maxArtist = topArtists[0]?.plays || 1;
+
   return (
-    <>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-20">
-        <div className="lg:col-span-2 space-y-8">
-          {recs.length > 0 && (
-            <div className="bg-[#121212]/50 backdrop-blur-md p-6 rounded-2xl border border-[var(--accent)]/20">
-              <h2 className="text-xl font-black mb-6 flex items-center gap-3 text-[var(--accent-text)]">
-                <span className="text-2xl">✨</span> Рекомендации
-              </h2>
-              <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-                {recs.map((r) => (
-                  <div
-                    key={r.artist}
-                    className="min-w-[150px] bg-white/5 p-3 rounded-xl border border-white/5 hover:border-[var(--accent)] transition-all group"
-                  >
-                    {r.cover_url ? (
-                      <img
-                        src={r.cover_url}
-                        className="w-full aspect-square rounded-lg object-cover mb-3 group-hover:scale-105 transition-transform"
-                        alt="Artist"
-                      />
-                    ) : (
-                      <div className="w-full aspect-square rounded-lg bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-3xl text-yellow-500 mb-3 group-hover:scale-105 transition-transform">
-                        🎤
-                      </div>
-                    )}
-                    <p className="font-bold text-sm text-white truncate">
-                      {r.artist}
-                    </p>
-                    <p className="text-[10px] text-gray-400 mt-1">{r.reason}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="bg-[#121212]/50 backdrop-blur-md p-6 rounded-2xl shadow-xl border border-white/5">
-            <h2 className="text-xl font-black mb-6 flex items-center gap-3 text-[var(--accent-text)]">
-              <span className="text-2xl">🎵</span> История
+    <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="flex min-w-0 flex-col gap-10">
+        {recs.length > 0 && (
+          <section aria-labelledby="recs-title" className="flex flex-col gap-4">
+            <h2 id="recs-title" className="text-base font-semibold">
+              Может понравиться
             </h2>
-            {data.history.length === 0 ? (
-              <p className="text-gray-400 font-medium">Тут пока пусто.</p>
-            ) : (
-              <ul className="space-y-3">
-                {data.history.map((item, idx: number) => {
-                  const isLatest = idx === 0;
-                  const isNowPlaying =
-                    isLatest &&
-                    (item.is_playing ||
-                      (now !== null &&
-                        now - Date.parse(item.updated_at + "Z") <
-                          15 * 60 * 1000));
-                  return (
-                    <HistoryItem
-                      key={item.id}
-                      item={item}
-                      isLatest={isLatest}
-                      isNowPlaying={isNowPlaying}
+            <ul className="hide-scrollbar flex gap-3 overflow-x-auto pb-1">
+              {recs.map((r) => (
+                <li
+                  key={r.artist}
+                  className="flex w-[150px] shrink-0 flex-col gap-2 rounded-xl border border-line bg-surface p-3"
+                >
+                  {r.cover_url ? (
+                    <img
+                      src={getSafeUrl(r.cover_url)}
+                      alt=""
+                      className="aspect-square w-full rounded-lg object-cover"
                     />
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-        </div>
-
-        <div className="space-y-8">
-          {wrapped && wrapped.top_artist !== "Нет данных" && (
-            <div className="bg-gradient-to-br from-[var(--accent)]/20 to-black p-6 rounded-2xl border border-[var(--accent)]/30 shadow-[0_0_30px_var(--accent-glow)] relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--accent)]/10 blur-3xl rounded-full"></div>
-              <h2 className="text-xl font-black mb-4 flex items-center gap-2 text-white">
-                <span className="text-xl">📊</span> Итоги месяца
-              </h2>
-              <div className="space-y-4 relative z-10">
-                <div>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                    Топ артист
-                  </p>
-                  <p className="text-lg font-black text-[var(--accent-text)]">
-                    {wrapped.top_artist}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                    Прослушано
-                  </p>
-                  <p className="text-lg font-black text-white">
-                    {wrapped.total_minutes} мин.
-                  </p>
-                </div>
-                <div className="pt-2 border-t border-white/10">
-                  <span className="bg-white/10 px-2 py-1 rounded text-[10px] font-black uppercase text-[var(--accent-text)]">
-                    {wrapped.status} Listener
+                  ) : (
+                    <span className="aspect-square w-full rounded-lg bg-surface-2" />
+                  )}
+                  <span className="truncate text-sm font-medium">
+                    {r.artist}
                   </span>
-                </div>
-              </div>
-            </div>
-          )}
+                  <span className="line-clamp-2 text-xs text-fg-3">
+                    {r.reason}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
-          <div className="bg-[#121212]/50 backdrop-blur-md p-6 rounded-2xl shadow-xl border border-white/5">
-            <h2 className="text-xl font-black mb-4 flex items-center gap-2 text-[var(--accent-text)]">
-              <span className="text-xl animate-fire">🔥</span> Топ треков
+        <section
+          aria-labelledby="history-title"
+          className="flex flex-col gap-3"
+        >
+          <h2 id="history-title" className="text-base font-semibold">
+            История
+          </h2>
+          {data.history.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-line px-5 py-10 text-center text-sm text-fg-2">
+              Тут пока пусто.
+            </p>
+          ) : (
+            <ol className="border-t border-line-soft">
+              {data.history.map((item, idx: number) => {
+                const isNowPlaying =
+                  idx === 0 &&
+                  (item.is_playing ||
+                    (now !== null &&
+                      now - Date.parse(item.updated_at + "Z") <
+                        15 * 60 * 1000));
+                return (
+                  <HistoryItem
+                    key={item.id}
+                    item={item}
+                    isNowPlaying={isNowPlaying}
+                  />
+                );
+              })}
+            </ol>
+          )}
+        </section>
+      </div>
+
+      <aside className="flex flex-col gap-8">
+        {wrapped && wrapped.top_artist !== "Нет данных" && (
+          <section
+            aria-labelledby="month-title"
+            className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-5"
+          >
+            <h2 id="month-title" className="text-sm font-semibold">
+              Итоги месяца
             </h2>
-            <ul className="space-y-3">
-              {data.stats.top_tracks?.map((item) => (
+            <dl className="grid grid-cols-2 gap-4">
+              <div className="flex min-w-0 flex-col-reverse gap-0.5">
+                <dt className="text-xs text-fg-2">артист месяца</dt>
+                <dd className="truncate text-base font-medium">
+                  {wrapped.top_artist}
+                </dd>
+              </div>
+              <div className="flex flex-col-reverse gap-0.5">
+                <dt className="text-xs text-fg-2">минут музыки</dt>
+                <dd className="font-mono text-xl">{wrapped.total_minutes}</dd>
+              </div>
+            </dl>
+            <span className="self-start rounded border border-line px-2 py-0.5 font-mono text-[11px] text-fg-2">
+              {wrapped.status}
+            </span>
+          </section>
+        )}
+
+        <section
+          aria-labelledby="top-tracks-title"
+          className="flex flex-col gap-3"
+        >
+          <h2 id="top-tracks-title" className="text-sm font-semibold">
+            Топ треков
+          </h2>
+          {topTracks.length === 0 ? (
+            <p className="text-sm text-fg-3">Пока нет данных.</p>
+          ) : (
+            <ol className="border-t border-line-soft">
+              {topTracks.map((item, i) => (
                 <li
                   key={item.title + item.artist}
-                  className="p-2 rounded-xl flex gap-3 items-start transition-all border group relative bg-white/5 border-transparent hover:bg-white/10 hover:border-white/5"
+                  className="grid grid-cols-[20px_40px_minmax(0,1fr)_auto] items-center gap-3 border-b border-line-soft py-2.5"
                 >
-                  <div className="relative w-10 h-10 rounded bg-[#1a1a1a] shrink-0 overflow-hidden shadow-sm mt-0.5">
-                    {item.cover_url ? (
-                      <img
-                        src={item.cover_url}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                        alt={item.title}
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-[#282828] to-[#121212] border border-white/5 flex items-center justify-center text-sm text-yellow-500/80 shadow-inner">
-                        🎵
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-grow min-w-[0] flex flex-col justify-center overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                    <div className="flex items-center gap-2 mb-0.5 w-max">
-                      <div className="shrink-0">
-                        {getPlatformIcon(item.source)}
-                      </div>
-                      <a
-                        href={getSafeUrl(getTrackUrl(item))}
-                        target="_blank"
-                        rel="noopener noreferrer"
-
-                        className="font-bold text-sm text-white hover:text-[var(--accent-text)] hover:underline transition-colors whitespace-nowrap pointer-events-auto pr-4"
-                      >
-                        {item.title}
-                      </a>
-                    </div>
-
-                    <div className="text-gray-300 text-xs pointer-events-auto whitespace-nowrap pl-[22px] relative z-10 w-max pr-4">
-                      {item.artist.split(",").map((a: string) => (
-                        <span key={a.trim()}>
-                          <a
-                            href={getArtistUrl(a.trim(), item.source)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-
-                            className="hover:text-[var(--accent-text)] hover:underline cursor-pointer transition-colors relative z-10 font-medium"
-                          >
-                            {a.trim()}
-                          </a>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <span className="text-[var(--text-on-accent)] bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] px-2 py-1 rounded text-xs font-black shadow-sm shrink-0 mt-1">
+                  <span className="font-mono text-xs text-fg-3">{i + 1}</span>
+                  <Cover src={item.cover_url} />
+                  <span className="flex min-w-0 flex-col">
+                    <a
+                      href={getSafeUrl(getTrackUrl(item))}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="truncate text-sm hover:underline"
+                    >
+                      {item.title}
+                    </a>
+                    <ArtistLinks
+                      artist={item.artist}
+                      source={item.source}
+                      className="text-xs text-fg-2"
+                    />
+                  </span>
+                  <span className="font-mono text-[13px] text-fg-2">
                     {item.plays}
                   </span>
                 </li>
               ))}
-            </ul>
-          </div>
+            </ol>
+          )}
+        </section>
 
-          <div className="bg-[#121212]/50 backdrop-blur-md p-6 rounded-2xl shadow-xl border border-white/5">
-            <h2 className="text-xl font-black mb-4 flex items-center gap-2 text-[var(--accent-text)]">
-              <span className="text-xl">🎤</span> Топ артистов
-            </h2>
-            <ul className="space-y-3">
-              {data.stats.top_artists?.map((item) => (
+        <section
+          aria-labelledby="top-artists-title"
+          className="flex flex-col gap-3"
+        >
+          <h2 id="top-artists-title" className="text-sm font-semibold">
+            Топ артистов
+          </h2>
+          {topArtists.length === 0 ? (
+            <p className="text-sm text-fg-3">Пока нет данных.</p>
+          ) : (
+            <ol className="flex flex-col gap-3">
+              {topArtists.map((item, i) => (
                 <li
                   key={item.artist}
-                  className="bg-white/5 hover:bg-white/10 p-3 rounded-xl flex justify-between items-start border-l-2 border-[#555] hover:border-[var(--accent)] transition-all group relative"
+                  className="grid grid-cols-[20px_minmax(0,1fr)_48px] items-center gap-3"
                 >
-                  <div className="flex items-center gap-2 min-w-[0] overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                    <div className="shrink-0">
-                      {getPlatformIcon(item.source)}
-                    </div>
-                    <div className="font-bold text-sm text-white pointer-events-auto whitespace-nowrap w-max pr-4">
-                      {item.artist.split(",").map((a: string) => (
-                        <span key={a.trim()}>
-                          <a
-                            href={getArtistUrl(a.trim(), item.source)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-
-                            className="hover:text-[var(--accent-text)] hover:underline cursor-pointer transition-colors relative z-10"
-                          >
-                            {a.trim()}
-                          </a>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <span className="text-[var(--text-on-accent)] bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] px-2 py-1 rounded text-xs font-black shadow-sm shrink-0 mt-0.5">
+                  <span className="font-mono text-xs text-fg-3">{i + 1}</span>
+                  <span className="flex min-w-0 flex-col gap-1.5">
+                    <ArtistLinks
+                      artist={item.artist}
+                      source={item.source}
+                      className="text-sm font-medium"
+                    />
+                    <Meter
+                      value={item.plays}
+                      max={maxArtist}
+                      accent={i === 0}
+                    />
+                  </span>
+                  <span className="text-right font-mono text-[13px] text-fg-2">
                     {item.plays}
                   </span>
                 </li>
               ))}
-            </ul>
-          </div>
-        </div>
-      </div>
-    </>
+            </ol>
+          )}
+        </section>
+      </aside>
+    </div>
   );
 }

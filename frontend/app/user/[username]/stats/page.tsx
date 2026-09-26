@@ -3,12 +3,13 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
-  PlatformDistribution,
+  BarStrip,
   GenreCloud,
-  ActivityBarChart,
+  PlatformDistribution,
 } from "@/components/StatsCharts";
-import { PieChart, Clock, CalendarDays, Award } from "lucide-react";
+import { Loading, PageHeader, Segmented } from "@/components/ui";
 import { API_URL } from "@/app/lib/api";
+import { isValidUser } from "@/app/lib/theme";
 import type { DetailedStats } from "@/app/lib/types";
 import { StatTiles } from "./_components/StatTiles";
 import {
@@ -20,17 +21,44 @@ import { DailyActivity } from "./_components/DailyActivity";
 
 type Period = "7d" | "30d" | "all";
 
-const PERIOD_LABELS: Record<Period, string> = {
-  "7d": "7 Дней",
-  "30d": "30 Дней",
-  all: "Всё время",
+const PERIODS: { id: Period; label: string }[] = [
+  { id: "7d", label: "7 дней" },
+  { id: "30d", label: "30 дней" },
+  { id: "all", label: "Всё время" },
+];
+
+const PERIOD_CAPTION: Record<Period, string> = {
+  "7d": "За последние 7 дней",
+  "30d": "За последние 30 дней",
+  all: "За всё время",
 };
 
-const noData = (
-  <div className="h-36 flex items-center justify-center text-gray-400 text-sm font-bold bg-white/5 rounded-xl">
-    Нет данных
-  </div>
-);
+function Panel({
+  id,
+  title,
+  aside,
+  children,
+}: Readonly<{
+  id: string;
+  title: string;
+  aside?: React.ReactNode;
+  children: React.ReactNode;
+}>) {
+  return (
+    <section
+      aria-labelledby={id}
+      className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-6"
+    >
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 id={id} className="text-base font-semibold">
+          {title}
+        </h2>
+        {aside && <span className="text-xs text-fg-3">{aside}</span>}
+      </div>
+      {children}
+    </section>
+  );
+}
 
 /** Platform the user's top tracks were mostly played on. */
 function mostUsedSource(tracks: DetailedStats["top_tracks"]): string {
@@ -48,6 +76,12 @@ export default function DetailedStatsPage() {
   const [period, setPeriod] = useState<Period>("30d");
   const [hasCheckedFallback, setHasCheckedFallback] = useState(false);
   const [error, setError] = useState("");
+  const [me, setMe] = useState<string | null>(null);
+
+  useEffect(() => {
+    const u = localStorage.getItem("username");
+    setMe(isValidUser(u) ? u : null);
+  }, []);
 
   useEffect(() => {
     if (!username) return;
@@ -90,19 +124,19 @@ export default function DetailedStatsPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen text-[var(--accent-text)] flex items-center justify-center font-bold text-2xl">
-        {error}
+      <div className="mx-auto max-w-md px-4 py-24 text-center">
+        <h1 className="text-2xl font-semibold">{error}</h1>
+        <Link
+          href="/"
+          className="mt-4 inline-block text-sm text-fg-2 hover:text-fg"
+        >
+          ← На главную
+        </Link>
       </div>
     );
   }
 
-  if (loading || !stats) {
-    return (
-      <output className="min-h-screen text-[var(--accent-text)] flex items-center justify-center font-bold text-2xl animate-pulse">
-        Сбор данных...
-      </output>
-    );
-  }
+  if (loading || !stats) return <Loading label="Считаем статистику…" />;
 
   const {
     user,
@@ -129,56 +163,43 @@ export default function DetailedStatsPage() {
     total_scrobbles > 0
       ? Math.round((unique_tracks / total_scrobbles) * 100)
       : 0;
+  const isMine = me !== null && me === username;
+  const sortedHours: [string, number][] = Object.entries(hours_activity).sort(
+    ([a], [b]) => Number(a) - Number(b),
+  );
+  const peakHour = Object.entries(hours_activity).sort(
+    (a, b) => b[1] - a[1],
+  )[0];
 
   return (
-    <div className="max-w-5xl mx-auto px-4 pt-24 pb-20 overflow-x-hidden">
-      <Link
-        href={`/user/${username}`}
-        className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-6 font-bold"
-      >
-        ← Назад в профиль
-      </Link>
-
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-10 gap-4">
-        <div className="flex items-center gap-5">
-          <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white/10 shadow-[0_0_20px_var(--accent-glow)] shrink-0 group">
-            <img
-              src={
-                user.avatar_url ||
-                `https://api.dicebear.com/9.x/micah/svg?seed=${username}&backgroundColor=transparent`
-              }
-              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-              alt={`Аватар ${username}`}
-            />
-          </div>
-          <div>
-            <h1 className="text-3xl md:text-4xl font-black text-white leading-tight">
-              Музыкальная карта
-            </h1>
-            <p className="text-[var(--accent-text)] font-bold text-lg">
-              @{username}
-            </p>
-          </div>
-        </div>
-
-        <fieldset className="flex bg-[#121212]/80 backdrop-blur-md rounded-xl p-1 border border-white/5 shadow-lg">
-          <legend className="sr-only">Период</legend>
-          {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
-            <button
-              type="button"
-              key={p}
-              onClick={() => setPeriod(p)}
-              aria-pressed={period === p}
-              className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${period === p ? "bg-[var(--accent)] shadow-[0_0_15px_var(--accent-glow)]" : "text-gray-300 hover:text-white"}`}
-              style={
-                period === p ? { color: "var(--text-on-accent)" } : undefined
-              }
-            >
-              {PERIOD_LABELS[p]}
-            </button>
-          ))}
-        </fieldset>
-      </div>
+    <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-7 px-4 py-8 sm:px-8 lg:px-12 lg:py-10">
+      <PageHeader
+        title={
+          isMine ? "Статистика" : `Статистика ${user.display_name || username}`
+        }
+        subtitle={
+          <>
+            {PERIOD_CAPTION[period]}
+            {!isMine && (
+              <>
+                {" · "}
+                <Link href={`/user/${username}`} className="hover:text-fg">
+                  @{username}
+                </Link>
+              </>
+            )}
+          </>
+        }
+        actions={
+          <Segmented
+            label="Период"
+            role="radiogroup"
+            value={period}
+            onChange={setPeriod}
+            options={PERIODS}
+          />
+        }
+      />
 
       <StatTiles
         totalScrobbles={total_scrobbles}
@@ -187,80 +208,43 @@ export default function DetailedStatsPage() {
         uniqueTracks={unique_tracks}
         avgPerDay={avgPerDay}
         topSource={topSource}
+        diversity={diversity}
       />
 
-      <section className="bg-[#121212]/70 p-6 rounded-2xl shadow-xl border border-white/5 mb-8">
-        <div className="flex justify-between items-end mb-6 border-b border-white/5 pb-4">
-          <h2 className="text-xl font-black text-[var(--accent-text)] flex items-center gap-2">
-            <span aria-hidden="true">📊</span> Детальная аналитика
-          </h2>
-          <div className="text-right">
-            <div className="text-3xl font-black text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">
-              {diversity}%
-            </div>
-            <div className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">
-              Индекс разнообразия
-            </div>
-          </div>
-        </div>
+      <DailyActivity
+        activity={activity_graph}
+        days={period === "7d" ? 7 : 30}
+      />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
-          <div>
-            <h3 className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-4 flex items-center gap-2">
-              <Clock className="w-3 h-3" aria-hidden="true" /> Время суток
-            </h3>
-            {Object.keys(hours_activity).length > 0 ? (
-              <ActivityBarChart data={hours_activity} color="var(--accent)" />
-            ) : (
-              noData
-            )}
-          </div>
-          <div>
-            <h3 className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-4 flex items-center gap-2">
-              <CalendarDays className="w-3 h-3" aria-hidden="true" /> Дни недели
-            </h3>
-            {Object.keys(days_activity).length > 0 ? (
-              <ActivityBarChart data={days_activity} color="#fff" />
-            ) : (
-              noData
-            )}
-          </div>
-        </div>
-      </section>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-        <section className="bg-[#121212]/70 p-6 rounded-2xl border border-white/5 shadow-xl">
-          <h2 className="text-xl font-black text-white mb-6 flex items-center gap-2">
-            <Award
-              className="w-5 h-5 text-[var(--accent)]"
-              aria-hidden="true"
-            />{" "}
-            Музыкальное ДНК
-          </h2>
-          <div className="min-h-[200px] flex items-center justify-center">
-            <GenreCloud data={genre_counts} />
-          </div>
-        </section>
-
-        <section className="bg-[#121212]/70 p-6 rounded-2xl border border-white/5 shadow-xl">
-          <h2 className="text-xl font-black text-white mb-6 flex items-center gap-2">
-            <PieChart
-              className="w-5 h-5 text-[var(--accent)]"
-              aria-hidden="true"
-            />{" "}
-            Распределение платформ
-          </h2>
-          <PlatformDistribution data={source_counts} />
-        </section>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        <Panel
+          id="hours-title"
+          title="Когда вы слушаете"
+          aside={
+            peakHour && peakHour[1] > 0 ? `пик — ${peakHour[0]}:00` : undefined
+          }
+        >
+          <BarStrip data={sortedHours} label="По часам" labelEvery={3} />
+        </Panel>
+        <Panel id="days-title" title="Дни недели">
+          <BarStrip data={days_activity} label="По дням недели" />
+        </Panel>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-        <TopTracksCard tracks={top_tracks} />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Panel id="sources-title" title="Источники">
+          <PlatformDistribution data={source_counts} />
+        </Panel>
+        <Panel id="genres-title" title="Жанры">
+          <GenreCloud data={genre_counts} />
+        </Panel>
+      </div>
+
+      <div className="grid gap-8 lg:grid-cols-3">
         <TopArtistsCard artists={top_artists} topSource={topSource} />
+        <TopTracksCard tracks={top_tracks} />
         <TopAlbumsCard albums={top_albums} />
       </div>
-
-      <DailyActivity activity={activity_graph} />
     </div>
   );
 }

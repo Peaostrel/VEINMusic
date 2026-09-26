@@ -17,10 +17,10 @@ import {
 const LIMIT = 50;
 
 function Details({ value }: Readonly<{ value: AuditEntry["details"] }>) {
-  if (!value) return <span className="text-gray-500">—</span>;
+  if (!value) return <span className="text-fg-3">—</span>;
   if (typeof value === "string") return <span>{value}</span>;
   return (
-    <span className="font-mono text-[11px] text-gray-300 break-all">
+    <span className="font-mono text-[11px] text-fg-2 break-all">
       {Object.entries(value)
         .map(
           ([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`,
@@ -52,7 +52,7 @@ export default function AuditTab() {
       <div className={panelClass}>
         <PanelTitle
           icon={
-            <ScrollText className="w-4 h-4 text-red-500" aria-hidden="true" />
+            <ScrollText className="w-4 h-4 text-danger" aria-hidden="true" />
           }
         >
           Журнал действий администраторов
@@ -94,11 +94,11 @@ export default function AuditTab() {
         </div>
       </div>
 
-      {error && <p className="text-red-400 text-xs font-bold">{error}</p>}
+      {error && <p className="text-danger text-xs font-medium">{error}</p>}
 
-      <div className="bg-[#141418] border border-white/5 rounded-2xl overflow-x-auto">
-        <table className="w-full text-left text-xs text-gray-300">
-          <thead className="bg-[#0f0f12] text-gray-400 font-mono uppercase text-[11px] border-b border-white/5">
+      <div className="bg-surface border border-line-soft rounded-xl overflow-x-auto">
+        <table className="w-full text-left text-xs text-fg-2">
+          <thead className="bg-[#0f0f12] text-fg-2 font-mono text-[11px] border-b border-line-soft">
             <tr>
               <th className="py-3 px-4">Когда</th>
               <th className="py-3 px-4">Кто</th>
@@ -110,11 +110,11 @@ export default function AuditTab() {
           <tbody className="divide-y divide-white/5">
             {(data?.items ?? []).map((e) => (
               <tr key={e.id}>
-                <td className="py-2.5 px-4 font-mono whitespace-nowrap text-gray-400">
+                <td className="py-2.5 px-4 font-mono whitespace-nowrap text-fg-2">
                   {formatDateTime(e.created_at)}
                 </td>
-                <td className="py-2.5 px-4 font-bold text-white">@{e.admin}</td>
-                <td className="py-2.5 px-4 font-mono text-red-300">
+                <td className="py-2.5 px-4 font-medium text-fg">@{e.admin}</td>
+                <td className="py-2.5 px-4 font-mono text-danger">
                   {e.action}
                 </td>
                 <td className="py-2.5 px-4">{e.target ?? "—"}</td>
@@ -125,7 +125,7 @@ export default function AuditTab() {
             ))}
             {!loading && data?.items.length === 0 && (
               <tr>
-                <td colSpan={5} className="py-6 text-center text-gray-400">
+                <td colSpan={5} className="py-6 text-center text-fg-2">
                   Записей нет
                 </td>
               </tr>

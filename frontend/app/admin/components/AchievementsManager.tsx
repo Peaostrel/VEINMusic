@@ -119,9 +119,7 @@ export default function AchievementsManager({
     <section className="space-y-4" aria-labelledby="achievements-heading">
       <form onSubmit={save} className={panelClass}>
         <PanelTitle
-          icon={
-            <Trophy className="w-4 h-4 text-purple-400" aria-hidden="true" />
-          }
+          icon={<Trophy className="w-4 h-4 text-fg-2" aria-hidden="true" />}
         >
           <span id="achievements-heading">
             {editingId === null
@@ -229,7 +227,7 @@ export default function AchievementsManager({
           )}
         </div>
         {needsTarget && (
-          <p className="text-[11px] text-gray-400">
+          <p className="text-[11px] text-fg-2">
             Для ссылки на Яндекс Музыку или Spotify название, обложка и число
             треков альбома подтянутся автоматически.
           </p>
@@ -258,32 +256,32 @@ export default function AchievementsManager({
         {achievements.map((a) => (
           <li
             key={a.id}
-            className="bg-[#141418] border border-white/5 p-3.5 rounded-xl flex items-start gap-3"
+            className="bg-surface border border-line-soft p-3.5 rounded-xl flex items-start gap-3"
           >
             <div
-              className="w-10 h-10 rounded-lg bg-black/40 border border-white/10 flex items-center justify-center text-xl shrink-0"
+              className="w-10 h-10 rounded-lg bg-bg border border-line flex items-center justify-center text-xl shrink-0"
               aria-hidden="true"
             >
               {a.icon || "🏆"}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="font-bold text-white text-xs truncate">
+              <div className="font-medium text-fg text-xs truncate">
                 {a.name}
               </div>
-              <div className="text-[11px] text-gray-400 truncate">
+              <div className="text-[11px] text-fg-2 truncate">
                 {a.description}
               </div>
-              <div className="text-[10px] font-mono mt-0.5 text-gray-400">
+              <div className="text-[10px] font-mono mt-0.5 text-fg-2">
                 {RULES[a.rule_type] ?? a.rule_type}
                 {a.rule_type !== "manual" && ` ≥ ${a.rule_value}`} ·{" "}
-                <span className="text-emerald-400">+{a.reward_xp} XP</span>
+                <span className="text-ok">+{a.reward_xp} XP</span>
               </div>
             </div>
             <div className="flex flex-col gap-1">
               <button
                 type="button"
                 aria-label={`Изменить ${a.name}`}
-                className="p-1.5 hover:bg-white/10 rounded-lg text-blue-300"
+                className="p-1.5 hover:bg-line rounded-lg text-fg-2"
                 onClick={() => {
                   setEditingId(a.id);
                   setForm(toForm(a));
@@ -294,7 +292,7 @@ export default function AchievementsManager({
               <button
                 type="button"
                 aria-label={`Удалить ${a.name}`}
-                className="p-1.5 hover:bg-red-500/20 rounded-lg text-red-400"
+                className="p-1.5 hover:bg-[#2a1b1b] rounded-lg text-danger"
                 onClick={() => remove(a)}
               >
                 <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />

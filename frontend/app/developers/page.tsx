@@ -1,355 +1,223 @@
-"use client";
 import Link from "next/link";
-import { useState } from "react";
-import { Light as SyntaxHighlighter } from "react-syntax-highlighter";
-import python from "react-syntax-highlighter/dist/esm/languages/hljs/python";
-import json from "react-syntax-highlighter/dist/esm/languages/hljs/json";
-import bash from "react-syntax-highlighter/dist/esm/languages/hljs/bash";
-import { atomOneDark } from "react-syntax-highlighter/dist/esm/styles/hljs";
+import { KeyRound } from "lucide-react";
+import { btn } from "@/components/ui";
+import CodeSamples from "./CodeSamples";
 
-SyntaxHighlighter.registerLanguage("python", python);
-SyntaxHighlighter.registerLanguage("json", json);
-SyntaxHighlighter.registerLanguage("bash", bash);
+const TOC = [
+  ["#auth", "Ключ"],
+  ["#endpoints", "Эндпоинты"],
+  ["#fields", "Поля скроббла"],
+  ["#devices", "Подключение устройства"],
+  ["#examples", "Примеры"],
+];
 
-// CodeBlock component moved outside parent to avoid re-creation on each render
-interface CodeBlockProps {
-  code: string;
-  language: string;
-  label: string;
-  colorClass?: string;
-  id: string;
-  onCopy: (text: string, id: string) => void;
-  copied: string;
+const ENDPOINTS = [
+  ["POST", "/api/scrobble", "Отправить трек в историю. Нужен api_key."],
+  ["GET", "/api/user/:username", "Профиль, аватар и что играет сейчас."],
+  ["GET", "/api/leaderboard", "Топ слушателей по опыту."],
+  ["GET", "/api/public-stats", "Общие цифры сайта: прослушивания, треки."],
+  ["POST", "/api/devices/code", "Начать подключение устройства без ключа."],
+  ["POST", "/api/devices/token", "Забрать ключ, когда пользователь разрешил."],
+];
+
+const FIELDS: [string, boolean, string][] = [
+  ["api_key", true, "Ваш секретный ключ."],
+  ["title", true, "Название трека."],
+  ["artist", true, "Исполнитель."],
+  ["source", true, "Откуда трек: discord_rpc, custom_script и т. п."],
+  ["album", false, "Альбом."],
+  ["duration", false, "Длина трека в секундах."],
+  ["progress_sec", false, "Сколько секунд уже прослушано."],
+  ["is_playing", false, "Играет ли трек прямо сейчас."],
+  ["cover_url, track_url", false, "Ссылки на обложку и сам трек."],
+];
+
+function Section({
+  id,
+  title,
+  children,
+}: Readonly<{ id: string; title: string; children: React.ReactNode }>) {
+  return (
+    <section
+      id={id}
+      aria-labelledby={`${id}-title`}
+      className="flex scroll-mt-24 flex-col gap-4"
+    >
+      <h2 id={`${id}-title`} className="text-lg font-semibold">
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
 }
 
-function CodeBlock({
-  code,
-  language,
-  label,
-  colorClass,
-  id,
-  onCopy,
-  copied,
-}: Readonly<CodeBlockProps>) {
+function Code({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <div className="mb-8 group/block">
-      <div className="flex items-center justify-between bg-[#1e252b] px-4 py-2.5 rounded-t-xl border border-white/5 border-b-0">
-        <span className={`text-xs font-bold ${colorClass || "text-gray-400"}`}>
-          {label}
-        </span>
-        <button
-          type="button"
-          onClick={() => onCopy(code, id)}
-          className="text-xs text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
-        >
-          {copied === id ? (
-            "✅ Скопировано"
-          ) : (
-            <>
-              <svg
-                className="w-3.5 h-3.5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                ></path>
-              </svg>
-              Копировать
-            </>
-          )}
-        </button>
-      </div>
-      <div className="relative overflow-hidden rounded-b-xl border border-white/5 shadow-2xl">
-        <SyntaxHighlighter
-          language={language}
-          style={atomOneDark}
-          customStyle={{
-            margin: 0,
-            padding: "20px",
-            fontSize: "14px",
-            lineHeight: "1.6",
-            backgroundColor: "#161b22",
-            fontFamily: "JetBrains Mono, Menlo, Monaco, Courier New, monospace",
-          }}
-        >
-          {code}
-        </SyntaxHighlighter>
-      </div>
-    </div>
+    <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[0.9em] text-fg">
+      {children}
+    </code>
   );
 }
 
 export default function Developers() {
-  const [copied, setCopied] = useState("");
-
-  const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(id);
-    setTimeout(() => setCopied(""), 2000);
-  };
-
-  const jsonExample = `{
-  "api_key": "твой_секретный_ключ",
-  "title": "Worthless I, Worthless You",
-  "artist": "LAZZY2WICE",
-  "source": "custom_script",
-  "progress_sec": 15,
-  "duration": 69,
-  "is_playing": true,
-  "cover_url": "https://...",
-  "track_url": "https://..."
-}`;
-
-  const pythonExample = `import requests
-
-url = "https://api.music.vein.guru/api/scrobble"
-payload = {
-    "api_key": "твой_секретный_ключ",
-    "title": "Демиург",
-    "artist": "Джизус",
-    "source": "python_bot",
-    "duration": 180,
-    "progress_sec": 10,
-    "is_playing": True
-}
-
-response = requests.post(url, json=payload)
-print(response.json())`;
-
-  const curlExample = String.raw`curl -X POST https://api.music.vein.guru/api/scrobble \
--H "Content-Type: application/json" \
--d '{
-  "api_key": "твой_секретный_ключ",
-  "title": "Всё забрать",
-  "artist": "Джизус",
-  "source": "terminal"
-}'`;
-
-  const getUserExample = `import requests
-
-username = "peaostrel"
-url = f"https://api.music.vein.guru/api/user/{username}"
-
-response = requests.get(url)
-data = response.json()
-
-print(f"Пользователь: {data['display_name']}")
-print(f"Ранг: {data['role']}")
-print(f"Стрик: {data['streak']} дней")`;
-
   return (
-    <div className="max-w-4xl mx-auto p-4 md:p-8 pt-24 min-h-screen text-white pb-32">
-      <div className="mb-12">
-        <div className="inline-block bg-[var(--accent)]/10 border border-[var(--accent)]/30 text-[var(--accent)] px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-4 shadow-[0_0_15px_var(--accent-glow)]">
-          VEIN API v1.0
-        </div>
-        <h1 className="text-5xl font-black text-white mb-4 drop-shadow-xl tracking-tight">
-          Для разработчиков
-        </h1>
-        <p className="text-gray-400 text-lg max-w-2xl leading-relaxed">
-          Подключи свой любимый плеер или Discord-бота к VEIN Music. Отправляй
-          прослушивания и получай статистику через открытый эндпоинт.
-        </p>
-      </div>
+    <div className="mx-auto flex w-full max-w-[1080px] gap-14 px-4 pt-12 pb-24 md:px-8 md:pt-16">
+      <nav
+        aria-label="Разделы документации"
+        className="sticky top-24 hidden h-fit w-[180px] shrink-0 flex-col gap-1 lg:flex"
+      >
+        <span className="mb-2 font-mono text-[11px] uppercase tracking-[0.06em] text-fg-3">
+          на странице
+        </span>
+        {TOC.map(([href, text]) => (
+          <a
+            key={href}
+            href={href}
+            className="rounded-md py-1.5 text-[13px] text-fg-2 transition-colors hover:text-fg"
+          >
+            {text}
+          </a>
+        ))}
+      </nav>
 
-      <div className="grid grid-cols-1 gap-12">
-        <section>
-          <h2 className="text-2xl font-black text-white mb-4 flex items-center gap-3">
-            <span
-              className="w-8 h-8 bg-[var(--accent)] rounded-lg flex items-center justify-center text-sm font-black"
-              style={{ color: "var(--text-on-accent)" }}
-            >
-              1
-            </span>{" "}
-            Аутентификация
-          </h2>
-          <div className="bg-[#121212]/60 backdrop-blur-md p-6 rounded-2xl border border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-gray-300 text-sm leading-relaxed">
-              Для POST-запросов используй свой <code>api_key</code>. Публичные
-              GET-запросы работают без ключа.
-            </p>
+      <div className="flex min-w-0 max-w-[760px] flex-1 flex-col gap-12">
+        <header className="flex flex-col gap-3">
+          <span className="font-mono text-xs text-fg-3">
+            разработчикам · API v1
+          </span>
+          <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.02em] md:text-[32px]">
+            API для своих плееров и ботов
+          </h1>
+          <p className="max-w-[620px] text-[15px] leading-relaxed text-fg-2">
+            Отправляйте прослушивания из любого плеера, Discord-бота или скрипта
+            и забирайте статистику. Публичные GET-запросы работают без ключа.
+          </p>
+        </header>
+
+        <Section id="auth" title="Ключ">
+          <p className="text-sm leading-relaxed text-fg-2">
+            Для POST-запросов нужен ваш <Code>api_key</Code>. Никому его не
+            показывайте: с ним можно писать в вашу историю.
+          </p>
+          <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface px-5 py-4 sm:flex-row sm:items-center">
+            <span className="flex flex-1 items-start gap-3">
+              <KeyRound
+                className="mt-0.5 h-4 w-4 shrink-0 text-accent"
+                aria-hidden="true"
+              />
+              <span className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium">
+                  Ключ показывается один раз — при регистрации
+                </span>
+                <span className="text-[13px] text-fg-2">
+                  Потеряли? Выпустите новый, старый сразу перестанет работать.
+                </span>
+              </span>
+            </span>
             <Link
-              href="/settings"
-              className="bg-white/5 hover:bg-[var(--accent)] hover:text-[var(--text-on-accent)] px-5 py-2.5 rounded-xl font-bold text-sm transition-all border border-white/10 shrink-0 whitespace-nowrap"
+              href="/settings?tab=integrations"
+              className={`${btn.secondary} ${btn.md} shrink-0`}
             >
-              Найти мой ключ
+              Выпустить новый
             </Link>
           </div>
-        </section>
+        </Section>
 
-        <section>
-          <h2 className="text-2xl font-black text-white mb-6 flex items-center gap-3">
-            <span
-              className="w-8 h-8 bg-[var(--accent)] rounded-lg flex items-center justify-center text-sm font-black"
-              style={{ color: "var(--text-on-accent)" }}
-            >
-              2
-            </span>{" "}
-            Эндпоинты (REST API)
-          </h2>
-          <div className="bg-[#121212]/60 backdrop-blur-md p-6 rounded-2xl border border-white/5 overflow-hidden shadow-2xl">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm text-gray-300">
-                <thead className="bg-white/5 text-white font-bold uppercase text-xs">
-                  <tr>
-                    <th className="px-4 py-3">Метод</th>
-                    <th className="px-4 py-3">URL</th>
-                    <th className="px-4 py-3">Описание</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  <tr className="hover:bg-white/5 transition-colors">
+        <Section id="endpoints" title="Эндпоинты">
+          <div className="overflow-x-auto rounded-xl border border-line">
+            <table className="w-full min-w-[560px] text-left text-[13px]">
+              <thead className="bg-surface text-xs text-fg-3">
+                <tr>
+                  <th className="w-[80px] px-4 py-2.5 font-normal">Метод</th>
+                  <th className="px-4 py-2.5 font-normal">Путь</th>
+                  <th className="px-4 py-2.5 font-normal">Что делает</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ENDPOINTS.map(([method, path, desc]) => (
+                  <tr key={path} className="border-t border-line-soft">
                     <td className="px-4 py-3">
-                      <span className="bg-green-500/20 text-green-400 px-2 py-0.5 rounded text-xs font-bold">
-                        GET
+                      <span
+                        className={`inline-flex h-[22px] items-center rounded px-2 font-mono text-[11px] font-medium ${
+                          method === "POST"
+                            ? "bg-accent text-on-accent"
+                            : "bg-surface-2 text-fg-2"
+                        }`}
+                      >
+                        {method}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <code>/api/user/:username</code>
+                    <td className="px-4 py-3 font-mono whitespace-nowrap">
+                      {path}
                     </td>
-                    <td className="px-4 py-3">
-                      Получить профиль, аватар и текущий статус
-                    </td>
+                    <td className="px-4 py-3 text-fg-2">{desc}</td>
                   </tr>
-                  <tr className="hover:bg-white/5 transition-colors">
-                    <td className="px-4 py-3">
-                      <span className="bg-green-500/20 text-green-400 px-2 py-0.5 rounded text-xs font-bold">
-                        GET
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <code>/api/leaderboard</code>
-                    </td>
-                    <td className="px-4 py-3">Топ игроков по XP</td>
-                  </tr>
-                  <tr className="hover:bg-white/5 transition-colors">
-                    <td className="px-4 py-3">
-                      <span className="bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded text-xs font-bold">
-                        POST
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <code>/api/scrobble</code>
-                    </td>
-                    <td className="px-4 py-3">
-                      Отправить трек в историю (нужен <code>api_key</code>)
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </section>
+        </Section>
 
-        <section>
-          <h2 className="text-2xl font-black text-white mb-4 flex items-center gap-3">
-            <span
-              className="w-8 h-8 bg-[var(--accent)] rounded-lg flex items-center justify-center text-sm font-black"
-              style={{ color: "var(--text-on-accent)" }}
-            >
-              3
-            </span>{" "}
-            Описание полей (Scrobble)
-          </h2>
-          <div className="bg-[#121212]/60 backdrop-blur-md p-6 rounded-2xl border border-white/5 space-y-3">
-            <div className="flex items-center gap-2">
-              <code className="font-bold" style={{ color: "var(--accent)" }}>
-                api_key
-              </code>{" "}
-              <span className="text-gray-400 text-sm">
-                - Твой секретный ключ для авторизации (строка).
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <code className="text-white font-bold">title</code>{" "}
-              <span className="text-gray-400 text-sm">
-                - Название трека (обязательное).
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <code className="text-white font-bold">artist</code>{" "}
-              <span className="text-gray-400 text-sm">
-                - Имя исполнителя (обязательное).
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <code className="text-white font-bold">source</code>{" "}
-              <span className="text-gray-400 text-sm">
-                - Источник (например: <code>discord_rpc</code>,{" "}
-                <code>custom_script</code>).
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <code className="text-white font-bold">duration</code>{" "}
-              <span className="text-gray-400 text-sm">
-                - Длина треки в секундах (число).
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <code className="text-white font-bold">is_playing</code>{" "}
-              <span className="text-gray-400 text-sm">
-                - Играет ли трек прямо сейчас (boolean).
-              </span>
-            </div>
-          </div>
-        </section>
+        <Section id="fields" title="Поля скроббла">
+          <dl className="rounded-xl border border-line">
+            {FIELDS.map(([name, required, desc]) => (
+              <div
+                key={name}
+                className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 border-t border-line-soft px-5 py-3 first:border-0 sm:grid-cols-[200px_110px_1fr]"
+              >
+                <dt className="font-mono text-[13px]">{name}</dt>
+                <dd
+                  className={`text-right text-xs sm:text-left ${required ? "text-accent" : "text-fg-3"}`}
+                >
+                  {required ? "обязательно" : "по желанию"}
+                </dd>
+                <dd className="col-span-2 text-[13px] text-fg-2 sm:col-span-1">
+                  {desc}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </Section>
 
-        <section>
-          <h2 className="text-2xl font-black text-white mb-6 flex items-center gap-3">
-            <span
-              className="w-8 h-8 bg-[var(--accent)] rounded-lg flex items-center justify-center text-sm font-black"
-              style={{ color: "var(--text-on-accent)" }}
-            >
-              4
-            </span>{" "}
-            Примеры кода
-          </h2>
+        <Section id="devices" title="Подключение устройства">
+          <p className="text-sm leading-relaxed text-fg-2">
+            Если не хотите, чтобы пользователь вставлял ключ руками, подключите
+            устройство по короткому коду — так работает наше расширение.
+          </p>
+          <ol className="flex flex-col gap-3 text-sm text-fg-2">
+            <li className="grid grid-cols-[28px_1fr]">
+              <span className="font-mono text-accent">01</span>
+              <span>
+                Вызовите <Code>POST /api/devices/code</Code> с полем{" "}
+                <Code>client_name</Code> и покажите пользователю{" "}
+                <Code>user_code</Code>.
+              </span>
+            </li>
+            <li className="grid grid-cols-[28px_1fr]">
+              <span className="font-mono text-fg-3">02</span>
+              <span>
+                Пользователь вводит код на странице{" "}
+                <Link href="/link" className="text-fg underline">
+                  /link
+                </Link>{" "}
+                и разрешает доступ.
+              </span>
+            </li>
+            <li className="grid grid-cols-[28px_1fr]">
+              <span className="font-mono text-fg-3">03</span>
+              <span>
+                Опрашивайте <Code>POST /api/devices/token</Code> с{" "}
+                <Code>device_code</Code> раз в <Code>interval</Code> секунд,
+                пока статус <Code>pending</Code>. После подтверждения придёт{" "}
+                <Code>api_key</Code>.
+              </span>
+            </li>
+          </ol>
+        </Section>
 
-          <CodeBlock
-            id="json"
-            label="JSON Structure (POST)"
-            language="json"
-            code={jsonExample}
-            colorClass="text-yellow-400"
-            onCopy={copyToClipboard}
-            copied={copied}
-          />
-
-          <CodeBlock
-            id="python"
-            label="Python requests (Scrobble)"
-            language="python"
-            code={pythonExample}
-            colorClass="text-blue-400"
-            onCopy={copyToClipboard}
-            copied={copied}
-          />
-
-          <CodeBlock
-            id="pythonget"
-            label="Python requests (Get Profile)"
-            language="python"
-            code={getUserExample}
-            colorClass="text-blue-400"
-            onCopy={copyToClipboard}
-            copied={copied}
-          />
-
-          <CodeBlock
-            id="curl"
-            label="cURL (POST)"
-            language="bash"
-            code={curlExample}
-            colorClass="text-gray-400"
-            onCopy={copyToClipboard}
-            copied={copied}
-          />
-        </section>
+        <Section id="examples" title="Примеры">
+          <CodeSamples />
+        </Section>
       </div>
     </div>
   );

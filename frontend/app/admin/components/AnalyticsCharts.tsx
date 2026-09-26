@@ -17,10 +17,10 @@ import type { Timeseries } from "../types";
 import { PanelTitle, panelClass, useAdminResource } from "../ui";
 
 const tooltipStyle = {
-  backgroundColor: "#1a1a1a",
-  border: "1px solid #333",
+  backgroundColor: "#1c1e21",
+  border: "1px solid #26282c",
   borderRadius: "8px",
-  color: "#fff",
+  color: "#ededeb",
   fontSize: 12,
 };
 
@@ -44,24 +44,24 @@ function Chart({
 }>) {
   const total = data.reduce((sum, row) => sum + Number(row[dataKey] || 0), 0);
   return (
-    <figure className="bg-black/30 border border-white/5 rounded-xl p-3">
+    <figure className="bg-bg border border-line-soft rounded-xl p-3">
       <figcaption className="flex justify-between text-xs mb-2">
-        <span className="font-bold text-white">{title}</span>
-        <span className="font-mono text-gray-400">Σ {total}</span>
+        <span className="font-medium text-fg">{title}</span>
+        <span className="font-mono text-fg-2">Σ {total}</span>
       </figcaption>
       <div className="h-44">
         <ResponsiveContainer width="100%" height="100%">
           {kind === "bar" ? (
             <BarChart data={data}>
-              <CartesianGrid stroke="#222" vertical={false} />
+              <CartesianGrid stroke="#1f2124" vertical={false} />
               <XAxis
                 dataKey="day"
-                stroke="#777"
+                stroke="#80848c"
                 fontSize={10}
                 tickLine={false}
               />
               <YAxis
-                stroke="#777"
+                stroke="#80848c"
                 fontSize={10}
                 tickLine={false}
                 allowDecimals={false}
@@ -80,15 +80,15 @@ function Chart({
             </BarChart>
           ) : (
             <LineChart data={data}>
-              <CartesianGrid stroke="#222" vertical={false} />
+              <CartesianGrid stroke="#1f2124" vertical={false} />
               <XAxis
                 dataKey="day"
-                stroke="#777"
+                stroke="#80848c"
                 fontSize={10}
                 tickLine={false}
               />
               <YAxis
-                stroke="#777"
+                stroke="#80848c"
                 fontSize={10}
                 tickLine={false}
                 allowDecimals={false}
@@ -128,12 +128,7 @@ export default function AnalyticsCharts() {
     <section className={panelClass} aria-labelledby="analytics-heading">
       <div className="flex items-center justify-between gap-3">
         <PanelTitle
-          icon={
-            <TrendingUp
-              className="w-4 h-4 text-emerald-400"
-              aria-hidden="true"
-            />
-          }
+          icon={<TrendingUp className="w-4 h-4 text-ok" aria-hidden="true" />}
         >
           <span id="analytics-heading">Динамика (UTC)</span>
         </PanelTitle>
@@ -145,38 +140,38 @@ export default function AnalyticsCharts() {
               type="button"
               aria-pressed={days === d}
               onClick={() => setDays(d)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold ${days === d ? "bg-red-600 text-white" : "bg-white/5 text-gray-300"}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium ${days === d ? "bg-line text-fg" : "bg-surface-2 text-fg-2"}`}
             >
               {d} дн.
             </button>
           ))}
         </fieldset>
       </div>
-      {error && <p className="text-red-400 text-xs font-bold">{error}</p>}
+      {error && <p className="text-danger text-xs font-medium">{error}</p>}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <Chart
           title="Засчитанные прослушивания"
           data={rows}
           dataKey="scrobbles"
-          color="#ef4444"
+          color="var(--accent)"
           kind="bar"
         />
         <Chart
           title="Активные слушатели"
           data={rows}
           dataKey="active_users"
-          color="#10b981"
+          color="#8c8f96"
           kind="line"
         />
         <Chart
           title="Регистрации"
           data={rows}
           dataKey="registrations"
-          color="#a855f7"
+          color="#8c8f96"
           kind="bar"
         />
       </div>
-      <p className="text-[11px] text-gray-400">
+      <p className="text-[11px] text-fg-2">
         Регистрации считаются для аккаунтов, созданных после обновления с датой
         регистрации.
       </p>

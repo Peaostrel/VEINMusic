@@ -2,42 +2,44 @@
 
 import { useEffect, useState } from "react";
 
+/** Accent presets. Muted on purpose: the UI is neutral, the accent is the
+ * only colour, so it must stay readable on #0E0F10 without glowing. */
 export const THEMES = {
   classic: {
-    main: "#ffcc00",
-    hover: "#ffaa00",
-    glow: "rgba(255,204,0,0.3)",
-    glowStrong: "rgba(255,204,0,0.6)",
+    main: "#e3a93b",
+    hover: "#eab55a",
+    glow: "rgba(227,169,59,0.15)",
+    glowStrong: "rgba(227,169,59,0.3)",
   },
   green: {
-    main: "#1DB954",
-    hover: "#16a34a",
-    glow: "rgba(29,185,84,0.3)",
-    glowStrong: "rgba(29,185,84,0.6)",
+    main: "#5fb58e",
+    hover: "#74c29f",
+    glow: "rgba(95,181,142,0.15)",
+    glowStrong: "rgba(95,181,142,0.3)",
   },
   orange: {
-    main: "#ff4500",
-    hover: "#dc2626",
-    glow: "rgba(255,69,0,0.3)",
-    glowStrong: "rgba(255,69,0,0.6)",
+    main: "#e07a45",
+    hover: "#e68f60",
+    glow: "rgba(224,122,69,0.15)",
+    glowStrong: "rgba(224,122,69,0.3)",
   },
   purple: {
-    main: "#a855f7",
-    hover: "#7e22ce",
-    glow: "rgba(168,85,247,0.3)",
-    glowStrong: "rgba(168,85,247,0.6)",
+    main: "#9d86e6",
+    hover: "#ae9aeb",
+    glow: "rgba(157,134,230,0.15)",
+    glowStrong: "rgba(157,134,230,0.3)",
   },
   red: {
-    main: "#ef4444",
-    hover: "#b91c1c",
-    glow: "rgba(239,68,68,0.3)",
-    glowStrong: "rgba(239,68,68,0.6)",
+    main: "#e06c6c",
+    hover: "#e68585",
+    glow: "rgba(224,108,108,0.15)",
+    glowStrong: "rgba(224,108,108,0.3)",
   },
   cyan: {
-    main: "#00ffff",
-    hover: "#0088ff",
-    glow: "rgba(0,255,255,0.3)",
-    glowStrong: "rgba(0,255,255,0.6)",
+    main: "#56b6c2",
+    hover: "#6fc3cd",
+    glow: "rgba(86,182,194,0.15)",
+    glowStrong: "rgba(86,182,194,0.3)",
   },
 };
 
@@ -86,7 +88,7 @@ export const applyTheme = (themeKey: string) => {
   const { r, g, b } = rgb;
 
   const lum = (r * 299 + g * 587 + b * 114) / 1000;
-  const textOnAccent = lum < 150 || isRainbow ? "#ffffff" : "#121212";
+  const textOnAccent = lum < 120 ? "#ffffff" : "#121212";
   const accentText = lum < 60 && !isRainbow ? "#ffffff" : "var(--accent)";
   root.style.setProperty("--text-on-accent", textOnAccent);
   root.style.setProperty("--accent-text", accentText);
@@ -118,17 +120,6 @@ export const applyTheme = (themeKey: string) => {
     root.style.setProperty("--accent-glow-strong", t.glowStrong);
   }
 };
-
-/** Luminance of hsl(h, 100%, 50%), to pick a readable text colour. */
-function hueLuminance(h: number) {
-  const s = 1;
-  const l = 0.5;
-  const k = (n: number) => (n + h / 30) % 12;
-  const a = s * Math.min(l, 1 - l);
-  const f = (n: number) =>
-    l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
-  return (f(0) * 255 * 299 + f(8) * 255 * 587 + f(4) * 255 * 114) / 1000;
-}
 
 function currentThemeKey(): string {
   const path = globalThis.location.pathname.toLowerCase();
@@ -165,17 +156,14 @@ export function useSiteTheme(pathname: string | null) {
     let hue = 0;
     const interval = setInterval(() => {
       hue = (hue + 2) % 360;
-      root.style.setProperty("--accent", `hsl(${hue}, 100%, 50%)`);
-      root.style.setProperty("--accent-hover", `hsl(${hue}, 100%, 50%)`);
+      root.style.setProperty("--accent", `hsl(${hue}, 65%, 62%)`);
+      root.style.setProperty("--accent-hover", `hsl(${hue}, 65%, 62%)`);
       root.style.setProperty("--accent-glow", `hsla(${hue}, 100%, 100%, 0.3)`);
       root.style.setProperty(
         "--accent-glow-strong",
         `hsla(${hue}, 100%, 100%, 0.6)`,
       );
-      root.style.setProperty(
-        "--text-on-accent",
-        hueLuminance(hue) > 140 ? "#121212" : "#ffffff",
-      );
+      root.style.setProperty("--text-on-accent", "#121212");
     }, 40);
     return () => clearInterval(interval);
   }, [currentTheme]);
