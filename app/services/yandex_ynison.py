@@ -58,7 +58,7 @@ def _connect(url: str, token: str, proto: dict[str, str]):
         open_timeout=TIMEOUT_SEC,
         extra_headers={
             "Sec-WebSocket-Protocol": f"Bearer, v2, {json.dumps(proto)}",
-            "Origin": "http://music.yandex.ru",
+            "Origin": "https://music.yandex.ru",
             "Authorization": f"OAuth {token}",
         },
     )
