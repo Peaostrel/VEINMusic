@@ -42,6 +42,6 @@ test.describe("Authentication Flow", () => {
 
     await page.getByRole("button", { name: "Войти", exact: true }).click();
 
-    await expect(page.getByRole("alert")).toBeVisible();
+    await expect(page.locator("form").getByRole("alert")).toBeVisible();
   });
 });
