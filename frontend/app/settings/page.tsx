@@ -23,16 +23,13 @@ function SettingsContent() {
 
   if (s.loading)
     return (
-      <div
-        className="min-h-screen text-[var(--accent-text)] flex flex-col items-center justify-center gap-4 font-bold text-xl animate-pulse"
-        role="status"
-      >
+      <output className="min-h-screen text-[var(--accent-text)] flex flex-col items-center justify-center gap-4 font-bold text-xl animate-pulse">
         <div
           aria-hidden="true"
           className="animate-spin border-4 border-[var(--accent-text)] border-t-transparent rounded-full w-12 h-12"
         ></div>
         Загрузка настроек...
-      </div>
+      </output>
     );
 
   let content: React.ReactNode;

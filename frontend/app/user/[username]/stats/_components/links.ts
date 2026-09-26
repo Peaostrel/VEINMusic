@@ -47,7 +47,8 @@ export const getAlbumUrl = (album: string, artist: string, source: string) => {
 
 export const getTrackUrl = (t: TrackLinkSource) => {
   if (t.source === "yandex" && !t.track_url?.includes("/track/")) {
-    return `${API_URL}/api/redirect?source=yandex&type=track&q=${encodeURIComponent(`${t.artist ?? ""} ${t.title ?? ""}`)}`;
+    const query = encodeURIComponent(`${t.artist ?? ""} ${t.title ?? ""}`);
+    return `${API_URL}/api/redirect?source=yandex&type=track&q=${query}`;
   }
   return (t.track_url && sanitizeUrl(t.track_url)) || "#";
 };

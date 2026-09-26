@@ -1,6 +1,6 @@
-import type { Country, SocialLink, UserInfo } from "@/app/lib/types";
+import type { UserInfo } from "@/app/lib/types";
 
-export type { Country, SocialLink };
+export type { Country, SocialLink } from "@/app/lib/types";
 
 /** Editable form state of the settings page. */
 export interface SettingsData {

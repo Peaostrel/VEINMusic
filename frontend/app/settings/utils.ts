@@ -52,7 +52,7 @@ export async function getCroppedImg(
 
 export const fixImageUrl = (url: string): string => {
   if (!url) return url;
-  const match = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  const match = /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/.exec(url);
   return match ? `https://drive.google.com/uc?export=view&id=${match[1]}` : url;
 };
 

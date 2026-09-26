@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
@@ -9,7 +10,7 @@ const ORIGIN = "http://localhost:3000";
 export const PASSWORD = "testpassword123";
 
 export function uniqueName(prefix: string): string {
-  return `${prefix}_${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`;
+  return `${prefix}_${Date.now().toString(36)}${randomBytes(3).toString("hex")}`;
 }
 
 /** Register through the API (the session cookie lands in the page's

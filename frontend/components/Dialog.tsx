@@ -3,8 +3,9 @@
 import { useEffect, useRef } from "react";
 
 /**
- * Full-screen modal overlay: role="dialog", closes on Escape, moves focus
- * into the dialog on open and back to the previously focused element on close.
+ * Full-screen modal built on the native <dialog> (showModal): the rest of
+ * the page is inert, Escape calls onClose, focus returns to the previously
+ * focused element when the dialog goes away.
  */
 export default function Dialog({
   label,
@@ -17,36 +18,33 @@ export default function Dialog({
   className?: string;
   children: React.ReactNode;
 }>) {
-  const ref = useRef<HTMLDivElement>(null);
-  const onCloseRef = useRef(onClose);
+  const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
-    onCloseRef.current = onClose;
-  }, [onClose]);
-
-  useEffect(() => {
+    const dialog = ref.current;
     const previous = document.activeElement as HTMLElement | null;
-    ref.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCloseRef.current();
-    };
-    document.addEventListener("keydown", onKey);
+    if (dialog && !dialog.open) {
+      if (typeof dialog.showModal === "function") dialog.showModal();
+      else dialog.setAttribute("open", "");
+    }
     return () => {
-      document.removeEventListener("keydown", onKey);
+      if (dialog?.open) dialog.close();
       previous?.focus?.();
     };
   }, []);
 
   return (
-    <div
+    <dialog
       ref={ref}
-      role="dialog"
-      aria-modal="true"
       aria-label={label}
-      tabIndex={-1}
-      className={`fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-4 outline-none ${className}`}
+      onCancel={(e) => {
+        // Escape: let the parent unmount us instead of closing natively
+        e.preventDefault();
+        onClose();
+      }}
+      className={`fixed inset-0 z-50 m-0 h-full max-h-none w-full max-w-none flex flex-col items-center justify-center bg-black/90 p-4 text-inherit outline-none backdrop:bg-transparent ${className}`}
     >
       {children}
-    </div>
+    </dialog>
   );
 }

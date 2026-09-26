@@ -196,14 +196,12 @@ def test_frames_crud(admin_client):
     assert admin_client.delete(f"/api/admin/frames/{frame_id}").status_code == 404
 
 
-def test_xp_multiplier(admin_client):
-    original = admin_router.GLOBAL_XP_MULTIPLIER
-    try:
-        assert admin_client.post("/api/admin/economy/multiplier", json={"multiplier": 2.5}).json()["multiplier"] == 2.5
-        assert admin_client.get("/api/admin/economy/multiplier").json() == {"multiplier": 2.5}
-        assert admin_client.post("/api/admin/economy/multiplier", json={"multiplier": 50}).status_code == 422
-    finally:
-        admin_router.GLOBAL_XP_MULTIPLIER = original
+def test_xp_multiplier(admin_client, monkeypatch):
+    # restored by monkeypatch after the test
+    monkeypatch.setattr(admin_router, "GLOBAL_XP_MULTIPLIER", admin_router.GLOBAL_XP_MULTIPLIER)
+    assert admin_client.post("/api/admin/economy/multiplier", json={"multiplier": 2.5}).json()["multiplier"] == 2.5
+    assert admin_client.get("/api/admin/economy/multiplier").json() == {"multiplier": 2.5}
+    assert admin_client.post("/api/admin/economy/multiplier", json={"multiplier": 50}).status_code == 422
 
 
 def test_system_health_and_analytics(admin_client):

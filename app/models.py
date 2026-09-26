@@ -18,6 +18,7 @@ from app.database import Base
 
 CASCADE_ALL_DELETE = "all, delete"
 FK_USERS_ID = "users.id"
+FK_SCROBBLES_ID = "scrobbles.id"
 
 
 class User(Base):
@@ -274,7 +275,7 @@ class ScrobbleLike(Base):
     scrobble_id = Column(
         Integer,
         ForeignKey(
-            "scrobbles.id",
+            FK_SCROBBLES_ID,
             ondelete="CASCADE"),
         index=True)
     created_at = Column(
@@ -295,7 +296,7 @@ class ScrobbleComment(Base):
     scrobble_id = Column(
         Integer,
         ForeignKey(
-            "scrobbles.id",
+            FK_SCROBBLES_ID,
             ondelete="CASCADE"),
         index=True)
     content = Column(String)
@@ -522,7 +523,7 @@ class Notification(Base):
     user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=False)
     actor_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=False, index=True)
     kind = Column(String(16), nullable=False)  # like, comment, follow
-    scrobble_id = Column(Integer, ForeignKey("scrobbles.id", ondelete="CASCADE"), nullable=True, index=True)
+    scrobble_id = Column(Integer, ForeignKey(FK_SCROBBLES_ID, ondelete="CASCADE"), nullable=True, index=True)
     message = Column(String(200), nullable=True)  # comment excerpt
     is_read = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

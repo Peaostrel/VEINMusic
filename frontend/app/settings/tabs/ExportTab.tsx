@@ -80,7 +80,7 @@ function ServiceRow({
               onChange={(e) => onToggle(e.target.checked)}
               className="w-4 h-4 accent-[var(--accent)]"
             />
-            Отправлять прослушивания
+            <span>Отправлять прослушивания</span>
           </label>
           <button
             type="button"
@@ -201,12 +201,9 @@ export default function ExportTab({
         Экспорт и вебхуки
       </h2>
       {message && (
-        <p
-          className="text-sm font-bold text-[var(--accent-text)]"
-          role="status"
-        >
+        <output className="block text-sm font-bold text-[var(--accent-text)]">
           {message}
-        </p>
+        </output>
       )}
 
       <section className={card} aria-labelledby="export-heading">

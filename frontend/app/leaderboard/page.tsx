@@ -26,16 +26,13 @@ export default function Leaderboard() {
 
   if (loading) {
     return (
-      <div
-        role="status"
-        className="min-h-screen flex flex-col justify-center items-center gap-4 font-bold text-2xl text-[var(--accent-text)] animate-pulse"
-      >
+      <output className="min-h-screen flex flex-col justify-center items-center gap-4 font-bold text-2xl text-[var(--accent-text)] animate-pulse">
         <div
           aria-hidden="true"
           className="animate-spin border-4 border-[var(--accent-text)] border-t-transparent rounded-full w-12 h-12"
         ></div>
         Составляем списки лучших...
-      </div>
+      </output>
     );
   }
 

@@ -221,7 +221,8 @@ def test_antifraud_micro_tracks_and_listing(db):
     db.commit()
     _listen(db, user, "Band", times=30, listened_sec=5)
     suspicious, risk, reasons = antifraud.scan_user_antifraud(user, db)
-    assert suspicious and risk == 40
+    assert suspicious
+    assert risk == 40
     assert "короткими" in reasons[0]
 
     flagged = _user(db, "flagged")

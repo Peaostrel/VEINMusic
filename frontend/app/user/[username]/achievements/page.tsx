@@ -198,16 +198,13 @@ export default function AchievementsPage() {
 
   if (loading)
     return (
-      <div
-        role="status"
-        className="min-h-screen text-[var(--accent)] flex flex-col items-center justify-center gap-4 font-bold text-2xl animate-pulse"
-      >
+      <output className="min-h-screen text-[var(--accent)] flex flex-col items-center justify-center gap-4 font-bold text-2xl animate-pulse">
         <div
           aria-hidden="true"
           className="animate-spin border-4 border-[var(--accent)] border-t-transparent rounded-full w-12 h-12"
         ></div>
         Загрузка достижений...
-      </div>
+      </output>
     );
 
   if (error || !data?.user)
@@ -303,11 +300,7 @@ export default function AchievementsPage() {
           </div>
           <div
             className="w-full bg-black/80 h-4 rounded-full overflow-hidden border border-white/10 p-0.5"
-            role="progressbar"
-            aria-label="Прогресс достижений"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(progressPercent)}
+            aria-hidden="true"
           >
             <div
               className="bg-[var(--accent)] h-full rounded-full shadow-[0_0_10px_var(--accent-glow)] relative transition-all duration-1000"
@@ -316,6 +309,12 @@ export default function AchievementsPage() {
               <div className="absolute top-0 left-0 w-full h-full bg-white/20 animate-pulse rounded-full"></div>
             </div>
           </div>
+          <progress
+            className="sr-only"
+            aria-label="Прогресс достижений"
+            max={100}
+            value={Math.round(progressPercent)}
+          />
         </div>
 
         <div className="grid grid-cols-1 gap-4">

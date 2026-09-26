@@ -98,12 +98,9 @@ export default function DetailedStatsPage() {
 
   if (loading || !stats) {
     return (
-      <div
-        className="min-h-screen text-[var(--accent-text)] flex items-center justify-center font-bold text-2xl animate-pulse"
-        role="status"
-      >
+      <output className="min-h-screen text-[var(--accent-text)] flex items-center justify-center font-bold text-2xl animate-pulse">
         Сбор данных...
-      </div>
+      </output>
     );
   }
 
