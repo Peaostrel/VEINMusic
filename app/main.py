@@ -217,16 +217,24 @@ def _is_ws_origin_allowed(websocket: WebSocket) -> bool:
 
 
 def _get_ws_authenticated_username(websocket: WebSocket) -> str | None:
+    ticket = websocket.query_params.get("ticket")
     token = websocket.cookies.get("api_key") or websocket.query_params.get("token")
-    if not token:
+    if not ticket and not token:
         return None
 
     from app.core.security import _authenticate_user
+    from app.core.ws_ticket import verify_ticket
 
     # Use a short-lived session: a Depends(get_db) session would keep a pooled
     # DB connection checked out for the whole lifetime of the WebSocket.
     db = SessionLocal()
     try:
+        if ticket:
+            ticket_user = verify_ticket(ticket)
+            user = db.query(User).filter(User.username == ticket_user).first() if ticket_user else None
+            return str(user.username) if user and not user.is_banned else None
+        if not token:
+            return None
         auth_user = _authenticate_user(token, db)
         if auth_user and not auth_user.is_banned:
             return str(auth_user.username)

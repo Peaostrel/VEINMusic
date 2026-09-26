@@ -4,7 +4,7 @@ import type { getRankInfo, getNextRankInfo } from "@/app/lib/ranks";
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { API_URL, wsUrl } from "@/app/lib/api";
+import { API_URL, openSocket } from "@/app/lib/api";
 import { useCountries } from "@/app/lib/geo";
 import { useProfileTheme } from "./hooks";
 import { fetchAndShowNotifications } from "./notifications";
@@ -242,32 +242,33 @@ export function useProfilePage() {
     fetchAllData();
     checkNotifications();
 
-    // WebSocket Integration
-    const ws = new WebSocket(wsUrl(`/ws/${username}`));
-    wsRef.current = ws;
-
-    ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
-      if (msg.type === "NEW_SCROBBLE") {
-        handleNewScrobble(msg.track);
-        checkNotifications();
-      } else if (msg.type === "SYNC_INVITE") {
-        if (
-          confirm(
-            `Пользователь ${msg.from} хочет слушать музыку вместе! Перейти к нему?`,
-          )
-        ) {
-          router.push(`/user/${msg.from}`);
-        }
-      } else if (msg.type === "IMPORT_FINISHED") {
-        alert(msg.message);
-        fetchAllData();
-      }
-    };
-
-    return () => {
-      if (wsRef.current) wsRef.current.close();
-    };
+    // Live updates: the server only opens a user's own channel
+    if (!isMyProfile) return;
+    return openSocket(
+      `/ws/${username}`,
+      (ws) => {
+        wsRef.current = ws;
+        ws.onmessage = (event) => {
+          const msg = JSON.parse(event.data);
+          if (msg.type === "NEW_SCROBBLE") {
+            handleNewScrobble(msg.track);
+            checkNotifications();
+          } else if (msg.type === "SYNC_INVITE") {
+            if (
+              confirm(
+                `Пользователь ${msg.from} хочет слушать музыку вместе! Перейти к нему?`,
+              )
+            ) {
+              router.push(`/user/${msg.from}`);
+            }
+          } else if (msg.type === "IMPORT_FINISHED") {
+            alert(msg.message);
+            fetchAllData();
+          }
+        };
+      },
+      { authed: true },
+    );
   }, [username, isMyProfile, router]);
 
   // Таймеры для уведомлений теперь создаются индивидуально при их добавлении
