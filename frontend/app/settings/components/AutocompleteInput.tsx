@@ -75,21 +75,21 @@ export default function AutocompleteInput({
         autoComplete="off"
       />
       {isFocused && (suggestions.length > 0 || isLoading) && (
-        <ul className="absolute z-50 w-full mt-1 max-h-60 overflow-y-auto bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl shadow-black/50 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+        <ul className="absolute z-50 w-full mt-1 max-h-60 overflow-y-auto bg-surface-2 border border-line rounded-lg shadow-black/50 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
           {isLoading && suggestions.length === 0 ? (
-            <li className="px-4 py-3 text-sm text-gray-400 text-center flex items-center justify-center gap-2">
-              <div className="animate-spin border-2 border-[var(--accent)] border-t-transparent rounded-full w-4 h-4"></div>
+            <li className="px-4 py-3 text-sm text-fg-2 text-center flex items-center justify-center gap-2">
+              <div className="animate-spin border-2 border-accent border-t-transparent rounded-full w-4 h-4"></div>
               Загрузка...
             </li>
           ) : (
             suggestions.map((suggestion) => (
               <li
                 key={suggestion.title}
-                className="border-b border-white/5 last:border-0"
+                className="border-b border-line-soft last:border-0"
               >
                 <button
                   type="button"
-                  className="w-full px-4 py-3 hover:bg-white/5 cursor-pointer text-sm text-gray-200 transition-colors flex items-center gap-3 text-left"
+                  className="w-full px-4 py-3 hover:bg-surface-2 cursor-pointer text-sm text-fg transition-colors flex items-center gap-3 text-left"
                   onMouseDown={(e) => {
                     // Use onMouseDown instead of onClick to prevent onBlur from firing before this
                     e.preventDefault();
@@ -110,12 +110,10 @@ export default function AutocompleteInput({
                     <img
                       src={suggestion.image}
                       alt={suggestion.title}
-                      className="w-8 h-8 rounded-full object-cover bg-black/50"
+                      className="w-8 h-8 rounded-full object-cover bg-bg"
                     />
                   ) : (
-                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs">
-                      🎵
-                    </div>
+                    <div className="w-8 h-8 rounded-full bg-line" />
                   )}
                   <span className="truncate">{suggestion.title}</span>
                 </button>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import StatusText from "@/components/StatusText";
 import { useFeature } from "@/app/lib/featureFlags";
 import { API_URL, ApiError, apiJson } from "@/app/lib/api";
 import type {
@@ -9,12 +10,11 @@ import type {
   WebhookInfo,
 } from "@/app/lib/types";
 
-const card =
-  "bg-[#121212]/50 p-6 rounded-xl border border-white/5 flex flex-col gap-4";
+const card = "flex flex-col gap-4 rounded-xl border border-line bg-surface p-6";
 const buttonBase =
-  "px-4 py-2.5 rounded-lg font-bold text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed";
+  "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-4 text-[13px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
 const input =
-  "flex-grow bg-black/50 border border-white/10 p-2.5 rounded-lg text-sm text-white outline-none focus:border-[var(--accent)]";
+  "h-10 min-w-0 flex-grow rounded-lg border border-line bg-bg px-3 text-sm text-fg outline-none focus:border-fg-3";
 
 const WEBHOOK_EVENTS = [
   { id: "scrobble.created", label: "Новое прослушивание" },
@@ -56,14 +56,14 @@ function ServiceRow({
 }: Readonly<ServiceRowProps>) {
   const toggleId = `export-${title.toLowerCase().replace(/\W+/g, "-")}`;
   return (
-    <div className="bg-black/30 border border-white/5 rounded-lg p-4 flex flex-col gap-3">
+    <div className="bg-bg border border-line-soft rounded-lg p-4 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-bold text-white">{title}</p>
-          <p className="text-xs text-gray-400">{description}</p>
+          <p className="font-medium text-fg">{title}</p>
+          <p className="text-xs text-fg-2">{description}</p>
         </div>
         <span
-          className={`text-xs font-bold shrink-0 ${connected ? "text-green-400" : "text-gray-400"}`}
+          className={`text-xs font-medium shrink-0 ${connected ? "text-ok" : "text-fg-2"}`}
         >
           {connected ? "Подключено" : "Не подключено"}
         </span>
@@ -72,7 +72,7 @@ function ServiceRow({
         <div className="flex flex-wrap items-center gap-4">
           <label
             htmlFor={toggleId}
-            className="flex items-center gap-2 text-sm text-gray-200 cursor-pointer"
+            className="flex items-center gap-2 text-sm text-fg cursor-pointer"
           >
             <input
               id={toggleId}
@@ -86,7 +86,7 @@ function ServiceRow({
           <button
             type="button"
             onClick={onDisconnect}
-            className={`${buttonBase} bg-red-900/20 text-red-400 border border-red-900/30`}
+            className={`${buttonBase} text-danger border border-danger-line`}
           >
             Отключить
           </button>
@@ -198,22 +198,16 @@ export default function ExportTab({
     );
 
   return (
-    <div className="p-6 md:p-8 space-y-6">
-      <h2 className="text-xl font-bold text-[var(--accent-text)]">
-        Экспорт и вебхуки
-      </h2>
-      {message && (
-        <output className="block text-sm font-bold text-[var(--accent-text)]">
-          {message}
-        </output>
-      )}
+    <div className="space-y-6">
+      <h2 className="text-lg font-semibold text-fg">Экспорт и вебхуки</h2>
+      {message && <StatusText text={message} />}
 
       <section className={card} aria-labelledby="export-heading">
         <div>
-          <h3 id="export-heading" className="font-bold text-white">
+          <h3 id="export-heading" className="font-medium text-fg">
             Экспорт прослушиваний
           </h3>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-fg-2">
             Каждое засчитанное прослушивание будет дополнительно отправляться в
             выбранные сервисы.
           </p>
@@ -236,7 +230,7 @@ export default function ExportTab({
         >
           <a
             href={`${API_URL}/api/integrations/lastfm/connect`}
-            className={`${buttonBase} self-start bg-[#D51007] text-white hover:opacity-90`}
+            className={`${buttonBase} self-start bg-accent text-on-accent hover:brightness-110`}
           >
             Подключить Last.fm
           </a>
@@ -288,7 +282,7 @@ export default function ExportTab({
               type="submit"
               disabled={busy || !listenbrainzToken.trim()}
               aria-label="Подключить ListenBrainz"
-              className={`${buttonBase} bg-[var(--accent)] text-[var(--text-on-accent)]`}
+              className={`${buttonBase} bg-accent text-on-accent`}
             >
               Подключить
             </button>
@@ -341,7 +335,7 @@ export default function ExportTab({
               type="submit"
               disabled={busy || !librefmKey.trim()}
               aria-label="Подключить Libre.fm"
-              className={`${buttonBase} bg-[var(--accent)] text-[var(--text-on-accent)]`}
+              className={`${buttonBase} bg-accent text-on-accent`}
             >
               Подключить
             </button>
@@ -351,16 +345,16 @@ export default function ExportTab({
 
       <section className={card} aria-labelledby="webhooks-heading">
         <div>
-          <h3 id="webhooks-heading" className="font-bold text-white">
+          <h3 id="webhooks-heading" className="font-medium text-fg">
             Вебхуки
           </h3>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-fg-2">
             VEIN отправит POST-запрос на ваш адрес при каждом событии. Запросы
             подписаны заголовком <code>X-VEIN-Signature</code> (HMAC-SHA256
             секретом вебхука). До 10 вебхуков.
           </p>
           {!webhooksEnabled && (
-            <p className="text-xs font-bold text-yellow-400 mt-2">
+            <p className="text-xs font-medium text-accent mt-2">
               Вебхуки временно отключены администратором: события не
               отправляются, новые вебхуки создать нельзя.
             </p>
@@ -369,28 +363,28 @@ export default function ExportTab({
 
         {newSecret && (
           <div
-            className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-xs text-yellow-200 break-all"
+            className="border border-line rounded-lg p-3 text-xs text-fg break-all"
             role="alert"
           >
             Секрет для проверки подписи (показывается один раз):{" "}
-            <code className="font-bold">{newSecret.secret}</code>
+            <code className="font-medium">{newSecret.secret}</code>
           </div>
         )}
 
         {webhooks.length === 0 ? (
-          <p className="text-xs text-gray-400">Вебхуков пока нет.</p>
+          <p className="text-xs text-fg-2">Вебхуков пока нет.</p>
         ) : (
           <ul className="space-y-2">
             {webhooks.map((w) => (
               <li
                 key={w.id}
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-black/30 border border-white/5 rounded-lg p-3"
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-bg border border-line-soft rounded-lg p-3"
               >
                 <div className="min-w-0">
-                  <p className="text-sm text-white font-bold truncate">
+                  <p className="text-sm text-fg font-medium truncate">
                     {w.url}
                   </p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-fg-2">
                     {w.events.filter(Boolean).join(", ") || "все события"}
                   </p>
                 </div>
@@ -398,14 +392,14 @@ export default function ExportTab({
                   <button
                     type="button"
                     onClick={() => testWebhook(w.id)}
-                    className={`${buttonBase} bg-white/5 border border-white/10 text-white hover:bg-white/10`}
+                    className={`${buttonBase} bg-surface-2 border border-line text-fg hover:bg-line`}
                   >
                     Проверить
                   </button>
                   <button
                     type="button"
                     onClick={() => deleteWebhook(w.id)}
-                    className={`${buttonBase} bg-red-900/20 text-red-400 border border-red-900/30`}
+                    className={`${buttonBase} text-danger border border-danger-line`}
                   >
                     Удалить
                   </button>
@@ -433,7 +427,7 @@ export default function ExportTab({
                 !hookUrl.trim() ||
                 hookEvents.length === 0
               }
-              className={`${buttonBase} bg-[var(--accent)] text-[var(--text-on-accent)]`}
+              className={`${buttonBase} bg-accent text-on-accent`}
             >
               Добавить вебхук
             </button>
@@ -443,7 +437,7 @@ export default function ExportTab({
             {WEBHOOK_EVENTS.map((ev) => (
               <label
                 key={ev.id}
-                className="flex items-center gap-2 text-sm text-gray-200 cursor-pointer"
+                className="flex items-center gap-2 text-sm text-fg cursor-pointer"
               >
                 <input
                   type="checkbox"

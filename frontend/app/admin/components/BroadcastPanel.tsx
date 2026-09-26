@@ -75,7 +75,7 @@ export default function BroadcastPanel() {
       aria-labelledby="broadcast-heading"
     >
       <PanelTitle
-        icon={<Send className="w-4 h-4 text-red-500" aria-hidden="true" />}
+        icon={<Send className="w-4 h-4 text-danger" aria-hidden="true" />}
       >
         <span id="broadcast-heading">Рассылка уведомлений</span>
       </PanelTitle>
@@ -122,7 +122,7 @@ export default function BroadcastPanel() {
           />
         </label>
       </div>
-      <fieldset className="flex flex-wrap gap-4 text-xs text-gray-200">
+      <fieldset className="flex flex-wrap gap-4 text-xs text-fg">
         <legend className="sr-only">Каналы</legend>
         <label className="flex items-center gap-2">
           <input

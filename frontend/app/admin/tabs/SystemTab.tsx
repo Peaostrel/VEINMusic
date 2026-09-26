@@ -32,12 +32,10 @@ function Stat({
   warn,
 }: Readonly<{ label: string; value: React.ReactNode; warn?: boolean }>) {
   return (
-    <div className="bg-black/30 border border-white/5 rounded-xl p-3">
-      <div className="text-[10px] font-mono text-gray-400 uppercase">
-        {label}
-      </div>
+    <div className="bg-bg border border-line-soft rounded-xl p-3">
+      <div className="text-[10px] font-mono text-fg-2">{label}</div>
       <div
-        className={`text-sm font-bold mt-1 ${warn ? "text-amber-400" : "text-white"}`}
+        className={`text-sm font-medium mt-1 ${warn ? "text-accent" : "text-fg"}`}
       >
         {value}
       </div>
@@ -55,7 +53,7 @@ function StatusPanel() {
     <section className={panelClass} aria-labelledby="status-heading">
       <div className="flex items-center justify-between">
         <PanelTitle
-          icon={<Cpu className="w-4 h-4 text-red-500" aria-hidden="true" />}
+          icon={<Cpu className="w-4 h-4 text-danger" aria-hidden="true" />}
         >
           <span id="status-heading">Состояние системы</span>
         </PanelTitle>
@@ -69,7 +67,7 @@ function StatusPanel() {
           Обновить
         </button>
       </div>
-      {error && <p className="text-red-400 text-xs font-bold">{error}</p>}
+      {error && <p className="text-danger text-xs font-medium">{error}</p>}
       {data && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -101,40 +99,36 @@ function StatusPanel() {
             />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="bg-black/30 border border-white/5 rounded-xl p-3 space-y-1">
-              <div className="text-[10px] font-mono text-gray-400 uppercase">
+            <div className="bg-bg border border-line-soft rounded-xl p-3 space-y-1">
+              <div className="text-[10px] font-mono text-fg-2">
                 Последние запуски cron
               </div>
               {Object.entries(data.worker.cron).map(([job, at]) => (
                 <div key={job} className="flex justify-between gap-3 text-xs">
-                  <span className="text-gray-300">
-                    {CRON_LABELS[job] ?? job}
-                  </span>
+                  <span className="text-fg-2">{CRON_LABELS[job] ?? job}</span>
                   <span
-                    className={`font-mono ${at ? "text-white" : "text-amber-400"}`}
+                    className={`font-mono ${at ? "text-fg" : "text-accent"}`}
                   >
                     {at ? formatDateTime(at) : "не запускался"}
                   </span>
                 </div>
               ))}
             </div>
-            <div className="bg-black/30 border border-white/5 rounded-xl p-3 space-y-1 text-xs">
-              <div className="text-[10px] font-mono text-gray-400 uppercase flex items-center gap-1">
+            <div className="bg-bg border border-line-soft rounded-xl p-3 space-y-1 text-xs">
+              <div className="text-[10px] font-mono text-fg-2 flex items-center gap-1">
                 <HardDrive className="w-3 h-3" aria-hidden="true" /> Бэкапы БД
               </div>
               {!data.backups.available && (
-                <p className="text-amber-400">
+                <p className="text-accent">
                   Каталог бэкапов не подключён к API (BACKUP_DIR).
                 </p>
               )}
               {data.backups.available && !data.backups.latest && (
-                <p className="text-amber-400">Бэкапов пока нет.</p>
+                <p className="text-accent">Бэкапов пока нет.</p>
               )}
               {data.backups.latest && (
                 <>
-                  <p
-                    className={backupStale ? "text-amber-400" : "text-gray-300"}
-                  >
+                  <p className={backupStale ? "text-accent" : "text-fg-2"}>
                     Последний:{" "}
                     <span className="font-mono">
                       {data.backups.latest.name}
@@ -142,7 +136,7 @@ function StatusPanel() {
                     , {formatDateTime(data.backups.latest.created_at)},{" "}
                     {formatBytes(data.backups.latest.bytes)}
                   </p>
-                  <p className="text-gray-400">
+                  <p className="text-fg-2">
                     Всего копий: {data.backups.count},{" "}
                     {formatBytes(data.backups.bytes)}
                   </p>
@@ -176,14 +170,14 @@ function ImportJobsPanel() {
   return (
     <section className={panelClass} aria-labelledby="imports-heading">
       <PanelTitle
-        icon={<Download className="w-4 h-4 text-red-500" aria-hidden="true" />}
+        icon={<Download className="w-4 h-4 text-danger" aria-hidden="true" />}
       >
         <span id="imports-heading">Импорт из Last.fm</span>
       </PanelTitle>
       <Notice text={notice} />
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs text-gray-300">
-          <thead className="text-gray-400 font-mono uppercase text-[11px]">
+        <table className="w-full text-left text-xs text-fg-2">
+          <thead className="text-fg-2 font-mono text-[11px]">
             <tr>
               <th className="py-2 pr-3">#</th>
               <th className="py-2 pr-3">Last.fm</th>
@@ -199,7 +193,7 @@ function ImportJobsPanel() {
                 <td className="py-2 pr-3 font-mono">{j.id}</td>
                 <td className="py-2 pr-3">{j.lastfm_username}</td>
                 <td
-                  className={`py-2 pr-3 font-bold ${j.status === "failed" ? "text-red-400" : "text-gray-200"}`}
+                  className={`py-2 pr-3 font-medium ${j.status === "failed" ? "text-danger" : "text-fg"}`}
                 >
                   {JOB_STATUS[j.status] ?? j.status}
                 </td>
@@ -207,7 +201,7 @@ function ImportJobsPanel() {
                   {j.imported_tracks}/{j.total_tracks || "?"}
                 </td>
                 <td
-                  className="py-2 pr-3 text-red-300 max-w-xs truncate"
+                  className="py-2 pr-3 text-danger max-w-xs truncate"
                   title={j.error_log ?? undefined}
                 >
                   {j.error_log ?? ""}
@@ -227,7 +221,7 @@ function ImportJobsPanel() {
             ))}
             {data?.jobs.length === 0 && (
               <tr>
-                <td colSpan={6} className="py-4 text-center text-gray-400">
+                <td colSpan={6} className="py-4 text-center text-fg-2">
                   Импортов не было
                 </td>
               </tr>
@@ -247,7 +241,7 @@ function RoomsPanel() {
     <section className={panelClass} aria-labelledby="rooms-heading">
       <div className="flex items-center justify-between">
         <PanelTitle
-          icon={<Radio className="w-4 h-4 text-red-500" aria-hidden="true" />}
+          icon={<Radio className="w-4 h-4 text-danger" aria-hidden="true" />}
         >
           <span id="rooms-heading">Комнаты «Слушать вместе»</span>
         </PanelTitle>
@@ -260,19 +254,19 @@ function RoomsPanel() {
         </button>
       </div>
       {data?.rooms.length === 0 && (
-        <p className="text-xs text-gray-400">Активных комнат нет</p>
+        <p className="text-xs text-fg-2">Активных комнат нет</p>
       )}
       <ul className="space-y-2">
         {(data?.rooms ?? []).map((r) => (
           <li
             key={r.room_id}
-            className="bg-black/30 border border-white/5 rounded-xl p-3 text-xs"
+            className="bg-bg border border-line-soft rounded-xl p-3 text-xs"
           >
             <div className="flex justify-between gap-3">
-              <span className="font-bold text-white">{r.name}</span>
-              <span className="font-mono text-gray-400">{r.room_id}</span>
+              <span className="font-medium text-fg">{r.name}</span>
+              <span className="font-mono text-fg-2">{r.room_id}</span>
             </div>
-            <div className="text-gray-400 mt-1">
+            <div className="text-fg-2 mt-1">
               DJ @{r.host_username} · слушателей: {r.listeners_count}
               {r.current_track?.title &&
                 ` · ${r.current_track.artist ?? ""} — ${r.current_track.title}`}

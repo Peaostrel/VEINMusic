@@ -48,7 +48,7 @@ export default function CropModal({
 }>) {
   return (
     <Dialog label="Обрезка изображения" onClose={onCancel}>
-      <div className="relative w-full max-w-4xl h-[50vh] md:h-[70vh] bg-[#121212] rounded-xl overflow-hidden shadow-2xl border border-white/10">
+      <div className="relative w-full max-w-4xl h-[50vh] md:h-[70vh] bg-surface rounded-xl overflow-hidden border border-line">
         <Cropper
           image={image}
           crop={crop}
@@ -63,14 +63,14 @@ export default function CropModal({
         <button
           type="button"
           onClick={onCancel}
-          className="px-6 py-3 rounded-lg font-bold text-white bg-white/10 hover:bg-white/20 transition-all border border-white/10"
+          className="px-6 py-3 rounded-lg font-medium text-fg bg-line hover:bg-line transition-all border border-line"
         >
           Отмена
         </button>
         <button
           type="button"
           onClick={onSave}
-          className="px-8 py-3 rounded-lg font-bold text-white bg-[var(--accent)] hover:bg-[var(--accent-hover)] transition-all drop-shadow-[0_0_15px_var(--accent-glow)]"
+          className="px-8 py-3 rounded-lg font-medium text-fg bg-accent hover:bg-[var(--accent-hover)] transition-all"
         >
           Сохранить
         </button>

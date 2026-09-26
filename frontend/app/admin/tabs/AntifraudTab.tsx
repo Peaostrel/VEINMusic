@@ -12,28 +12,28 @@ export default function AntifraudTab({
 }: AdminPanelState) {
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between p-5 bg-[#141418] border border-red-500/20 rounded-2xl">
+      <div className="flex items-center justify-between p-5 bg-surface border border-danger-line rounded-xl">
         <div className="flex items-center gap-3">
-          <ShieldAlert className="w-6 h-6 text-red-500" />
+          <ShieldAlert className="w-6 h-6 text-danger" />
           <div>
-            <h3 className="font-bold text-white text-sm">
+            <h3 className="font-medium text-fg text-sm">
               Система автоматического обнаружения накрутки
             </h3>
-            <p className="text-gray-400 text-xs">
+            <p className="text-fg-2 text-xs">
               Алгоритм анализирует скорость скробблинга (&gt;70 треков/час) и
               короткие треки (&lt;20с).
             </p>
           </div>
         </div>
-        <span className="px-3 py-1 bg-red-500/20 text-red-300 font-mono text-xs font-bold rounded-lg">
+        <span className="px-3 py-1 text-danger font-mono text-xs font-medium rounded-lg">
           {suspiciousUsers.length} флагов
         </span>
       </div>
 
       {suspiciousUsers.length === 0 ? (
-        <div className="text-center py-16 bg-[#141418] border border-white/5 rounded-2xl">
-          <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-3 opacity-60" />
-          <p className="text-sm text-gray-400">
+        <div className="text-center py-16 bg-surface border border-line-soft rounded-xl">
+          <CheckCircle className="w-12 h-12 text-ok mx-auto mb-3 opacity-60" />
+          <p className="text-sm text-fg-2">
             Подозрительных аккаунтов не обнаружено. Система чиста!
           </p>
         </div>
@@ -42,7 +42,7 @@ export default function AntifraudTab({
           {suspiciousUsers.map((su) => (
             <div
               key={su.user_id}
-              className="bg-[#141418] border border-red-500/30 p-5 rounded-2xl space-y-4 shadow-lg shadow-red-950/20"
+              className="bg-surface border border-danger-line p-5 rounded-xl space-y-4"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -52,25 +52,25 @@ export default function AntifraudTab({
                       "https://assets.vein.guru/avatars/default.png"
                     }
                     alt={su.username}
-                    className="w-10 h-10 rounded-xl object-cover border border-white/10"
+                    className="w-10 h-10 rounded-xl object-cover border border-line"
                   />
                   <div>
-                    <div className="font-bold text-white">@{su.username}</div>
-                    <div className="text-xs text-gray-400 font-mono">
+                    <div className="font-medium text-fg">@{su.username}</div>
+                    <div className="text-xs text-fg-2 font-mono">
                       {su.total_scrobbles} скробблов • {su.total_xp} XP
                     </div>
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <span className="px-2.5 py-1 bg-red-500/20 border border-red-500/40 text-red-400 text-xs font-mono font-bold rounded-lg">
+                  <span className="px-2.5 py-1 border border-danger-line text-danger text-xs font-mono font-medium rounded-lg">
                     Риск: {su.risk_score}%
                   </span>
                 </div>
               </div>
 
-              <div className="p-3 bg-black/40 rounded-xl border border-white/5 text-xs text-red-300 space-y-1">
-                <div className="font-bold text-gray-400 text-[10px] uppercase tracking-wider font-mono">
+              <div className="p-3 bg-bg rounded-xl border border-line-soft text-xs text-danger space-y-1">
+                <div className="font-medium text-fg-2 text-[10px] font-mono">
                   Причины срабатывания:
                 </div>
                 {su.reasons.length > 0 ? (
@@ -82,11 +82,11 @@ export default function AntifraudTab({
                 )}
               </div>
 
-              <div className="flex items-center gap-2 pt-2 border-t border-white/5">
+              <div className="flex items-center gap-2 pt-2 border-t border-line-soft">
                 <button
                   type="button"
                   onClick={() => handleResetSuspiciousXp(su.username)}
-                  className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="flex-1 py-2 bg-accent text-on-accent hover:brightness-110 rounded-xl text-xs font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   Сбросить XP и стрик
@@ -94,10 +94,10 @@ export default function AntifraudTab({
                 <button
                   type="button"
                   onClick={() => handleToggleBan(su.username, su.is_banned)}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  className={`px-3 py-2 rounded-xl text-xs font-medium transition cursor-pointer ${
                     su.is_banned
-                      ? "bg-white/10 text-white hover:bg-white/20"
-                      : "bg-red-950/60 border border-red-500/40 text-red-400 hover:bg-red-950"
+                      ? "bg-line text-fg hover:bg-line"
+                      : "border border-danger-line text-danger hover:bg-[#2a1b1b]"
                   }`}
                 >
                   {su.is_banned ? "Разбан" : "Бан"}
@@ -105,7 +105,7 @@ export default function AntifraudTab({
                 <button
                   type="button"
                   onClick={() => handleUnflagAntifraud(su.username)}
-                  className="px-3 py-2 bg-white/5 hover:bg-white/10 text-gray-400 rounded-xl text-xs font-bold transition cursor-pointer"
+                  className="px-3 py-2 bg-surface-2 hover:bg-line text-fg-2 rounded-xl text-xs font-medium transition cursor-pointer"
                   title="Снять подозрение"
                 >
                   Снять флаг

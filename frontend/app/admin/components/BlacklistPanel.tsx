@@ -69,7 +69,7 @@ export default function BlacklistPanel() {
   return (
     <section className={panelClass} aria-labelledby="blacklist-heading">
       <PanelTitle
-        icon={<Filter className="w-4 h-4 text-red-500" aria-hidden="true" />}
+        icon={<Filter className="w-4 h-4 text-danger" aria-hidden="true" />}
       >
         <span id="blacklist-heading">Чёрный список (не засчитывать)</span>
       </PanelTitle>
@@ -121,24 +121,22 @@ export default function BlacklistPanel() {
             className="flex items-center justify-between gap-3 py-2 text-xs"
           >
             <div className="min-w-0">
-              <span className="font-mono text-white break-all">
-                {f.pattern}
-              </span>{" "}
-              <span className="text-gray-400">({f.filter_type})</span>
-              {f.reason && <div className="text-gray-400">{f.reason}</div>}
+              <span className="font-mono text-fg break-all">{f.pattern}</span>{" "}
+              <span className="text-fg-2">({f.filter_type})</span>
+              {f.reason && <div className="text-fg-2">{f.reason}</div>}
             </div>
             <button
               type="button"
               onClick={() => remove(f)}
               aria-label={`Удалить фильтр ${f.pattern}`}
-              className="p-2 hover:bg-red-500/20 rounded-lg text-red-400"
+              className="p-2 hover:bg-[#2a1b1b] rounded-lg text-danger"
             >
               <Trash2 className="w-4 h-4" aria-hidden="true" />
             </button>
           </li>
         ))}
         {data?.filters.length === 0 && (
-          <li className="py-2 text-xs text-gray-400">Фильтров нет</li>
+          <li className="py-2 text-xs text-fg-2">Фильтров нет</li>
         )}
       </ul>
     </section>

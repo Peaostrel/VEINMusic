@@ -1,4 +1,5 @@
 "use client";
+import { Check, Headphones, Lock } from "lucide-react";
 import React from "react";
 import { THEMES } from "../utils";
 import type { SettingsData, UpdateData } from "../types";
@@ -32,10 +33,10 @@ export default function ThemeTab({
     data.theme && typeof data.theme === "string" && data.theme.startsWith("#");
 
   return (
-    <div className="p-6 md:p-8 space-y-8">
+    <div className="space-y-8">
       {/* Секция цветовой темы */}
       <div>
-        <h2 className="text-xl font-bold mb-6 text-[var(--accent-text)]">
+        <h2 className="text-lg font-semibold text-fg mb-6">
           Выбор цветовой темы
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -45,31 +46,35 @@ export default function ThemeTab({
               ? isThemeCustom
               : data.theme === opt.id;
 
-            let cardBorderClass = "border-white/10 hover:border-white/30";
+            let cardBorderClass = "border-line hover:bg-surface";
             if (isLocked) {
-              cardBorderClass = "opacity-50 grayscale cursor-not-allowed";
-            } else if (isSelected) {
               cardBorderClass =
-                "border-[var(--accent)] bg-[var(--accent)]/10 shadow-[0_0_15px_var(--accent-glow)]";
+                "border-line-soft opacity-50 cursor-not-allowed";
+            } else if (isSelected) {
+              cardBorderClass = "border-accent bg-surface";
             }
 
             let backgroundStyle = opt.color;
             if (opt.isRainbow) {
               backgroundStyle =
-                "linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #8b00ff)";
+                "conic-gradient(#e06c8c, #e3a93b, #5fb58e, #56b6c2, #9d86e6, #e06c8c)";
             } else if (opt.isCustom) {
               if (isThemeCustom) {
                 backgroundStyle = data.theme;
               } else {
-                backgroundStyle = "linear-gradient(45deg, #ef4444, #3b82f6)";
+                backgroundStyle = "linear-gradient(135deg, #e07a45, #9d86e6)";
               }
             }
 
-            let statusIndicator = null;
+            let statusIndicator: React.ReactNode = null;
             if (isLocked) {
-              statusIndicator = "🔒";
+              statusIndicator = (
+                <Lock className="h-4 w-4 text-fg-3" aria-label="Закрыто" />
+              );
             } else if (isSelected) {
-              statusIndicator = "✅";
+              statusIndicator = (
+                <Check className="h-4 w-4 text-accent" aria-label="Выбрано" />
+              );
             }
 
             return (
@@ -79,43 +84,45 @@ export default function ThemeTab({
                 onClick={() => {
                   if (isLocked) return;
                   if (opt.isCustom) {
-                    const currentColor = isThemeCustom ? data.theme : "#ef4444";
+                    const currentColor = isThemeCustom ? data.theme : "#e06c6c";
                     updateData("theme", currentColor);
                   } else {
                     updateData("theme", opt.id);
                   }
                 }}
-                className={`text-left w-full p-4 rounded-xl border-2 transition-all flex flex-col gap-3 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50 ${cardBorderClass}`}
+                className={`text-left w-full p-4 rounded-xl border transition-colors flex flex-col gap-3 cursor-pointer focus:outline-none focus:ring-2 focus:ring-fg-3/40 ${cardBorderClass}`}
                 disabled={isLocked}
               >
                 <div className="flex items-center justify-between w-full">
                   <div className="flex items-center gap-4">
                     <div
-                      className="w-8 h-8 rounded-full shadow-lg"
+                      className="w-8 h-8 rounded-full"
                       style={{
                         background: backgroundStyle,
                       }}
                     ></div>
                     <div>
-                      <div className="font-bold text-white">{opt.name}</div>
-                      <div className="text-xs text-gray-400">LVL {opt.req}</div>
+                      <div className="font-medium text-fg">{opt.name}</div>
+                      <div className="font-mono text-[11px] text-fg-3">
+                        с ур. {opt.req}
+                      </div>
                     </div>
                   </div>
                   {statusIndicator}
                 </div>
 
                 {isSelected && opt.isCustom && (
-                  <div className="w-full pt-3 border-t border-white/5 flex items-center gap-3">
-                    <span className="text-xs text-gray-400">Цвет:</span>
+                  <div className="w-full pt-3 border-t border-line-soft flex items-center gap-3">
+                    <span className="text-xs text-fg-2">Цвет:</span>
                     <input
                       type="color"
-                      value={isThemeCustom ? data.theme : "#ef4444"}
+                      value={isThemeCustom ? data.theme : "#e06c6c"}
                       onChange={(e) => updateData("theme", e.target.value)}
                       onClick={(e) => e.stopPropagation()}
-                      className="w-10 h-7 rounded bg-transparent border border-white/10 cursor-pointer p-0"
+                      className="w-10 h-7 rounded bg-transparent border border-line cursor-pointer p-0"
                     />
-                    <span className="font-mono text-xs text-white uppercase">
-                      {isThemeCustom ? data.theme : "#ef4444"}
+                    <span className="font-mono text-xs text-fg">
+                      {isThemeCustom ? data.theme : "#e06c6c"}
                     </span>
                   </div>
                 )}
@@ -126,36 +133,36 @@ export default function ThemeTab({
       </div>
 
       {/* Секция рамки аватара */}
-      <div className="pt-6 border-t border-white/5">
-        <h2 className="text-xl font-bold mb-2 text-[var(--accent-text)]">
-          Анимированная рамка аватара
-        </h2>
-        <p className="text-xs text-gray-400 mb-6 leading-relaxed">
-          Украсьте ваш аватар уникальной анимированной рамкой. Дополнительные
-          стили разблокируются по мере роста вашего уровня.
+      <div className="pt-6 border-t border-line-soft">
+        <h2 className="text-lg font-semibold text-fg mb-2">Рамка аватара</h2>
+        <p className="text-xs text-fg-2 mb-6 leading-relaxed">
+          Рамки открываются по мере роста уровня.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {FRAMES.map((frame) => {
             const isLocked = level < frame.req;
             const isSelected = (data.avatarFrame || "") === frame.id;
 
-            let cardClass = "border-white/10 hover:border-white/30";
+            let cardClass = "border-line hover:bg-surface";
             if (isLocked) {
-              cardClass = "opacity-50 grayscale cursor-not-allowed";
+              cardClass = "border-line-soft opacity-50 cursor-not-allowed";
             } else if (isSelected) {
-              cardClass =
-                "border-[var(--accent)] bg-[var(--accent)]/10 shadow-[0_0_15px_var(--accent-glow)]";
+              cardClass = "border-accent bg-surface";
             }
 
             const frameWrapperClass = frame.id
               ? `avatar-frame-wrapper ${frame.class}`
-              : "p-[5px] border-2 border-dashed border-gray-600 rounded-full";
+              : "p-[5px] border-2 border-dashed border-line rounded-full";
 
-            let frameStatusIndicator = null;
+            let frameStatusIndicator: React.ReactNode = null;
             if (isLocked) {
-              frameStatusIndicator = "🔒";
+              frameStatusIndicator = (
+                <Lock className="h-4 w-4 text-fg-3" aria-label="Закрыто" />
+              );
             } else if (isSelected) {
-              frameStatusIndicator = "✅";
+              frameStatusIndicator = (
+                <Check className="h-4 w-4 text-accent" aria-label="Выбрано" />
+              );
             }
 
             return (
@@ -168,20 +175,20 @@ export default function ThemeTab({
                     updateData("avatarFrame", frame.id);
                   }
                 }}
-                className={`text-left w-full p-4 rounded-xl border-2 transition-all flex items-center justify-between cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50 ${cardClass}`}
+                className={`text-left w-full p-4 rounded-xl border transition-colors flex items-center justify-between cursor-pointer focus:outline-none focus:ring-2 focus:ring-fg-3/40 ${cardClass}`}
               >
                 <div className="flex items-center gap-4">
                   <div className={`${frameWrapperClass} shrink-0`}>
-                    <div className="w-10 h-10 rounded-full bg-[#282828] flex items-center justify-center text-lg shadow-inner">
-                      🎧
+                    <div className="w-10 h-10 rounded-full bg-surface-2 flex items-center justify-center text-fg-3">
+                      <Headphones className="h-4 w-4" aria-hidden="true" />
                     </div>
                   </div>
                   <div>
-                    <div className="font-bold text-white text-sm">
+                    <div className="font-medium text-fg text-sm">
                       {frame.name}
                     </div>
-                    <div className="text-[10px] text-gray-400">
-                      LVL {frame.req}
+                    <div className="font-mono text-[11px] text-fg-3">
+                      с ур. {frame.req}
                     </div>
                   </div>
                 </div>

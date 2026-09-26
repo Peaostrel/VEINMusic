@@ -6,7 +6,7 @@ async function openAdmin(page: Page) {
   setRole(username, "admin");
   await page.goto("/admin");
   await expect(
-    page.getByRole("heading", { name: /VEIN Admin Nexus/ }),
+    page.getByRole("heading", { name: "Админка", level: 1 }),
   ).toBeVisible();
   return username;
 }
@@ -52,7 +52,7 @@ test.describe("Admin panel", () => {
 
     await card.getByLabel("Уровень").fill("7");
     await card.getByRole("button", { name: "Установить уровень" }).click();
-    await expect(card.getByText("✅ Уровень 7 установлен")).toBeVisible();
+    await expect(card.getByText("Уровень 7 установлен")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(card).toBeHidden();
 

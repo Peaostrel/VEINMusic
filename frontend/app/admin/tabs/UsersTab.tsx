@@ -29,24 +29,24 @@ export default function UsersTab({
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-fg-2 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Поиск по нику или имени..."
             value={userSearch}
             onChange={(e) => setUserSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-[#141418] border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-red-500"
+            className="w-full pl-10 pr-4 py-2.5 bg-surface border border-line rounded-xl text-sm text-fg placeholder:text-fg-3 focus:outline-none focus:border-fg-3"
           />
         </div>
-        <span className="text-xs text-gray-400 font-mono">
+        <span className="text-xs text-fg-2 font-mono">
           Найдено: {filteredUsers.length}
         </span>
       </div>
 
-      <div className="bg-[#141418] border border-white/5 rounded-2xl overflow-hidden">
+      <div className="bg-surface border border-line-soft rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-gray-300">
-            <thead className="bg-[#0f0f12] text-gray-400 font-mono uppercase text-[11px] border-b border-white/5">
+          <table className="w-full text-left text-xs text-fg-2">
+            <thead className="bg-[#0f0f12] text-fg-2 font-mono text-[11px] border-b border-line-soft">
               <tr>
                 <th className="py-3.5 px-4">Пользователь</th>
                 <th className="py-3.5 px-4">Роль</th>
@@ -66,7 +66,7 @@ export default function UsersTab({
                           "https://assets.vein.guru/avatars/default.png"
                         }
                         alt={u.username}
-                        className="w-9 h-9 rounded-xl object-cover border border-white/10"
+                        className="w-9 h-9 rounded-xl object-cover border border-line"
                         onError={fallbackOnce(
                           "https://assets.vein.guru/avatars/default.png",
                         )}
@@ -75,14 +75,14 @@ export default function UsersTab({
                         <button
                           type="button"
                           onClick={() => onOpenUser(u.username)}
-                          className="font-bold text-white flex items-center gap-1.5 hover:text-red-300"
+                          className="font-medium text-fg flex items-center gap-1.5 hover:text-accent"
                         >
                           @{u.username}
                           {u.is_verified && (
-                            <CheckCircle className="w-3.5 h-3.5 text-blue-400 inline" />
+                            <CheckCircle className="w-3.5 h-3.5 text-fg-2 inline" />
                           )}
                         </button>
-                        <div className="text-[11px] text-gray-400">
+                        <div className="text-[11px] text-fg-2">
                           {u.display_name || "Без имени"}
                         </div>
                       </div>
@@ -90,30 +90,28 @@ export default function UsersTab({
                   </td>
                   <td className="py-3.5 px-4">
                     <span
-                      className={`px-2 py-0.5 rounded font-mono text-[10px] font-bold ${getUserRoleBadge(u.role)}`}
+                      className={`px-2 py-0.5 rounded font-mono text-[10px] font-medium ${getUserRoleBadge(u.role)}`}
                     >
                       {u.role || "user"}
                     </span>
                   </td>
                   <td className="py-3.5 px-4 font-mono">
                     <div>{u.scrobbles} треков</div>
-                    <div className="text-emerald-400 font-bold">
-                      {u.total_xp} XP
-                    </div>
+                    <div className="text-ok font-medium">{u.total_xp} XP</div>
                   </td>
                   <td className="py-3.5 px-4">
                     {u.is_banned && (
-                      <span className="px-2 py-0.5 rounded bg-red-950/80 border border-red-500/50 text-red-400 text-[10px] font-bold">
+                      <span className="px-2 py-0.5 rounded border border-danger-line text-danger text-[10px] font-medium">
                         ЗАБЛОКИРОВАН
                       </span>
                     )}
                     {!u.is_banned && u.is_flagged_antifraud && (
-                      <span className="px-2 py-0.5 rounded bg-amber-950/80 border border-amber-500/50 text-amber-400 text-[10px] font-bold">
+                      <span className="px-2 py-0.5 rounded border border-line text-accent text-[10px] font-medium">
                         ФЛАГ АНТИФРОД
                       </span>
                     )}
                     {!u.is_banned && !u.is_flagged_antifraud && (
-                      <span className="text-emerald-400 font-mono text-[11px]">
+                      <span className="text-ok font-mono text-[11px]">
                         Активен
                       </span>
                     )}
@@ -123,7 +121,7 @@ export default function UsersTab({
                       <button
                         type="button"
                         onClick={() => onOpenUser(u.username)}
-                        className="p-2 hover:bg-white/10 rounded-lg text-gray-200 transition"
+                        className="p-2 hover:bg-line rounded-lg text-fg transition"
                         title="Карточка пользователя"
                         aria-label={`Карточка @${u.username}`}
                       >
@@ -134,7 +132,7 @@ export default function UsersTab({
                         onClick={() =>
                           handleToggleVerify(u.username, !!u.is_verified)
                         }
-                        className="p-2 hover:bg-white/10 rounded-lg text-blue-400 transition"
+                        className="p-2 hover:bg-line rounded-lg text-fg-2 transition"
                         title={
                           u.is_verified ? "Снять галочку" : "Выдать верификацию"
                         }
@@ -146,7 +144,7 @@ export default function UsersTab({
                         onClick={() =>
                           handleChangeRole(u.username, u.role || "user")
                         }
-                        className="p-2 hover:bg-white/10 rounded-lg text-purple-400 transition"
+                        className="p-2 hover:bg-line rounded-lg text-fg-2 transition"
                         title="Изменить роль"
                       >
                         <Edit className="w-4 h-4" />
@@ -154,7 +152,7 @@ export default function UsersTab({
                       <button
                         type="button"
                         onClick={() => handleResetProfile(u.username)}
-                        className="p-2 hover:bg-white/10 rounded-lg text-amber-400 transition"
+                        className="p-2 hover:bg-line rounded-lg text-accent transition"
                         title="Очистить профиль (аватар/био)"
                       >
                         <RotateCcw className="w-4 h-4" />
@@ -164,8 +162,8 @@ export default function UsersTab({
                         onClick={() =>
                           handleToggleBan(u.username, !!u.is_banned)
                         }
-                        className={`p-2 hover:bg-white/10 rounded-lg transition ${
-                          u.is_banned ? "text-emerald-400" : "text-orange-400"
+                        className={`p-2 hover:bg-line rounded-lg transition ${
+                          u.is_banned ? "text-ok" : "text-fg-2"
                         }`}
                         title={u.is_banned ? "Разблокировать" : "Заблокировать"}
                       >
@@ -174,7 +172,7 @@ export default function UsersTab({
                       <button
                         type="button"
                         onClick={() => handleDeleteUser(u.username)}
-                        className="p-2 hover:bg-red-500/20 text-red-400 rounded-lg transition"
+                        className="p-2 hover:bg-[#2a1b1b] text-danger rounded-lg transition"
                         title="Удалить пользователя навсегда"
                       >
                         <Trash2 className="w-4 h-4" />

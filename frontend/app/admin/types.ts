@@ -106,12 +106,12 @@ export interface SystemAnalytics {
 
 export const getUserRoleBadge = (role?: string) => {
   if (role === "admin") {
-    return "bg-red-950/60 border border-red-500/40 text-red-400";
+    return "border border-line text-accent";
   }
   if (role === "moderator") {
-    return "bg-purple-950/60 border border-purple-500/40 text-purple-400";
+    return "border border-line text-fg";
   }
-  return "bg-white/5 text-gray-400";
+  return "bg-surface-2 text-fg-2";
 };
 
 // --- Admin tools (audit, moderation, user card, catalog, system) -----------

@@ -6,6 +6,8 @@
 "use client";
 import { Suspense } from "react";
 import { API_URL } from "@/app/lib/api";
+import StatusText from "@/components/StatusText";
+import { Loading, PageHeader, btn } from "@/components/ui";
 import GeneralTab from "./tabs/GeneralTab";
 import ShowcaseTab from "./tabs/ShowcaseTab";
 import ThemeTab from "./tabs/ThemeTab";
@@ -21,16 +23,7 @@ function SettingsContent() {
   const s = useSettingsPage();
   const { data, updateData, activeTab, status, isSaveDisabled } = s;
 
-  if (s.loading)
-    return (
-      <output className="min-h-screen text-[var(--accent-text)] flex flex-col items-center justify-center gap-4 font-bold text-xl animate-pulse">
-        <div
-          aria-hidden="true"
-          className="animate-spin border-4 border-[var(--accent-text)] border-t-transparent rounded-full w-12 h-12"
-        ></div>
-        Загрузка настроек...
-      </output>
-    );
+  if (s.loading) return <Loading label="Загружаем настройки…" />;
 
   let content: React.ReactNode;
   if (activeTab === "security") content = <SecurityTab />;
@@ -82,18 +75,12 @@ function SettingsContent() {
           <PrivacyTab data={data} updateData={updateData} />
         )}
 
-        <div className="p-6 bg-black/20 flex justify-between items-center border-t border-white/5">
-          <output className="text-[var(--accent-text)] font-bold">
-            {status}
-          </output>
+        <div className="sticky bottom-0 z-10 -mx-1 mt-8 flex items-center justify-between gap-4 border-t border-line-soft bg-bg/95 px-1 py-4">
+          <StatusText text={status} />
           <button
             type="submit"
             disabled={isSaveDisabled}
-            className={`font-black px-8 py-3 rounded-lg transition-all ${
-              isSaveDisabled
-                ? "bg-white/10 text-gray-400 cursor-not-allowed"
-                : "bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)] text-[var(--text-on-accent)] hover:scale-105"
-            }`}
+            className={`${btn.primary} ${btn.md} ml-auto`}
           >
             {isSaveDisabled ? "Заблокировано" : "Сохранить всё"}
           </button>
@@ -116,36 +103,40 @@ function SettingsContent() {
           onSave={s.handleCropSave}
         />
       )}
-      <div className="min-h-screen text-white p-4 md:p-8 max-w-6xl mx-auto flex flex-col md:flex-row gap-8 pt-24">
-        <nav
-          aria-label="Разделы настроек"
-          className="w-full md:w-64 shrink-0 flex flex-col gap-2"
-        >
-          <a
-            href="/feed"
-            className="text-sm font-bold text-gray-400 hover:text-white mb-4 block px-4"
+      <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-7 px-4 py-8 sm:px-8 lg:px-12 lg:py-10">
+        <PageHeader title="Настройки" />
+        <div className="flex flex-col gap-8 md:flex-row md:gap-12">
+          <nav
+            aria-label="Разделы настроек"
+            className="hide-scrollbar flex shrink-0 gap-1 overflow-x-auto md:w-[210px] md:flex-col md:gap-0.5"
           >
-            ← Глобальная лента
-          </a>
-          {SETTINGS_TABS.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => s.setActiveTab(tab.id)}
-              aria-current={activeTab === tab.id ? "page" : undefined}
-              className={`text-left px-4 py-3 rounded-lg font-bold transition-all ${activeTab === tab.id ? "bg-[var(--accent)] text-[var(--text-on-accent)]" : "text-gray-400 hover:bg-[#1e1e1e]"}`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
+            {SETTINGS_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => s.setActiveTab(tab.id)}
+                aria-current={activeTab === tab.id ? "page" : undefined}
+                className={`h-9 shrink-0 rounded-lg px-3 text-left text-sm transition-colors ${
+                  activeTab === tab.id
+                    ? "bg-surface-2 font-medium text-fg"
+                    : "text-fg-2 hover:text-fg"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
 
-        <section
-          aria-label="Настройки"
-          className="flex-grow bg-[#1e1e1e]/60 backdrop-blur-md rounded-xl border border-white/5 shadow-lg relative overflow-hidden mb-20"
-        >
-          {content}
-        </section>
+          <section
+            aria-label="Настройки"
+            className="min-w-0 max-w-[760px] flex-1"
+          >
+            {activeTab === "integrations" && (
+              <StatusText text={status} className="mb-4" />
+            )}
+            {content}
+          </section>
+        </div>
       </div>
 
       {s.showConfirmModal && (
@@ -160,13 +151,7 @@ function SettingsContent() {
 
 export default function Settings() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen flex items-center justify-center text-white">
-          Загрузка...
-        </div>
-      }
-    >
+    <Suspense fallback={<Loading label="Загружаем настройки…" />}>
       <SettingsContent />
     </Suspense>
   );

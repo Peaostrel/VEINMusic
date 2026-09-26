@@ -49,7 +49,7 @@ export default function LastfmImportStatus({
     <div className="mt-2 text-xs space-y-1.5" aria-live="polite">
       {running && (
         <>
-          <div className="flex justify-between text-gray-300">
+          <div className="flex justify-between text-fg-2">
             <span>
               Импорт {job.incremental ? "новых прослушиваний" : "истории"}…
             </span>
@@ -59,26 +59,26 @@ export default function LastfmImportStatus({
                 : "подготовка"}
             </span>
           </div>
-          <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+          <div className="h-1.5 w-full bg-line rounded-full overflow-hidden">
             <div
-              className="h-full bg-[#D51007] transition-all"
+              className="h-full bg-accent transition-all"
               style={{ width: `${Math.max(progress, 3)}%` }}
             />
           </div>
-          <p className="text-gray-400">
+          <p className="text-fg-2">
             Добавлено треков: {job.imported_tracks ?? 0}
           </p>
         </>
       )}
       {job.status === "completed" && (
-        <p className="text-green-400">
-          ✅ Последний импорт завершён: добавлено {job.imported_tracks ?? 0}{" "}
+        <p className="text-ok">
+          Последний импорт завершён: добавлено {job.imported_tracks ?? 0}{" "}
           треков. Повторный импорт добавит только новые прослушивания.
         </p>
       )}
       {job.status === "failed" && (
-        <p className="text-red-400">
-          ❌ Импорт прервался
+        <p className="text-danger">
+          Импорт прервался
           {job.error ? `: ${job.error}` : ""}. Нажмите «Импорт», чтобы
           продолжить с того же места.
         </p>

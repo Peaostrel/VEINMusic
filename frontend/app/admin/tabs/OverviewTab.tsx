@@ -18,50 +18,48 @@ export default function OverviewTab({
       <AnalyticsCharts />
       {/* Quick Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-[#141418] border border-white/5 p-5 rounded-2xl">
-          <div className="flex items-center justify-between text-gray-400 text-xs font-mono mb-2">
-            <span>ПОЛЬЗОВАТЕЛИ</span>
-            <Users className="w-4 h-4 text-blue-400" />
+        <div className="bg-surface border border-line-soft p-5 rounded-xl">
+          <div className="flex items-center justify-between text-fg-2 text-xs font-mono mb-2">
+            <span>Пользователи</span>
+            <Users className="w-4 h-4 text-fg-3" />
           </div>
-          <div className="text-3xl font-black text-white">{totalUsers}</div>
-          <div className="text-[11px] text-gray-400 mt-1">
+          <div className="text-3xl font-semibold text-fg">{totalUsers}</div>
+          <div className="text-[11px] text-fg-2 mt-1">
             DAU: {analytics?.dau || 0} • MAU: {analytics?.mau || 0}
           </div>
         </div>
 
-        <div className="bg-[#141418] border border-white/5 p-5 rounded-2xl">
-          <div className="flex items-center justify-between text-gray-400 text-xs font-mono mb-2">
-            <span>СКРОББЛЫ (ВСЕГО)</span>
-            <Disc3 className="w-4 h-4 text-emerald-400" />
+        <div className="bg-surface border border-line-soft p-5 rounded-xl">
+          <div className="flex items-center justify-between text-fg-2 text-xs font-mono mb-2">
+            <span>Скробблы (всего)</span>
+            <Disc3 className="w-4 h-4 text-fg-3" />
           </div>
-          <div className="text-3xl font-black text-white">
+          <div className="text-3xl font-semibold text-fg">
             {totalScrobbles.toLocaleString()}
           </div>
-          <div className="text-[11px] text-emerald-400 mt-1 font-mono">
+          <div className="text-[11px] text-ok mt-1 font-mono">
             +{analytics?.scrobbles_24h || 0} за 24 часа
           </div>
         </div>
 
-        <div className="bg-[#141418] border border-white/5 p-5 rounded-2xl">
-          <div className="flex items-center justify-between text-gray-400 text-xs font-mono mb-2">
-            <span>ТРЕКОВ В БАЗЕ</span>
-            <Zap className="w-4 h-4 text-amber-400" />
+        <div className="bg-surface border border-line-soft p-5 rounded-xl">
+          <div className="flex items-center justify-between text-fg-2 text-xs font-mono mb-2">
+            <span>Треков в базе</span>
+            <Zap className="w-4 h-4 text-fg-3" />
           </div>
-          <div className="text-3xl font-black text-white">{tracks.length}</div>
-          <div className="text-[11px] text-gray-400 mt-1">
-            Каталог нормализован
-          </div>
+          <div className="text-3xl font-semibold text-fg">{tracks.length}</div>
+          <div className="text-[11px] text-fg-2 mt-1">Каталог нормализован</div>
         </div>
 
-        <div className="bg-[#141418] border border-white/5 p-5 rounded-2xl">
-          <div className="flex items-center justify-between text-gray-400 text-xs font-mono mb-2">
-            <span>WEBSOCKET КЛИЕНТЫ</span>
-            <Radio className="w-4 h-4 text-red-500 animate-pulse" />
+        <div className="bg-surface border border-line-soft p-5 rounded-xl">
+          <div className="flex items-center justify-between text-fg-2 text-xs font-mono mb-2">
+            <span>WebSocket-клиенты</span>
+            <Radio className="w-4 h-4 text-fg-3" />
           </div>
-          <div className="text-3xl font-black text-white">
+          <div className="text-3xl font-semibold text-fg">
             {health?.websockets.connected_clients || 0}
           </div>
-          <div className="text-[11px] text-gray-400 mt-1">
+          <div className="text-[11px] text-fg-2 mt-1">
             В {health?.websockets.active_rooms || 0} комнатах
           </div>
         </div>
@@ -69,40 +67,40 @@ export default function OverviewTab({
 
       {/* System Services Status */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-[#141418] border border-white/5 p-6 rounded-2xl space-y-4">
-          <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
-            <Server className="w-4 h-4 text-red-500" />
+        <div className="bg-surface border border-line-soft p-6 rounded-xl space-y-4">
+          <h3 className="text-sm font-semibold text-fg flex items-center gap-2">
+            <Server className="w-4 h-4 text-fg-3" />
             Инфраструктура и База данных
           </h3>
 
           <div className="space-y-3 text-xs">
-            <div className="flex justify-between items-center p-3 bg-black/30 rounded-xl border border-white/5">
-              <span className="text-gray-400">PostgreSQL Connection Pool</span>
-              <span className="px-2 py-0.5 bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 font-mono font-bold rounded">
+            <div className="flex justify-between items-center p-3 bg-bg rounded-xl border border-line-soft">
+              <span className="text-fg-2">PostgreSQL Connection Pool</span>
+              <span className="px-2 py-0.5 border border-line text-ok font-mono font-medium rounded">
                 ACTIVE (OK)
               </span>
             </div>
-            <div className="flex justify-between items-center p-3 bg-black/30 rounded-xl border border-white/5">
-              <span className="text-gray-400">Синхронизация Яндекс.Музыки</span>
-              <span className="font-mono text-white font-bold">
+            <div className="flex justify-between items-center p-3 bg-bg rounded-xl border border-line-soft">
+              <span className="text-fg-2">Синхронизация Яндекс.Музыки</span>
+              <span className="font-mono text-fg font-medium">
                 {health?.cloud_scrobblers.yandex_users || 0} аккаунтов
               </span>
             </div>
-            <div className="flex justify-between items-center p-3 bg-black/30 rounded-xl border border-white/5">
-              <span className="text-gray-400">Синхронизация Spotify</span>
-              <span className="font-mono text-white font-bold">
+            <div className="flex justify-between items-center p-3 bg-bg rounded-xl border border-line-soft">
+              <span className="text-fg-2">Синхронизация Spotify</span>
+              <span className="font-mono text-fg font-medium">
                 {health?.cloud_scrobblers.spotify_users || 0} аккаунтов
               </span>
             </div>
           </div>
         </div>
 
-        <div className="bg-[#141418] border border-white/5 p-6 rounded-2xl space-y-4">
-          <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
-            <Flame className="w-4 h-4 text-amber-500" />
+        <div className="bg-surface border border-line-soft p-6 rounded-xl space-y-4">
+          <h3 className="text-sm font-semibold text-fg flex items-center gap-2">
+            <Flame className="w-4 h-4 text-fg-3" />
             Глобальный множитель опыта (XP)
           </h3>
-          <p className="text-gray-400 text-xs">
+          <p className="text-fg-2 text-xs">
             Увеличьте опыт за скробблы для всех пользователей платформы
             (например, в честь выходных или ивентов). Действует на
             прослушивания, засчитанные после изменения; уже набранный опыт не
@@ -115,10 +113,10 @@ export default function OverviewTab({
                 type="button"
                 key={val}
                 onClick={() => handleSetMultiplier(val)}
-                className={`flex-1 py-2.5 rounded-xl font-mono font-bold text-xs transition cursor-pointer ${
+                className={`flex-1 py-2.5 rounded-xl font-mono font-medium text-xs transition cursor-pointer ${
                   xpMultiplier === val
-                    ? "bg-amber-500 text-black shadow-lg shadow-amber-500/20"
-                    : "bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10"
+                    ? "bg-line text-fg"
+                    : "bg-surface-2 hover:bg-line text-fg-2 border border-line"
                 }`}
               >
                 x{val.toFixed(1)} XP

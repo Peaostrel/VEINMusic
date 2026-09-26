@@ -104,8 +104,10 @@ export function useSettingsPage() {
       setStatus("✅ Spotify успешно привязан!");
       setActiveTab("integrations");
     }
-    if (searchParams.get("tab") === "export") {
-      setActiveTab("export");
+    const tabParam = searchParams.get("tab");
+    const linkedTab = SETTINGS_TABS.find((t) => t.id === tabParam);
+    if (linkedTab) setActiveTab(linkedTab.id);
+    if (tabParam === "export") {
       const result = searchParams.get("status");
       if (result === "lastfm_connected") setStatus("✅ Last.fm подключён");
       else if (result === "lastfm_error")
@@ -236,7 +238,7 @@ export function useSettingsPage() {
       setStatus("✅ API ключ скопирован в буфер обмена");
       setTimeout(() => setStatus(""), 3000);
     } else {
-      setStatus("⚠️ API ключ не найден!");
+      setStatus("⚠️ API-ключ не найден");
       setTimeout(() => setStatus(""), 2000);
     }
   };
@@ -388,7 +390,7 @@ export function useSettingsPage() {
         setStatus(
           started.status === "already_running"
             ? "⏳ Импорт уже идёт"
-            : "🚀 Импорт запущен!",
+            : "✅ Импорт запущен",
         );
         setImportRefresh((n) => n + 1);
       } else {

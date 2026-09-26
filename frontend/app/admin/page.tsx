@@ -1,19 +1,7 @@
 "use client";
 
-import {
-  Users,
-  ShieldAlert,
-  Disc3,
-  Trophy,
-  Megaphone,
-  Activity,
-  RotateCcw,
-  Server,
-  RefreshCw,
-  MessageSquareWarning,
-  Cpu,
-  ScrollText,
-} from "lucide-react";
+import { RefreshCw, RotateCcw, ShieldAlert } from "lucide-react";
+import { Loading, PageHeader, btn } from "@/components/ui";
 import { useState } from "react";
 import OverviewTab from "./tabs/OverviewTab";
 import UsersTab from "./tabs/UsersTab";
@@ -42,27 +30,18 @@ export default function AdminPanel() {
     handleFlushCache,
   } = admin;
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <div className="animate-spin border-4 border-red-500 border-t-transparent rounded-full w-12 h-12"></div>
-        <p className="text-gray-400 font-mono text-sm tracking-wider">
-          Загрузка панели управления VEIN...
-        </p>
-      </div>
-    );
-  }
+  if (loading) return <Loading label="Загружаем панель управления…" />;
 
   if (error) {
     return (
-      <div className="max-w-md mx-auto my-20 p-6 bg-red-950/40 border border-red-500/40 rounded-2xl text-center">
-        <ShieldAlert className="w-12 h-12 text-red-500 mx-auto mb-3" />
-        <h2 className="text-xl font-bold text-white mb-2">Доступ ограничен</h2>
-        <p className="text-red-300 text-sm mb-6">{error}</p>
+      <div className="mx-auto flex max-w-md flex-col items-center gap-3 px-4 py-24 text-center">
+        <ShieldAlert className="h-8 w-8 text-fg-3" aria-hidden="true" />
+        <h1 className="text-2xl font-semibold">Доступ ограничен</h1>
+        <p className="text-sm text-fg-2">{error}</p>
         <button
           type="button"
           onClick={() => router.push("/")}
-          className="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold text-sm transition"
+          className={`${btn.secondary} ${btn.md} mt-4`}
         >
           На главную
         </button>
@@ -71,81 +50,59 @@ export default function AdminPanel() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-6">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-black text-white tracking-tight flex items-center gap-2">
-              <Server className="w-8 h-8 text-red-500" />
-              VEIN Admin Nexus
-            </h1>
-            <span className="px-2.5 py-0.5 rounded-full bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-mono font-bold">
-              v2.0 Pro
-            </span>
-          </div>
-          <p className="text-gray-400 text-sm mt-1">
-            Командный центр управления платформой, каталогом, безопасностью и
-            экономикой
-          </p>
-        </div>
+    <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-6 px-4 py-8 sm:px-8 lg:px-12 lg:py-10">
+      <PageHeader
+        title="Админка"
+        subtitle="Пользователи, каталог, модерация и состояние системы"
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={handleFlushCache}
+              className={`${btn.secondary} ${btn.sm}`}
+            >
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+              Сбросить кэш
+            </button>
+            <button
+              type="button"
+              onClick={loadAllData}
+              className={`${btn.secondary} ${btn.sm}`}
+            >
+              <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+              Обновить
+            </button>
+          </>
+        }
+      />
 
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={handleFlushCache}
-            className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold text-gray-300 flex items-center gap-2 transition cursor-pointer"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-            Сброс кэша
-          </button>
-          <button
-            type="button"
-            onClick={loadAllData}
-            className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-red-600/20 transition cursor-pointer"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            Обновить данные
-          </button>
-        </div>
-      </div>
-
-      {/* Navigation Tabs */}
-      <div className="flex flex-wrap gap-2 p-1.5 bg-[#121214] border border-white/5 rounded-2xl">
+      <nav
+        aria-label="Разделы админки"
+        className="hide-scrollbar flex gap-6 overflow-x-auto border-b border-line-soft"
+      >
         {(
           [
-            { id: "overview", label: "Обзор и Здоровье", icon: Activity },
-            {
-              id: "users",
-              label: `Пользователи (${users.length})`,
-              icon: Users,
-            },
+            { id: "overview", label: "Обзор" },
+            { id: "users", label: "Пользователи", count: users.length },
             {
               id: "antifraud",
-              label:
-                "Антифрод" +
-                (suspiciousUsers.length > 0
-                  ? ` (${suspiciousUsers.length})`
-                  : ""),
-              icon: ShieldAlert,
+              label: "Антифрод",
+              count: suspiciousUsers.length || undefined,
+              alert: suspiciousUsers.length > 0,
             },
-            {
-              id: "moderation",
-              label: "Модерация",
-              icon: MessageSquareWarning,
-            },
-            { id: "catalog", label: "Каталог и Дедупликация", icon: Disc3 },
-            { id: "gamification", label: "Геймификация и Рамки", icon: Trophy },
-            {
-              id: "announcements",
-              label: "Оповещения и Флаги",
-              icon: Megaphone,
-            },
-            { id: "system", label: "Система", icon: Cpu },
-            { id: "audit", label: "Журнал", icon: ScrollText },
-          ] satisfies { id: AdminTab; label: string; icon: unknown }[]
+            { id: "moderation", label: "Модерация" },
+            { id: "catalog", label: "Каталог" },
+            { id: "gamification", label: "Геймификация" },
+            { id: "announcements", label: "Оповещения и флаги" },
+            { id: "system", label: "Система" },
+            { id: "audit", label: "Журнал" },
+          ] satisfies {
+            id: AdminTab;
+            label: string;
+            count?: number;
+            alert?: boolean;
+          }[]
         ).map((tab) => {
-          const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
             <button
@@ -153,20 +110,28 @@ export default function AdminPanel() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               aria-pressed={isActive}
-              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer ${
+              className={`-mb-px flex h-10 shrink-0 items-center gap-1.5 border-b-2 text-sm transition-colors ${
                 isActive
-                  ? "bg-red-600 text-white shadow-lg shadow-red-600/20"
-                  : "text-gray-400 hover:text-white hover:bg-white/5"
+                  ? "border-accent font-medium text-fg"
+                  : "border-transparent text-fg-2 hover:text-fg"
               }`}
             >
-              <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
-              <span>{tab.label}</span>
+              {tab.label}
+              {tab.count !== undefined && (
+                <span
+                  className={`rounded px-1.5 font-mono text-[11px] ${
+                    "alert" in tab && tab.alert
+                      ? "bg-accent text-on-accent"
+                      : "text-fg-3"
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              )}
             </button>
           );
         })}
-      </div>
-
-      {/* ─── TAB 1: OVERVIEW & SYSTEM HEALTH ─────────────────────────────────── */}
+      </nav>
 
       {admin.activeTab === "overview" && <OverviewTab {...admin} />}
       {admin.activeTab === "users" && (
