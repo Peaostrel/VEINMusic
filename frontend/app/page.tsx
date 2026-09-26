@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Heart, MessageCircle, Users } from "lucide-react";
 
@@ -9,6 +10,9 @@ import { getPlatformIcon } from "../utils/formatters";
 import About from "./about/page";
 import { API_URL } from "@/app/lib/api";
 import type { TasteTwin } from "@/app/lib/types";
+import { useVisiblePolling } from "@/app/lib/usePolling";
+
+const FEED_POLL_MS = 15000;
 
 interface FeedItem {
   id: number;
@@ -24,6 +28,7 @@ interface FeedItem {
 }
 
 export default function Home() {
+  const router = useRouter();
   const [globalHistory, setGlobalHistory] = useState<FeedItem[]>([]);
   const [friendsHistory, setFriendsHistory] = useState<FeedItem[]>([]);
   const [twins, setTwins] = useState<TasteTwin[]>([]);
@@ -32,43 +37,46 @@ export default function Home() {
   const [username, setUsername] = useState<string | null>(null);
 
   useEffect(() => {
-    const user = localStorage.getItem("username");
-    setUsername(user);
+    setUsername(localStorage.getItem("username"));
+  }, []);
 
-    const fetchFeeds = async () => {
-      try {
-        const globalRes = await fetch(`${API_URL}/api/global-history`, {
+  const fetchFeed = useCallback(async () => {
+    const user = localStorage.getItem("username");
+    try {
+      if (activeFeed === "friends" && user) {
+        const res = await fetch(`${API_URL}/api/friends-history/${user}`, {
           credentials: "include",
         });
-        const globalData = await globalRes.json();
-        setGlobalHistory(Array.isArray(globalData) ? globalData : []);
-
-        if (user) {
-          const friendsRes = await fetch(
-            `${API_URL}/api/friends-history/${user}`,
-            { credentials: "include" },
-          );
-          const friendsData = await friendsRes.json();
-          setFriendsHistory(Array.isArray(friendsData) ? friendsData : []);
-
-          const twinsRes = await fetch(
-            `${API_URL}/api/discovery/taste-twins?username=${user}`,
-            { credentials: "include" },
-          );
-          const twinsData = await twinsRes.json();
-          setTwins(Array.isArray(twinsData) ? twinsData : []);
-        }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
+        const data = await res.json();
+        setFriendsHistory(Array.isArray(data) ? data : []);
+      } else {
+        const res = await fetch(`${API_URL}/api/global-history`, {
+          credentials: "include",
+        });
+        const data = await res.json();
+        setGlobalHistory(Array.isArray(data) ? data : []);
       }
-    };
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeFeed]);
 
-    fetchFeeds();
-    const interval = setInterval(fetchFeeds, 5000);
-    return () => clearInterval(interval);
-  }, []);
+  // Only the visible feed, only while the tab is shown
+  useVisiblePolling(fetchFeed, FEED_POLL_MS);
+
+  // Taste twins change slowly (and are cached on the server): load once
+  useEffect(() => {
+    if (!username) return;
+    fetch(
+      `${API_URL}/api/discovery/taste-twins?username=${encodeURIComponent(username)}`,
+      { credentials: "include" },
+    )
+      .then((res) => res.json())
+      .then((data) => setTwins(Array.isArray(data) ? data : []))
+      .catch((e) => console.error(e));
+  }, [username]);
 
   const toggleLike = async (e: React.MouseEvent, scrobbleId: number) => {
     e.stopPropagation();
@@ -78,7 +86,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
       });
-      // Optimistic update or just wait for next fetch
+      await fetchFeed();
     } catch (e) {
       console.error(e);
     }
@@ -181,7 +189,7 @@ export default function Home() {
                         key={item.id || idx}
                         className="bg-[#1a1a1a]/80 backdrop-blur-sm border border-white/5 p-4 rounded-2xl flex flex-col gap-4 hover:bg-[#1f1f1f] hover:border-[var(--accent)]/30 hover:-translate-y-1 hover:shadow-[0_10px_25px_-5px_var(--accent-glow-strong)] transition-all duration-300 group cursor-pointer relative overflow-hidden"
                         onClick={() => {
-                          globalThis.location.href = `/user/${item.username}`;
+                          router.push(`/user/${item.username}`);
                         }}
                       >
                         <div className="flex items-center gap-4">

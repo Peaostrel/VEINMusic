@@ -4,6 +4,7 @@ from typing import Annotated
 
 import anyio
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -23,6 +24,7 @@ from app.models import (
 )
 from app.schemas import CommentRequest, ScrobbleData
 from app.services import notifications
+from app.services.cache import delete_from_cache, get_from_cache, set_to_cache
 from app.services.scrobble_processor import format_history_item, process_scrobble
 
 logger = logging.getLogger(__name__)
@@ -155,8 +157,18 @@ def get_history(username: str,
             t in scrobbles]}
 
 
+GLOBAL_HISTORY_CACHE_KEY = "global_history"
+# Every open home page polls this; it is the same for everyone, so a few
+# seconds of caching turns N identical queries into one.
+GLOBAL_HISTORY_TTL = 5
+TASTE_TWINS_TTL = 600
+
+
 @router.get("/global-history")
 def get_global_history(db: Annotated[Session, Depends(get_db)]):
+    cached = get_from_cache(GLOBAL_HISTORY_CACHE_KEY, ttl=GLOBAL_HISTORY_TTL)
+    if cached is not None:
+        return cached
     now = datetime.now(UTC)
     active_threshold = now - timedelta(seconds=45)
 
@@ -177,7 +189,9 @@ def get_global_history(db: Annotated[Session, Depends(get_db)]):
     s_ids = [s.id for s, t in scrobbles]
     counters = get_scrobble_counters(db, s_ids)
 
-    return [format_history_item(s, t, counters=counters) for s, t in scrobbles]
+    result = [format_history_item(s, t, counters=counters) for s, t in scrobbles]
+    set_to_cache(GLOBAL_HISTORY_CACHE_KEY, jsonable_encoder(result))
+    return result
 
 
 @router.get("/friends-history/{username}",
@@ -233,7 +247,14 @@ def api_get_taste_twins(
     from app.routers.common import _get_visible_user
     from app.services.taste import get_taste_twins
     _get_visible_user(username, request, db)
-    return get_taste_twins(username, db)
+    # A full scan over everyone's scrobbles: computed at most every 10 min
+    key = f"taste_twins:{username}"
+    cached = get_from_cache(key, ttl=TASTE_TWINS_TTL)
+    if cached is not None:
+        return cached
+    twins = get_taste_twins(username, db)
+    set_to_cache(key, jsonable_encoder(twins))
+    return twins
 
 
 @router.post("/scrobble/{scrobble_id}/like",
@@ -261,6 +282,7 @@ def toggle_like(scrobble_id: int, request: Request, background_tasks: Background
         notifications.remove_unread(db, recipient_id=int(scrobble.user_id), actor_id=int(user.id),
                                     kind=notifications.KIND_LIKE, scrobble_id=scrobble_id)
         db.commit()
+        delete_from_cache(GLOBAL_HISTORY_CACHE_KEY)
         return {"status": "unliked"}
     db.add(ScrobbleLike(user_id=user.id, scrobble_id=scrobble_id))
     try:
@@ -271,6 +293,7 @@ def toggle_like(scrobble_id: int, request: Request, background_tasks: Background
     notification = notifications.create(db, recipient_id=int(scrobble.user_id), actor_id=int(user.id),
                                         kind=notifications.KIND_LIKE, scrobble_id=scrobble_id)
     db.commit()
+    delete_from_cache(GLOBAL_HISTORY_CACHE_KEY)
     notifications.schedule_push(background_tasks, notification)
     return {"status": "liked"}
 
@@ -309,5 +332,6 @@ def add_comment(scrobble_id: int,
                                         kind=notifications.KIND_COMMENT, scrobble_id=scrobble_id,
                                         message=clean_content)
     db.commit()
+    delete_from_cache(GLOBAL_HISTORY_CACHE_KEY)
     notifications.schedule_push(background_tasks, notification)
     return {"status": "ok"}

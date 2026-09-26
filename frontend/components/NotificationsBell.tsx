@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiJson } from "@/app/lib/api";
 import type { NotificationList, SocialNotification } from "@/app/lib/types";
+import { useVisiblePolling } from "@/app/lib/usePolling";
 
 const POLL_MS = 60_000;
 const KIND_ICON: Record<SocialNotification["kind"], string> = {
@@ -40,14 +41,7 @@ export default function NotificationsBell() {
     }
   }, []);
 
-  useEffect(() => {
-    const first = setTimeout(load, 0);
-    const timer = setInterval(load, POLL_MS);
-    return () => {
-      clearTimeout(first);
-      clearInterval(timer);
-    };
-  }, [load]);
+  useVisiblePolling(load, POLL_MS);
 
   const close = useCallback(() => {
     setOpen(false);
