@@ -1,4 +1,3 @@
-import hashlib
 import os
 
 from slowapi import Limiter
@@ -15,15 +14,13 @@ limiter = Limiter(
 
 
 def credential_key(request) -> str:
-    """Rate-limit key per credential (API key / session), falling back to IP.
+    """Rate-limit key per account, falling back to the client IP.
 
     Used where many legitimate users may share one IP (NAT), so a per-IP
-    limit would be too tight while a per-account one still stops abuse."""
-    token = (
-        request.headers.get("X-API-Key")
-        or request.cookies.get("api_key")
-        or request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-    )
-    if token:
-        return "cred:" + hashlib.sha256(token.encode("utf-8")).hexdigest()[:32]
+    limit would be too tight while a per-account one still stops abuse.
+    slowapi evaluates it after FastAPI resolved the endpoint's dependencies,
+    so get_current_user has already recorded the account on request.state."""
+    user_id = getattr(request.state, "user_id", None)
+    if user_id is not None:
+        return f"user:{user_id}"
     return get_remote_address(request)

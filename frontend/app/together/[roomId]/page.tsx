@@ -387,10 +387,11 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
           {/* Chat Input (signed-in listeners only; guests just listen) */}
           {isGuest ? (
             <p className="mt-4 pt-2 border-t border-white/5 text-xs text-gray-500">
+              Чтобы писать в чат,{" "}
               <a href="/auth" className="text-red-400 underline">
-                Войдите
+                войдите
               </a>
-              , чтобы писать в чат.
+              .
             </p>
           ) : (
             <form

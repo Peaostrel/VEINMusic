@@ -253,6 +253,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
         _check_dev_key_scope(request, dev_key_scopes)
 
     _check_csrf(request, from_cookie)
+    request.state.user_id = user.id  # per-account rate limits (rate_limit.credential_key)
     return user
 
 

@@ -83,7 +83,7 @@ function flushOfflineQueue() {
 }
 
 const SCROBBLE_MIN_INTERVAL_MS = 5000;
-let lastScrobbleSent = { key: '', playing: null, at: 0 };
+let lastScrobbleSent = { key: '', playing: false, at: 0 };
 
 function shouldSendScrobble(payload) {
     if (!payload || typeof payload !== 'object') return false;

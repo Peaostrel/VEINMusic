@@ -314,62 +314,75 @@ def _clean_track_update(track_data) -> dict:
     return clean
 
 
+async def _room_track_sync(room_id: str, username: str, data: dict) -> None:
+    fields = _clean_track_update(data.get("track"))
+    fields["updated_at"] = time.time()
+    track = await manager.update_room_track(room_id, fields)
+    await manager.broadcast_to_room(room_id, {
+        "type": "TRACK_SYNC",
+        "track": track,
+        "from": username,
+    })
+
+
+async def _room_chat(room_id: str, username: str, data: dict, state: dict) -> None:
+    if state.get("is_guest"):
+        return  # guests may listen, but only signed-in users can chat
+    now = time.time()
+    if now - state["last_chat"] < 0.5:
+        return  # simple per-connection flood protection
+    state["last_chat"] = now
+    text = str(data.get("text", "")).strip()
+    if not text:
+        return
+    msg_obj = {
+        "from": username,
+        "text": text[:500],
+        "timestamp": int(now),
+    }
+    await manager.add_room_chat(room_id, msg_obj)
+    await manager.broadcast_to_room(room_id, {
+        "type": "CHAT_MESSAGE",
+        **msg_obj,
+    })
+
+
+async def _room_playback_control(room_id: str, username: str, data: dict) -> None:
+    try:
+        progress_sec = float(data.get("progress_sec", 0))
+    except (TypeError, ValueError):
+        return
+    if not 0 <= progress_sec < 86400:
+        return
+    is_playing = bool(data.get("is_playing"))
+    await manager.update_room_track(room_id, {
+        "is_playing": is_playing,
+        "progress_sec": progress_sec,
+        "updated_at": time.time(),
+    })
+    await manager.broadcast_to_room(room_id, {
+        "type": "PLAYBACK_CONTROL",
+        "is_playing": is_playing,
+        "progress_sec": progress_sec,
+        "from": username,
+    })
+
+
 async def _handle_room_message(room_id: str, username: str, data: dict, state: dict) -> None:
     msg_type = data.get("type")
-    if msg_type in ("TRACK_SYNC", "PLAYBACK_CONTROL"):
-        room = await manager.room_state(room_id)
-        if room is None or room["host"] != username:
-            return  # only the host (DJ) controls playback
+    if msg_type == "CHAT_MESSAGE":
+        await _room_chat(room_id, username, data, state)
+        return
+    if msg_type not in ("TRACK_SYNC", "PLAYBACK_CONTROL"):
+        return
 
+    room = await manager.room_state(room_id)
+    if room is None or room["host"] != username:
+        return  # only the host (DJ) controls playback
     if msg_type == "TRACK_SYNC":
-        fields = _clean_track_update(data.get("track"))
-        fields["updated_at"] = time.time()
-        track = await manager.update_room_track(room_id, fields)
-        await manager.broadcast_to_room(room_id, {
-            "type": "TRACK_SYNC",
-            "track": track,
-            "from": username,
-        })
-
-    elif msg_type == "CHAT_MESSAGE":
-        if state.get("is_guest"):
-            return  # guests may listen, but only signed-in users can chat
-        now = time.time()
-        if now - state["last_chat"] < 0.5:
-            return  # simple per-connection flood protection
-        state["last_chat"] = now
-        text = str(data.get("text", "")).strip()
-        if text:
-            msg_obj = {
-                "from": username,
-                "text": text[:500],
-                "timestamp": int(now),
-            }
-            await manager.add_room_chat(room_id, msg_obj)
-            await manager.broadcast_to_room(room_id, {
-                "type": "CHAT_MESSAGE",
-                **msg_obj,
-            })
-
-    elif msg_type == "PLAYBACK_CONTROL":
-        try:
-            progress_sec = float(data.get("progress_sec", 0))
-        except (TypeError, ValueError):
-            return
-        if not 0 <= progress_sec < 86400:
-            return
-        is_playing = bool(data.get("is_playing"))
-        await manager.update_room_track(room_id, {
-            "is_playing": is_playing,
-            "progress_sec": progress_sec,
-            "updated_at": time.time(),
-        })
-        await manager.broadcast_to_room(room_id, {
-            "type": "PLAYBACK_CONTROL",
-            "is_playing": is_playing,
-            "progress_sec": progress_sec,
-            "from": username,
-        })
+        await _room_track_sync(room_id, username, data)
+    else:
+        await _room_playback_control(room_id, username, data)
 
 
 @app.websocket("/ws/together/{room_id}")

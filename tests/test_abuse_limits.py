@@ -74,13 +74,14 @@ def test_api_keys_per_user_are_capped(client):
 # --- Push --------------------------------------------------------------------
 
 @pytest.fixture
-def push_enabled(monkeypatch, request):
+def push_enabled(monkeypatch):
     from app.services import push_notifications
     for name, value in push_notifications.generate_vapid_keys().items():
         monkeypatch.setenv(name, value)
     push_notifications._vapid_private_key.cache_clear()
-    request.addfinalizer(push_notifications._vapid_private_key.cache_clear)
     monkeypatch.setattr("app.utils.is_safe_url", lambda url, allowed_domains=None: True)
+    yield
+    push_notifications._vapid_private_key.cache_clear()
 
 
 def test_push_subscriptions_keep_only_the_newest(client, db, push_enabled):
@@ -114,7 +115,8 @@ def test_overlong_scrobble_fields_are_truncated(client, db):
     user = db.query(User).filter_by(username="longtitle").first()
     scrobble = db.query(Scrobble).filter_by(user_id=user.id).first()
     track = db.query(Track).filter_by(id=scrobble.track_id).first()
-    assert len(track.title) <= 300 and len(track.artist) <= 300
+    assert len(track.title) <= 300
+    assert len(track.artist) <= 300
     assert len(scrobble.source) <= 32
 
 
@@ -214,3 +216,54 @@ def test_guests_cannot_chat_in_rooms():
             "room", "member", {"type": "CHAT_MESSAGE", "text": "hi"},
             {"last_chat": 0.0, "is_guest": False}))
         add_chat.assert_awaited_once()
+
+
+# --- Per-account rate limits -------------------------------------------------
+
+def test_upload_limit_is_per_account_not_per_ip(client):
+    """credential_key relies on slowapi running after get_current_user."""
+    import contextlib
+    import os
+
+    from app.core.rate_limit import limiter
+    from app.routers.media import UPLOADS_DIR
+
+    first, _ = _register(client, "uploader1")
+    client.cookies.clear()
+    second, _ = _register(client, "uploader2")
+    client.cookies.clear()
+    png = b"\x89PNG\r\n\x1a\n" + b"\0" * 32
+
+    def reset_counters():
+        # Redis may be deliberately unreachable in tests; the limiter then
+        # counts in its in-memory fallback, which is reset as well.
+        with contextlib.suppress(Exception):
+            limiter.reset()
+        fallback = getattr(limiter, "_fallback_storage", None)
+        if fallback is not None:
+            fallback.reset()
+
+    def upload(token):
+        return client.post("/api/upload", headers={"X-API-Key": token},
+                           files={"file": ("a.png", png, "image/png")})
+
+    created = []
+    reset_counters()
+    limiter.enabled = True
+    try:
+        for _ in range(30):
+            resp = upload(first)
+            assert resp.status_code == 200, resp.text
+            created.append(resp.json()["url"].rsplit("/", 1)[-1])
+        assert upload(first).status_code == 429
+        # same IP, different account: not affected
+        resp = upload(second)
+        assert resp.status_code == 200
+        created.append(resp.json()["url"].rsplit("/", 1)[-1])
+    finally:
+        limiter.enabled = False
+        reset_counters()
+        for name in created:
+            path = os.path.join(UPLOADS_DIR, name)
+            if os.path.exists(path):
+                os.remove(path)
