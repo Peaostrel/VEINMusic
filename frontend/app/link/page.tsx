@@ -113,7 +113,7 @@ function LinkDevice() {
               Разрешить <b>{info.client_name}</b> отправлять ваши прослушивания
               и читать профиль?
             </p>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-400">
               Код {info.user_code}. Устройство получит отдельный ключ, который
               можно отозвать в настройках (раздел «Безопасность и данные»).
             </p>

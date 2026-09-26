@@ -1,5 +1,7 @@
 "use client";
 
+import type { useRouter } from "next/navigation";
+
 export interface ProfileActionsProps {
   isLogged: boolean;
   isMyProfile: boolean;
@@ -12,7 +14,7 @@ export interface ProfileActionsProps {
   onShowWrapped: () => void;
   onListenTogether: () => void;
   onShowCompatibility: () => void;
-  router: any;
+  router: ReturnType<typeof useRouter>;
 }
 
 export function ProfileActions({

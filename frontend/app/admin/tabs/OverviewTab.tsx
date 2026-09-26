@@ -22,7 +22,7 @@ export default function OverviewTab({
             <Users className="w-4 h-4 text-blue-400" />
           </div>
           <div className="text-3xl font-black text-white">{totalUsers}</div>
-          <div className="text-[11px] text-gray-500 mt-1">
+          <div className="text-[11px] text-gray-400 mt-1">
             DAU: {analytics?.dau || 0} • MAU: {analytics?.mau || 0}
           </div>
         </div>
@@ -46,7 +46,7 @@ export default function OverviewTab({
             <Zap className="w-4 h-4 text-amber-400" />
           </div>
           <div className="text-3xl font-black text-white">{tracks.length}</div>
-          <div className="text-[11px] text-gray-500 mt-1">
+          <div className="text-[11px] text-gray-400 mt-1">
             Каталог нормализован
           </div>
         </div>
@@ -59,7 +59,7 @@ export default function OverviewTab({
           <div className="text-3xl font-black text-white">
             {health?.websockets.connected_clients || 0}
           </div>
-          <div className="text-[11px] text-gray-500 mt-1">
+          <div className="text-[11px] text-gray-400 mt-1">
             В {health?.websockets.active_rooms || 0} комнатах
           </div>
         </div>

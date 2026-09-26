@@ -3,8 +3,15 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 
+/** Chromium's install prompt event (not in the DOM typings). */
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
 export default function PWARegistration() {
-  const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [installPrompt, setInstallPrompt] =
+    useState<BeforeInstallPromptEvent | null>(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
 
   useEffect(() => {
@@ -21,9 +28,9 @@ export default function PWARegistration() {
     }
 
     // 2. Capture install prompt
-    const handleBeforeInstall = (e: any) => {
+    const handleBeforeInstall = (e: Event) => {
       e.preventDefault();
-      setInstallPrompt(e);
+      setInstallPrompt(e as BeforeInstallPromptEvent);
       setShowInstallBanner(true);
     };
 
@@ -67,10 +74,10 @@ export default function PWARegistration() {
           <button
             type="button"
             onClick={() => setShowInstallBanner(false)}
-            className="text-gray-500 hover:text-white shrink-0 p-1"
+            className="text-gray-400 hover:text-white shrink-0 p-1"
             aria-label="Закрыть"
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
       )}

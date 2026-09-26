@@ -56,7 +56,7 @@ export default function AntifraudTab({
                   />
                   <div>
                     <div className="font-bold text-white">@{su.username}</div>
-                    <div className="text-xs text-gray-500 font-mono">
+                    <div className="text-xs text-gray-400 font-mono">
                       {su.total_scrobbles} скробблов • {su.total_xp} XP
                     </div>
                   </div>

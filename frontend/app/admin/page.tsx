@@ -17,7 +17,7 @@ import AntifraudTab from "./tabs/AntifraudTab";
 import CatalogTab from "./tabs/CatalogTab";
 import GamificationTab from "./tabs/GamificationTab";
 import AnnouncementsTab from "./tabs/AnnouncementsTab";
-import { useAdminPanel } from "./useAdminPanel";
+import { type AdminTab, useAdminPanel } from "./useAdminPanel";
 
 export default function AdminPanel() {
   const admin = useAdminPanel();
@@ -103,36 +103,47 @@ export default function AdminPanel() {
 
       {/* Navigation Tabs */}
       <div className="flex flex-wrap gap-2 p-1.5 bg-[#121214] border border-white/5 rounded-2xl">
-        {[
-          { id: "overview", label: "Обзор и Здоровье", icon: Activity },
-          { id: "users", label: `Пользователи (${users.length})`, icon: Users },
-          {
-            id: "antifraud",
-            label:
-              "Антифрод" +
-              (suspiciousUsers.length > 0
-                ? ` (${suspiciousUsers.length})`
-                : ""),
-            icon: ShieldAlert,
-          },
-          { id: "catalog", label: "Каталог и Дедупликация", icon: Disc3 },
-          { id: "gamification", label: "Геймификация и Рамки", icon: Trophy },
-          { id: "announcements", label: "Оповещения и Флаги", icon: Megaphone },
-        ].map((tab) => {
+        {(
+          [
+            { id: "overview", label: "Обзор и Здоровье", icon: Activity },
+            {
+              id: "users",
+              label: `Пользователи (${users.length})`,
+              icon: Users,
+            },
+            {
+              id: "antifraud",
+              label:
+                "Антифрод" +
+                (suspiciousUsers.length > 0
+                  ? ` (${suspiciousUsers.length})`
+                  : ""),
+              icon: ShieldAlert,
+            },
+            { id: "catalog", label: "Каталог и Дедупликация", icon: Disc3 },
+            { id: "gamification", label: "Геймификация и Рамки", icon: Trophy },
+            {
+              id: "announcements",
+              label: "Оповещения и Флаги",
+              icon: Megaphone,
+            },
+          ] satisfies { id: AdminTab; label: string; icon: unknown }[]
+        ).map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
             <button
               type="button"
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id)}
+              aria-pressed={isActive}
               className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer ${
                 isActive
                   ? "bg-red-600 text-white shadow-lg shadow-red-600/20"
                   : "text-gray-400 hover:text-white hover:bg-white/5"
               }`}
             >
-              <Icon className="w-4 h-4 shrink-0" />
+              <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
               <span>{tab.label}</span>
             </button>
           );

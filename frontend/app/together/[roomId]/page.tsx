@@ -255,7 +255,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <Disc className="w-16 h-16 text-gray-600 animate-spin-slow" />
+                    <Disc className="w-16 h-16 text-gray-400 animate-spin-slow" />
                   )}
                 </div>
               </div>
@@ -268,7 +268,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
                   {track.artist}
                 </p>
                 {track.album && (
-                  <p className="text-gray-500 text-xs uppercase tracking-wider font-semibold truncate mb-4">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider font-semibold truncate mb-4">
                     {track.album}
                   </p>
                 )}
@@ -358,8 +358,8 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
           {/* Chat Messages Log */}
           <div className="flex-grow overflow-y-auto space-y-3 pr-2 custom-scrollbar">
             {chatMessages.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-gray-500 text-xs text-center">
-                <Sparkles className="w-6 h-6 mb-2 text-gray-600" />
+              <div className="h-full flex flex-col items-center justify-center text-gray-400 text-xs text-center">
+                <Sparkles className="w-6 h-6 mb-2 text-gray-400" />
                 Здесь пока тихо. Напишите первое сообщение!
               </div>
             ) : (
@@ -370,7 +370,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
                 >
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <span className="font-bold text-red-400">@{msg.from}</span>
-                    <span className="text-[10px] text-gray-500">
+                    <span className="text-[10px] text-gray-400">
                       {new Date(msg.timestamp * 1000).toLocaleTimeString([], {
                         hour: "2-digit",
                         minute: "2-digit",
@@ -386,7 +386,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
 
           {/* Chat Input (signed-in listeners only; guests just listen) */}
           {isGuest ? (
-            <p className="mt-4 pt-2 border-t border-white/5 text-xs text-gray-500">
+            <p className="mt-4 pt-2 border-t border-white/5 text-xs text-gray-400">
               Чтобы писать в чат,{" "}
               <a href="/auth" className="text-red-400 underline">
                 войдите

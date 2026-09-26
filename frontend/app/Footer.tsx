@@ -53,7 +53,7 @@ export default function Footer() {
                 VEIN <span style={{ color: "var(--accent)" }}>Music</span>
               </span>
             </Link>
-            <p className="text-gray-500 text-xs mt-1 leading-relaxed max-w-xs">
+            <p className="text-gray-400 text-xs mt-1 leading-relaxed max-w-xs">
               Автоматический трекинг прослушиваний. Твоя музыкальная жизнь в
               одном дашборде.
             </p>
@@ -122,7 +122,7 @@ export default function Footer() {
         </div>
 
         {/* Разделитель */}
-        <div className="border-t border-white/5 pt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-[11px] text-gray-500 font-medium">
+        <div className="border-t border-white/5 pt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-[11px] text-gray-400 font-medium">
           <div className="flex items-center gap-6">
             <span className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse shadow-[0_0_8px_#34d399]"></span>{" "}

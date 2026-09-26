@@ -86,7 +86,7 @@ export default function Auth() {
               <div>
                 <label
                   htmlFor="auth-username"
-                  className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2"
+                  className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2"
                 >
                   Логин
                 </label>
@@ -104,7 +104,7 @@ export default function Auth() {
               <div>
                 <label
                   htmlFor="auth-password"
-                  className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2"
+                  className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2"
                 >
                   Пароль
                 </label>
@@ -120,7 +120,7 @@ export default function Auth() {
                   required
                 />
                 {!isLogin && (
-                  <p className="text-xs text-gray-500 mt-2">
+                  <p className="text-xs text-gray-400 mt-2">
                     Минимум 8 символов.
                   </p>
                 )}

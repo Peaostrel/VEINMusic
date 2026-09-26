@@ -15,17 +15,18 @@ import type {
   SystemAnalytics,
 } from "./types";
 
+export type AdminTab =
+  | "overview"
+  | "users"
+  | "antifraud"
+  | "catalog"
+  | "gamification"
+  | "announcements";
+
 /** All state, data loading and actions of the admin panel. */
 export function useAdminPanel() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<
-    | "overview"
-    | "users"
-    | "antifraud"
-    | "catalog"
-    | "gamification"
-    | "announcements"
-  >("overview");
+  const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -150,8 +151,11 @@ export function useAdminPanel() {
       }
 
       setLoading(false);
-    } catch (e: any) {
-      setError(e.message || "Ошибка загрузки панели администратора");
+    } catch (e) {
+      setError(
+        (e instanceof Error && e.message) ||
+          "Ошибка загрузки панели администратора",
+      );
       setLoading(false);
     }
   };

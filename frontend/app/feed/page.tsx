@@ -94,7 +94,7 @@ export default function GlobalFeed() {
             <Radio className="w-8 h-8 text-red-500 animate-pulse" />
             Live Feed
           </h1>
-          <p className="text-gray-500 font-bold uppercase text-xs tracking-widest flex items-center gap-2">
+          <p className="text-gray-400 font-bold uppercase text-xs tracking-widest flex items-center gap-2">
             <span className="w-2 h-2 bg-red-500 rounded-full animate-ping"></span>{" "}
             Прямой эфир прослушиваний со всего мира
           </p>
@@ -121,7 +121,7 @@ export default function GlobalFeed() {
       <div className="bg-[#121216]/80 border border-white/5 p-4 rounded-2xl mb-8 space-y-3 backdrop-blur-md">
         {/* Search */}
         <div className="relative">
-          <Search className="w-4 h-4 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
@@ -133,7 +133,7 @@ export default function GlobalFeed() {
 
         {/* Source Pills */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs font-bold custom-scrollbar">
-          <span className="text-gray-500 flex items-center gap-1 shrink-0 mr-1 text-[11px] uppercase tracking-wider">
+          <span className="text-gray-400 flex items-center gap-1 shrink-0 mr-1 text-[11px] uppercase tracking-wider">
             <Filter className="w-3 h-3" /> Источник:
           </span>
           {[
@@ -204,7 +204,7 @@ export default function GlobalFeed() {
                   <span className="font-black text-white text-sm group-hover:text-red-400 transition-colors truncate">
                     @{s.username}
                   </span>
-                  <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
                     {s.relative_time}
                   </span>
                 </div>

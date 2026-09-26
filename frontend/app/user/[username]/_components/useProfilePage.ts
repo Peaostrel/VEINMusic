@@ -1,19 +1,59 @@
 "use client";
 
-import type { getRankInfo, getNextRankInfo } from "../../../Navbar";
+import type { getRankInfo, getNextRankInfo } from "@/app/lib/ranks";
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { API_URL, wsUrl } from "@/app/lib/api";
 import { useCountries, useProfileTheme, useAccentColor } from "./hooks";
 import { fetchAndShowNotifications } from "./notifications";
+import type {
+  AchievementInfo,
+  ArtistRecommendation,
+  CompatibilityResult,
+  FollowStats,
+  HistoryEntry,
+  MoodInfo,
+  SocialLink,
+  TasteMatch,
+  UserCard,
+  UserInfo,
+  UserStats,
+  WrappedStats,
+} from "@/app/lib/types";
+
+/** Achievement pop-up shown on the owner's profile. */
+export interface AchievementToast {
+  id: string;
+  ach_id: number;
+  name: string;
+  icon: string | null;
+  xp: number;
+  image: string | null;
+}
+
+export interface ProfileData {
+  history: HistoryEntry[];
+  stats: Partial<UserStats>;
+  user: UserInfo | null;
+  taste: TasteMatch | null;
+  followStats: FollowStats;
+}
+
+export interface FollowModalState {
+  isOpen: boolean;
+  type: string;
+  title: string;
+  users: UserCard[];
+  loading: boolean;
+}
 
 /** State, data loading and actions of the profile page. */
 export function useProfilePage() {
   const username = useParams()?.username;
   const router = useRouter();
 
-  const [data, setData] = useState<any>({
+  const [data, setData] = useState<ProfileData>({
     history: [],
     stats: {},
     user: null,
@@ -22,15 +62,13 @@ export function useProfilePage() {
   });
   const [loading, setLoading] = useState(true);
   const [showWrapped, setShowWrapped] = useState(false);
-  const [toasts, setToasts] = useState<any[]>([]);
+  const [toasts, setToasts] = useState<AchievementToast[]>([]);
 
   const removeToast = (toastId: string) => {
-    setToasts((prev: any[]) =>
-      prev.filter((toast: any) => toast.id !== toastId),
-    );
+    setToasts((prev) => prev.filter((toast) => toast.id !== toastId));
   };
 
-  const [followModal, setFollowModal] = useState<any>({
+  const [followModal, setFollowModal] = useState<FollowModalState>({
     isOpen: false,
     type: "",
     title: "",
@@ -45,8 +83,9 @@ export function useProfilePage() {
   const accentColor = useAccentColor(data.history[0]?.cover_url);
 
   const [error, setError] = useState("");
-  const [recs, setRecs] = useState<any[]>([]);
-  const [compatibility, setCompatibility] = useState<any>(null);
+  const [recs, setRecs] = useState<ArtistRecommendation[]>([]);
+  const [compatibility, setCompatibility] =
+    useState<CompatibilityResult | null>(null);
   const [compatModalOpen, setCompatModalOpen] = useState(false);
   const [compatLoading, setCompatLoading] = useState(false);
 
@@ -73,15 +112,15 @@ export function useProfilePage() {
       setCompatLoading(false);
     }
   };
-  const [wrapped, setWrapped] = useState<any>(null);
-  const [mood, setMood] = useState<any>(null);
+  const [wrapped, setWrapped] = useState<WrappedStats | null>(null);
+  const [mood, setMood] = useState<MoodInfo | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
-  const handleNewScrobble = (track: any) => {
-    setData((prev: any) => {
+  const handleNewScrobble = (track: HistoryEntry) => {
+    setData((prev) => {
       const newHistory = [
         track,
-        ...prev.history.filter((h: any) => h.id !== track.id),
+        ...prev.history.filter((h) => h.id !== track.id),
       ].slice(0, 50);
       return { ...prev, history: newHistory };
     });
@@ -243,7 +282,7 @@ export function useProfilePage() {
       });
       if (res.ok) {
         const result = await res.json();
-        setData((prev: any) => ({
+        setData((prev) => ({
           ...prev,
           followStats: {
             ...prev.followStats,
@@ -273,7 +312,7 @@ export function useProfilePage() {
       });
       if (res.ok) {
         const fetchedUsers = await res.json();
-        setFollowModal((prev: any) => ({
+        setFollowModal((prev) => ({
           ...prev,
           users: fetchedUsers,
           loading: false,
@@ -281,7 +320,7 @@ export function useProfilePage() {
       }
     } catch (err) {
       console.error(err);
-      setFollowModal((prev: any) => ({ ...prev, loading: false }));
+      setFollowModal((prev) => ({ ...prev, loading: false }));
     }
   };
 
@@ -380,7 +419,7 @@ export type ProfilePageState = ReturnType<typeof useProfilePage>;
 
 /** Values derived from the loaded profile (computed by the page). */
 export interface ProfileDerived {
-  u: any;
+  u: UserInfo;
   fallbackAvatar: string;
   totalXp: number;
   currentLevel: number;
@@ -388,11 +427,11 @@ export interface ProfileDerived {
   progressPercent: number;
   rank: ReturnType<typeof getRankInfo>;
   nextRank: ReturnType<typeof getNextRankInfo>;
-  socialLinks: any[];
+  socialLinks: SocialLink[];
   favoriteArtistQuery: string;
   favoriteAlbumSearchQuery: string;
   favoriteAlbumRedirectUrl: string;
-  displayedAchs: any[];
+  displayedAchs: AchievementInfo[];
 }
 
 export type ProfileViewProps = ProfilePageState & ProfileDerived;

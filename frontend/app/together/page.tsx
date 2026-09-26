@@ -81,7 +81,7 @@ export default function ListenTogetherLobby() {
     if (rooms.length === 0) {
       return (
         <div className="bg-[#121214]/60 border border-white/5 rounded-3xl p-12 text-center flex flex-col items-center justify-center">
-          <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center text-gray-500 mb-4">
+          <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center text-gray-400 mb-4">
             <Disc className="w-8 h-8" />
           </div>
           <h3 className="text-xl font-bold text-white mb-1">
@@ -135,7 +135,7 @@ export default function ListenTogetherLobby() {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <Disc className="w-5 h-5 text-gray-500" />
+                  <Disc className="w-5 h-5 text-gray-400" />
                 )}
               </div>
               <div className="min-w-0 flex-grow">

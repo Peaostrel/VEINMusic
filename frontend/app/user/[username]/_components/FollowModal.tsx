@@ -45,7 +45,7 @@ export function FollowModal({
                     loading: false,
                   })
                 }
-                className="text-gray-500 hover:text-white transition-colors text-xl font-black border-none bg-transparent outline-none"
+                className="text-gray-400 hover:text-white transition-colors text-xl font-black border-none bg-transparent outline-none"
               >
                 ✕
               </button>

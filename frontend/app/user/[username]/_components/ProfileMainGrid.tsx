@@ -37,7 +37,7 @@ export function ProfileMainGrid({ data, recs, wrapped }: ProfileViewProps) {
                     <p className="font-bold text-sm text-white truncate">
                       {r.artist}
                     </p>
-                    <p className="text-[10px] text-gray-500 mt-1">{r.reason}</p>
+                    <p className="text-[10px] text-gray-400 mt-1">{r.reason}</p>
                   </div>
                 ))}
               </div>
@@ -52,7 +52,7 @@ export function ProfileMainGrid({ data, recs, wrapped }: ProfileViewProps) {
               <p className="text-gray-400 font-medium">Тут пока пусто.</p>
             ) : (
               <ul className="space-y-3">
-                {data.history.map((item: any, idx: number) => {
+                {data.history.map((item, idx: number) => {
                   const isLatest = idx === 0;
                   const isNowPlaying =
                     isLatest &&
@@ -112,10 +112,10 @@ export function ProfileMainGrid({ data, recs, wrapped }: ProfileViewProps) {
               <span className="text-xl animate-fire">🔥</span> Топ треков
             </h2>
             <ul className="space-y-3">
-              {data.stats.top_tracks?.map((item: any) => (
+              {data.stats.top_tracks?.map((item) => (
                 <li
                   key={item.title + item.artist}
-                  className={`p-2 rounded-xl flex gap-3 items-start transition-all border group relative ${item.is_playing ? "bg-[var(--accent)]/10 border-[var(--accent)] shadow-[0_0_15px_var(--accent-glow)]" : "bg-white/5 border-transparent hover:bg-white/10 hover:border-white/5"}`}
+                  className="p-2 rounded-xl flex gap-3 items-start transition-all border group relative bg-white/5 border-transparent hover:bg-white/10 hover:border-white/5"
                 >
                   <div className="relative w-10 h-10 rounded bg-[#1a1a1a] shrink-0 overflow-hidden shadow-sm mt-0.5">
                     {item.cover_url ? (
@@ -175,7 +175,7 @@ export function ProfileMainGrid({ data, recs, wrapped }: ProfileViewProps) {
               <span className="text-xl">🎤</span> Топ артистов
             </h2>
             <ul className="space-y-3">
-              {data.stats.top_artists?.map((item: any) => (
+              {data.stats.top_artists?.map((item) => (
                 <li
                   key={item.artist}
                   className="bg-white/5 hover:bg-white/10 p-3 rounded-xl flex justify-between items-start border-l-2 border-[#555] hover:border-[var(--accent)] transition-all group relative"

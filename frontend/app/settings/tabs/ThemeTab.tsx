@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { THEMES } from "../utils";
+import type { SettingsData, UpdateData } from "../types";
 
 const FRAMES = [
   { id: "", name: "Без рамки", req: 1, class: "" },
@@ -17,8 +18,8 @@ const FRAMES = [
 ];
 
 interface ThemeTabProps {
-  data: any;
-  updateData: (k: string, v: any) => void;
+  data: SettingsData;
+  updateData: UpdateData;
   level: number;
 }
 
