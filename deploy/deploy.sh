@@ -64,7 +64,9 @@ fi
 
 if [[ "${SKIP_PULL:-0}" != "1" ]]; then
     echo "==> Pulling images"
-    compose pull -q
+    # A failed pull (e.g. Docker Hub rate limit) keeps the local copy;
+    # `up` still fails if an image is missing entirely
+    compose pull -q --ignore-pull-failures
 fi
 
 if [[ -z "$(get_var VAPID_PRIVATE_KEY)" ]]; then
@@ -86,6 +88,9 @@ for _ in $(seq 1 60); do
 done
 compose ps
 docker image prune -f >/dev/null
+# Older releases (every commit has its own tag): drop the ones no container uses
+docker image prune -af --filter \
+    "label=org.opencontainers.image.source=https://github.com/Peaostrel/VEINMusic" >/dev/null
 
 if [[ "${status:-}" != "healthy" ]]; then
     echo "!! The API is not healthy yet: docker compose logs backend" >&2

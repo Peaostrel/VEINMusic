@@ -48,3 +48,6 @@ test_track_counting.py
 test_write_node.js
 direct_screenshot.bat
 check_users.py
+
+# Server-side deploy state (auto-update.sh)
+deploy/.state/

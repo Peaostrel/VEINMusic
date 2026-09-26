@@ -11,6 +11,7 @@ GitHub Container Registry, Caddy с автоматическим HTTPS, нару
 | `.env.example` | Настройки; `deploy.sh` создаёт из него `.env` и генерирует секреты |
 | `setup-server.sh` | Разовая подготовка Ubuntu: обновления, swap, Docker, фаервол, fail2ban |
 | `deploy.sh` | Первый запуск и обновления |
+| `install-auto-update.sh` | Таймер автодеплоя: `auto-update.sh` раз в 5 минут |
 
 Образы собирает workflow `.github/workflows/images.yml` при каждом пуше в
 `VEIN`: `ghcr.io/peaostrel/veinmusic-backend` и
@@ -59,16 +60,35 @@ cd /opt/veinmusic/deploy
 docker compose exec backend python -m app.cli set-role <логин> admin
 ```
 
-## Обновление
+## Автоматический деплой
+
+Один раз на сервере:
+
+```sh
+/opt/veinmusic/deploy/install-auto-update.sh
+```
+
+Таймер systemd раз в 5 минут запускает `auto-update.sh`. Если в `VEIN`
+появился новый коммит и GitHub Actions уже опубликовал его образы, скрипт
+обновляет код, выкатывает именно эти образы (тег = SHA коммита) и удаляет
+старые. Пока образы собираются, скрипт просто ждёт следующего запуска.
+Упавший деплой повторяется до трёх раз, затем пропускается до следующего
+коммита. Миграции базы API применяет сам при старте.
+
+```sh
+systemctl list-timers veinmusic-update.timer   # когда следующая проверка
+journalctl -u veinmusic-update -n 50           # что было выкачено
+systemctl disable --now veinmusic-update.timer # выключить
+```
+
+## Обновление вручную и откат
 
 ```sh
 cd /opt/veinmusic && git pull && ./deploy/deploy.sh
 ```
 
-Скрипт скачивает свежие образы, перезапускает изменившиеся контейнеры и
-удаляет старые образы. Миграции базы API применяет сам при старте. Чтобы
-откатиться, укажите в `.env` `IMAGE_TAG=<sha рабочего коммита>` и снова
-запустите `deploy.sh`.
+Откатиться на рабочую версию: выключите таймер (иначе он вернёт свежую) и
+запустите `IMAGE_TAG=<sha рабочего коммита> ./deploy/deploy.sh`.
 
 ## Бэкапы
 
