@@ -1,0 +1,186 @@
+# Production stack for a small VPS (1 GB RAM + swap): prebuilt images from
+# GitHub Container Registry, Caddy with automatic HTTPS in front, nothing but
+# ports 80/443 exposed. Settings live in deploy/.env (see .env.example).
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-veinmusic}
+  REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+  SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY}
+  TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
+  ENVIRONMENT: production
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  SENTRY_DSN: ${SENTRY_DSN:-}
+  VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+  VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+  VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@music.vein.guru}
+  FRONTEND_URL: https://${SITE_DOMAIN:?Set SITE_DOMAIN}
+  API_BASE_URL: https://${API_DOMAIN:?Set API_DOMAIN}
+  LASTFM_API_KEY: ${LASTFM_API_KEY:-}
+  LASTFM_API_SECRET: ${LASTFM_API_SECRET:-}
+  SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
+  SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
+  SPOTIFY_REDIRECT_URI: https://${API_DOMAIN}/auth/spotify/callback
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      default:
+        # Fixed address: the API trusts X-Forwarded-For only from here
+        ipv4_address: 172.30.0.10
+    mem_limit: 96m
+    logging: *logging
+    depends_on:
+      - backend
+      - frontend
+
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-veinmusic}
+    # Sized for a 1 GB machine
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - effective_cache_size=256MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=32MB
+      - -c
+      - max_connections=80
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 256m
+    logging: *logging
+
+  # Daily pg_dump into the db_backups volume, keeping BACKUP_KEEP_DAYS days
+  db-backup:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-veinmusic}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-7}
+      BACKUP_INTERVAL_SEC: ${BACKUP_INTERVAL_SEC:-86400}
+    entrypoint: ["sh", "/scripts/db-backup.sh"]
+    volumes:
+      - ../scripts/db-backup.sh:/scripts/db-backup.sh:ro
+      - db_backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 128m
+    logging: *logging
+
+  redis:
+    image: redis:alpine
+    restart: always
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    # Password-protected and never published: arq keeps pickled jobs here
+    command:
+      - sh
+      - -c
+      - 'test -n "$$REDIS_PASSWORD" || { echo "REDIS_PASSWORD is required" >&2; exit 1; }; exec redis-server --requirepass "$$REDIS_PASSWORD" --maxmemory 64mb --maxmemory-policy volatile-lru'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 96m
+    logging: *logging
+
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/peaostrel/veinmusic-backend}:${IMAGE_TAG:-latest}
+    restart: always
+    environment:
+      <<: *backend-env
+      # The API applies Alembic migrations on start (see docker-entrypoint.sh)
+      RUN_MIGRATIONS: "1"
+      # Spotify/Yandex polling runs in the worker (arq cron job)
+      RUN_CLOUD_POLLING: "0"
+      FORWARDED_ALLOW_IPS: 172.30.0.10
+      BACKUP_DIR: /backups
+    volumes:
+      - uploads:/app/uploads
+      - db_backups:/backups:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    mem_limit: 384m
+    logging: *logging
+
+  # Background jobs queued in Redis (achievements, webhooks, imports, polling)
+  worker:
+    image: ${BACKEND_IMAGE:-ghcr.io/peaostrel/veinmusic-backend}:${IMAGE_TAG:-latest}
+    restart: always
+    command: ["arq", "app.worker.WorkerSettings"]
+    environment:
+      <<: *backend-env
+    volumes:
+      - uploads:/app/uploads
+    healthcheck:
+      disable: true
+    depends_on:
+      backend:
+        condition: service_healthy
+    mem_limit: 320m
+    logging: *logging
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/peaostrel/veinmusic-frontend}:${IMAGE_TAG:-latest}
+    restart: always
+    depends_on:
+      - backend
+    mem_limit: 256m
+    logging: *logging
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  caddy_data:
+  caddy_config:
+  postgres_data:
+  redis_data:
+  uploads:
+  db_backups:

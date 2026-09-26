@@ -1,28 +1,41 @@
-FROM node:20-alpine
-USER node
-
+# Build stage: installs every dependency and compiles the app
+FROM node:20-alpine AS build
 WORKDIR /app
 
-# Copy package files
-COPY --chown=node:node frontend/package*.json ./
-
-# Install dependencies
+COPY frontend/package*.json ./
 RUN npm ci --ignore-scripts
 
-# Copy the frontend code
-COPY --chown=node:node frontend/ ./
+COPY frontend/ ./
 
 # NEXT_PUBLIC_* values are inlined into the bundle at build time, so they
 # must be provided as build args (runtime env vars have no effect).
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ARG NEXT_PUBLIC_WS_URL=localhost:8000
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL \
+    NEXT_OUTPUT=standalone \
+    NEXT_TELEMETRY_DISABLED=1
 
-# Build the Next.js application
 RUN npm run build
+
+# Runtime stage: only the standalone server, static assets and public files
+FROM node:20-alpine
+WORKDIR /app
+
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0
+
+COPY --from=build --chown=node:node /app/.next/standalone ./
+COPY --from=build --chown=node:node /app/.next/static ./.next/static
+COPY --from=build --chown=node:node /app/public ./public
+
+USER node
 
 EXPOSE 3000
 
-# Start the application
-CMD ["npm", "start"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD wget -q -O /dev/null http://127.0.0.1:3000/about || exit 1
+
+CMD ["node", "server.js"]

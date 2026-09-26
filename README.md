@@ -167,6 +167,7 @@ VEINMusic/
 ├── music-extension/              # Браузерное расширение (Manifest V3)
 ├── alembic/                      # Миграции базы данных
 ├── tests/                        # Тесты бэкенда (pytest)
+├── deploy/                       # Продакшен на VPS: готовые образы, Caddy (HTTPS), скрипты установки
 └── docker-compose.yml            # PostgreSQL, Redis, API, воркер и фронтенд
 ```
 
@@ -194,6 +195,10 @@ docker compose up -d --build
 фоновый воркер arq (достижения, вебхуки, экспорт скробблов, импорт Last.fm,
 опрос Spotify/Яндекса, ночная очистка неиспользуемых загрузок) и фронтенд.
 Проверка состояния: `GET /health`.
+
+Для VPS с 1–2 ГБ памяти удобнее [`deploy/`](deploy/README.md): образы
+собирает GitHub Actions, сервер только скачивает их, а Caddy сам выпускает
+HTTPS-сертификаты.
 
 **Резервные копии.** Сервис `db-backup` раз в сутки делает `pg_dump` в том
 `db_backups` и хранит копии `BACKUP_KEEP_DAYS` дней (по умолчанию 7).
