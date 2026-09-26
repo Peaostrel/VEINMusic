@@ -24,6 +24,7 @@ from app.core.security import (
 from app.database import get_db
 from app.models import User, UserIntegration, UserProfile
 from app.schemas import UserCreate
+from app.services import runtime_settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -40,10 +41,13 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 REGISTER_RATE_LIMIT = os.getenv("REGISTER_RATE_LIMIT", "3/minute")
 
 
-@router.post("/register", responses={400: {"description": "Bad Request"}})
+@router.post("/register", responses={400: {"description": "Bad Request"},
+                                      403: {"description": "Registration is switched off"}})
 @limiter.limit(REGISTER_RATE_LIMIT)
 def register(request: Request, data: UserCreate, response: Response,
              db: Annotated[Session, Depends(get_db)]):
+    if not runtime_settings.is_feature_enabled("registration", db):
+        raise HTTPException(403, "Регистрация временно закрыта")
     data.username = data.username.lower()
     if len(data.username) < 3:
         raise HTTPException(400, "Никнейм слишком короткий")

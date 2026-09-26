@@ -1,9 +1,11 @@
 "use client";
 import { useState, useEffect } from "react";
 import { API_URL } from "@/app/lib/api";
+import { useFeature } from "@/app/lib/featureFlags";
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
+  const registrationOpen = useFeature("registration");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -149,18 +151,24 @@ export default function Auth() {
             </form>
 
             <div className="mt-8 text-center">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsLogin(!isLogin);
-                  setError("");
-                }}
-                className="text-sm text-gray-400 hover:text-white transition-colors font-medium"
-              >
-                {isLogin
-                  ? "Нет аккаунта? Зарегистрироваться"
-                  : "Уже есть аккаунт? Войти"}
-              </button>
+              {registrationOpen || !isLogin ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLogin(!isLogin);
+                    setError("");
+                  }}
+                  className="text-sm text-gray-400 hover:text-white transition-colors font-medium"
+                >
+                  {isLogin
+                    ? "Нет аккаунта? Зарегистрироваться"
+                    : "Уже есть аккаунт? Войти"}
+                </button>
+              ) : (
+                <p className="text-sm text-gray-400">
+                  Регистрация новых аккаунтов временно закрыта.
+                </p>
+              )}
             </div>
           </div>
         ) : (

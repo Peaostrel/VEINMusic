@@ -111,6 +111,9 @@ def db():
                 db_cleanup.execute(table.delete())
         db_cleanup.commit()
         db_cleanup.close()
+        from app.services import cache, runtime_settings
+        runtime_settings.invalidate()
+        cache.CACHE.clear()
 
 
 @pytest.fixture(scope="function")

@@ -20,6 +20,7 @@ from app.schemas import (
     LikeRequest,
     YandexTokenUpdate,
 )
+from app.services.runtime_settings import require_feature
 from app.services.lastfm_import import (
     LASTFM_API_KEY,
     enqueue_import,
@@ -33,8 +34,9 @@ router = APIRouter(tags=["integrations"])
 
 # --- /api/import/lastfm ---
 @router.post("/api/import/lastfm",
+             dependencies=[Depends(require_feature("lastfm_import"))],
              responses={400: {"description": "Last.fm username not set"},
-                        503: {"description": "API key not configured"}})
+                        503: {"description": "API key not configured or import switched off"}})
 async def start_lastfm_import(data: LikeRequest,
                               db: Annotated[Session,
                                             Depends(get_db)],

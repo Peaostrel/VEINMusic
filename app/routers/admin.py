@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core import redis
 from app.core.security import get_admin_user, revoke_all_sessions
 from app.core.websockets import manager
 from app.database import get_db
@@ -37,6 +36,7 @@ from app.schemas import (
     UserRoleRequest,
     VerifyUserRequest,
 )
+from app.services import cache, runtime_settings
 from app.services.antifraud import get_all_suspicious_users
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -316,13 +316,14 @@ def merge_catalog_items(
 
 @router.post("/cache/flush", responses={500: {"description": "Internal Server Error"}})
 async def flush_system_cache(admin: Annotated[User, Depends(get_admin_user)]):
-    """Flush application and redis caches."""
+    """Drop cached responses (leaderboard, discovery, taste twins…) and the
+    cached runtime settings, so the next requests are computed afresh."""
     try:
-        if redis.arq_pool is not None:
-            await redis.arq_pool.ping()
-        return {"status": "ok", "message": "Системный кэш успешно сброшен"}
+        removed = await asyncio.to_thread(cache.clear_all)
     except Exception:
         raise HTTPException(500, "Ошибка сброса системного кэша")
+    runtime_settings.invalidate()
+    return {"status": "ok", "removed": removed, "message": f"Кэш сброшен (записей: {removed})"}
 
 
 # ─── GAMIFICATION: AVATAR FRAMES & ECONOMY ────────────────────────────────────
@@ -399,20 +400,19 @@ def delete_avatar_frame(
     return {"status": "ok"}
 
 
-# In-memory / Redis global XP multiplier setting
-GLOBAL_XP_MULTIPLIER = 1.0
-
-
 @router.get("/economy/multiplier")
-def get_xp_multiplier(admin: Annotated[User, Depends(get_admin_user)]):
-    return {"multiplier": GLOBAL_XP_MULTIPLIER}
+def get_xp_multiplier(db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
+    return {"multiplier": runtime_settings.get_xp_multiplier(db)}
 
 
 @router.post("/economy/multiplier")
-def set_xp_multiplier(data: EconomyMultiplierRequest, admin: Annotated[User, Depends(get_admin_user)]):
-    global GLOBAL_XP_MULTIPLIER
-    GLOBAL_XP_MULTIPLIER = float(data.multiplier)
-    return {"status": "ok", "multiplier": GLOBAL_XP_MULTIPLIER, "message": f"Множитель опыта установлен на x{GLOBAL_XP_MULTIPLIER}"}
+def set_xp_multiplier(
+    data: EconomyMultiplierRequest, db: Annotated[Session, Depends(get_db)],
+    admin: Annotated[User, Depends(get_admin_user)],
+):
+    """Scales the XP of plays counted from now on (already earned XP is kept)."""
+    value = runtime_settings.set_xp_multiplier(db, data.multiplier)
+    return {"status": "ok", "multiplier": value, "message": f"Множитель опыта установлен на x{value:g}"}
 
 
 # ─── SYSTEM HEALTH & METRICS ──────────────────────────────────────────────────
@@ -559,8 +559,8 @@ def delete_announcement(
 
 @router.get("/feature-flags")
 def list_admin_feature_flags(db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
-    flags = db.query(FeatureFlag).all()
-    return {"feature_flags": flags}
+    flags = db.query(FeatureFlag).order_by(FeatureFlag.key).all()
+    return {"feature_flags": flags, "known_features": runtime_settings.KNOWN_FEATURES}
 
 
 @router.post("/feature-flags", responses={400: {"description": "Bad Request"}})
@@ -575,6 +575,7 @@ def create_feature_flag(
     db.add(flag)
     db.commit()
     db.refresh(flag)
+    runtime_settings.invalidate()
     return {"status": "ok", "feature_flag": flag}
 
 
@@ -596,6 +597,7 @@ def update_feature_flag(
 
     db.commit()
     db.refresh(flag)
+    runtime_settings.invalidate()
     return {"status": "ok", "feature_flag": flag}
 
 
@@ -606,6 +608,7 @@ def delete_feature_flag(key: str, db: Annotated[Session, Depends(get_db)], admin
         raise HTTPException(404, "Фича-флаг не найден")
     db.delete(flag)
     db.commit()
+    runtime_settings.invalidate()
     return {"status": "ok"}
 
 

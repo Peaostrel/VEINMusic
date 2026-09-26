@@ -348,6 +348,17 @@ class FeatureFlag(Base):
             UTC))
 
 
+class SystemSetting(Base):
+    """Runtime settings changed from the admin panel (e.g. the XP multiplier)."""
+    __tablename__ = "system_settings"
+    key = Column(String(64), primary_key=True)
+    value = Column(String(256), nullable=False)
+    updated_at = Column(
+        DateTime(
+            timezone=True), default=lambda: datetime.now(
+            UTC))
+
+
 class TrackAlias(Base):
     __tablename__ = "track_aliases"
     id = Column(Integer, primary_key=True, index=True)

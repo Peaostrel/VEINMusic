@@ -170,11 +170,13 @@ def test_merge_artists(admin_client):
 
 
 def test_cache_flush(admin_client):
-    with patch.object(admin_router.redis, "arq_pool", None):
-        assert admin_client.post("/api/admin/cache/flush").status_code == 200
-    broken = AsyncMock()
-    broken.ping.side_effect = ConnectionError("down")
-    with patch.object(admin_router.redis, "arq_pool", broken):
+    from app.services import cache
+    cache.set_to_cache("leaderboard_test", {"x": 1})
+    res = admin_client.post("/api/admin/cache/flush")
+    assert res.status_code == 200
+    assert res.json()["removed"] >= 1
+    assert cache.get_from_cache("leaderboard_test") is None
+    with patch.object(admin_router.cache, "clear_all", side_effect=ConnectionError("down")):
         assert admin_client.post("/api/admin/cache/flush").status_code == 500
 
 
@@ -196,9 +198,8 @@ def test_frames_crud(admin_client):
     assert admin_client.delete(f"/api/admin/frames/{frame_id}").status_code == 404
 
 
-def test_xp_multiplier(admin_client, monkeypatch):
-    # restored by monkeypatch after the test
-    monkeypatch.setattr(admin_router, "GLOBAL_XP_MULTIPLIER", admin_router.GLOBAL_XP_MULTIPLIER)
+def test_xp_multiplier(admin_client):
+    assert admin_client.get("/api/admin/economy/multiplier").json() == {"multiplier": 1.0}
     assert admin_client.post("/api/admin/economy/multiplier", json={"multiplier": 2.5}).json()["multiplier"] == 2.5
     assert admin_client.get("/api/admin/economy/multiplier").json() == {"multiplier": 2.5}
     assert admin_client.post("/api/admin/economy/multiplier", json={"multiplier": 50}).status_code == 422

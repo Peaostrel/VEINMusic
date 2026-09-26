@@ -19,6 +19,8 @@ from app.database import get_db
 from app.models import (
     User,
 )
+from app.services import runtime_settings
+from app.services.runtime_settings import require_feature
 from app.schemas import (
     PushSubscribeRequest,
     PushUnsubscribeRequest,
@@ -72,10 +74,8 @@ def get_active_announcements(db: Annotated[Session, Depends(get_db)]):
 # --- /api/feature-flags ---
 @router.get("/api/feature-flags")
 def get_public_feature_flags(db: Annotated[Session, Depends(get_db)]):
-    """Retrieve key-value dictionary of enabled feature flags."""
-    from app.models import FeatureFlag
-    flags = db.query(FeatureFlag).all()
-    return {"flags": {f.key: bool(f.is_enabled) for f in flags}}
+    """Feature flags (known features without a row are reported as on)."""
+    return {"flags": runtime_settings.feature_flags(db)}
 
 
 # --- /api/frames ---
@@ -203,7 +203,8 @@ async def send_test_push(
 
 
 # --- Listen Together REST API ---
-@router.get("/api/together/rooms")
+@router.get("/api/together/rooms", dependencies=[Depends(require_feature("listen_together"))],
+            responses={503: {"description": "Listen Together is switched off"}})
 async def list_together_rooms():
     """List active Listen Together rooms with listener counts and current tracks."""
     return {"rooms": await manager.get_active_rooms_info()}

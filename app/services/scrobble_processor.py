@@ -388,8 +388,9 @@ def _update_scrobble_progress(
     track_dur = int(track.duration) if getattr(track, 'duration', None) and track.duration > 0 else 180
     threshold = track_dur * 0.85
     if last_scrobble.listened_sec >= threshold and old_listened < threshold:
+        from app.services.runtime_settings import apply_xp_multiplier
         is_fav = _check_favorite(track, user)
-        last_scrobble.xp_earned = 2 if is_fav else 1
+        last_scrobble.xp_earned = apply_xp_multiplier(2 if is_fav else 1, db)
         db.commit()
         _handle_streak(db, user)
         return True

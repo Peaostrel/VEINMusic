@@ -6,6 +6,7 @@ import { Radio, Users, Plus, Disc, ArrowRight } from "lucide-react";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { API_URL } from "@/app/lib/api";
 import Dialog from "@/components/Dialog";
+import { useFeature } from "@/app/lib/featureFlags";
 
 interface RoomInfo {
   room_id: string;
@@ -28,6 +29,7 @@ export default function ListenTogetherLobby() {
   const [loading, setLoading] = useState(true);
   const [newRoomName, setNewRoomName] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const enabled = useFeature("listen_together");
 
   const fetchRooms = async () => {
     try {
@@ -70,6 +72,13 @@ export default function ListenTogetherLobby() {
   };
 
   const renderRoomsContent = () => {
+    if (!enabled) {
+      return (
+        <div className="bg-[#121214]/60 border border-white/5 rounded-3xl p-12 text-center text-gray-300 font-bold">
+          «Слушать вместе» временно отключено администратором.
+        </div>
+      );
+    }
     if (loading) {
       return (
         <div className="py-20 flex flex-col items-center justify-center gap-4 text-gray-400 font-bold">
@@ -183,7 +192,8 @@ export default function ListenTogetherLobby() {
         <button
           type="button"
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white font-black px-6 py-3.5 rounded-2xl shadow-lg shadow-red-600/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-sm"
+          disabled={!enabled}
+          className="disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white font-black px-6 py-3.5 rounded-2xl shadow-lg shadow-red-600/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-sm"
         >
           <Plus className="w-5 h-5" aria-hidden="true" />
           Создать комнату
