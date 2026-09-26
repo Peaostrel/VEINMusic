@@ -32,15 +32,15 @@ export default function GlobalAnnouncementBanner() {
   if (activeItems.length === 0) return null;
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 flex flex-col gap-1 pointer-events-auto">
+    <div className="flex flex-col">
       {activeItems.map((ann) => {
-        let bgStyle = "bg-red-950/90 border-red-500/50 text-red-200";
+        let iconClass = "text-danger";
         let Icon = AlertCircle;
         if (ann.type === "info") {
-          bgStyle = "bg-blue-950/90 border-blue-500/50 text-blue-200";
+          iconClass = "text-fg-2";
           Icon = Info;
         } else if (ann.type === "warning") {
-          bgStyle = "bg-amber-950/90 border-amber-500/50 text-amber-200";
+          iconClass = "text-accent";
           Icon = AlertTriangle;
         }
 
@@ -48,23 +48,24 @@ export default function GlobalAnnouncementBanner() {
           <aside
             key={ann.id}
             aria-label="Системное оповещение"
-            className={`w-full px-4 py-2.5 border-b backdrop-blur-md flex items-center justify-between shadow-lg transition-all ${bgStyle}`}
+            className="flex items-center gap-3 border-b border-line bg-surface px-4 py-2.5 sm:px-6"
           >
-            <div className="flex items-center gap-3 max-w-6xl mx-auto flex-1">
-              <Icon className="w-5 h-5 shrink-0" />
-              <div className="text-xs sm:text-sm font-medium">
-                <strong className="font-bold mr-2">{ann.title}:</strong>
-                {ann.message}
-              </div>
-            </div>
+            <Icon
+              className={`h-4 w-4 shrink-0 ${iconClass}`}
+              aria-hidden="true"
+            />
+            <p className="min-w-0 flex-1 text-[13px] text-fg-2">
+              <strong className="mr-2 font-medium text-fg">{ann.title}</strong>
+              {ann.message}
+            </p>
             <button
               type="button"
               onClick={() => setDismissed((prev) => [...prev, ann.id])}
-              className="p-1 hover:opacity-80 transition cursor-pointer text-inherit"
+              className="rounded p-1 text-fg-3 transition-colors hover:text-fg"
               aria-label="Закрыть оповещение"
               title="Закрыть"
             >
-              <X className="w-4 h-4" />
+              <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </aside>
         );

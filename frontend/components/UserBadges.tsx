@@ -23,10 +23,10 @@ export const VerifiedBadge = ({
           viewBox="0 0 24 24"
           role="img"
           aria-label="Разработчик VEIN"
-          className={`${sizeClass} drop-shadow-[0_0_8px_var(--accent-glow-strong)] shrink-0`}
+          className={`${sizeClass} shrink-0`}
         >
           <path
-            fill="#1a1a1a"
+            fill="#16171a"
             stroke="var(--accent)"
             strokeWidth="1.2"
             d={BADGE_PATH}
@@ -46,9 +46,9 @@ export const VerifiedBadge = ({
           viewBox="0 0 24 24"
           role="img"
           aria-label={label}
-          className={`${sizeClass} drop-shadow-[0_0_8px_rgba(29,155,240,0.6)] shrink-0`}
+          className={`${sizeClass} shrink-0`}
         >
-          <path fill="#1D9BF0" d={BADGE_PATH}></path>
+          <path fill="#4b8fd6" d={BADGE_PATH}></path>
           <path fill="#ffffff" d={CHECK_PATH}></path>
         </svg>
       </span>
@@ -59,10 +59,8 @@ export const VerifiedBadge = ({
 
 export const LvlBadge = ({ level }: { level: number }) => {
   return (
-    <span
-      className={`ml-2 inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border border-[var(--accent)] text-[var(--accent)] bg-[#121212] shadow-[0_0_5px_var(--accent-glow)] shrink-0`}
-    >
-      LVL {level || 1}
+    <span className="ml-2 inline-flex shrink-0 items-center rounded border border-line px-1.5 py-px font-mono text-[10px] font-medium text-fg-2">
+      ур. {level || 1}
     </span>
   );
 };

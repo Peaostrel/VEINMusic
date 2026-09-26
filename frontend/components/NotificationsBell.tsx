@@ -2,16 +2,17 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Bell, Heart, Megaphone, MessageCircle, UserPlus } from "lucide-react";
 import { apiJson } from "@/app/lib/api";
 import type { NotificationList, SocialNotification } from "@/app/lib/types";
 import { useVisiblePolling } from "@/app/lib/usePolling";
 
 const POLL_MS = 60_000;
-const KIND_ICON: Record<SocialNotification["kind"], string> = {
-  like: "❤️",
-  comment: "💬",
-  follow: "👤",
-  system: "📢",
+const KIND_ICON: Record<SocialNotification["kind"], typeof Bell> = {
+  like: Heart,
+  comment: MessageCircle,
+  follow: UserPlus,
+  system: Megaphone,
 };
 
 function timeAgo(iso: string | null): string {
@@ -28,7 +29,9 @@ function timeAgo(iso: string | null): string {
 }
 
 /** Bell with the unread count and a dropdown of likes, comments and new followers. */
-export default function NotificationsBell() {
+export default function NotificationsBell({
+  align = "right",
+}: Readonly<{ align?: "left" | "right" }>) {
   const [data, setData] = useState<NotificationList>({ items: [], unread: 0 });
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -100,15 +103,13 @@ export default function NotificationsBell() {
         aria-label={label}
         aria-haspopup="true"
         aria-expanded={open}
-        className="relative text-gray-300 hover:text-[var(--accent-text)] transition p-2 rounded-lg hover:bg-white/5"
+        className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-fg-2 transition-colors hover:bg-surface-2 hover:text-fg"
       >
-        <span className="text-lg" aria-hidden="true">
-          🔔
-        </span>
+        <Bell className="h-[18px] w-[18px]" aria-hidden="true" />
         {data.unread > 0 && (
           <span
             aria-hidden="true"
-            className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-black flex items-center justify-center"
+            className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 font-mono text-[10px] font-medium text-on-accent"
           >
             {data.unread > 99 ? "99+" : data.unread}
           </span>
@@ -118,46 +119,50 @@ export default function NotificationsBell() {
       {open && (
         <section
           aria-label="Уведомления"
-          className="absolute right-0 top-[calc(100%+12px)] w-[320px] max-h-[420px] overflow-y-auto bg-[#222222] border border-white/10 rounded-2xl shadow-[0_15px_40px_rgba(0,0,0,0.6)] z-50"
+          className={`absolute ${align === "left" ? "left-0" : "right-0"} top-[calc(100%+8px)] z-50 max-h-[420px] w-[320px] overflow-y-auto rounded-xl border border-line bg-surface-2 shadow-[0_12px_32px_rgba(0,0,0,0.45)]`}
         >
-          <h2 className="px-4 py-3 text-sm font-bold text-white border-b border-white/5">
+          <h2 className="border-b border-line px-4 py-3 text-sm font-semibold text-fg">
             Уведомления
           </h2>
           {data.items.length === 0 ? (
-            <p className="px-4 py-6 text-sm text-gray-300 text-center">
+            <p className="px-4 py-6 text-center text-sm text-fg-2">
               Пока ничего нет. Здесь появятся лайки, комментарии и новые
               подписчики.
             </p>
           ) : (
             <ul>
-              {data.items.map((n) => (
-                <li key={n.id}>
-                  <Link
-                    href={
-                      n.kind === "system" ? "/" : `/user/${n.actor.username}`
-                    }
-                    onClick={() => setOpen(false)}
-                    className={`flex gap-3 px-4 py-3 hover:bg-white/5 transition-colors ${n.is_read ? "" : "bg-white/[0.03]"}`}
-                  >
-                    <span className="text-lg shrink-0" aria-hidden="true">
-                      {KIND_ICON[n.kind]}
-                    </span>
-                    <span className="min-w-0 text-sm">
-                      <span className="block text-white break-words">
-                        {n.text}
-                      </span>
-                      {n.message && n.kind !== "system" && (
-                        <span className="block text-gray-300 text-xs mt-0.5 truncate">
-                          «{n.message}»
+              {data.items.map((n) => {
+                const Icon = KIND_ICON[n.kind];
+                return (
+                  <li key={n.id}>
+                    <Link
+                      href={
+                        n.kind === "system" ? "/" : `/user/${n.actor.username}`
+                      }
+                      onClick={() => setOpen(false)}
+                      className={`flex gap-3 px-4 py-3 transition-colors hover:bg-line ${n.is_read ? "" : "bg-white/[0.03]"}`}
+                    >
+                      <Icon
+                        className={`mt-0.5 h-4 w-4 shrink-0 ${n.is_read ? "text-fg-3" : "text-accent"}`}
+                        aria-hidden="true"
+                      />
+                      <span className="min-w-0 text-sm">
+                        <span className="block break-words text-fg">
+                          {n.text}
                         </span>
-                      )}
-                      <span className="block text-gray-400 text-xs mt-0.5">
-                        {timeAgo(n.created_at)}
+                        {n.message && n.kind !== "system" && (
+                          <span className="mt-0.5 block truncate text-xs text-fg-2">
+                            «{n.message}»
+                          </span>
+                        )}
+                        <span className="mt-0.5 block font-mono text-[11px] text-fg-3">
+                          {timeAgo(n.created_at)}
+                        </span>
                       </span>
-                    </span>
-                  </Link>
-                </li>
-              ))}
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>

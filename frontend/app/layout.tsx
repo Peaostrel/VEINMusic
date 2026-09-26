@@ -1,36 +1,45 @@
 import "./globals.css";
-import Navbar from "./Navbar";
-import Footer from "./Footer";
-import GlobalAnnouncementBanner from "../components/GlobalAnnouncementBanner";
+import type { Metadata, Viewport } from "next";
+import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import AppShell from "./shell/AppShell";
 import PWARegistration from "../components/PWARegistration";
 
-/**
- * Root Layout
- * -----------
- * Глобальный каркас приложения.
- * Содержит: Navbar, Footer и общие стили.
- * Здесь же применен фикс для гидратации (suppressHydrationWarning).
- */
-import type { Metadata, Viewport } from "next";
+const plexSans = IBM_Plex_Sans({
+  subsets: ["latin", "cyrillic"],
+  weight: ["400", "500", "600"],
+  variable: "--font-plex-sans",
+  display: "swap",
+});
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin", "cyrillic"],
+  weight: ["400", "500"],
+  variable: "--font-plex-mono",
+  display: "swap",
+});
 
 export const viewport: Viewport = {
-  themeColor: "#ffcc00",
+  themeColor: "#0e0f10",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
 };
 
 export const metadata: Metadata = {
-  title: "VEIN Music",
-  description: "Твой музыкальный профиль",
+  title: "VEINMusic",
+  description: "Вся музыка, что вы слушаете, — в одной истории",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
-    title: "VEIN Music",
+    statusBarStyle: "black-translucent",
+    title: "VEINMusic",
   },
 };
+
+/*
+ * Runs before first paint: marks signed-in visitors so the shell CSS shows
+ * the sidebar layout straight away (no flash of the guest header).
+ */
+const authFlagScript = `try{var u=localStorage.getItem("username");if(u&&!["null","undefined","false","[]","{}"].includes(u.trim().toLowerCase()))document.documentElement.dataset.auth="1"}catch(e){}`;
 
 export default function RootLayout({
   children,
@@ -38,23 +47,25 @@ export default function RootLayout({
   readonly children: React.ReactNode;
 }) {
   return (
-    <html lang="ru" suppressHydrationWarning>
+    <html
+      lang="ru"
+      className={`${plexSans.variable} ${plexMono.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: authFlagScript }} />
+      </head>
       <body
         suppressHydrationWarning
-        className="min-h-screen flex flex-col relative bg-[#0a0a0a] text-white font-sans overflow-x-hidden"
+        className="min-h-screen bg-bg font-sans text-fg antialiased"
       >
-        {/* Атмосферный фон (световые пятна) теперь тоже меняют цвет под тему! */}
-        <div className="fixed top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-[var(--accent)] rounded-full mix-blend-screen filter blur-[150px] opacity-[0.06] animate-blob z-0 pointer-events-none transition-colors duration-1000"></div>
-        <div className="fixed bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-[var(--accent-hover)] rounded-full mix-blend-screen filter blur-[150px] opacity-[0.04] animate-blob animation-delay-2000 z-0 pointer-events-none transition-colors duration-1000"></div>
-
-        <GlobalAnnouncementBanner />
-        <Navbar />
-
-        <main className="flex-grow pt-32 pb-12 px-4 z-10 relative">
-          {children}
-        </main>
-
-        <Footer />
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-surface-2 focus:px-4 focus:py-2 focus:text-sm"
+        >
+          К содержимому
+        </a>
+        <AppShell>{children}</AppShell>
         <PWARegistration />
       </body>
     </html>
