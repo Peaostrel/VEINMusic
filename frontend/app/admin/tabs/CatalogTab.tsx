@@ -132,7 +132,7 @@ export default function CatalogTab({
               className="w-full pl-10 pr-4 py-2.5 bg-[#141418] border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-red-500"
             />
           </div>
-          <span className="text-xs text-gray-500 font-mono">
+          <span className="text-xs text-gray-400 font-mono">
             Треков: {filteredTracks.length}
           </span>
         </div>
@@ -149,7 +149,7 @@ export default function CatalogTab({
             <tbody className="divide-y divide-white/5">
               {filteredTracks.slice(0, 150).map((t) => (
                 <tr key={t.id} className="hover:bg-white/[0.02] transition">
-                  <td className="py-2.5 px-4 font-mono text-gray-500">
+                  <td className="py-2.5 px-4 font-mono text-gray-400">
                     #{t.id}
                   </td>
                   <td className="py-2.5 px-4 font-bold text-white">

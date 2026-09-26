@@ -3,8 +3,17 @@
 import { useState, useEffect } from "react";
 import { getPlatformIcon } from "../../../../utils/formatters";
 import { getSafeUrl, getArtistUrl, getTrackUrl } from "./profileUtils";
+import type { HistoryEntry } from "@/app/lib/types";
 
-export const LiveTimer = ({ listenedSec, isPlaying, updatedAt }: any) => {
+export const LiveTimer = ({
+  listenedSec,
+  isPlaying,
+  updatedAt,
+}: Readonly<{
+  listenedSec: number;
+  isPlaying: boolean;
+  updatedAt: string;
+}>) => {
   const [elapsed, setElapsed] = useState(listenedSec);
 
   useEffect(() => {
@@ -33,7 +42,7 @@ export const LiveTimer = ({ listenedSec, isPlaying, updatedAt }: any) => {
   );
 };
 
-export function PastPlayIndicator({ item }: Readonly<{ item: any }>) {
+export function PastPlayIndicator({ item }: Readonly<{ item: HistoryEntry }>) {
   const timeStr = new Date(item.time + "Z").toLocaleTimeString("ru-RU", {
     hour: "2-digit",
     minute: "2-digit",
@@ -44,7 +53,7 @@ export function PastPlayIndicator({ item }: Readonly<{ item: any }>) {
         <span className="bg-black/50 text-[10px] px-2 py-1 rounded text-gray-300 border border-white/5 font-mono">
           {timeStr}
         </span>
-        <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider bg-white/5 px-1.5 py-0.5 rounded border border-white/5 shadow-inner">
+        <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider bg-white/5 px-1.5 py-0.5 rounded border border-white/5 shadow-inner">
           Импортировано
         </span>
       </div>
@@ -72,11 +81,13 @@ export function PastPlayIndicator({ item }: Readonly<{ item: any }>) {
   );
 }
 
-export function NowPlayingIndicator({ item }: Readonly<{ item: any }>) {
+export function NowPlayingIndicator({
+  item,
+}: Readonly<{ item: HistoryEntry }>) {
   const playStatusText = item.is_playing ? "Сейчас" : "Пауза";
   const accentTextClass = item.is_playing
     ? "text-[var(--accent-text)]"
-    : "text-gray-500";
+    : "text-gray-400";
   const animClass = item.is_playing
     ? "animate-[bounce_1s_infinite]"
     : "opacity-40";
@@ -119,7 +130,7 @@ export function NowPlayingIndicator({ item }: Readonly<{ item: any }>) {
 export function PlayStateIndicator({
   item,
   isNowPlaying,
-}: Readonly<{ item: any; isNowPlaying: boolean }>) {
+}: Readonly<{ item: HistoryEntry; isNowPlaying: boolean }>) {
   if (isNowPlaying) {
     return <NowPlayingIndicator item={item} />;
   }
@@ -131,7 +142,7 @@ export function HistoryItem({
   isLatest,
   isNowPlaying,
 }: Readonly<{
-  item: any;
+  item: HistoryEntry;
   isLatest: boolean;
   isNowPlaying: boolean;
 }>) {

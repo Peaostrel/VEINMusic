@@ -22,6 +22,7 @@ from app.models import (
     UserProfile,
 )
 from app.schemas import CommentRequest, ScrobbleData
+from app.services import notifications
 from app.services.scrobble_processor import format_history_item, process_scrobble
 
 logger = logging.getLogger(__name__)
@@ -239,8 +240,9 @@ def api_get_taste_twins(
              responses={404: {"description": "Scrobble not found"},
                         403: {"description": "Access denied (private profile)"}})
 @limiter.limit("30/minute")
-def toggle_like(scrobble_id: int, request: Request, db: Annotated[Session, Depends(
-        get_db)], current_user: Annotated[User, Depends(get_current_user)]):
+def toggle_like(scrobble_id: int, request: Request, background_tasks: BackgroundTasks,
+                db: Annotated[Session, Depends(get_db)],
+                current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
     # Verify scrobble exists
     scrobble = db.query(Scrobble).filter(Scrobble.id == scrobble_id).first()
@@ -256,15 +258,21 @@ def toggle_like(scrobble_id: int, request: Request, db: Annotated[Session, Depen
         user_id=user.id, scrobble_id=scrobble_id).first()
     if like:
         db.delete(like)
+        notifications.remove_unread(db, recipient_id=int(scrobble.user_id), actor_id=int(user.id),
+                                    kind=notifications.KIND_LIKE, scrobble_id=scrobble_id)
         db.commit()
         return {"status": "unliked"}
-    else:
-        db.add(ScrobbleLike(user_id=user.id, scrobble_id=scrobble_id))
-        try:
-            db.commit()
-        except IntegrityError:
-            db.rollback()  # concurrent duplicate like
+    db.add(ScrobbleLike(user_id=user.id, scrobble_id=scrobble_id))
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()  # concurrent duplicate like
         return {"status": "liked"}
+    notification = notifications.create(db, recipient_id=int(scrobble.user_id), actor_id=int(user.id),
+                                        kind=notifications.KIND_LIKE, scrobble_id=scrobble_id)
+    db.commit()
+    notifications.schedule_push(background_tasks, notification)
+    return {"status": "liked"}
 
 
 @router.post("/scrobble/{scrobble_id}/comment",
@@ -274,6 +282,7 @@ def toggle_like(scrobble_id: int, request: Request, db: Annotated[Session, Depen
 def add_comment(scrobble_id: int,
                 request: Request,
                 data: CommentRequest,
+                background_tasks: BackgroundTasks,
                 db: Annotated[Session,
                               Depends(get_db)],
                 current_user: Annotated[User,
@@ -296,5 +305,9 @@ def add_comment(scrobble_id: int,
             user_id=user.id,
             scrobble_id=scrobble_id,
             content=clean_content))
+    notification = notifications.create(db, recipient_id=int(scrobble.user_id), actor_id=int(user.id),
+                                        kind=notifications.KIND_COMMENT, scrobble_id=scrobble_id,
+                                        message=clean_content)
     db.commit()
+    notifications.schedule_push(background_tasks, notification)
     return {"status": "ok"}

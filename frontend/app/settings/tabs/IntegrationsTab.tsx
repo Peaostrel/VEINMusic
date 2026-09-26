@@ -1,4 +1,21 @@
+import type { UserInfo } from "@/app/lib/types";
 import LastfmImportStatus from "../components/LastfmImportStatus";
+import type { SettingsData, UpdateData } from "../types";
+
+interface IntegrationsTabProps {
+  data: SettingsData;
+  updateData: UpdateData;
+  userProfile: UserInfo | null;
+  handleDisconnect: (service: string) => void;
+  saveYandexToken: () => void;
+  startLastfmImport: () => void;
+  importRefresh: number;
+  generatedApiKey: string | null;
+  handleGenerateApiKey: () => void;
+  handleCopyKey: () => void;
+  copied: boolean;
+  API_URL: string;
+}
 
 export default function IntegrationsTab({
   data,
@@ -13,7 +30,7 @@ export default function IntegrationsTab({
   handleCopyKey,
   copied,
   API_URL,
-}: any) {
+}: Readonly<IntegrationsTabProps>) {
   return (
     <div className="p-6 md:p-8 space-y-6">
       <h2 className="text-2xl font-bold text-white">Интеграции</h2>
@@ -64,7 +81,7 @@ export default function IntegrationsTab({
           </div>
         </div>
         {userProfile?.last_sync && userProfile?.spotify_linked && (
-          <div className="text-[10px] text-gray-500 uppercase flex items-center gap-2 mt-2">
+          <div className="text-[10px] text-gray-400 uppercase flex items-center gap-2 mt-2">
             <span className="w-1.5 h-1.5 rounded-full bg-[#1DB954] animate-pulse"></span>
             Последняя синхронизация:{" "}
             {new Date(userProfile.last_sync).toLocaleString()}
@@ -138,7 +155,7 @@ export default function IntegrationsTab({
           </div>
         </div>
         {userProfile?.last_sync && userProfile?.yandex_linked && (
-          <div className="text-[10px] text-gray-500 uppercase flex items-center gap-2 mt-2">
+          <div className="text-[10px] text-gray-400 uppercase flex items-center gap-2 mt-2">
             <span className="w-1.5 h-1.5 rounded-full bg-[#ffcc00] animate-pulse"></span>
             Последняя синхронизация:{" "}
             {new Date(userProfile.last_sync).toLocaleString()}

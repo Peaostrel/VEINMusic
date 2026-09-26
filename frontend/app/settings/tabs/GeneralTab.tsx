@@ -1,5 +1,35 @@
 "use client";
 
+import type {
+  Country,
+  ImageField,
+  SettingsData,
+  SocialLink,
+  UpdateData,
+} from "../types";
+
+interface GeneralTabProps {
+  data: SettingsData;
+  updateData: UpdateData;
+  countries: Country[];
+  cities: string[];
+  isCityInputFocused: boolean;
+  setIsCityInputFocused: (focused: boolean) => void;
+  onSelectFile: (
+    event: React.ChangeEvent<HTMLInputElement>,
+    field: ImageField,
+  ) => void;
+  username: string;
+  socialLinks: SocialLink[];
+  addSocialLink: () => void;
+  updateSocialLink: (
+    id: SocialLink["id"],
+    field: "network" | "username",
+    value: string,
+  ) => void;
+  removeSocialLink: (id: SocialLink["id"]) => void;
+}
+
 export default function GeneralTab({
   data,
   updateData,
@@ -13,7 +43,7 @@ export default function GeneralTab({
   addSocialLink,
   updateSocialLink,
   removeSocialLink,
-}: any) {
+}: Readonly<GeneralTabProps>) {
   return (
     <div className="p-6 md:p-8 space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -36,7 +66,9 @@ export default function GeneralTab({
                 ></div>
               ) : (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 group-hover:text-[var(--accent-text)] transition-colors">
-                  <span className="text-4xl mb-2">🏞️</span>
+                  <span className="text-4xl mb-2" aria-hidden="true">
+                    🏞️
+                  </span>
                   <span className="font-bold">Загрузить обложку</span>
                 </div>
               )}
@@ -103,7 +135,7 @@ export default function GeneralTab({
             className="w-full p-3 rounded bg-[#282828]/50 border border-white/10 focus:border-[var(--accent)] text-white outline-none appearance-none cursor-pointer"
           >
             <option value="">Выберите страну...</option>
-            {countries.map((c: any) => (
+            {countries.map((c) => (
               <option key={c.code} value={c.name}>
                 {c.flag} {c.name}
               </option>
@@ -129,7 +161,7 @@ export default function GeneralTab({
             />
             {isCityInputFocused && cities.length > 0 && (
               <div className="absolute top-full left-0 right-0 bg-[#121212] border border-[var(--accent)]/50 rounded-lg mt-1 z-[100] max-h-60 overflow-y-auto shadow-2xl">
-                {cities.map((c: any) => (
+                {cities.map((c) => (
                   <button
                     type="button"
                     key={c}
@@ -170,12 +202,13 @@ export default function GeneralTab({
 
         {socialLinks && socialLinks.length > 0 ? (
           <div className="space-y-3">
-            {socialLinks.map((link: any) => (
+            {socialLinks.map((link) => (
               <div
                 key={link.id}
                 className="flex gap-3 items-center bg-[#121212]/30 p-3 rounded-lg border border-white/5"
               >
                 <select
+                  aria-label="Соцсеть"
                   value={link.network}
                   onChange={(e) =>
                     updateSocialLink(link.id, "network", e.target.value)
@@ -196,12 +229,14 @@ export default function GeneralTab({
                     updateSocialLink(link.id, "username", e.target.value)
                   }
                   placeholder="Никнейм/ID"
+                  aria-label="Никнейм или ID"
                   className="flex-grow p-2.5 rounded bg-[#282828]/50 border border-white/10 text-white outline-none focus:border-[var(--accent)] text-sm"
                 />
 
                 <button
                   type="button"
                   onClick={() => removeSocialLink(link.id)}
+                  aria-label="Удалить ссылку"
                   className="p-2.5 bg-red-900/20 text-red-400 border border-red-900/30 rounded-lg hover:bg-red-900/40 transition-colors text-sm font-bold"
                 >
                   ✕
@@ -210,7 +245,7 @@ export default function GeneralTab({
             ))}
           </div>
         ) : (
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-400">
             Социальные сети пока не привязаны.
           </p>
         )}

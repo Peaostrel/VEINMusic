@@ -1,7 +1,9 @@
 "use client";
 
-import { LvlBadge, VerifiedBadge } from "../../../Navbar";
+import { LvlBadge, VerifiedBadge } from "@/components/UserBadges";
 import { fallbackOnce } from "@/app/lib/img";
+import type { useRouter } from "next/navigation";
+import type { UserCard } from "@/app/lib/types";
 
 export function FollowModalContent({
   loading,
@@ -10,8 +12,8 @@ export function FollowModalContent({
   onClose,
 }: Readonly<{
   loading: boolean;
-  users: any[];
-  router: any;
+  users: UserCard[];
+  router: ReturnType<typeof useRouter>;
   onClose: () => void;
 }>) {
   if (loading) {
@@ -24,7 +26,7 @@ export function FollowModalContent({
   }
   if (users.length === 0) {
     return (
-      <div className="text-center text-gray-500 py-10 font-medium">
+      <div className="text-center text-gray-400 py-10 font-medium">
         Тут пока пусто.
       </div>
     );
@@ -33,7 +35,7 @@ export function FollowModalContent({
     `https://api.dicebear.com/9.x/micah/svg?seed=${username}&backgroundColor=transparent`;
   return (
     <ul className="space-y-1">
-      {users.map((followerUser: any) => (
+      {users.map((followerUser) => (
         <li key={followerUser.username}>
           <button
             type="button"
@@ -56,12 +58,12 @@ export function FollowModalContent({
                 {followerUser.display_name}
                 <VerifiedBadge
                   role={followerUser.role}
-                  isVerified={followerUser.is_verified}
+                  isVerified={Boolean(followerUser.is_verified)}
                   sizeClass="w-3.5 h-3.5"
                 />
-                <LvlBadge level={followerUser.level} />
+                <LvlBadge level={followerUser.level ?? 1} />
               </div>
-              <div className="text-xs text-gray-500 truncate">
+              <div className="text-xs text-gray-400 truncate">
                 @{followerUser.username}
               </div>
             </div>

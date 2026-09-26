@@ -1,20 +1,22 @@
 "use client";
 
-import { VerifiedBadge } from "../../../Navbar";
+import { VerifiedBadge } from "@/components/UserBadges";
 import { fallbackOnce } from "@/app/lib/img";
+import type { useRouter } from "next/navigation";
+import type { AchievementInfo, MoodInfo, UserInfo } from "@/app/lib/types";
 
 export interface ProfileHeaderSectionProps {
-  u: any;
+  u: UserInfo;
   username: string;
   fallbackAvatar: string;
   currentLevel: number;
   rankTitle: string;
-  mood: any;
+  mood: MoodInfo | null;
   followers: number;
   following: number;
   openFollowModal: (type: string) => void;
-  displayedAchs: any[];
-  router: any;
+  displayedAchs: AchievementInfo[];
+  router: ReturnType<typeof useRouter>;
 }
 
 export function ProfileHeaderSection({
@@ -110,7 +112,7 @@ export function ProfileHeaderSection({
 
         <div className="mb-6 flex flex-col md:flex-row md:items-center gap-3">
           <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 relative">
-            {displayedAchs.map((a: any) => (
+            {displayedAchs.map((a) => (
               <div
                 key={a.id}
                 className="group relative flex items-center gap-2 bg-[#121212]/80 px-3 py-1.5 rounded-lg border border-white/5 hover:border-[var(--accent)] transition-all cursor-help shadow-md hover:shadow-[0_0_15px_var(--accent-glow)]"

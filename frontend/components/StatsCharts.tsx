@@ -29,7 +29,9 @@ const PLATFORM_COLORS: Record<string, string> = {
   apple_music: "#FA243C",
 };
 
-export const PlatformDistribution = ({ data }: { data: any }) => {
+type CountMap = Record<string, number>;
+
+export const PlatformDistribution = ({ data }: { data: CountMap }) => {
   const chartData = Object.entries(data)
     .map(([name, value]) => ({
       name: PLATFORM_NAMES[name] || name,
@@ -70,7 +72,7 @@ export const PlatformDistribution = ({ data }: { data: any }) => {
   );
 };
 
-export const GenreCloud = ({ data }: { data: any }) => {
+export const GenreCloud = ({ data }: { data: CountMap }) => {
   const sortedGenres = Object.entries(data)
     .map(([name, value]) => ({ name, value: Number(value) }))
     .sort((a, b) => b.value - a.value)
@@ -78,7 +80,7 @@ export const GenreCloud = ({ data }: { data: any }) => {
 
   if (sortedGenres.length === 0)
     return (
-      <div className="text-gray-500 text-center py-10">Нет данных о жанрах</div>
+      <div className="text-gray-400 text-center py-10">Нет данных о жанрах</div>
     );
 
   const maxVal = sortedGenres[0].value;
@@ -110,7 +112,7 @@ export const ActivityBarChart = ({
   data,
   color = "var(--accent)",
 }: {
-  data: any;
+  data: CountMap;
   color?: string;
 }) => {
   const chartData = Object.entries(data).map(([name, value]) => ({

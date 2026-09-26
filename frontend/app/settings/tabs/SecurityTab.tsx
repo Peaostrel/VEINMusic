@@ -222,7 +222,7 @@ export default function SecurityTab() {
           </p>
         </div>
         {pushAvailable === false ? (
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-400">
             Недоступно: браузер не поддерживает push или уведомления не
             настроены на сервере.
           </p>
@@ -261,7 +261,7 @@ export default function SecurityTab() {
           </p>
         </div>
         {devices.length === 0 ? (
-          <p className="text-xs text-gray-500">Нет подключённых устройств.</p>
+          <p className="text-xs text-gray-400">Нет подключённых устройств.</p>
         ) : (
           <ul className="space-y-2">
             {devices.map((d) => (
@@ -273,7 +273,7 @@ export default function SecurityTab() {
                   <p className="text-sm text-white font-bold truncate">
                     {d.name.replace(/^Устройство:\s*/, "")}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-400">
                     Подключено {formatDate(d.created_at)} · последняя активность{" "}
                     {formatDate(d.last_used_at)}
                   </p>

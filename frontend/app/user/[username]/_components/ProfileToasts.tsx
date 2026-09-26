@@ -50,9 +50,11 @@ export function ProfileToasts({ toasts, removeToast }: ProfileViewProps) {
             <button
               type="button"
               onClick={() => removeToast(t.id)}
-              className="absolute top-2 right-2 text-gray-500 hover:text-white transition-colors"
+              aria-label="Закрыть уведомление"
+              className="absolute top-2 right-2 text-gray-400 hover:text-white transition-colors"
             >
               <svg
+                aria-hidden="true"
                 className="w-4 h-4"
                 fill="none"
                 stroke="currentColor"

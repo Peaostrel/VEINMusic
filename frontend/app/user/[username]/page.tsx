@@ -7,7 +7,7 @@
  */
 "use client";
 import { API_URL } from "@/app/lib/api";
-import { getRankInfo, getNextRankInfo } from "../../Navbar";
+import { getRankInfo, getNextRankInfo } from "@/app/lib/ranks";
 import { ProfileActions } from "./_components/ProfileActions";
 import { ProfileHeaderSection } from "./_components/ProfileHeaderSection";
 import { ProfileStatsSection } from "./_components/ProfileStatsSection";
@@ -96,7 +96,7 @@ export default function Profile() {
         <h1 className="text-4xl font-black text-white mb-2 uppercase tracking-tighter">
           Это приватный профиль
         </h1>
-        <p className="text-gray-500 font-bold max-w-md">
+        <p className="text-gray-400 font-bold max-w-md">
           Пользователь ограничил доступ к своей статистике и истории
           прослушиваний.
         </p>
@@ -119,7 +119,7 @@ export default function Profile() {
       : `${API_URL}/api/redirect?source=yandex&type=album&q=${encodeURIComponent(favoriteAlbumSearchQuery)}`;
 
   const displayedAchs =
-    u.achievements?.filter((a: any) => a.is_displayed !== false) || [];
+    u.achievements?.filter((a) => a.is_displayed !== false) || [];
 
   const view = {
     ...profile,
@@ -141,7 +141,7 @@ export default function Profile() {
   return (
     <div
       className="max-w-6xl mx-auto relative px-4 md:px-0"
-      style={{ "--dynamic-accent": accentColor } as any}
+      style={{ "--dynamic-accent": accentColor } as React.CSSProperties}
     >
       <style>{`
         @keyframes fireFlicker {
@@ -171,7 +171,7 @@ export default function Profile() {
         isLogged={isLogged}
         isMyProfile={isMyProfile}
         isFollowing={data.followStats.is_following}
-        hasImportedLastfm={data.has_imported_lastfm}
+        hasImportedLastfm={Boolean(data.user?.has_imported_lastfm)}
         username={username as string}
         importLoading={importLoading}
         onFollow={handleFollow}

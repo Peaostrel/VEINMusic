@@ -236,6 +236,14 @@ def get_pollable_user_ids(db: Session) -> list[int]:
         | UserIntegration.yandex_token.isnot(None)).all()]
 
 
+def _load_pollable_user_ids() -> list[int]:
+    db = SessionLocal()
+    try:
+        return get_pollable_user_ids(db)
+    finally:
+        db.close()
+
+
 async def poll_once(process_func) -> None:
     """Poll all linked accounts once.
 
@@ -254,11 +262,7 @@ async def poll_once(process_func) -> None:
         return
 
     try:
-        db = SessionLocal()
-        try:
-            user_ids = get_pollable_user_ids(db)
-        finally:
-            db.close()
+        user_ids = await asyncio.to_thread(_load_pollable_user_ids)
 
         if user_ids:
             # Bound concurrency so polling never exhausts the DB pool

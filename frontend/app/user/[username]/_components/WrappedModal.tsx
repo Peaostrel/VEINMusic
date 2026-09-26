@@ -1,6 +1,6 @@
 "use client";
 
-import { VerifiedBadge } from "../../../Navbar";
+import { VerifiedBadge } from "@/components/UserBadges";
 import type { ProfileViewProps } from "./useProfilePage";
 import { fallbackOnce } from "@/app/lib/img";
 
@@ -49,7 +49,7 @@ export function WrappedModal({
               <h3 className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-3">
                 Любимые артисты
               </h3>
-              {data.stats.top_artists?.slice(0, 3).map((a: any) => (
+              {data.stats.top_artists?.slice(0, 3).map((a) => (
                 <div
                   key={a.artist}
                   className="flex justify-between items-center mb-2 border-l-2 border-[var(--accent)] pl-2"
@@ -63,7 +63,7 @@ export function WrappedModal({
                 </div>
               ))}
             </div>
-            <div className="z-10 text-center text-xs text-gray-500 mt-4">
+            <div className="z-10 text-center text-xs text-gray-400 mt-4">
               Сделай скриншот и закинь в сторис! <br />
               <button
                 type="button"

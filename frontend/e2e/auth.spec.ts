@@ -7,13 +7,16 @@ test.describe("Authentication Flow", () => {
   test("should register a new user successfully", async ({ page }) => {
     await page.goto("/auth");
 
-    // Switch to registration mode
-    await page
-      .getByRole("button", { name: /Нет аккаунта\? Зарегистрироваться/i })
-      .click();
-
-    // Verify header changed
-    await expect(page.locator("h1")).toHaveText("НОВАЯ КРОВЬ");
+    // Switch to registration mode (retried: the first click can land
+    // before the dev server has hydrated the page)
+    await expect(async () => {
+      await page
+        .getByRole("button", { name: /Нет аккаунта\? Зарегистрироваться/i })
+        .click();
+      await expect(page.locator("h1")).toHaveText("НОВАЯ КРОВЬ", {
+        timeout: 1000,
+      });
+    }).toPass();
 
     // Fill form
     await page.locator("#auth-username").fill(testUser);

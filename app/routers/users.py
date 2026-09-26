@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     HTTPException,
     Request,
@@ -31,6 +32,7 @@ from app.schemas import (
     MarkRead,
     ToggleAch,
 )
+from app.services import notifications
 from app.services.user_stats import (
     get_active_streak,
     get_levels_for_users,
@@ -309,6 +311,7 @@ def search_users(q: str, db: Annotated[Session, Depends(get_db)]):
 def toggle_follow(target_username: str,
                   request: Request,
                   data: FollowAction,
+                  background_tasks: BackgroundTasks,
                   db: Annotated[Session,
                                 Depends(get_db)],
                   current_user: Annotated[User,
@@ -322,15 +325,21 @@ def toggle_follow(target_username: str,
         Follow.following_id == target.id).first()
     if existing:
         db.delete(existing)
+        notifications.remove_unread(db, recipient_id=int(target.id), actor_id=int(follower.id),
+                                    kind=notifications.KIND_FOLLOW)
         db.commit()
         return {"status": "unfollowed"}
-    else:
-        db.add(Follow(follower_id=follower.id, following_id=target.id))
-        try:
-            db.commit()
-        except IntegrityError:
-            db.rollback()  # concurrent duplicate request
+    db.add(Follow(follower_id=follower.id, following_id=target.id))
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()  # concurrent duplicate request
         return {"status": "followed"}
+    notification = notifications.create(db, recipient_id=int(target.id), actor_id=int(follower.id),
+                                        kind=notifications.KIND_FOLLOW)
+    db.commit()
+    notifications.schedule_push(background_tasks, notification)
+    return {"status": "followed"}
 
 
 # --- POST /api/notifications/{username}/read ---

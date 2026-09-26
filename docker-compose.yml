@@ -40,6 +40,26 @@ services:
       timeout: 5s
       retries: 10
 
+  # Daily pg_dump into the db_backups volume, keeping BACKUP_KEEP_DAYS days
+  db-backup:
+    image: postgres:15-alpine
+    container_name: veinmusic-db-backup
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-veinmusic}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-7}
+      BACKUP_INTERVAL_SEC: ${BACKUP_INTERVAL_SEC:-86400}
+    entrypoint: ["sh", "/scripts/db-backup.sh"]
+    volumes:
+      - ./scripts/db-backup.sh:/scripts/db-backup.sh:ro
+      - db_backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+
   redis:
     image: redis:alpine
     container_name: veinmusic-redis
@@ -125,3 +145,4 @@ volumes:
   postgres_data:
   redis_data:
   uploads:
+  db_backups:

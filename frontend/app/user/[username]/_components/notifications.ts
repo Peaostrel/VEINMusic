@@ -2,11 +2,20 @@
 
 import React from "react";
 import { API_URL } from "@/app/lib/api";
+import type { AchievementToast } from "./useProfilePage";
+
+interface UnreadAchievement {
+  ua_id: number;
+  name: string;
+  icon: string | null;
+  reward_xp: number;
+  target_image: string | null;
+}
 
 export async function fetchAndShowNotifications(
   username: string,
   isMyProfile: boolean,
-  setToasts: React.Dispatch<React.SetStateAction<any[]>>,
+  setToasts: React.Dispatch<React.SetStateAction<AchievementToast[]>>,
   removeToast: (id: string) => void,
 ) {
   if (!isMyProfile) return;
@@ -15,12 +24,12 @@ export async function fetchAndShowNotifications(
       credentials: "include",
     });
     if (!res.ok) return;
-    const unread = await res.json();
+    const unread: UnreadAchievement[] = await res.json();
     if (unread.length === 0) return;
 
-    setToasts((prev: any[]) => {
+    setToasts((prev) => {
       const newToasts = [...prev];
-      const existingIds = new Set(newToasts.map((t: any) => t.ach_id));
+      const existingIds = new Set(newToasts.map((t) => t.ach_id));
       for (const ach of unread) {
         if (!existingIds.has(ach.ua_id)) {
           const toastId = `${ach.ua_id}-${Date.now()}-${newToasts.length}`;
@@ -42,7 +51,7 @@ export async function fetchAndShowNotifications(
       credentials: "include",
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ua_ids: unread.map((d: any) => d.ua_id) }),
+      body: JSON.stringify({ ua_ids: unread.map((d) => d.ua_id) }),
     });
   } catch (e) {
     console.error(e);

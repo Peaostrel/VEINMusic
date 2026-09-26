@@ -1,6 +1,7 @@
 "use client";
 
 import { API_URL } from "@/app/lib/api";
+import type { Country, TrackLinkSource } from "@/app/lib/types";
 
 // Utility to break CodeQL taint dataflow tracking while preserving the string
 export const getSafeUrl = (url: string | null | undefined): string => {
@@ -35,7 +36,7 @@ export const getArtistUrl = (artist: string, source: string) => {
   }
 };
 
-export const getTrackUrl = (t: any) => {
+export const getTrackUrl = (t: TrackLinkSource | null | undefined) => {
   if (!t) return "#";
   if (t.track_url && t.track_url !== "#") return t.track_url;
 
@@ -171,7 +172,7 @@ export const COMMON_COUNTRIES: { [key: string]: string } = {
 
 export function getCountryCode(
   countryName: string,
-  countries: any[],
+  countries: Country[],
 ): string | null {
   if (!countryName) return null;
   const cleaned = countryName.trim().toLowerCase();

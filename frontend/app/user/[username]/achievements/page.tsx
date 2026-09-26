@@ -2,6 +2,17 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { API_URL } from "@/app/lib/api";
+import type { AchievementInfo } from "@/app/lib/types";
+
+/** GET /api/achievements/all/{username} */
+interface AchievementsResponse {
+  user: { username: string; display_name: string; avatar_url: string | null };
+  achievements: AchievementInfo[];
+  earned_count: number;
+  total_count: number;
+}
+
+type DescriptionNode = string | React.ReactElement;
 
 function getRarityStyle(rarity: number): string {
   if (rarity < 10)
@@ -11,11 +22,14 @@ function getRarityStyle(rarity: number): string {
   return "bg-white/5 text-gray-400 border-white/5";
 }
 
-function parseMarkdownForNode(node: any, nodeIdx: number) {
+function parseMarkdownForNode(
+  node: DescriptionNode,
+  nodeIdx: number,
+): DescriptionNode[] {
   if (typeof node !== "string") {
     return [node];
   }
-  const finalNodes: any[] = [];
+  const finalNodes: DescriptionNode[] = [];
   let lastIndex = 0;
   while (lastIndex < node.length) {
     const link = findNextLink(node, lastIndex);
@@ -91,7 +105,7 @@ function renderDescriptionWithLinks(
   url: string | null,
   name: string,
 ) {
-  let nodes: any[] = [desc];
+  let nodes: DescriptionNode[] = [desc];
 
   const fallbackMeta = !meta || meta === "None" ? name : meta;
   const rawUrl = url?.includes("||") ? url.split("||")[1] : url;
@@ -106,7 +120,7 @@ function renderDescriptionWithLinks(
     if (!targetWord) return;
     const lowerTarget = targetWord.toLowerCase();
 
-    const newNodes: any[] = [];
+    const newNodes: DescriptionNode[] = [];
     nodes.forEach((node, nodeIdx) => {
       if (typeof node !== "string") {
         newNodes.push(node);
@@ -147,7 +161,7 @@ function renderDescriptionWithLinks(
   });
 
   // 2. Затем обрабатываем Markdown [Текст](Ссылка) на оставшихся текстовых нодах
-  const finalNodes: any[] = [];
+  const finalNodes: DescriptionNode[] = [];
 
   nodes.forEach((node, nodeIdx) => {
     finalNodes.push(...parseMarkdownForNode(node, nodeIdx));
@@ -159,7 +173,7 @@ function renderDescriptionWithLinks(
 export default function AchievementsPage() {
   const username = useParams()?.username;
   const router = useRouter();
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<AchievementsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -184,10 +198,13 @@ export default function AchievementsPage() {
 
   if (loading)
     return (
-      <div className="min-h-screen text-[var(--accent)] flex flex-col items-center justify-center gap-4 font-bold text-2xl animate-pulse">
-        <div className="animate-spin border-4 border-[var(--accent)] border-t-transparent rounded-full w-12 h-12"></div>
+      <output className="min-h-screen text-[var(--accent)] flex flex-col items-center justify-center gap-4 font-bold text-2xl animate-pulse">
+        <div
+          aria-hidden="true"
+          className="animate-spin border-4 border-[var(--accent)] border-t-transparent rounded-full w-12 h-12"
+        ></div>
         Загрузка достижений...
-      </div>
+      </output>
     );
 
   if (error || !data?.user)
@@ -214,10 +231,12 @@ export default function AchievementsPage() {
           <button
             type="button"
             onClick={() => router.push(`/user/${username}`)}
+            aria-label="Назад в профиль"
             className="bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 text-white transition-all shrink-0 p-3.5 rounded-xl shadow-lg backdrop-blur-sm group"
           >
             <svg
               className="w-6 h-6 group-hover:-translate-x-1 transition-transform"
+              aria-hidden="true"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -237,7 +256,7 @@ export default function AchievementsPage() {
                 `https://api.dicebear.com/9.x/micah/svg?seed=${username}&backgroundColor=transparent`
               }
               className="w-16 h-16 rounded-xl object-cover border-2 border-[var(--accent)] shadow-[0_0_10px_var(--accent-glow)] bg-[#1a1a1a]"
-              alt="Avatar"
+              alt=""
             />
             <div>
               <h1 className="text-2xl font-black text-white tracking-wide">
@@ -247,7 +266,12 @@ export default function AchievementsPage() {
                 <span className="text-[var(--accent)] text-xs font-bold uppercase tracking-widest">
                   Достижения
                 </span>
-                <span className="text-gray-600 text-xs font-mono">•</span>
+                <span
+                  className="text-gray-400 text-xs font-mono"
+                  aria-hidden="true"
+                >
+                  •
+                </span>
                 <span className="text-gray-400 text-xs font-bold">
                   @{data.user.username}
                 </span>
@@ -259,7 +283,7 @@ export default function AchievementsPage() {
         <div className="bg-[#121212]/80 backdrop-blur-md rounded-2xl p-6 mb-8 shadow-2xl border border-white/5">
           <div className="flex justify-between items-end mb-4">
             <div>
-              <div className="text-[10px] text-gray-500 font-bold tracking-widest uppercase mb-1">
+              <div className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mb-1">
                 Прогресс
               </div>
               <div className="text-lg font-black text-white">
@@ -274,7 +298,10 @@ export default function AchievementsPage() {
               {Math.round(progressPercent)}%
             </div>
           </div>
-          <div className="w-full bg-black/80 h-4 rounded-full overflow-hidden border border-white/10 p-0.5">
+          <div
+            className="w-full bg-black/80 h-4 rounded-full overflow-hidden border border-white/10 p-0.5"
+            aria-hidden="true"
+          >
             <div
               className="bg-[var(--accent)] h-full rounded-full shadow-[0_0_10px_var(--accent-glow)] relative transition-all duration-1000"
               style={{ width: `${progressPercent}%` }}
@@ -282,12 +309,18 @@ export default function AchievementsPage() {
               <div className="absolute top-0 left-0 w-full h-full bg-white/20 animate-pulse rounded-full"></div>
             </div>
           </div>
+          <progress
+            className="sr-only"
+            aria-label="Прогресс достижений"
+            max={100}
+            value={Math.round(progressPercent)}
+          />
         </div>
 
         <div className="grid grid-cols-1 gap-4">
-          {data.achievements.map((a: any) => {
+          {data.achievements.map((a) => {
             const currentVal = a.current_progress || 0;
-            const targetVal = a.target_value || 1;
+            const targetVal = Number(a.target_value) || 1;
             const progressRatio = Math.min(currentVal / targetVal, 1);
 
             return (
@@ -306,13 +339,15 @@ export default function AchievementsPage() {
                     <img
                       src={a.target_image}
                       className="w-full h-full object-contain"
-                      alt="icon"
+                      alt=""
                       onError={(e) => {
                         e.currentTarget.style.display = "none";
                       }}
                     />
                   ) : (
-                    <span className="drop-shadow-lg">{a.icon}</span>
+                    <span className="drop-shadow-lg" aria-hidden="true">
+                      {a.icon}
+                    </span>
                   )}
                   {!a.is_earned && (
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"></div>
@@ -322,18 +357,18 @@ export default function AchievementsPage() {
                 <div className="flex-grow w-full md:w-auto">
                   {/* Сделали мягкий белый для названия */}
                   <h3
-                    className={`text-xl font-black leading-tight mb-1 ${a.is_earned ? "text-gray-200" : "text-gray-500"}`}
+                    className={`text-xl font-black leading-tight mb-1 ${a.is_earned ? "text-gray-200" : "text-gray-400"}`}
                   >
                     {a.name}
                   </h3>
                   <div className="mb-3 max-w-2xl">
                     <p
-                      className={`text-sm leading-relaxed ${a.is_earned ? "text-gray-300" : "text-gray-600"}`}
+                      className={`text-sm leading-relaxed ${a.is_earned ? "text-gray-300" : "text-gray-400"}`}
                     >
                       {renderDescriptionWithLinks(
-                        a.description,
-                        a.rule_meta,
-                        a.rule_target,
+                        a.description || "",
+                        a.rule_meta ?? null,
+                        a.rule_target ?? null,
                         a.name,
                       )}
                     </p>
@@ -341,23 +376,24 @@ export default function AchievementsPage() {
 
                   <div className="flex flex-wrap items-center gap-3">
                     <div
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider border ${getRarityStyle(a.rarity)}`}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider border ${getRarityStyle(a.rarity ?? 0)}`}
                     >
                       <svg
                         className="w-3.5 h-3.5"
+                        aria-hidden="true"
                         viewBox="0 0 24 24"
                         fill="currentColor"
                       >
                         <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" />
                       </svg>
-                      Есть у {a.rarity}% пользователей
+                      Есть у {a.rarity ?? 0}% пользователей
                     </div>
 
                     {!a.is_earned &&
                       a.rule_type !== "manual" &&
                       targetVal > 0 && (
                         <div className="flex-grow w-full max-w-[200px]">
-                          <div className="flex justify-between text-[10px] text-gray-500 font-bold mb-1 tracking-wider uppercase">
+                          <div className="flex justify-between text-[10px] text-gray-400 font-bold mb-1 tracking-wider uppercase">
                             <span>Прогресс</span>
                             <span>
                               {currentVal} / {targetVal}
@@ -382,14 +418,14 @@ export default function AchievementsPage() {
                       </div>
                       {/* Сделали мягкий белый для даты */}
                       <div className="text-sm font-black text-gray-200 bg-[var(--accent)]/20 px-3 py-1.5 rounded-lg border border-[var(--accent)]/30 shadow-[0_0_10px_var(--accent-glow)]">
-                        {new Date(a.earned_at + "Z").toLocaleDateString(
+                        {new Date(`${a.earned_at}Z`).toLocaleDateString(
                           "ru-RU",
                           { day: "numeric", month: "short", year: "numeric" },
                         )}
                       </div>
                     </>
                   ) : (
-                    <div className="text-xs text-gray-600 font-black uppercase tracking-widest bg-black/50 px-4 py-2 rounded-lg border border-white/5 w-full md:w-auto text-center">
+                    <div className="text-xs text-gray-400 font-black uppercase tracking-widest bg-black/50 px-4 py-2 rounded-lg border border-white/5 w-full md:w-auto text-center">
                       Заблокировано
                     </div>
                   )}

@@ -138,11 +138,20 @@ async def _run_export_job(user_id: int, artist: str, title: str, album, timestam
         db.close()
 
 
+async def _run_social_push_job(notification_id: int) -> None:
+    from app.services.notifications import send_social_push
+    try:
+        await send_social_push(notification_id)
+    except Exception:
+        logging.exception("Social notification push failed")
+
+
 # In-process fallbacks for async jobs when the arq worker is unavailable
 _ASYNC_JOB_FALLBACKS: dict[str, Callable[..., Coroutine[Any, Any, None]]] = {
     'async_dispatch_webhook': _run_webhook_job,
     'async_export_scrobble': _run_export_job,
     'import_lastfm': _run_lastfm_import_job,
+    'send_social_push': _run_social_push_job,
 }
 
 

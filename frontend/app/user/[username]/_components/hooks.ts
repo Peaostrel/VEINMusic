@@ -1,9 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { setProfileTheme } from "@/app/lib/theme";
+import type { Country } from "@/app/lib/types";
+
+interface RestCountry {
+  name: { common: string };
+  translations?: { rus?: { common?: string } };
+  cca2: string;
+  flag: string;
+}
 
 export function useCountries() {
-  const [countries, setCountries] = useState<any[]>([]);
+  const [countries, setCountries] = useState<Country[]>([]);
   useEffect(() => {
     fetch(
       "https://restcountries.com/v3.1/all?fields=name,translations,cca2,flag",
@@ -11,7 +20,7 @@ export function useCountries() {
       .then((r) => r.json())
       .then((d) => {
         if (Array.isArray(d)) {
-          const list = d.map((c: any) => ({
+          const list = d.map((c: RestCountry) => ({
             name: c.translations?.rus?.common || c.name.common,
             code: c.cca2,
             flag: c.flag,
@@ -28,14 +37,8 @@ export function useCountries() {
 
 export function useProfileTheme(theme: string | undefined) {
   useEffect(() => {
-    if (theme) {
-      (globalThis as any).__ACTIVE_PROFILE_THEME__ = theme;
-      globalThis.dispatchEvent(new Event("theme_update"));
-    }
-    return () => {
-      delete (globalThis as any).__ACTIVE_PROFILE_THEME__;
-      globalThis.dispatchEvent(new Event("theme_update"));
-    };
+    if (theme) setProfileTheme(theme);
+    return () => setProfileTheme(undefined);
   }, [theme]);
 }
 

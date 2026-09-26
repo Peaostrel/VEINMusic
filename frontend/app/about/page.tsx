@@ -113,7 +113,7 @@ export default function About() {
             key={item.label}
             className="bg-[#121212]/60 backdrop-blur-md border border-white/5 p-6 rounded-2xl text-center shadow-lg hover:border-[var(--accent)]/30 transition-all group"
           >
-            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1 group-hover:text-[var(--accent)] transition-colors">
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1 group-hover:text-[var(--accent)] transition-colors">
               {item.label}
             </p>
             <p className="text-xl md:text-3xl font-black text-white">

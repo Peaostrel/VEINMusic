@@ -8,6 +8,7 @@ import { getPlatformIcon } from "../utils/formatters";
 
 import About from "./about/page";
 import { API_URL } from "@/app/lib/api";
+import type { TasteTwin } from "@/app/lib/types";
 
 interface FeedItem {
   id: number;
@@ -25,7 +26,7 @@ interface FeedItem {
 export default function Home() {
   const [globalHistory, setGlobalHistory] = useState<FeedItem[]>([]);
   const [friendsHistory, setFriendsHistory] = useState<FeedItem[]>([]);
-  const [twins, setTwins] = useState<any[]>([]);
+  const [twins, setTwins] = useState<TasteTwin[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFeed, setActiveFeed] = useState("global");
   const [username, setUsername] = useState<string | null>(null);
@@ -123,7 +124,7 @@ export default function Home() {
           <button
             type="button"
             onClick={() => setActiveFeed("global")}
-            className={`text-2xl font-black pb-2 border-b-2 transition-all ${activeFeed === "global" ? "border-[var(--accent)] text-white" : "border-transparent text-gray-500 hover:text-gray-300"}`}
+            className={`text-2xl font-black pb-2 border-b-2 transition-all ${activeFeed === "global" ? "border-[var(--accent)] text-white" : "border-transparent text-gray-400 hover:text-gray-300"}`}
           >
             Глобальная лента
           </button>
@@ -131,7 +132,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setActiveFeed("friends")}
-              className={`text-2xl font-black pb-2 border-b-2 transition-all flex items-center gap-2 ${activeFeed === "friends" ? "border-[var(--accent)] text-white" : "border-transparent text-gray-500 hover:text-gray-300"}`}
+              className={`text-2xl font-black pb-2 border-b-2 transition-all flex items-center gap-2 ${activeFeed === "friends" ? "border-[var(--accent)] text-white" : "border-transparent text-gray-400 hover:text-gray-300"}`}
             >
               Лента друзей
               {activeFeed === "friends" && (
@@ -157,14 +158,14 @@ export default function Home() {
                 );
               if (activeFeed === "friends" && friendsHistory.length === 0)
                 return (
-                  <div className="bg-[#1e1e1e]/50 backdrop-blur-md border border-white/5 p-10 rounded-2xl text-center text-gray-500 font-bold">
+                  <div className="bg-[#1e1e1e]/50 backdrop-blur-md border border-white/5 p-10 rounded-2xl text-center text-gray-400 font-bold">
                     Тут пусто. Подпишись на кого-нибудь, чтобы видеть их треки
                     здесь!
                   </div>
                 );
               if (currentFeed.length === 0)
                 return (
-                  <div className="bg-[#1e1e1e]/50 backdrop-blur-md border border-white/5 p-10 rounded-2xl text-center text-gray-500 font-bold">
+                  <div className="bg-[#1e1e1e]/50 backdrop-blur-md border border-white/5 p-10 rounded-2xl text-center text-gray-400 font-bold">
                     Пока тихо... Врубай музыку!
                   </div>
                 );
@@ -215,7 +216,7 @@ export default function Home() {
                               {item.artist}
                             </div>
                             <div className="flex items-center justify-between">
-                              <div className="text-[10px] text-gray-500 uppercase tracking-wider font-black">
+                              <div className="text-[10px] text-gray-400 uppercase tracking-wider font-black">
                                 @{item.username}
                               </div>
                               {item.listening_with &&
@@ -260,7 +261,11 @@ export default function Home() {
             {username && twins.length > 0 && (
               <div className="bg-[#121212]/80 backdrop-blur-md border border-white/5 rounded-2xl p-6 shadow-xl sticky top-24">
                 <h3 className="text-lg font-black text-white mb-6 flex items-center gap-2">
-                  <Users className="w-5 h-5 text-[var(--accent)]" /> Taste Twins
+                  <Users
+                    className="w-5 h-5 text-[var(--accent)]"
+                    aria-hidden="true"
+                  />{" "}
+                  Taste Twins
                 </h3>
                 <div className="space-y-6">
                   {twins.map((twin) => (
@@ -277,14 +282,14 @@ export default function Home() {
                               `https://api.dicebear.com/9.x/micah/svg?seed=${twin.username}&backgroundColor=transparent`
                             }
                             className="w-full h-full object-cover"
-                            alt="Avatar"
+                            alt=""
                           />
                         </div>
                         <div className="flex-grow">
                           <div className="font-bold text-sm text-white group-hover:text-[var(--accent)] transition-colors">
                             {twin.display_name}
                           </div>
-                          <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
+                          <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
                             @{twin.username}
                           </div>
                         </div>
@@ -292,7 +297,7 @@ export default function Home() {
                           <div className="text-sm font-black text-[var(--accent)]">
                             {twin.match}%
                           </div>
-                          <div className="text-[8px] text-gray-600 font-bold uppercase">
+                          <div className="text-[8px] text-gray-400 font-bold uppercase">
                             MATCH
                           </div>
                         </div>

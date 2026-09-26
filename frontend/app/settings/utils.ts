@@ -1,5 +1,7 @@
+import type { Area } from "react-easy-crop";
+
 export const createImage = (url: string) =>
-  new Promise((resolve, reject) => {
+  new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
     image.addEventListener("load", () => resolve(image));
     image.addEventListener("error", () =>
@@ -11,9 +13,9 @@ export const createImage = (url: string) =>
 
 export async function getCroppedImg(
   imageSrc: string,
-  pixelCrop: any,
+  pixelCrop: Area,
 ): Promise<File | null> {
-  const image: any = await createImage(imageSrc);
+  const image = await createImage(imageSrc);
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
@@ -48,9 +50,9 @@ export async function getCroppedImg(
   });
 }
 
-export const fixImageUrl = (url: any) => {
+export const fixImageUrl = (url: string): string => {
   if (!url) return url;
-  const match = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  const match = /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/.exec(url);
   return match ? `https://drive.google.com/uc?export=view&id=${match[1]}` : url;
 };
 

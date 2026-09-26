@@ -8,15 +8,22 @@ import {
   getNetworkLabel,
   getSocialUrl,
 } from "./profileUtils";
+import type { getNextRankInfo } from "@/app/lib/ranks";
+import type {
+  Country,
+  SocialLink,
+  TasteMatch,
+  UserInfo,
+} from "@/app/lib/types";
 
 export interface ProfileStatsSectionProps {
-  u: any;
+  u: UserInfo;
   progressPercent: number;
   xpInCurrentLevel: number;
-  nextRank: any;
-  taste: any;
-  socialLinks: any[];
-  countries: any[];
+  nextRank: ReturnType<typeof getNextRankInfo>;
+  taste: TasteMatch | null;
+  socialLinks: SocialLink[];
+  countries: Country[];
   favoriteAlbumRedirectUrl: string;
 }
 
@@ -91,7 +98,7 @@ export function ProfileStatsSection({
 
       {socialLinks.length > 0 && (
         <div className="flex flex-wrap justify-center md:justify-start gap-3 mb-6">
-          {socialLinks.map((link: any) => {
+          {socialLinks.map((link) => {
             const href = getSocialUrl(link.network, link.username);
             if (!href) return null;
             return (
@@ -138,7 +145,7 @@ export function ProfileStatsSection({
                   )}
                 </div>
                 <div className="flex flex-col text-left">
-                  <span className="text-[9px] text-gray-500 uppercase tracking-[0.2em] font-black leading-none mb-1">
+                  <span className="text-[9px] text-gray-400 uppercase tracking-[0.2em] font-black leading-none mb-1">
                     Местоположение
                   </span>
                   <span className="text-sm font-bold text-white leading-none tracking-wide">
@@ -155,7 +162,7 @@ export function ProfileStatsSection({
               🎧
             </span>
             <div className="flex flex-col text-left">
-              <span className="text-[9px] text-gray-500 uppercase tracking-[0.2em] font-black leading-none mb-1">
+              <span className="text-[9px] text-gray-400 uppercase tracking-[0.2em] font-black leading-none mb-1">
                 Жанр
               </span>
               <span className="text-sm font-bold text-white leading-none tracking-wide">
@@ -170,7 +177,7 @@ export function ProfileStatsSection({
               🔊
             </span>
             <div className="flex flex-col text-left">
-              <span className="text-[9px] text-gray-500 uppercase tracking-[0.2em] font-black leading-none mb-1">
+              <span className="text-[9px] text-gray-400 uppercase tracking-[0.2em] font-black leading-none mb-1">
                 Аппаратура
               </span>
               <span className="text-sm font-bold text-white leading-none tracking-wide">
@@ -218,32 +225,8 @@ export function ProfileStatsSection({
                     >
                       {u.favorite_artist}
                     </a>
-                    {u.favorite_artist_rating > 0 && (
-                      <div
-                        className="flex items-center gap-0.5 mt-2"
-                        title={`Оценка: ${u.favorite_artist_rating}/5`}
-                      >
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <span
-                            key={star}
-                            className={`text-sm ${
-                              star <= u.favorite_artist_rating
-                                ? "text-yellow-400 drop-shadow-[0_0_3px_rgba(250,204,21,0.4)]"
-                                : "text-gray-700"
-                            }`}
-                          >
-                            ★
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
-                {u.favorite_artist_review && (
-                  <p className="text-xs text-gray-300 italic bg-black/40 p-3 rounded-xl border-l-2 border-cyan-400 leading-relaxed max-h-32 overflow-y-auto pr-2">
-                    &ldquo;{u.favorite_artist_review}&rdquo;
-                  </p>
-                )}
               </div>
             )}
 
@@ -282,32 +265,8 @@ export function ProfileStatsSection({
                     >
                       {u.favorite_track}
                     </a>
-                    {u.favorite_track_rating > 0 && (
-                      <div
-                        className="flex items-center gap-0.5 mt-2"
-                        title={`Оценка: ${u.favorite_track_rating}/5`}
-                      >
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <span
-                            key={star}
-                            className={`text-sm ${
-                              star <= u.favorite_track_rating
-                                ? "text-yellow-400 drop-shadow-[0_0_3px_rgba(250,204,21,0.4)]"
-                                : "text-gray-700"
-                            }`}
-                          >
-                            ★
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
-                {u.favorite_track_review && (
-                  <p className="text-xs text-gray-300 italic bg-black/40 p-3 rounded-xl border-l-2 border-purple-400 leading-relaxed max-h-32 overflow-y-auto pr-2">
-                    &ldquo;{u.favorite_track_review}&rdquo;
-                  </p>
-                )}
               </div>
             )}
 
@@ -338,32 +297,8 @@ export function ProfileStatsSection({
                     >
                       {u.favorite_album}
                     </a>
-                    {u.favorite_album_rating > 0 && (
-                      <div
-                        className="flex items-center gap-0.5 mt-2"
-                        title={`Оценка: ${u.favorite_album_rating}/5`}
-                      >
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <span
-                            key={star}
-                            className={`text-sm ${
-                              star <= u.favorite_album_rating
-                                ? "text-yellow-400 drop-shadow-[0_0_3px_rgba(250,204,21,0.4)]"
-                                : "text-gray-700"
-                            }`}
-                          >
-                            ★
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
-                {u.favorite_album_review && (
-                  <p className="text-xs text-gray-300 italic bg-black/40 p-3 rounded-xl border-l-2 border-amber-400 leading-relaxed max-h-32 overflow-y-auto pr-2">
-                    &ldquo;{u.favorite_album_review}&rdquo;
-                  </p>
-                )}
               </div>
             )}
           </div>

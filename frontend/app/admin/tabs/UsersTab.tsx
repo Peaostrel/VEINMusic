@@ -36,7 +36,7 @@ export default function UsersTab({
             className="w-full pl-10 pr-4 py-2.5 bg-[#141418] border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-red-500"
           />
         </div>
-        <span className="text-xs text-gray-500 font-mono">
+        <span className="text-xs text-gray-400 font-mono">
           Найдено: {filteredUsers.length}
         </span>
       </div>
@@ -76,7 +76,7 @@ export default function UsersTab({
                             <CheckCircle className="w-3.5 h-3.5 text-blue-400 inline" />
                           )}
                         </div>
-                        <div className="text-[11px] text-gray-500">
+                        <div className="text-[11px] text-gray-400">
                           {u.display_name || "Без имени"}
                         </div>
                       </div>

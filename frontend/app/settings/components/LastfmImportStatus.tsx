@@ -65,7 +65,7 @@ export default function LastfmImportStatus({
               style={{ width: `${Math.max(progress, 3)}%` }}
             />
           </div>
-          <p className="text-gray-500">
+          <p className="text-gray-400">
             Добавлено треков: {job.imported_tracks ?? 0}
           </p>
         </>

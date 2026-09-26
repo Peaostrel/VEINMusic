@@ -29,7 +29,7 @@ export function CompatibilityModal({
               <button
                 type="button"
                 onClick={() => setCompatModalOpen(false)}
-                className="text-gray-500 hover:text-white transition-colors text-xl font-black border-none bg-transparent outline-none cursor-pointer"
+                className="text-gray-400 hover:text-white transition-colors text-xl font-black border-none bg-transparent outline-none cursor-pointer"
               >
                 ✕
               </button>
@@ -69,7 +69,7 @@ export function CompatibilityModal({
                         Общие артисты
                       </h4>
                       <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto custom-scrollbar">
-                        {compatibility.common_artists.map((item: any) => (
+                        {compatibility.common_artists.map((item) => (
                           <span
                             key={item.artist}
                             className="bg-white/5 border border-white/10 px-3 py-1 rounded-lg text-xs font-medium text-white flex items-center gap-1.5"

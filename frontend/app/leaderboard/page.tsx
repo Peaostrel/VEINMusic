@@ -1,19 +1,21 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { THEMES, LvlBadge, VerifiedBadge } from "../Navbar";
+import { THEMES } from "@/app/lib/theme";
+import { LvlBadge, VerifiedBadge } from "@/components/UserBadges";
 import { API_URL } from "@/app/lib/api";
 import { fallbackOnce } from "@/app/lib/img";
+import type { LeaderboardEntry } from "@/app/lib/types";
 
 export default function Leaderboard() {
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch(`${API_URL}/api/leaderboard`, { credentials: "include" })
       .then((res) => res.json())
       .then((data) => {
-        setUsers(data);
+        setUsers(Array.isArray(data) ? data : []);
         setLoading(false);
       })
       .catch((err) => {
@@ -24,10 +26,13 @@ export default function Leaderboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col justify-center items-center gap-4 font-bold text-2xl text-[var(--accent-text)] animate-pulse">
-        <div className="animate-spin border-4 border-[var(--accent-text)] border-t-transparent rounded-full w-12 h-12"></div>
+      <output className="min-h-screen flex flex-col justify-center items-center gap-4 font-bold text-2xl text-[var(--accent-text)] animate-pulse">
+        <div
+          aria-hidden="true"
+          className="animate-spin border-4 border-[var(--accent-text)] border-t-transparent rounded-full w-12 h-12"
+        ></div>
         Составляем списки лучших...
-      </div>
+      </output>
     );
   }
 
@@ -44,7 +49,7 @@ export default function Leaderboard() {
 
       <div className="bg-[#121212]/60 backdrop-blur-xl border border-white/5 rounded-3xl p-4 md:p-6 shadow-2xl">
         {users.length === 0 ? (
-          <div className="text-center text-gray-500 py-10 font-bold">
+          <div className="text-center text-gray-400 py-10 font-bold">
             Никто еще не слушал музыку. Будь первым!
           </div>
         ) : (
@@ -71,7 +76,7 @@ function getGlowColor(theme: string): string {
   return THEMES[theme as keyof typeof THEMES]?.main || "#ffcc00";
 }
 
-function getLeaderboardItemStyles(u: any, idx: number) {
+function getLeaderboardItemStyles(u: LeaderboardEntry, idx: number) {
   const isTop3 = idx < 3;
   const isHighLevel = u.level >= 50;
   const isRainbow = u.theme === "rainbow";
@@ -112,9 +117,12 @@ function getLeaderboardItemStyles(u: any, idx: number) {
   };
 }
 
-function LeaderboardItem({ u, idx }: Readonly<{ u: any; idx: number }>) {
+function LeaderboardItem({
+  u,
+  idx,
+}: Readonly<{ u: LeaderboardEntry; idx: number }>) {
   const rankCrown = RANK_CROWNS[idx] || `#${idx + 1}`;
-  const rankClass = RANK_CLASSES[idx] || "text-gray-500";
+  const rankClass = RANK_CLASSES[idx] || "text-gray-400";
 
   const { itemClass, itemStyle, avatarClass, avatarStyle } =
     getLeaderboardItemStyles(u, idx);
@@ -140,7 +148,7 @@ function LeaderboardItem({ u, idx }: Readonly<{ u: any; idx: number }>) {
             onError={fallbackOnce(
               `https://api.dicebear.com/9.x/micah/svg?seed=${u.username}&backgroundColor=transparent`,
             )}
-            alt="avatar"
+            alt=""
           />
         </div>
 
@@ -166,9 +174,9 @@ function LeaderboardItem({ u, idx }: Readonly<{ u: any; idx: number }>) {
       <div className="text-right shrink-0">
         <div className="font-black text-white text-lg">
           {u.total_xp || u.total_scrobbles || 0}{" "}
-          <span className="text-xs text-gray-500 font-normal">XP</span>
+          <span className="text-xs text-gray-400 font-normal">XP</span>
         </div>
-        <div className="text-[10px] text-gray-500 font-black uppercase tracking-wider mt-0.5">
+        <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mt-0.5">
           LVL {Math.floor((u.total_xp || u.total_scrobbles || 0) / 100) + 1}
         </div>
       </div>

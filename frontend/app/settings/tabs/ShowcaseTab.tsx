@@ -1,10 +1,11 @@
 "use client";
 import React from "react";
 import AutocompleteInput from "../components/AutocompleteInput";
+import type { SettingsData, UpdateData } from "../types";
 
 interface ShowcaseTabProps {
-  data: any;
-  updateData: (k: string, v: any) => void;
+  data: SettingsData;
+  updateData: UpdateData;
 }
 
 export default function ShowcaseTab({

@@ -1,4 +1,9 @@
-export default function PrivacyTab({ data, updateData }: any) {
+import type { SettingsData, UpdateData } from "../types";
+
+export default function PrivacyTab({
+  data,
+  updateData,
+}: Readonly<{ data: SettingsData; updateData: UpdateData }>) {
   return (
     <div className="p-6 md:p-8 space-y-8">
       <h2 className="text-xl font-bold mb-4 text-[var(--accent-text)]">
@@ -14,6 +19,9 @@ export default function PrivacyTab({ data, updateData }: any) {
         <button
           type="button"
           onClick={() => updateData("isPrivate", !data.isPrivate)}
+          role="switch"
+          aria-checked={data.isPrivate}
+          aria-label="Приватный профиль"
           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${data.isPrivate ? "bg-[var(--accent)]" : "bg-gray-700"}`}
         >
           <span
@@ -30,6 +38,7 @@ export default function PrivacyTab({ data, updateData }: any) {
           </p>
         </div>
         <select
+          aria-label="Кто может приглашать слушать вместе"
           value={data.syncPrivacy || "all"}
           onChange={(e) => updateData("syncPrivacy", e.target.value)}
           className="bg-[#1e1e1e] border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent)]"

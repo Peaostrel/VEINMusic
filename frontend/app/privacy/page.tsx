@@ -53,7 +53,7 @@ export default function Privacy() {
           </p>
         </section>
 
-        <div className="pt-6 border-t border-white/5 text-xs text-gray-500">
+        <div className="pt-6 border-t border-white/5 text-xs text-gray-400">
           Последнее обновление: {new Date().toLocaleDateString("ru-RU")}
         </div>
       </div>
