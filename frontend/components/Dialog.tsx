@@ -42,7 +42,7 @@ export default function Dialog({
         e.preventDefault();
         onClose();
       }}
-      className={`fixed inset-0 z-50 m-0 h-full max-h-none w-full max-w-none flex flex-col items-center justify-center bg-black/90 p-4 text-inherit outline-none backdrop:bg-transparent ${className}`}
+      className={`fixed inset-0 z-50 m-0 h-full max-h-none w-full max-w-none flex flex-col items-center justify-center bg-[#08090a]/75 p-4 text-inherit outline-none backdrop:bg-transparent ${className}`}
     >
       {children}
     </dialog>

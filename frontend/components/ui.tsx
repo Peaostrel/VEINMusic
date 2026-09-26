@@ -25,8 +25,13 @@ export const btn = {
 
 export const card = "rounded-xl border border-line bg-surface";
 
-export const input =
-  "h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-fg placeholder:text-fg-3 outline-none transition-colors focus:border-fg-3";
+const inputBase =
+  "h-10 w-full rounded-lg border border-line px-3 text-sm text-fg placeholder:text-fg-3 outline-none transition-colors focus:border-fg-3";
+
+/** Text field on the page background. */
+export const input = `${inputBase} bg-surface`;
+/** Text field inside a card (darker than the card). */
+export const inputOnCard = `${inputBase} bg-bg`;
 
 export const textarea =
   "w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-sm leading-relaxed text-fg placeholder:text-fg-3 outline-none transition-colors focus:border-fg-3 resize-none";

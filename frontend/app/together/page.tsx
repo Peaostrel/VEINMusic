@@ -1,12 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Radio, Users, Plus, Disc, ArrowRight } from "lucide-react";
+import { Plus, Users } from "lucide-react";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { API_URL } from "@/app/lib/api";
 import Dialog from "@/components/Dialog";
 import { useFeature } from "@/app/lib/featureFlags";
+import { plural } from "@/app/lib/plural";
+import { useVisiblePolling } from "@/app/lib/usePolling";
+import {
+  Avatar,
+  EmptyState,
+  Loading,
+  PageHeader,
+  PlayingBars,
+  btn,
+  inputOnCard,
+  label,
+} from "@/components/ui";
 
 interface RoomInfo {
   room_id: string;
@@ -14,13 +27,63 @@ interface RoomInfo {
   host_username: string;
   listeners_count: number;
   listeners: string[];
-  current_track: {
+  current_track?: {
     title: string;
     artist: string;
     album?: string;
     cover_url?: string;
     is_playing: boolean;
   };
+}
+
+function RoomCard({ room }: Readonly<{ room: RoomInfo }>) {
+  const track = room.current_track;
+  const playing = Boolean(track?.is_playing);
+  return (
+    <Link
+      href={`/together/${room.room_id}`}
+      className="flex h-full flex-col gap-4 rounded-xl border border-line bg-surface p-5 transition-colors hover:bg-surface-2"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="truncate text-base font-semibold">{room.name}</span>
+        <span
+          className={`flex shrink-0 items-center gap-1.5 font-mono text-[11px] ${playing ? "text-accent" : "text-fg-3"}`}
+        >
+          {playing && <PlayingBars />}
+          {playing ? "играет" : "пауза"}
+        </span>
+      </div>
+      <div className="grid grid-cols-[56px_minmax(0,1fr)] items-center gap-3.5">
+        {track?.cover_url ? (
+          <img
+            src={track.cover_url}
+            alt=""
+            className="h-14 w-14 rounded-md object-cover"
+          />
+        ) : (
+          <span className="h-14 w-14 rounded-md bg-surface-2" />
+        )}
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="truncate text-sm font-medium">
+            {track?.title || "Ожидание трека"}
+          </span>
+          <span className="truncate text-[13px] text-fg-2">
+            {track?.artist || "DJ пока выбирает"}
+          </span>
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-3 text-xs text-fg-2">
+        <span className="flex min-w-0 items-center gap-2">
+          <Avatar seed={room.host_username} size={22} />
+          <span className="truncate">DJ @{room.host_username}</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-1 font-mono">
+          <Users className="h-3.5 w-3.5" aria-hidden="true" />
+          {room.listeners_count}
+        </span>
+      </div>
+    </Link>
+  );
 }
 
 export default function ListenTogetherLobby() {
@@ -31,7 +94,7 @@ export default function ListenTogetherLobby() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const enabled = useFeature("listen_together");
 
-  const fetchRooms = async () => {
+  const fetchRooms = useCallback(async () => {
     try {
       const res = await fetch(`${API_URL}/api/together/rooms`, {
         credentials: "include",
@@ -55,13 +118,9 @@ export default function ListenTogetherLobby() {
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchRooms();
-    const interval = setInterval(fetchRooms, 10000);
-    return () => clearInterval(interval);
   }, []);
+
+  useVisiblePolling(fetchRooms, 10000);
 
   const handleCreateRoom = (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,156 +130,91 @@ export default function ListenTogetherLobby() {
     );
   };
 
-  const renderRoomsContent = () => {
-    if (!enabled) {
-      return (
-        <div className="bg-[#121214]/60 border border-white/5 rounded-3xl p-12 text-center text-gray-300 font-bold">
-          «Слушать вместе» временно отключено администратором.
-        </div>
-      );
-    }
-    if (loading) {
-      return (
-        <div className="py-20 flex flex-col items-center justify-center gap-4 text-gray-400 font-bold">
-          <div
-            aria-hidden="true"
-            className="animate-spin border-4 border-red-500 border-t-transparent rounded-full w-10 h-10"
-          ></div>
-          Поиск активных комнат...
-        </div>
-      );
-    }
-
-    if (rooms.length === 0) {
-      return (
-        <div className="bg-[#121214]/60 border border-white/5 rounded-3xl p-12 text-center flex flex-col items-center justify-center">
-          <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center text-gray-400 mb-4">
-            <Disc className="w-8 h-8" />
-          </div>
-          <h3 className="text-xl font-bold text-white mb-1">
-            Сейчас нет активных комнат
-          </h3>
-          <p className="text-gray-400 text-sm max-w-sm mb-6">
-            Станьте первым DJ прямо сейчас — создайте комнату и включите музыку!
-          </p>
+  let content: React.ReactNode;
+  if (!enabled) {
+    content = (
+      <EmptyState title="«Слушать вместе» временно отключено">
+        Администратор выключил эту функцию. Загляните позже.
+      </EmptyState>
+    );
+  } else if (loading) {
+    content = <Loading label="Ищем активные комнаты…" />;
+  } else if (rooms.length === 0) {
+    content = (
+      <EmptyState
+        title="Сейчас нет активных комнат"
+        action={
           <button
             type="button"
             onClick={() => setShowCreateModal(true)}
-            className="bg-white/10 hover:bg-white/15 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition-colors cursor-pointer"
+            className={`${btn.secondary} ${btn.md}`}
           >
             Создать первую комнату
           </button>
-        </div>
-      );
-    }
-
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {rooms.map((room) => (
-          <button
-            key={room.room_id}
-            type="button"
-            onClick={() => router.push(`/together/${room.room_id}`)}
-            className="w-full text-left bg-[#141418]/80 hover:bg-[#181820] border border-white/5 hover:border-red-500/30 p-5 rounded-3xl transition-all duration-200 group cursor-pointer flex flex-col justify-between"
-          >
-            <div className="flex items-start justify-between gap-4 mb-4 w-full">
-              <div>
-                <h3 className="text-lg font-black text-white group-hover:text-red-400 transition-colors">
-                  {room.name}
-                </h3>
-                <p className="text-xs text-gray-400">
-                  DJ: @{room.host_username}
-                </p>
-              </div>
-              <div className="flex items-center gap-1.5 bg-white/5 px-2.5 py-1 rounded-full text-xs font-bold text-gray-300 shrink-0">
-                <Users className="w-3.5 h-3.5 text-red-400" />
-                {room.listeners_count}
-              </div>
-            </div>
-
-            <div className="bg-black/40 border border-white/5 rounded-2xl p-3 flex items-center gap-3 w-full">
-              <div className="w-10 h-10 rounded-xl bg-[#222] overflow-hidden shrink-0 flex items-center justify-center">
-                {room.current_track?.cover_url &&
-                sanitizeImageUrl(room.current_track.cover_url) ? (
-                  <img
-                    src={sanitizeImageUrl(room.current_track.cover_url)}
-                    alt="Cover"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <Disc className="w-5 h-5 text-gray-400" />
-                )}
-              </div>
-              <div className="min-w-0 flex-grow">
-                <p className="text-white text-xs font-bold truncate">
-                  {room.current_track?.title || "Ожидание трека"}
-                </p>
-                <p className="text-gray-400 text-[11px] truncate">
-                  {room.current_track?.artist || "—"}
-                </p>
-              </div>
-              <div className="w-8 h-8 rounded-full bg-red-500/10 group-hover:bg-red-500 text-red-400 group-hover:text-white flex items-center justify-center transition-colors shrink-0">
-                <ArrowRight className="w-4 h-4" />
-              </div>
-            </div>
-          </button>
-        ))}
-      </div>
+        }
+      >
+        Станьте первым DJ — создайте комнату и включите музыку.
+      </EmptyState>
     );
-  };
+  } else {
+    const listeners = rooms.reduce((n, r) => n + (r.listeners_count || 0), 0);
+    content = (
+      <>
+        <p className="flex items-center gap-2.5 font-mono text-xs text-fg-3">
+          <span className="h-1.5 w-1.5 rounded-full bg-ok" />
+          {rooms.length} {plural(rooms.length, "комната", "комнаты", "комнат")}{" "}
+          · {listeners}{" "}
+          {plural(
+            listeners,
+            "человек слушает",
+            "человека слушают",
+            "человек слушают",
+          )}
+        </p>
+        <ul
+          aria-label="Активные комнаты"
+          className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
+        >
+          {rooms.map((room) => (
+            <li key={room.room_id}>
+              <RoomCard room={room} />
+            </li>
+          ))}
+        </ul>
+      </>
+    );
+  }
 
   return (
-    <div className="min-h-screen pt-24 pb-20 px-4 md:px-8 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-red-500/10 rounded-2xl border border-red-500/20 text-red-500">
-              <Radio className="w-8 h-8 animate-pulse" aria-hidden="true" />
-            </div>
-            <div>
-              <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight">
-                СЛУШАТЬ ВМЕСТЕ
-              </h1>
-              <p className="text-gray-400 text-sm font-medium">
-                Синхронное прослушивание музыки в реальном времени с чатом
+    <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-7 px-4 py-8 sm:px-8 lg:px-12 lg:py-10">
+      <PageHeader
+        title="Слушать вместе"
+        subtitle="Комнаты, где музыка играет у всех одновременно. DJ ставит треки, остальные слушают и болтают в чате."
+        actions={
+          <button
+            type="button"
+            onClick={() => setShowCreateModal(true)}
+            disabled={!enabled}
+            className={`${btn.primary} ${btn.md}`}
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Создать комнату
+          </button>
+        }
+      />
+
+      {showCreateModal && (
+        <Dialog label="Новая комната" onClose={() => setShowCreateModal(false)}>
+          <div className="flex w-full max-w-[440px] flex-col gap-5 rounded-2xl border border-line bg-surface p-7">
+            <div className="flex flex-col gap-1.5">
+              <h2 className="text-lg font-semibold">Новая комната</h2>
+              <p className="text-[13px] leading-normal text-fg-2">
+                Вы будете DJ: что играет у вас — то слышат все, кто зайдёт.
               </p>
             </div>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setShowCreateModal(true)}
-          disabled={!enabled}
-          className="disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white font-black px-6 py-3.5 rounded-2xl shadow-lg shadow-red-600/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-sm"
-        >
-          <Plus className="w-5 h-5" aria-hidden="true" />
-          Создать комнату
-        </button>
-      </div>
-
-      {/* Modal */}
-      {showCreateModal && (
-        <Dialog
-          label="Создание комнаты"
-          onClose={() => setShowCreateModal(false)}
-          className="backdrop-blur-sm"
-        >
-          <div className="bg-[#141416] border border-white/10 p-6 md:p-8 rounded-3xl max-w-md w-full shadow-2xl">
-            <h3 className="text-2xl font-black text-white mb-2">
-              Создание комнаты
-            </h3>
-            <p className="text-gray-400 text-sm mb-6">
-              Вы будете DJ комнаты — другие пользователи смогут подключиться и
-              слушать музыку с вами.
-            </p>
-            <form onSubmit={handleCreateRoom} className="space-y-4">
+            <form onSubmit={handleCreateRoom} className="flex flex-col gap-5">
               <div>
-                <label
-                  htmlFor="room-name"
-                  className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2"
-                >
+                <label htmlFor="room-name" className={label}>
                   Название комнаты
                 </label>
                 <input
@@ -228,24 +222,22 @@ export default function ListenTogetherLobby() {
                   type="text"
                   value={newRoomName}
                   onChange={(e) => setNewRoomName(e.target.value)}
-                  placeholder="Например: Synthwave Chill & Coding"
-                  className="w-full bg-[#1e1e24] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-red-500 font-medium text-sm"
+                  placeholder="Например: пост-панк по пятницам"
+                  maxLength={60}
+                  className={inputOnCard}
                   required
                 />
               </div>
-              <div className="flex gap-3 pt-2">
+              <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="flex-1 bg-white/5 hover:bg-white/10 text-gray-300 font-bold py-3 rounded-xl transition-colors text-sm"
+                  className={`${btn.secondary} ${btn.md}`}
                 >
                   Отмена
                 </button>
-                <button
-                  type="submit"
-                  className="flex-1 bg-red-600 hover:bg-red-500 text-white font-black py-3 rounded-xl transition-colors text-sm shadow-lg shadow-red-600/20"
-                >
-                  Войти как DJ
+                <button type="submit" className={`${btn.primary} ${btn.md}`}>
+                  Создать и стать DJ
                 </button>
               </div>
             </form>
@@ -253,8 +245,7 @@ export default function ListenTogetherLobby() {
         </Dialog>
       )}
 
-      {/* Rooms Grid */}
-      {renderRoomsContent()}
+      {content}
     </div>
   );
 }

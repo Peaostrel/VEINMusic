@@ -1,19 +1,13 @@
 "use client";
 
 import { use, useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import {
-  Users,
-  Play,
-  Pause,
-  Send,
-  MessageSquare,
-  ArrowLeft,
-  Disc,
-  Sparkles,
-} from "lucide-react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Pause, Play, Send } from "lucide-react";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { wsUrl } from "@/app/lib/api";
+import { plural } from "@/app/lib/plural";
+import { Avatar, Meter, btn, inputOnCard } from "@/components/ui";
 
 interface ChatMessage {
   from: string;
@@ -38,7 +32,6 @@ interface PageProps {
 
 export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
   const { roomId } = use(params);
-  const router = useRouter();
   const searchParams = useSearchParams();
   const roomNameParam = searchParams.get("name") || "Музыкальная комната";
 
@@ -49,8 +42,8 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
   // The server names unauthenticated listeners "Guest_…" (real usernames are lowercase)
   const isGuest = me.startsWith("Guest_");
   const [track, setTrack] = useState<TrackState>({
-    title: "Ожидание трека от DJ...",
-    artist: "VEIN Music",
+    title: "Ожидание трека от DJ…",
+    artist: "VEINMusic",
     album: "",
     cover_url: "",
     duration: 180,
@@ -186,234 +179,221 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
   );
 
   return (
-    <div className="min-h-screen pt-20 pb-16 px-4 md:px-8 max-w-6xl mx-auto">
-      {/* Top Navigation */}
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <button
-          type="button"
-          onClick={() => router.push("/together")}
-          className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors font-bold text-sm bg-white/5 hover:bg-white/10 px-4 py-2 rounded-xl cursor-pointer"
+    <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-6 px-4 py-8 sm:px-8 lg:px-12 lg:py-8">
+      <header className="flex flex-col gap-2.5">
+        <Link
+          href="/together"
+          className="self-start text-[13px] text-fg-2 hover:text-fg"
         >
-          <ArrowLeft className="w-4 h-4" />
-          Все комнаты
-        </button>
-
-        <div className="flex items-center gap-2">
-          <span
-            className={`w-2.5 h-2.5 rounded-full ${
-              connected ? "bg-emerald-500 animate-pulse" : "bg-red-500"
-            }`}
-          ></span>
-          <span className="text-xs font-bold text-gray-400">
-            {connected ? "LIVE SYNC" : "ПОДКЛЮЧЕНИЕ..."}
+          ← Все комнаты
+        </Link>
+        <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2">
+          <h1 className="text-[28px] font-semibold tracking-[-0.02em]">
+            {roomNameParam}
+          </h1>
+          <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-line px-2 font-mono text-[11px] text-fg-2">
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-ok" : "bg-danger"}`}
+            />
+            {connected ? "синхронно" : "подключение…"}
+          </span>
+          <span className="font-mono text-xs text-fg-3">
+            {listeners.length}{" "}
+            {plural(listeners.length, "слушатель", "слушателя", "слушателей")}
           </span>
         </div>
-      </div>
+      </header>
 
-      {/* Main Grid: Player + Chat */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Synchronized Player Card */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-[#141418]/90 border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden">
-            {/* Ambient Background Glow */}
-            <div className="absolute top-0 right-0 w-96 h-96 bg-red-600/10 rounded-full blur-3xl pointer-events-none"></div>
-
-            {/* Room Title */}
-            <div className="flex items-center justify-between gap-4 mb-8">
-              <div>
-                <span className="text-[10px] font-black text-red-400 uppercase tracking-widest bg-red-500/10 px-3 py-1 rounded-full border border-red-500/20">
-                  LIVE ROOM
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="flex min-w-0 flex-col gap-6">
+          <section
+            aria-label="Сейчас играет"
+            className="flex flex-col gap-6 rounded-xl border border-line bg-surface p-6 md:p-7"
+          >
+            <div className="flex flex-col items-center gap-6 sm:flex-row sm:gap-7">
+              {sanitizeImageUrl(track.cover_url) ? (
+                <img
+                  src={sanitizeImageUrl(track.cover_url)}
+                  alt=""
+                  className="h-44 w-44 shrink-0 rounded-lg object-cover md:h-[200px] md:w-[200px]"
+                />
+              ) : (
+                <span className="h-44 w-44 shrink-0 rounded-lg bg-surface-2 md:h-[200px] md:w-[200px]" />
+              )}
+              <div className="flex min-w-0 flex-col gap-2 text-center sm:text-left">
+                <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-fg-3">
+                  ставит DJ {host ? `@${host}` : "—"}
                 </span>
-                <h2 className="text-2xl md:text-3xl font-black text-white mt-2">
-                  {roomNameParam}
-                </h2>
-                <p className="text-xs text-gray-400 font-medium">
-                  DJ: @{host || "VEIN DJ"}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 bg-white/5 border border-white/5 px-3 py-1.5 rounded-2xl">
-                <Users className="w-4 h-4 text-red-400" />
-                <span className="text-xs font-bold text-white">
-                  {listeners.length} слушателей
-                </span>
-              </div>
-            </div>
-
-            {/* Vinyl & Artwork Display */}
-            <div className="flex flex-col sm:flex-row items-center gap-6 mb-8">
-              <div className="relative group">
-                <div
-                  className={`w-40 h-40 md:w-48 md:h-48 rounded-2xl overflow-hidden bg-[#1f1f24] shadow-2xl border border-white/10 flex items-center justify-center shrink-0 ${
-                    track.is_playing ? "shadow-red-600/20" : ""
-                  }`}
-                >
-                  {sanitizeImageUrl(track.cover_url) ? (
-                    <img
-                      src={sanitizeImageUrl(track.cover_url)}
-                      alt="Cover"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <Disc className="w-16 h-16 text-gray-400 animate-spin-slow" />
-                  )}
-                </div>
-              </div>
-
-              <div className="text-center sm:text-left min-w-0 flex-grow">
-                <h3 className="text-xl md:text-2xl font-black text-white truncate mb-1">
+                <h2 className="text-2xl font-semibold tracking-[-0.02em] md:text-[30px]">
                   {track.title}
-                </h3>
-                <p className="text-gray-400 font-bold text-base truncate mb-3">
+                </h2>
+                <span className="text-base text-fg-2">
                   {track.artist}
-                </p>
-                {track.album && (
-                  <p className="text-gray-400 text-xs uppercase tracking-wider font-semibold truncate mb-4">
-                    {track.album}
-                  </p>
-                )}
-
-                {/* Animated Equalizer */}
-                {track.is_playing && (
-                  <div className="flex items-end gap-1 h-5 justify-center sm:justify-start">
-                    {[6, 12, 18, 14, 8, 16, 10].map((h, idx) => (
-                      <div
-                        key={idx}
-                        className="w-1 bg-red-500 rounded-full animate-pulse"
-                        style={{
-                          height: `${h}px`,
-                          animationDelay: `${idx * 150}ms`,
-                        }}
-                      ></div>
-                    ))}
-                  </div>
-                )}
+                  {track.album ? ` · ${track.album}` : ""}
+                </span>
+                <span
+                  aria-hidden="true"
+                  className="mt-2 flex h-[22px] items-end justify-center gap-1 sm:justify-start"
+                >
+                  {[8, 16, 22, 14, 10, 18, 12].map((h, idx) => (
+                    <span
+                      key={idx}
+                      className={`w-1 rounded-full bg-accent ${track.is_playing ? "eq-bar" : ""}`}
+                      style={{
+                        height: track.is_playing ? h : 3,
+                        animationDelay: `${idx * 0.12}s`,
+                      }}
+                    />
+                  ))}
+                </span>
               </div>
             </div>
 
-            {/* Progress Bar */}
-            <div className="space-y-2 mb-6">
-              <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden relative">
-                <div
-                  className="h-full bg-gradient-to-r from-red-600 to-orange-500 transition-all duration-300 rounded-full"
-                  style={{ width: `${progressPct}%` }}
-                ></div>
-              </div>
-              <div className="flex justify-between text-xs font-bold text-gray-400">
+            <div className="flex flex-col gap-2">
+              <Meter value={progressPct} height={4} />
+              <div className="flex justify-between font-mono text-xs text-fg-3">
                 <span>{formatTime(currentProgress)}</span>
                 <span>{formatTime(track.duration || 180)}</span>
               </div>
             </div>
 
-            {/* Controls */}
-            <div className="flex items-center justify-center gap-4">
+            <div className="flex items-center gap-4">
               <button
                 type="button"
                 onClick={handleTogglePlay}
                 disabled={!isHost}
-                title={
+                aria-label={track.is_playing ? "Пауза" : "Играть"}
+                className={`flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full transition-colors ${
                   isHost
-                    ? undefined
-                    : "Управлять воспроизведением может только DJ"
-                }
-                className="disabled:opacity-40 disabled:cursor-not-allowed w-14 h-14 rounded-full bg-gradient-to-tr from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white flex items-center justify-center shadow-lg shadow-red-600/30 transition-transform active:scale-95 cursor-pointer"
+                    ? "bg-accent text-on-accent hover:brightness-110"
+                    : "cursor-not-allowed bg-line text-fg-3"
+                }`}
               >
                 {track.is_playing ? (
-                  <Pause className="w-6 h-6" />
+                  <Pause className="h-5 w-5 fill-current" aria-hidden="true" />
                 ) : (
-                  <Play className="w-6 h-6 ml-0.5" />
+                  <Play
+                    className="ml-0.5 h-5 w-5 fill-current"
+                    aria-hidden="true"
+                  />
                 )}
               </button>
+              <span className="text-[13px] text-fg-3">
+                {isHost
+                  ? "Вы DJ — пауза и перемотка идут у всех"
+                  : "Управлять воспроизведением может только DJ"}
+              </span>
             </div>
-          </div>
+          </section>
 
-          {/* Listeners List */}
-          <div className="bg-[#141418]/60 border border-white/5 rounded-3xl p-5">
-            <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3">
-              Участники в комнате ({listeners.length})
-            </h4>
-            <div className="flex flex-wrap gap-2">
+          <section
+            aria-labelledby="people-title"
+            className="flex flex-col gap-3.5"
+          >
+            <h2 id="people-title" className="text-sm font-semibold">
+              В комнате ({listeners.length})
+            </h2>
+            <ul className="flex flex-wrap gap-2">
               {listeners.map((user) => (
-                <div
+                <li
                   key={user}
-                  className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/5 text-xs font-bold text-gray-200"
+                  className="inline-flex h-[34px] items-center gap-2 rounded-full border border-line pl-1 pr-3 text-[13px]"
                 >
-                  <div className="w-4 h-4 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center text-[10px]">
-                    {user[0]?.toUpperCase()}
-                  </div>
-                  @{user}
-                </div>
+                  <Avatar seed={user} size={26} />
+                  {user}
+                  {user === host && (
+                    <span className="font-mono text-[10px] text-accent">
+                      DJ
+                    </span>
+                  )}
+                </li>
               ))}
-            </div>
-          </div>
+            </ul>
+          </section>
         </div>
 
-        {/* Right: Real-time Room Chat */}
-        <div className="bg-[#141418]/90 border border-white/10 rounded-3xl p-5 flex flex-col h-[520px] shadow-2xl">
-          <div className="flex items-center gap-2 border-b border-white/5 pb-4 mb-4">
-            <MessageSquare className="w-4 h-4 text-red-400" />
-            <h4 className="text-sm font-black text-white">Чат комнаты</h4>
-          </div>
-
-          {/* Chat Messages Log */}
-          <div className="flex-grow overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+        <section
+          aria-labelledby="chat-title"
+          className="flex h-[560px] flex-col rounded-xl border border-line bg-surface"
+        >
+          <h2
+            id="chat-title"
+            className="border-b border-line px-5 py-4 text-sm font-semibold"
+          >
+            Чат комнаты
+          </h2>
+          <div
+            aria-live="polite"
+            className="flex flex-1 flex-col gap-3.5 overflow-y-auto px-5 py-4"
+          >
             {chatMessages.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-gray-400 text-xs text-center">
-                <Sparkles className="w-6 h-6 mb-2 text-gray-400" />
+              <p className="m-auto text-center text-[13px] text-fg-3">
                 Здесь пока тихо. Напишите первое сообщение!
-              </div>
+              </p>
             ) : (
               chatMessages.map((msg) => (
                 <div
                   key={`${msg.from}-${msg.timestamp}-${msg.text.slice(0, 15)}`}
-                  className="bg-white/5 rounded-2xl p-3 text-xs"
+                  className="flex flex-col gap-0.5"
                 >
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="font-bold text-red-400">@{msg.from}</span>
-                    <span className="text-[10px] text-gray-400">
-                      {new Date(msg.timestamp * 1000).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                  <span className="flex items-baseline gap-2">
+                    <span
+                      className={`text-[13px] font-medium ${msg.from === host ? "text-accent" : "text-fg"}`}
+                    >
+                      {msg.from}
                     </span>
-                  </div>
-                  <p className="text-gray-200 break-words">{msg.text}</p>
+                    <span className="font-mono text-[10px] text-fg-3">
+                      {new Date(msg.timestamp * 1000).toLocaleTimeString(
+                        "ru-RU",
+                        { hour: "2-digit", minute: "2-digit" },
+                      )}
+                    </span>
+                  </span>
+                  <p className="break-words text-sm leading-snug text-fg-2">
+                    {msg.text}
+                  </p>
                 </div>
               ))
             )}
             <div ref={chatEndRef} />
           </div>
 
-          {/* Chat Input (signed-in listeners only; guests just listen) */}
+          {/* Signed-in listeners only; guests just listen */}
           {isGuest ? (
-            <p className="mt-4 pt-2 border-t border-white/5 text-xs text-gray-400">
+            <p className="border-t border-line px-5 py-4 text-[13px] text-fg-2">
               Чтобы писать в чат,{" "}
-              <a href="/auth" className="text-red-400 underline">
+              <Link
+                href="/auth"
+                className="text-accent underline underline-offset-2"
+              >
                 войдите
-              </a>
+              </Link>
               .
             </p>
           ) : (
             <form
               onSubmit={handleSendChat}
-              className="mt-4 flex gap-2 pt-2 border-t border-white/5"
+              className="flex gap-2 border-t border-line p-3"
             >
               <input
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Написать в чат..."
-                className="flex-grow bg-[#1e1e24] border border-white/10 rounded-xl px-3 py-2 text-white placeholder-gray-500 text-xs focus:outline-none focus:border-red-500"
+                placeholder="Написать в чат…"
+                aria-label="Сообщение в чат"
+                maxLength={300}
+                className={inputOnCard}
               />
               <button
                 type="submit"
-                className="bg-red-600 hover:bg-red-500 text-white p-2.5 rounded-xl transition-colors shrink-0 cursor-pointer"
+                aria-label="Отправить"
+                className={`${btn.primary} h-10 w-10 shrink-0`}
               >
-                <Send className="w-4 h-4" />
+                <Send className="h-4 w-4" aria-hidden="true" />
               </button>
             </form>
           )}
-        </div>
+        </section>
       </div>
     </div>
   );
