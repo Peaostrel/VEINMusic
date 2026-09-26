@@ -23,7 +23,7 @@ export function useVisiblePolling(
       void pollRef.current();
     };
     const start = () => {
-      if (timer === undefined) timer = setInterval(run, intervalMs);
+      timer ??= setInterval(run, intervalMs);
     };
     const stop = () => {
       if (timer !== undefined) clearInterval(timer);

@@ -100,7 +100,7 @@ def _load_flags(db: Session) -> dict[str, bool]:
 
 def feature_flags(db: Session | None = None) -> dict[str, bool]:
     """All flags, with known features that have no row reported as on."""
-    flags = {key: True for key in KNOWN_FEATURES}
+    flags = dict.fromkeys(KNOWN_FEATURES, True)
     flags.update(_cached("feature_flags", _load_flags, db))
     return flags
 

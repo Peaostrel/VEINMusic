@@ -58,7 +58,8 @@ def test_search_itunes_entities(entity, item, expected):
         async with httpx.AsyncClient(transport=httpx.MockTransport(_router(routes))) as client:
             return await ms._search_itunes(client, "q", itunes_entity)
     title, cover, url = asyncio.run(run())
-    assert (title, cover or None, url) == expected
+    actual = (title, cover or None, url)
+    assert actual == expected
 
 
 @pytest.mark.parametrize("entity,section,result,expected", [
@@ -76,7 +77,8 @@ def test_search_metadata_falls_back_to_genius(entity, section, result, expected)
     }
     with _mock_http(ms, _router(routes)):
         title, cover, _ = asyncio.run(ms.search_metadata("query", entity))
-    assert (title, cover) == expected
+    actual = (title, cover)
+    assert actual == expected
 
 
 @pytest.mark.parametrize("entity,payload,expected", [

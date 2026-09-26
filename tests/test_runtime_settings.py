@@ -101,12 +101,16 @@ def test_registration_can_be_closed(client):
     assert client.get("/api/feature-flags").json()["flags"]["registration"] is False
 
 
+def _join_room(client):
+    with client.websocket_connect("/ws/together/room1", headers=ORIGIN) as ws:
+        return ws.receive_json()
+
+
 def test_listen_together_can_be_switched_off(client):
     _set_flag("listen_together", False)
     assert client.get("/api/together/rooms").status_code == 503
     with pytest.raises(WebSocketDisconnect) as closed:
-        with client.websocket_connect("/ws/together/room1", headers=ORIGIN) as ws:
-            ws.receive_json()
+        _join_room(client)
     assert closed.value.code == 4010
 
 
