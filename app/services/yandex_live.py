@@ -20,7 +20,6 @@ connections; users whose connection is up are skipped by the 30-second poll
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 import json
 import logging
 import secrets
@@ -173,8 +172,7 @@ class UserListener:
         self._last_event = playback.event
         if not playback.pause_unknown:
             return playback
-        inferred: Playback = dataclasses.replace(playback, playing=self._web_playing(playback, expected))
-        return inferred
+        return playback.with_playing(self._web_playing(playback, expected))
 
     def _restarted(self, playback: Playback | None, expected: tuple[int, bool] | None) -> bool:
         """The same track started over (repeat, seek back to the start)."""

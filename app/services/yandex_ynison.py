@@ -60,6 +60,11 @@ class Playback:
     # time, so the listener infers play/pause from their order
     pause_unknown: bool = field(default=False, compare=False)
 
+    def with_playing(self, playing: bool) -> "Playback":
+        """The same state with play/pause set (inferred for the web player)."""
+        return Playback(self.track_id, playing, self.progress_sec, self.duration_sec,
+                        self.event, self.event_ms, self.pause_unknown)
+
 
 def _connect(url: str, token: str, proto: dict[str, str], **kwargs: Any):
     return websockets.connect(
