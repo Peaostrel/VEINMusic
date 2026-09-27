@@ -126,6 +126,15 @@ export function useProfilePage() {
     });
   };
 
+  const handlePlaybackState = (id: number, isPlaying: boolean) => {
+    setData((prev) => ({
+      ...prev,
+      history: prev.history.map((h) =>
+        h.id === id ? { ...h, is_playing: isPlaying } : h,
+      ),
+    }));
+  };
+
   useEffect(() => {
     setIsMyProfile(localStorage.getItem("username") === username);
     setIsLogged(!!localStorage.getItem("username"));
@@ -254,12 +263,7 @@ export function useProfilePage() {
             handleNewScrobble(msg.track);
             checkNotifications();
           } else if (msg.type === "PLAYBACK_STATE") {
-            setData((prev) => ({
-              ...prev,
-              history: prev.history.map((h) =>
-                h.id === msg.id ? { ...h, is_playing: msg.is_playing } : h,
-              ),
-            }));
+            handlePlaybackState(msg.id, msg.is_playing);
           } else if (msg.type === "SYNC_INVITE") {
             if (
               confirm(

@@ -196,11 +196,10 @@ class LiveManager:
             return True  # no Redis: single process
 
     async def reconcile(self, wanted: dict[int, str]) -> None:
-        for uid in list(self.listeners):
-            listener = self.listeners[uid]
-            if wanted.get(uid) != listener.token:
-                await listener.stop()
-                del self.listeners[uid]
+        stale = [uid for uid, listener in self.listeners.items()
+                 if wanted.get(uid) != listener.token]
+        for uid in stale:
+            await self.listeners.pop(uid).stop()
         for uid, token in wanted.items():
             if uid not in self.listeners:
                 listener = UserListener(uid, token, self.process_func)
