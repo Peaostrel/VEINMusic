@@ -122,36 +122,55 @@ def _parse_yandex_now_playing(data: dict):
     }
 
 
+# Track metadata by Yandex track id: the live listener reports the same
+# track every few seconds, and /tracks answers never change for an id
+_TRACK_INFO_CACHE: dict[str, dict] = {}
+_TRACK_INFO_CACHE_MAX = 1000
+
+
+async def _yandex_track_info(client, track_id: str, headers: dict, username: str) -> dict | None:
+    cached = _TRACK_INFO_CACHE.get(str(track_id))
+    if cached is not None:
+        return cached
+    t_resp = await client.post("https://api.music.yandex.net/tracks", data={"track-ids": [track_id]}, headers=headers, timeout=5.0)
+    if t_resp.status_code != 200:
+        logger.warning(f"Yandex /tracks answered {t_resp.status_code} for user {username}")
+        return None
+    result = t_resp.json().get("result", [])
+    if not result:
+        return None
+    t_info = result[0]
+    cover_uri = t_info.get("coverUri")
+    albums = t_info.get("albums") or []
+    info = {
+        "title": t_info.get("title"),
+        "artist": ", ".join([a.get("name") for a in t_info.get("artists", []) if "name" in a]),
+        "cover": "https://" + cover_uri.replace("%%", "400x400") if cover_uri else None,
+        "duration": int(t_info.get("durationMs", 0) / 1000),
+        "album": albums[0].get("title") if albums else None,
+    }
+    if len(_TRACK_INFO_CACHE) >= _TRACK_INFO_CACHE_MAX:
+        _TRACK_INFO_CACHE.clear()
+    _TRACK_INFO_CACHE[str(track_id)] = info
+    return info
+
+
 async def _fetch_yandex_track_info(client, track_id, headers, process_func, db, user,
                                    changed_at: datetime | None = None,
                                    position: tuple[int, bool] | None = None):
-    """Look the track up and report it. `position` is (progress_sec,
+    """Look the track up and report it; returns process_func's status (None
+    if the track could not be looked up). `position` is (progress_sec,
     is_playing) when known (Ynison); otherwise it is estimated from the time
     the play queue last changed."""
-    t_resp = await client.post("https://api.music.yandex.net/tracks", data={"track-ids": [track_id]}, headers=headers, timeout=5.0)
-    if t_resp.status_code != 200:
-        logger.warning(f"Yandex /tracks answered {t_resp.status_code} for user {user.username}")
-        return
-    t_info = t_resp.json().get("result", [])
-    if not t_info:
-        return
-    t_info = t_info[0]
-
-    title = t_info.get("title")
-    artist = ", ".join([a.get("name") for a in t_info.get("artists", []) if "name" in a])
-    cover_uri = t_info.get("coverUri")
-    cover = "https://" + cover_uri.replace("%%", "400x400") if cover_uri else None
-    duration = int(t_info.get("durationMs", 0) / 1000)
+    info = await _yandex_track_info(client, track_id, headers, user.username)
+    if info is None:
+        return None
     track_url = f"https://music.yandex.ru/track/{track_id}"
-
-    albums = t_info.get("albums", [])
-    album = albums[0].get("title") if albums else None
-
-    progress, is_playing = position or _estimate_queue_position(changed_at, duration)
-    await process_func(
-        db, user, title, artist, cover,
+    progress, is_playing = position or _estimate_queue_position(changed_at, info["duration"])
+    return await process_func(
+        db, user, info["title"], info["artist"], info["cover"],
         track_url, "yandex", progress, is_playing,
-        duration, album
+        info["duration"], info["album"]
     )
 
 
@@ -278,7 +297,9 @@ async def poll_user(user_id: int, process_func):
             if u.integration.spotify_refresh_token:
                 await sync_spotify_status(u, local_db, process_func)
 
-            if u.integration.yandex_token:
+            # A user with an open live Ynison connection is reported by it
+            from app.services.yandex_live import connected as live_users
+            if u.integration.yandex_token and user_id not in live_users:
                 await sync_yandex_status(u, local_db, process_func)
 
         u.integration.last_sync = datetime.now(UTC)

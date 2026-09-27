@@ -301,3 +301,88 @@ def test_dispatch_external_exports_only_to_enabled_services(db):
     lastfm.assert_awaited_once_with("sk", "A", "T", None, 7)
     lb.assert_not_awaited()
     librefm.assert_awaited_once_with("lsk", "A", "T", None, 7)
+
+
+# --- Deezer ---------------------------------------------------------------------
+
+DEEZER = {
+    "artist": {"data": [
+        {"name": "Джизус", "link": "https://deezer/a/1", "picture_medium": "https://dz/artist/abc/250.jpg",
+         "picture_xl": "https://dz/artist/abc/1000.jpg"},
+        {"name": "Без фото", "picture_medium": "https://dz/images/artist//250.jpg",
+         "picture_xl": "https://dz/images/artist//1000.jpg"},
+        {"name": "джизус"},  # same name, other case: skipped
+    ]},
+    "track": {"data": [{"title": "Ковёр вертолёт (Remastered)", "title_short": "Ковёр вертолёт",
+                        "link": "https://deezer/t/1", "artist": {"name": "Агата Кристи"},
+                        "album": {"cover_medium": "https://dz/c/250.jpg", "cover_xl": "https://dz/c/1000.jpg"}}]},
+    "album": {"data": [{"title": "Альбом без названия", "link": "https://deezer/al/1",
+                        "artist": {"name": "Джизус"}, "cover_medium": "https://dz/al/250.jpg",
+                        "cover_xl": "https://dz/al/1000.jpg"}]},
+}
+
+
+def _deezer_routes(**extra):
+    routes = {("api.deezer.com", f"/search/{kind}"): payload for kind, payload in DEEZER.items()}
+    routes.update(extra)
+    return routes
+
+
+def test_deezer_parses_artists_tracks_albums():
+    async def run(kind):
+        async with httpx.AsyncClient(transport=httpx.MockTransport(_router(_deezer_routes()))) as client:
+            return await ms._search_deezer(client, "q", kind)
+    artists = asyncio.run(run("artist"))
+    assert [a["title"] for a in artists] == ["Джизус", "Без фото"]
+    assert artists[0]["cover"] == "https://dz/artist/abc/1000.jpg"
+    assert artists[1]["image"] == ""  # Deezer's placeholder is not a photo
+    assert asyncio.run(run("track")) == [{
+        "title": "Агата Кристи — Ковёр вертолёт", "image": "https://dz/c/250.jpg",
+        "cover": "https://dz/c/1000.jpg", "url": "https://deezer/t/1"}]
+    assert asyncio.run(run("album"))[0]["title"] == "Джизус — Альбом без названия"
+
+
+def test_search_metadata_prefers_deezer():
+    with _mock_http(ms, _router(_deezer_routes())):
+        assert asyncio.run(ms.search_metadata("Agatha Christie — Ковёр вертолёт", "track")) == (
+            "Агата Кристи — Ковёр вертолёт", "https://dz/c/1000.jpg", "https://deezer/t/1")
+
+
+def test_deezer_retries_with_title_only():
+    """The artist spelled differently than on Deezer: the title finds it."""
+    seen = []
+
+    def handler(request):
+        seen.append(request.url.params["q"])
+        if request.url.params["q"] == "Ковёр вертолёт":
+            return httpx.Response(200, json=DEEZER["track"])
+        return httpx.Response(200, json={"data": []})
+    with _mock_http(ms, handler):
+        title, _, _ = asyncio.run(ms.search_metadata("Agatha Christie — Ковёр вертолёт", "track"))
+    assert title == "Агата Кристи — Ковёр вертолёт"
+    assert seen[:2] == ["Agatha Christie — Ковёр вертолёт", "Ковёр вертолёт"]
+
+
+def test_deezer_name_with_other_provider_cover():
+    routes = {("api.deezer.com", "/search/artist"): {"data": [{"name": "Джизус"}]},
+              ("itunes.apple.com", "musicArtist"): {"resultCount": 1, "results": [
+                  {"artistName": "Jesus", "artworkUrl100": "https://it/100x100bb.jpg"}]}}
+    with _mock_http(ms, _router(routes)):
+        title, cover, _ = asyncio.run(ms.search_metadata("джизус", "artist"))
+    assert title == "Джизус"
+    assert cover == "https://it/600x600bb.jpg"
+
+
+def test_suggestions_start_with_deezer():
+    with _mock_http(ms, _router(_deezer_routes())):
+        assert asyncio.run(ms.search_suggestions("джизус", "album")) == [
+            {"title": "Джизус — Альбом без названия", "image": "https://dz/al/250.jpg"}]
+
+
+def test_deezer_errors_fall_back(monkeypatch):
+    def handler(request):
+        if request.url.host == "api.deezer.com":
+            raise httpx.ReadTimeout("slow")
+        return httpx.Response(200, json=ITUNES_SONG)
+    with _mock_http(ms, handler):
+        assert asyncio.run(ms.search_metadata("band song", "track"))[0] == "Band — Song"

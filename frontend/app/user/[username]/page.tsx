@@ -131,9 +131,12 @@ export default function Profile() {
       {u.cover_url && (
         <div
           aria-hidden="true"
-          className="-mb-4 h-32 rounded-xl bg-surface bg-cover bg-center md:h-44"
+          className="relative -mb-4 h-40 overflow-hidden rounded-2xl border border-line-soft bg-surface bg-cover bg-center sm:h-52 md:h-64"
           style={{ backgroundImage: `url(${u.cover_url})` }}
-        />
+        >
+          {/* Fades into the page so the avatar sits on it */}
+          <div className="absolute inset-0 bg-linear-to-t from-bg/80 via-bg/10 to-transparent" />
+        </div>
       )}
 
       <ProfileHeaderSection

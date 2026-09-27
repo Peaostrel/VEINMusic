@@ -117,14 +117,23 @@ export function ProfileHeaderSection({
   return (
     <div className="flex flex-col gap-7">
       <header className="flex flex-col gap-6 border-b border-line-soft pb-7 md:flex-row md:items-start">
-        <span className={`self-start ${frame}`}>
-          <img
-            src={u.avatar_url || fallbackAvatar}
-            alt=""
-            onError={fallbackOnce(fallbackAvatar)}
-            className="h-24 w-24 rounded-full bg-surface-2 object-cover"
-          />
-        </span>
+        {/* With a cover, the avatar overlaps its lower edge */}
+        <div
+          className={
+            u.cover_url
+              ? "relative z-10 -mt-[76px] self-start rounded-full bg-bg p-1"
+              : "self-start"
+          }
+        >
+          <span className={frame || "block"}>
+            <img
+              src={u.avatar_url || fallbackAvatar}
+              alt=""
+              onError={fallbackOnce(fallbackAvatar)}
+              className="h-24 w-24 rounded-full bg-surface-2 object-cover"
+            />
+          </span>
+        </div>
 
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">

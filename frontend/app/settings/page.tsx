@@ -75,7 +75,7 @@ function SettingsContent() {
           <PrivacyTab data={data} updateData={updateData} />
         )}
 
-        <div className="sticky bottom-0 z-10 -mx-1 mt-8 flex items-center justify-between gap-4 border-t border-line-soft bg-bg/95 px-1 py-4">
+        <div className="sticky bottom-[var(--tabbar-offset)] z-10 -mx-1 mt-8 flex items-center justify-between gap-4 border-t border-line-soft bg-bg/95 px-1 py-4">
           <StatusText text={status} />
           <button type="submit" className={`${btn.primary} ${btn.md} ml-auto`}>
             Сохранить всё

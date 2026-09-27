@@ -12,7 +12,7 @@ from fastapi import (
     Request,
 )
 from fastapi.responses import RedirectResponse
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 from app.core.constants import USER_AGENT_MOZILLA, YANDEX_MUSIC_DOMAIN
@@ -99,8 +99,10 @@ def get_recommendations(
     if not twins:
         return []
     twin_names = [t['username'] for t in twins]
+    # MAX(cover_url): Postgres rejects a column that is neither grouped nor
+    # aggregated; an expanding bind works for IN on every database
     sql = text("""
-        SELECT t.artist, t.cover_url, COUNT(s.id) as plays
+        SELECT t.artist, MAX(t.cover_url), COUNT(s.id) as plays
         FROM scrobbles s
         JOIN tracks t ON s.track_id = t.id
         JOIN users u ON s.user_id = u.id
@@ -111,9 +113,8 @@ def get_recommendations(
         GROUP BY t.artist
         ORDER BY plays DESC
         LIMIT 10
-    """)
-    recs = db.execute(sql, {"twins": tuple(twin_names),
-                      "my_id": user.id}).fetchall()
+    """).bindparams(bindparam("twins", expanding=True))
+    recs = db.execute(sql, {"twins": twin_names, "my_id": user.id}).fetchall()
     data = [{"artist": r[0], "cover_url": r[1],
              "reason": "Слушают ваши вкусовые близнецы"} for r in recs]
     set_to_cache(cache_key, data)

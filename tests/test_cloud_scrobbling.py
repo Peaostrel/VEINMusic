@@ -20,6 +20,13 @@ def _mock_http(handler):
     return patch.object(cs.httpx, "AsyncClient", side_effect=factory)
 
 
+@pytest.fixture(autouse=True)
+def _clear_track_cache():
+    cs._TRACK_INFO_CACHE.clear()
+    yield
+    cs._TRACK_INFO_CACHE.clear()
+
+
 def _user(**integration):
     fields = {"spotify_access_token": "old", "spotify_refresh_token": "refresh", "yandex_token": "ya"}
     fields.update(integration)

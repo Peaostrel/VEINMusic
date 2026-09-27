@@ -25,7 +25,10 @@ export default function Sidebar({
     (i) => !i.staffOnly || isStaff(profile?.role),
   );
   return (
-    <div className="flex h-full flex-col gap-6 overflow-y-auto px-4 py-6">
+    // Only the section list scrolls: an overflow container would clip the
+    // notifications, search and account popovers, which are wider than the
+    // sidebar
+    <div className="flex h-full flex-col gap-6 px-4 py-6">
       <div className="flex items-center justify-between pl-2">
         <BrandLink />
         <NotificationsBell align="left" />
@@ -33,7 +36,10 @@ export default function Sidebar({
 
       <UserSearch id="sidebar-search" />
 
-      <nav aria-label="Разделы" className="flex flex-col gap-0.5">
+      <nav
+        aria-label="Разделы"
+        className="-mx-1 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-1"
+      >
         {items.map((item) => {
           const current = item.id === active;
           const Icon = item.icon;
@@ -54,8 +60,6 @@ export default function Sidebar({
           );
         })}
       </nav>
-
-      <div className="flex-1" />
 
       <NowPlaying username={username} />
 

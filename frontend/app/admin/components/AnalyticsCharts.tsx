@@ -140,7 +140,7 @@ export default function AnalyticsCharts() {
               type="button"
               aria-pressed={days === d}
               onClick={() => setDays(d)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium ${days === d ? "bg-line text-fg" : "bg-surface-2 text-fg-2"}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap ${days === d ? "bg-line text-fg" : "bg-surface-2 text-fg-2"}`}
             >
               {d} дн.
             </button>

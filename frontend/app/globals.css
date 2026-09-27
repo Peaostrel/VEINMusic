@@ -36,6 +36,8 @@
   --accent-glow: rgba(227, 169, 59, 0.15);
   --accent-glow-strong: rgba(227, 169, 59, 0.3);
   --sidebar-width: 232px;
+  /* Height of the bottom tab bar on phones: sticky footers sit above it */
+  --tabbar-offset: 0px;
   color-scheme: dark;
 }
 
@@ -55,9 +57,13 @@ body {
   color: var(--text-on-accent);
 }
 
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+/* In the base layer so `outline-none` on fields with their own focus
+   border wins; unlayered, this drew a second ring inside them */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
 }
 
 ::-webkit-scrollbar {
@@ -93,9 +99,11 @@ html:not([data-auth="1"]) .auth-only {
 }
 
 @media (max-width: 1023.98px) {
-  /* Room for the bottom tab bar on phones */
+  html[data-auth="1"] {
+    --tabbar-offset: calc(64px + env(safe-area-inset-bottom));
+  }
   html[data-auth="1"] .shell-main {
-    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+    padding-bottom: var(--tabbar-offset);
   }
 }
 

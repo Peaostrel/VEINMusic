@@ -26,6 +26,8 @@ x-backend-env: &backend-env
   SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
   SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
   SPOTIFY_REDIRECT_URI: https://${API_DOMAIN}/auth/spotify/callback
+  # 0 turns off the open Ynison connections (Yandex Music falls back to polling)
+  YANDEX_LIVE: ${YANDEX_LIVE:-1}
 
 services:
   caddy:

@@ -72,6 +72,28 @@ async def _update_favorite(user_profile, field_value, field_name, entity_type):
     return True
 
 
+FAVORITE_FIELDS = (("favorite_artist", "artist"), ("favorite_track", "track"), ("favorite_album", "album"))
+
+
+async def refresh_favorites(user_profile) -> list[str]:
+    """Look the set favorites up again (name, picture, link) without
+    touching their 30-day locks. Returns the fields that changed."""
+    changed = []
+    for field_name, entity_type in FAVORITE_FIELDS:
+        value = getattr(user_profile, field_name)
+        if not value:
+            continue
+        title, cover, url = await search_metadata(value, entity_type)
+        new = {field_name: sanitize_text(title) if title else value,
+               f"{field_name}_cover": cover or getattr(user_profile, f"{field_name}_cover"),
+               f"{field_name}_url": url or getattr(user_profile, f"{field_name}_url")}
+        if any(getattr(user_profile, k) != v for k, v in new.items()):
+            for k, v in new.items():
+                setattr(user_profile, k, v)
+            changed.append(field_name)
+    return changed
+
+
 def _validate_url(url: str | None):
     if url and not url.startswith(("http:", "https:")):
         raise HTTPException(400, "Invalid URL")
