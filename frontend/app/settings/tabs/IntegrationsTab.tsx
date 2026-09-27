@@ -80,6 +80,9 @@ export default function IntegrationsTab({
   API_URL,
 }: Readonly<IntegrationsTabProps>) {
   const importEnabled = useFeature("lastfm_import");
+  const spotifyEnabled = useFeature("integration_spotify");
+  const yandexEnabled = useFeature("integration_yandex");
+  const lastfmEnabled = useFeature("integration_lastfm");
   const synced = (linked?: boolean) => {
     if (!linked) return "не подключено";
     if (!userProfile?.last_sync) return "подключено";
@@ -116,7 +119,11 @@ export default function IntegrationsTab({
           name="Spotify"
           status={synced(userProfile?.spotify_linked)}
           statusOk={Boolean(userProfile?.spotify_linked)}
-          description="Скробблинг напрямую через сервер, без расширения."
+          description={
+            spotifyEnabled
+              ? "Скробблинг напрямую через сервер, без расширения."
+              : "Временно приостановлено администратором."
+          }
         >
           <div className="flex gap-2 md:justify-end">
             {userProfile?.spotify_linked && (
@@ -133,6 +140,8 @@ export default function IntegrationsTab({
               onClick={() => {
                 globalThis.location.href = `${API_URL}/auth/spotify/login`;
               }}
+              disabled={!spotifyEnabled}
+              title={spotifyEnabled ? undefined : "Spotify временно отключён"}
               className={userProfile?.spotify_linked ? small : smallPrimary}
             >
               {userProfile?.spotify_linked ? "Обновить" : "Подключить"}
@@ -146,17 +155,21 @@ export default function IntegrationsTab({
           status={synced(userProfile?.yandex_linked)}
           statusOk={Boolean(userProfile?.yandex_linked)}
           description={
-            <>
-              Нужен OAuth-токен.{" "}
-              <a
-                href="https://oauth.yandex.ru/authorize?response_type=token&client_id=23cabbbdc6cd418abb4b39c32c41195d"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-accent hover:underline"
-              >
-                Получить токен
-              </a>
-            </>
+            yandexEnabled ? (
+              <>
+                Нужен OAuth-токен.{" "}
+                <a
+                  href="https://oauth.yandex.ru/authorize?response_type=token&client_id=23cabbbdc6cd418abb4b39c32c41195d"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-accent hover:underline"
+                >
+                  Получить токен
+                </a>
+              </>
+            ) : (
+              "Временно приостановлено администратором."
+            )
           }
         >
           <input
@@ -166,6 +179,7 @@ export default function IntegrationsTab({
             placeholder="y0_AgAAA…"
             aria-label="OAuth-токен Яндекса"
             autoComplete="new-password"
+            disabled={!yandexEnabled}
             readOnly
             onFocus={(e) => e.target.removeAttribute("readonly")}
             className={`${inputOnCard} h-9`}
@@ -183,6 +197,10 @@ export default function IntegrationsTab({
             <button
               type="button"
               onClick={saveYandexToken}
+              disabled={!yandexEnabled}
+              title={
+                yandexEnabled ? undefined : "Яндекс Музыка временно отключена"
+              }
               className={`${smallPrimary} flex-1`}
             >
               Сохранить
@@ -199,7 +217,11 @@ export default function IntegrationsTab({
               : "не подключено"
           }
           statusOk={Boolean(data.lastfmUsername)}
-          description="Импорт истории. Повторный импорт добавит только новые прослушивания."
+          description={
+            lastfmEnabled
+              ? "Импорт истории. Повторный импорт добавит только новые прослушивания."
+              : "Временно приостановлено администратором."
+          }
           footer={<LastfmImportStatus refreshKey={importRefresh ?? 0} />}
         >
           <input
@@ -208,6 +230,7 @@ export default function IntegrationsTab({
             placeholder="Ник на Last.fm"
             aria-label="Ник на Last.fm"
             autoComplete="off"
+            disabled={!lastfmEnabled}
             readOnly
             onFocus={(e) => e.target.removeAttribute("readonly")}
             className={`${inputOnCard} h-9`}
@@ -225,8 +248,12 @@ export default function IntegrationsTab({
             <button
               type="button"
               onClick={startLastfmImport}
-              disabled={!importEnabled}
-              title={importEnabled ? undefined : "Импорт временно отключён"}
+              disabled={!importEnabled || !lastfmEnabled}
+              title={
+                importEnabled && lastfmEnabled
+                  ? undefined
+                  : "Импорт временно отключён"
+              }
               className={`${smallPrimary} flex-1`}
             >
               Импорт

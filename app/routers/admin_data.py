@@ -14,8 +14,8 @@ from sqlalchemy.orm import Query as SAQuery, Session
 from app.core.constants import USER_NOT_FOUND
 from app.core.security import get_admin_user
 from app.database import get_db
-from app.models import Scrobble, Track, User
-from app.services import audit, cache
+from app.models import FeatureFlag, Scrobble, Track, User, UserIntegration
+from app.services import audit, cache, runtime_settings
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -183,6 +183,15 @@ def bulk_delete_scrobbles(data: BulkDelete, db: DB, admin: AdminUser):
 # ─── INTEGRATIONS ─────────────────────────────────────────────────────────────
 
 PROVIDERS = ("yandex", "spotify", "lastfm")
+PROVIDER_FEATURES = {
+    "yandex": "integration_yandex",
+    "spotify": "integration_spotify",
+    "lastfm": "integration_lastfm",
+}
+
+
+class ProviderState(BaseModel):
+    enabled: bool
 
 
 async def _live_status() -> tuple[dict[int, dict[str, Any]], int | None, bool]:
@@ -207,8 +216,6 @@ async def _live_status() -> tuple[dict[int, dict[str, Any]], int | None, bool]:
 
 
 def _integration_rows(db: Session, q: str | None, provider: str | None):
-    from app.models import UserIntegration
-
     query = db.query(User, UserIntegration).join(UserIntegration, UserIntegration.user_id == User.id)
     conditions = {
         "yandex": UserIntegration.yandex_token.isnot(None),
@@ -240,12 +247,24 @@ async def list_integrations(
     last_played: dict[int, datetime] = {
         int(uid): played for uid, played in db.query(Scrobble.user_id, func.max(Scrobble.played_at))
         .filter(Scrobble.user_id.in_(ids)).group_by(Scrobble.user_id)} if ids else {}
+    flags = runtime_settings.feature_flags(db)
+    linked_counts = {
+        name: _integration_rows(db, None, name).count()
+        for name in PROVIDERS
+    }
     return {
         "total": total,
         "redis": redis_ok,
         "worker_heartbeat_ms": heartbeat,
         # "N seconds ago" in the panel is counted from here
         "now_ms": int(datetime.now(UTC).timestamp() * 1000),
+        "providers": {
+            name: {
+                "enabled": flags.get(PROVIDER_FEATURES[name], True),
+                "linked": linked_counts[name],
+            }
+            for name in PROVIDERS
+        },
         "items": [{
             "username": u.username,
             "avatar_url": u.profile.avatar_url if u.profile else None,
@@ -258,6 +277,32 @@ async def list_integrations(
             "last_scrobble": last_played[int(u.id)].isoformat() if last_played.get(int(u.id)) else None,
         } for u, i in rows],
     }
+
+
+@router.put("/integrations/providers/{provider}")
+def set_provider_state(
+    provider: Annotated[str, Path(pattern="^(yandex|spotify|lastfm)$")],
+    data: ProviderState,
+    db: DB,
+    admin: AdminUser,
+):
+    """Pause or resume one provider without deleting any user's credentials."""
+    key = PROVIDER_FEATURES[provider]
+    flag = db.query(FeatureFlag).filter(FeatureFlag.key == key).first()
+    if flag is None:
+        flag = FeatureFlag(
+            key=key,
+            description=runtime_settings.KNOWN_FEATURES[key],
+            is_enabled=data.enabled,
+        )
+        db.add(flag)
+    else:
+        flag.is_enabled = data.enabled  # type: ignore[assignment]
+        flag.updated_at = datetime.now(UTC)  # type: ignore[assignment]
+    audit.record(db, admin, "integration.provider_state", provider, enabled=data.enabled)
+    db.commit()
+    runtime_settings.invalidate()
+    return {"provider": provider, "enabled": data.enabled}
 
 
 def _user_with_integration(db: Session, username: str) -> User:
@@ -275,6 +320,8 @@ async def reconnect_yandex(username: str, db: DB, admin: AdminUser):
     from app.core.redis import get_redis_client
     from app.services.yandex_live import RESTART_KEY
 
+    if not runtime_settings.is_feature_enabled("integration_yandex", db):
+        raise HTTPException(503, "Яндекс Музыка приостановлена администратором")
     user = _user_with_integration(db, username)
     if not user.integration.yandex_token:
         raise HTTPException(400, "Яндекс Музыка не подключена")

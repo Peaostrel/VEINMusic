@@ -254,6 +254,59 @@ def test_integrations_list_with_live_status(admin_client):
     assert [i["username"] for i in only_fm["items"]] == ["other"]
 
 
+
+def test_provider_can_be_paused_without_removing_credentials(admin_client):
+    from app.services import cloud_scrobbling, yandex_live
+
+    target_id = _link("target", yandex_token="ya")
+    other_id = _link("other", spotify_refresh_token="sp")
+    _link("boss", lastfm_username="boss_fm")
+
+    initial = admin_client.get("/api/admin/integrations").json()["providers"]
+    assert initial == {
+        "yandex": {"enabled": True, "linked": 1},
+        "spotify": {"enabled": True, "linked": 1},
+        "lastfm": {"enabled": True, "linked": 1},
+    }
+
+    try:
+        paused = admin_client.put(
+            "/api/admin/integrations/providers/yandex",
+            json={"enabled": False},
+        )
+        assert paused.json() == {"provider": "yandex", "enabled": False}
+        providers = admin_client.get("/api/admin/integrations").json()["providers"]
+        assert providers["yandex"] == {"enabled": False, "linked": 1}
+
+        # The token stays in the database, while both Yandex workers ignore it.
+        assert yandex_live.load_linked_users() == {}
+        assert target_id not in _session(cloud_scrobbling.get_pollable_user_ids)
+        assert other_id in _session(cloud_scrobbling.get_pollable_user_ids)
+        assert admin_client.post(
+            "/api/admin/integrations/target/yandex/reconnect"
+        ).status_code == 503
+
+        # A user can still unlink, but cannot save a new token while paused.
+        _login(admin_client, "target")
+        assert admin_client.post(
+            "/api/integrations/yandex", json={"token": "replacement"}
+        ).status_code == 503
+        assert admin_client.post(
+            "/api/integrations/yandex/disconnect", json={}
+        ).status_code == 200
+    finally:
+        _login(admin_client, "boss")
+        admin_client.put(
+            "/api/admin/integrations/providers/yandex",
+            json={"enabled": True},
+        )
+
+    actions = {
+        entry["action"]
+        for entry in admin_client.get("/api/admin/audit").json()["items"]
+    }
+    assert "integration.provider_state" in actions
+
 def test_reconnect_and_unlink(admin_client):
     import asyncio
     from unittest.mock import AsyncMock, patch

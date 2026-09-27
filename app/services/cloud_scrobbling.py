@@ -4,11 +4,12 @@ import os
 from datetime import UTC, datetime
 
 import httpx
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import User
-from app.services import yandex_ynison
+from app.services import runtime_settings, yandex_ynison
 
 logger = logging.getLogger(__name__)
 
@@ -295,13 +296,15 @@ async def poll_user(user_id: int, process_func):
         # Same per-user lock as POST /api/scrobble, so cloud polling and
         # client scrobbles never process concurrently for one user.
         from app.core.redis import redis_lock
+        spotify_enabled = runtime_settings.is_feature_enabled("integration_spotify", local_db)
+        yandex_enabled = runtime_settings.is_feature_enabled("integration_yandex", local_db)
         async with redis_lock(f"scrobble_lock:{user_id}", expire_sec=30):
-            if u.integration.spotify_refresh_token:
+            if spotify_enabled and u.integration.spotify_refresh_token:
                 await sync_spotify_status(u, local_db, process_func)
 
             # A user with an open live Ynison connection is reported by it
             from app.services.yandex_live import connected as live_users
-            if u.integration.yandex_token and user_id not in live_users:
+            if yandex_enabled and u.integration.yandex_token and user_id not in live_users:
                 await sync_yandex_status(u, local_db, process_func)
 
         u.integration.last_sync = datetime.now(UTC)
@@ -317,10 +320,15 @@ def get_pollable_user_ids(db: Session) -> list[int]:
     from app.models import UserIntegration
     # NB: must be SQL expressions (.isnot); a Python `x is not None` on a
     # Column evaluates to True and would select every user.
+    providers = []
+    if runtime_settings.is_feature_enabled("integration_spotify", db):
+        providers.append(UserIntegration.spotify_refresh_token.isnot(None))
+    if runtime_settings.is_feature_enabled("integration_yandex", db):
+        providers.append(UserIntegration.yandex_token.isnot(None))
+    if not providers:
+        return []
     return [row[0] for row in db.query(User.id).join(UserIntegration).filter(
-        User.is_banned.isnot(True),
-        UserIntegration.spotify_refresh_token.isnot(None)
-        | UserIntegration.yandex_token.isnot(None)).all()]
+        User.is_banned.isnot(True), or_(*providers)).all()]
 
 
 def _load_pollable_user_ids() -> list[int]:
