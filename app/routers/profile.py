@@ -13,6 +13,7 @@ from app.core.security import SECRET_KEY, get_current_user
 from app.database import get_db
 from app.models import User
 from app.schemas import PrivacyUpdate, ProfileUpdate
+from app.services.cache import clear_all
 from app.services.metadata_search import search_metadata
 from app.utils import sanitize_text
 
@@ -166,6 +167,7 @@ def _update_profile_fields(profile, data: ProfileUpdate):
 async def update_profile(request: Request, data: ProfileUpdate, db: Annotated[Session, Depends(
         get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
+    privacy_changed = data.is_private is not None and user.profile.is_private != data.is_private
 
     await _update_favorite(user.profile, data.favorite_artist, 'favorite_artist', 'artist')
     await _update_favorite(user.profile, data.favorite_track, 'favorite_track', 'track')
@@ -187,6 +189,8 @@ async def update_profile(request: Request, data: ProfileUpdate, db: Annotated[Se
     _validate_and_set_social(user.profile, data.social_links)
 
     db.commit()
+    if privacy_changed:
+        clear_all()
     return {"status": "ok"}
 
 
@@ -194,6 +198,8 @@ async def update_profile(request: Request, data: ProfileUpdate, db: Annotated[Se
 @limiter.limit("20/minute")
 def update_privacy(request: Request, data: PrivacyUpdate, db: Annotated[Session, Depends(
         get_db)], current_user: Annotated[User, Depends(get_current_user)]):
+    privacy_changed = (data.is_private is not None
+                       and current_user.profile.is_private != data.is_private)
     if data.is_private is not None:
         current_user.profile.is_private = data.is_private
     if data.hidden_artists is not None:
@@ -201,6 +207,8 @@ def update_privacy(request: Request, data: PrivacyUpdate, db: Annotated[Session,
     if data.sync_privacy is not None:
         current_user.profile.sync_privacy = data.sync_privacy
     db.commit()
+    if privacy_changed:
+        clear_all()
     return {"status": "ok"}
 
 
