@@ -479,3 +479,92 @@ def test_pause_and_resume_are_broadcast(db):
     messages = [c.args[1] for c in broadcast.await_args_list]
     assert [m["type"] for m in messages] == ["NEW_SCROBBLE", "PLAYBACK_STATE"]
     assert messages[1] == {"type": "PLAYBACK_STATE", "id": s.id, "is_playing": False}
+
+
+def test_enrich_album_through_yandex_api_with_token():
+    """Outside Russia the album page and the old handlers give nothing and the
+    API wants a token: the admin's own token gets the cover and track count."""
+    from app.services import og_parser
+
+    seen = {}
+
+    def handler(request):
+        seen["auth"] = request.headers.get("Authorization")
+        assert request.url.path == "/albums/35360435"
+        return httpx.Response(200, json={"result": {
+            "title": "Проводник", "trackCount": 15, "artists": [{"name": "Джизус"}],
+            "coverUri": "avatars.yandex.net/get-music-content/1/abc/%%"}})
+
+    url = "https://music.yandex.ru/album/35360435"
+    with _mock_http(og_parser, handler), \
+            patch.object(ach, "parse_og_meta", new=AsyncMock(return_value=(None, None))) as og:
+        result = asyncio.run(ach._enrich_achievement_data("specific_album", url, 1, "", "", "tok"))
+    assert result == (url, 15, "https://avatars.yandex.net/get-music-content/1/abc/400x400", "")
+    assert seen["auth"] == "OAuth tok"
+    og.assert_not_awaited()
+
+
+def test_yandex_api_meta_track_artist_and_errors():
+    from app.services import og_parser
+
+    def handler(request):
+        if request.url.path == "/tracks/7":
+            return httpx.Response(200, json={"result": [{
+                "title": "Ковёр вертолёт", "artists": [{"name": "Агата Кристи"}],
+                "albums": [{"coverUri": "avatars.yandex.net/a/%%"}]}]})
+        if request.url.path == "/artists/9/brief-info":
+            return httpx.Response(200, json={"result": {"artist": {
+                "name": "Джизус", "cover": {"uri": "avatars.yandex.net/b/%%"}}}})
+        return httpx.Response(451, json={})
+
+    with _mock_http(og_parser, handler):
+        run = asyncio.run
+        assert run(og_parser.yandex_api_meta("https://music.yandex.ru/album/1/track/7", "t")) == (
+            "Агата Кристи — Ковёр вертолёт", "https://avatars.yandex.net/a/400x400", 0)
+        assert run(og_parser.yandex_api_meta("https://music.yandex.ru/artist/9", "t")) == (
+            "Джизус", "https://avatars.yandex.net/b/400x400", 0)
+        assert run(og_parser.yandex_api_meta("https://music.yandex.ru/album/5", "t")) == (None, None, 0)
+        assert run(og_parser.yandex_api_meta("https://music.yandex.ru/album/5", "")) == (None, None, 0)
+        assert run(og_parser.yandex_api_meta("https://example.com/x", "t")) == (None, None, 0)
+
+
+def test_enrich_falls_back_to_deezer_cover_by_name():
+    """No token and nothing from the link: the cover is found by the
+    achievement's names ("Джизус - Проводник")."""
+    from app.services import metadata_search
+
+    seen = []
+
+    def handler(request):
+        seen.append(request.url.params.get("q"))
+        return httpx.Response(200, json={"data": [{
+            "title": "Проводник", "artist": {"name": "Джизус"}, "link": "https://deezer/al/1",
+            "cover_medium": "https://dz/250.jpg", "cover_xl": "https://dz/1000.jpg"}]})
+
+    url = "https://music.yandex.ru/album/35360435"
+    with _mock_http(metadata_search, handler), \
+            patch.object(ach, "parse_og_meta", new=AsyncMock(return_value=(None, None))), \
+            patch.object(ach, "get_album_track_count", new=AsyncMock(return_value=0)):
+        result = asyncio.run(ach._enrich_achievement_data("specific_album", url, 15, "", "Джизус - Проводник"))
+    assert result == (url, 15, "https://dz/1000.jpg", "Джизус - Проводник")
+    assert seen[0] == "Джизус Проводник"
+
+
+def test_album_progress_counts_tracks_played_from_the_album_link(db):
+    """Progress matches the award check, which counts tracks by the album link."""
+    from app.models import Achievement, Scrobble, Track, User
+
+    user = User(username="alb_user", hashed_password="x")
+    db.add(user)
+    db.flush()
+    for n in range(3):
+        track = Track(title=f"T{n}", artist="Джизус", duration=100,
+                      track_url=f"https://music.yandex.ru/album/35360435/track/{n}")
+        db.add(track)
+        db.flush()
+        db.add(Scrobble(user_id=user.id, track_id=track.id, listened_sec=100, source="yandex_music"))
+    a = Achievement(name="Проводник", description="", rule_type="specific_album", rule_value=15,
+                    rule_target="https://music.yandex.ru/album/35360435", target_image="", rule_meta="")
+    db.add(a)
+    db.commit()
+    assert ach._calc_specific_album(db, user, a) == 3

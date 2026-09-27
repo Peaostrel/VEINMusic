@@ -87,6 +87,62 @@ async def _parse_yandex_meta(
     return None, None
 
 
+YANDEX_API = "https://api.music.yandex.net"
+
+
+def _yandex_cover(uri: str | None) -> str | None:
+    return HTTPS_PREFIX + uri.replace("%%", "400x400") if uri else None
+
+
+def _first_artist(item: dict) -> str | None:
+    artists = item.get("artists") or []
+    return artists[0].get("name") if artists and isinstance(artists[0], dict) else None
+
+
+def _parse_api_result(kind: str, result) -> tuple[str | None, str | None, int]:
+    """(title, cover, album track count) of an api.music.yandex.net answer."""
+    if kind == "album" and isinstance(result, dict):
+        artist = _first_artist(result)
+        title = f"{artist} — {result.get('title')}" if artist and result.get("title") else result.get("title")
+        return title, _yandex_cover(result.get("coverUri")), int(result.get("trackCount") or 0)
+    if kind == "track" and isinstance(result, list) and result:
+        track = result[0]
+        artist = _first_artist(track)
+        title = f"{artist} — {track.get('title')}" if artist and track.get("title") else track.get("title")
+        albums = track.get("albums") or [{}]
+        return title, _yandex_cover(track.get("coverUri") or albums[0].get("coverUri")), 0
+    if kind == "artist" and isinstance(result, dict):
+        info: dict = result.get("artist") or {}
+        return info.get("name"), _yandex_cover((info.get("cover") or {}).get("uri")), 0
+    return None, None, 0
+
+
+async def yandex_api_meta(url: str, token: str) -> tuple[str | None, str | None, int]:
+    """Title, cover and album track count of a music.yandex.ru link through
+    the API with a user's token. The site and its old handlers serve only an
+    empty page outside Russia, and the API refuses requests without a token
+    (451)."""
+    ids = re.search(r"/(album|track|artist)/(\d+)(?:/track/(\d+))?", url or "")
+    if not ids or not token:
+        return None, None, 0
+    kind, item_id = ids.group(1), ids.group(2)
+    if ids.group(3):
+        kind, item_id = "track", ids.group(3)
+    path = {"album": f"/albums/{item_id}", "track": f"/tracks/{item_id}",
+            "artist": f"/artists/{item_id}/brief-info"}[kind]
+    headers = {"Authorization": f"OAuth {token}", "X-Yandex-Music-Client": "YandexMusicAndroid/2023.12.1"}
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(YANDEX_API + path, headers=headers)
+        if resp.status_code != 200:
+            logger.warning(f"Yandex API {path}: HTTP {resp.status_code}")
+            return None, None, 0
+        return _parse_api_result(kind, resp.json().get("result"))
+    except Exception as e:
+        logger.warning(f"Yandex API {path} error: {e}")
+        return None, None, 0
+
+
 def _clean_banned_titles(title: str | None, img: str | None) -> tuple[str | None, str | None]:
     if not title:
         return None, img

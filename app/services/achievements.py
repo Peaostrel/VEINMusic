@@ -26,7 +26,7 @@ from app.models import (
     User,
     UserAchievement,
 )
-from app.services.og_parser import parse_og_meta
+from app.services.og_parser import parse_og_meta, yandex_api_meta
 from app.services.user_stats import get_user_timezone_offset
 
 logger = logging.getLogger(__name__)
@@ -283,7 +283,14 @@ def _calc_specific_album(db: Session, user: User, a: Achievement) -> int:
         else:
             current_val_text = db.query(func.count(func.distinct(Scrobble.track_id))).join(Track).filter(
                 Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85, Track.album.ilike(f"%{album_name.strip()}%")).scalar() or 0
-    return max(current_val_img, current_val_text)
+    # The same rule the award check uses: tracks played from the album's link
+    current_val_url = 0
+    if a.rule_target.startswith("http"):
+        current_val_url = db.query(func.count(func.distinct(Scrobble.track_id))).join(Track).filter(
+            Scrobble.user_id == user.id,
+            Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,
+            Track.track_url.like(f"%{a.rule_target.split('?')[0]}%")).scalar() or 0
+    return max(current_val_img, current_val_text, current_val_url)
 
 
 def _calculate_achievement_progress(db: Session, user: User, a: Achievement) -> int:
@@ -332,7 +339,34 @@ def _format_achievement_data(db: Session, user: User, a: Achievement, ua: UserAc
     }
 
 
-async def _enrich_achievement_data(rule_type: str, target_val: str, val: int, t_img: str, meta_text: str):
+DEEZER_KIND = {"specific_album": "album", "specific_track": "track", "specific_artist": "artist"}
+
+
+async def _deezer_cover(rule_type: str, query: str | None) -> str | None:
+    """Cover by name ("Джизус - Проводник") when the link gave none."""
+    from app.services.metadata_search import _search_deezer
+
+    if not query or not query.strip():
+        return None
+    words = " ".join(p.strip() for p in query.replace("—", "-").split(" - ") if p.strip())
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        found = await _search_deezer(client, words, DEEZER_KIND[rule_type], limit=1)
+    return found[0]["cover"] or None if found else None
+
+
+async def _link_meta(target_val: str, yandex_token: str | None) -> tuple[str | None, str | None, int]:
+    """(title, cover, album track count) of the achievement's link."""
+    title, img, tracks = None, None, 0
+    if YANDEX_MUSIC_DOMAIN in target_val and yandex_token:
+        title, img, tracks = await yandex_api_meta(target_val, yandex_token)
+    if not img:
+        og_title, og_img = await parse_og_meta(target_val)
+        title, img = title or og_title, og_img
+    return title, img, tracks
+
+
+async def _enrich_achievement_data(rule_type: str, target_val: str, val: int, t_img: str, meta_text: str,
+                                   yandex_token: str | None = None):
     is_valid_type = rule_type in ["specific_track", "specific_album", "specific_artist"]
     is_http_target = target_val and target_val.startswith("http")
 
@@ -343,7 +377,9 @@ async def _enrich_achievement_data(rule_type: str, target_val: str, val: int, t_
     if is_internal_image:
         return target_val, val, target_val, meta_text
 
-    title, img = await parse_og_meta(target_val)
+    title, img, api_tracks = await _link_meta(target_val, yandex_token)
+    if not img:
+        img = await _deezer_cover(rule_type, meta_text or title)
     if img:
         t_img = img
 
@@ -354,7 +390,7 @@ async def _enrich_achievement_data(rule_type: str, target_val: str, val: int, t_
             target_val = f"{title}||{target_val}"
 
     if rule_type == "specific_album":
-        track_count = await get_album_track_count(target_val)
+        track_count = api_tracks or await get_album_track_count(target_val)
         if track_count > 0:
             val = track_count
 
