@@ -36,6 +36,8 @@
   --accent-glow: rgba(227, 169, 59, 0.15);
   --accent-glow-strong: rgba(227, 169, 59, 0.3);
   --sidebar-width: 232px;
+  /* Height of the bottom tab bar on phones: sticky footers sit above it */
+  --tabbar-offset: 0px;
   color-scheme: dark;
 }
 
@@ -94,11 +96,6 @@ html:not([data-auth="1"]) .auth-only {
   html[data-auth="1"] .shell-main {
     padding-left: var(--sidebar-width);
   }
-}
-
-/* Height of the bottom tab bar on phones: sticky footers sit above it */
-:root {
-  --tabbar-offset: 0px;
 }
 
 @media (max-width: 1023.98px) {
