@@ -32,7 +32,7 @@ export function DailyActivity({
       aria-labelledby="daily-activity"
       className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-6"
     >
-      <div className="flex items-baseline justify-between">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h2 id="daily-activity" className="text-base font-semibold">
           Прослушивания по дням
         </h2>

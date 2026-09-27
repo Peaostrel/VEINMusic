@@ -58,7 +58,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
   const [currentProgress, setCurrentProgress] = useState(0);
 
   const socketRef = useRef<WebSocket | null>(null);
-  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const chatBoxRef = useRef<HTMLDivElement | null>(null);
 
   // Connect to WebSocket
   useEffect(() => {
@@ -137,9 +137,11 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
     return () => clearInterval(interval);
   }, [track]);
 
-  // Auto scroll chat
+  // Scroll only the chat box: scrollIntoView also scrolled the page, so on
+  // phones opening a room jumped past the player down to the chat
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const box = chatBoxRef.current;
+    box?.scrollTo({ top: box.scrollHeight, behavior: "smooth" });
   }, [chatMessages]);
 
   const handleSendChat = (e: React.FormEvent) => {
@@ -325,6 +327,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
             Чат комнаты
           </h2>
           <div
+            ref={chatBoxRef}
             aria-live="polite"
             className="flex flex-1 flex-col gap-3.5 overflow-y-auto px-5 py-4"
           >
@@ -357,7 +360,6 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
                 </div>
               ))
             )}
-            <div ref={chatEndRef} />
           </div>
 
           {/* Signed-in listeners only; guests just listen */}

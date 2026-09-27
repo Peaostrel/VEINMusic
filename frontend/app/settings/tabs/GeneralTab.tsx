@@ -211,7 +211,7 @@ export default function GeneralTab({
                   onChange={(e) =>
                     updateSocialLink(link.id, "network", e.target.value)
                   }
-                  className="h-10 cursor-pointer rounded-lg border border-line bg-surface px-3 text-sm text-fg outline-none"
+                  className="h-10 cursor-pointer rounded-lg border border-line bg-surface px-3 text-sm text-fg outline-none transition-colors focus:border-fg-3"
                 >
                   <option value="telegram">Telegram</option>
                   <option value="vk">VK</option>
