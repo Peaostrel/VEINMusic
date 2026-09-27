@@ -35,26 +35,28 @@ def _headers(token: str) -> dict[str, str]:
     }
 
 
+def _parse_track(item: dict[str, Any]) -> HistoryTrack | None:
+    data = item.get("data") or {}
+    ids = data.get("itemId") or {}
+    if item.get("type") != "track" or not ids.get("trackId"):
+        return None
+    model = data.get("fullModel") or {}
+    return HistoryTrack(
+        track_id=str(ids["trackId"]),
+        album_id=str(ids.get("albumId") or ""),
+        title=str(model.get("title") or ""),
+        artists=", ".join(a.get("name", "") for a in model.get("artists") or []),
+    )
+
+
+def _parse_day(tab: dict[str, Any]) -> list[HistoryTrack]:
+    items = [item for group in tab.get("items") or [] for item in group.get("tracks") or []]
+    return [t for t in map(_parse_track, items) if t is not None]
+
+
 def parse_history(result: dict[str, Any]) -> list[tuple[str, list[HistoryTrack]]]:
     """[(date, tracks)] in the order the API returns them."""
-    days = []
-    for tab in result.get("historyTabs") or []:
-        tracks = []
-        for group in tab.get("items") or []:
-            for item in group.get("tracks") or []:
-                data = item.get("data") or {}
-                ids = data.get("itemId") or {}
-                model = data.get("fullModel") or {}
-                if item.get("type") != "track" or not ids.get("trackId"):
-                    continue
-                tracks.append(HistoryTrack(
-                    track_id=str(ids["trackId"]),
-                    album_id=str(ids.get("albumId") or ""),
-                    title=str(model.get("title") or ""),
-                    artists=", ".join(a.get("name", "") for a in model.get("artists") or []),
-                ))
-        days.append((str(tab.get("date") or ""), tracks))
-    return days
+    return [(str(tab.get("date") or ""), _parse_day(tab)) for tab in result.get("historyTabs") or []]
 
 
 async def fetch_history(client: httpx.AsyncClient, token: str,
@@ -65,47 +67,56 @@ async def fetch_history(client: httpx.AsyncClient, token: str,
     return parse_history(resp.json().get("result") or {})
 
 
-async def _diagnose(token: str, minutes: float) -> None:  # pragma: no cover - manual diagnostics
-    import asyncio
+async def _print_history(client: httpx.AsyncClient, token: str, show_shape: bool) -> None:  # pragma: no cover
     import json
     import time
 
+    resp = await client.get(f"{API_URL}/music-history", headers=_headers(token),
+                            params={"fullModelsCount": 10}, timeout=10)
+    print(f"{time.strftime('%H:%M:%S')} history HTTP {resp.status_code}")  # noqa: T201
+    result = resp.json().get("result") or {}
+    if show_shape:
+        # Shape of one group, without personal data beyond ids
+        tab = (result.get("historyTabs") or [{}])[0]
+        group = (tab.get("items") or [{}])[0]
+        track = ((group.get("tracks") or [{}])[0].get("data") or {}).get("itemId")
+        print("keys:", sorted(result.keys()), "tab:", sorted(tab.keys()),  # noqa: T201
+              "group:", sorted(group.keys()), "track item:", json.dumps(track, ensure_ascii=False))
+    for date, tracks in parse_history(result)[:1]:
+        for t in tracks[:5]:
+            print(f"  {date} {t.track_id}:{t.album_id} {t.artists} — {t.title}")  # noqa: T201
+
+
+def _device_label(device: dict[str, Any]) -> str:  # pragma: no cover - manual diagnostics
+    info = device.get("info") or {}
+    return f"{info.get('type')}/{info.get('app_name')}{' offline' if device.get('is_offline') else ''}"
+
+
+async def _print_ynison(token: str) -> None:  # pragma: no cover - manual diagnostics
     from app.services import yandex_ynison
 
-    first = True
+    state = await yandex_ynison._read_state(token)
+    status = (state.get("player_state") or {}).get("status") or {}
+    print(f"  ynison: {yandex_ynison.parse_state(state)} paused={status.get('paused')} "  # noqa: T201
+          f"event={(status.get('version') or {}).get('timestamp_ms')} "
+          f"active={state.get('active_device_id_optional')} "
+          f"devices={[_device_label(d) for d in state.get('devices') or []]}")
+
+
+async def _diagnose(token: str, minutes: float) -> None:  # pragma: no cover - manual diagnostics
+    import asyncio
+    import time
+
     deadline = time.time() + minutes * 60
+    first = True
     async with httpx.AsyncClient() as client:
         while True:
-            stamp = time.strftime("%H:%M:%S")
             try:
-                resp = await client.get(f"{API_URL}/music-history", headers=_headers(token),
-                                        params={"fullModelsCount": 10}, timeout=10)
-                print(f"{stamp} history HTTP {resp.status_code}")  # noqa: T201
-                body = resp.json()
-                if first:
-                    # Shape of one group, without personal data beyond ids
-                    tab = ((body.get("result") or {}).get("historyTabs") or [{}])[0]
-                    group = (tab.get("items") or [{}])[0]
-                    print("keys:", sorted((body.get("result") or {}).keys()),  # noqa: T201
-                          "tab:", sorted(tab.keys()), "group:", sorted(group.keys()),
-                          "track item:", json.dumps(((group.get("tracks") or [{}])[0].get("data") or {})
-                                                    .get("itemId"), ensure_ascii=False))
-                for date, tracks in parse_history(body.get("result") or {})[:1]:
-                    for t in tracks[:5]:
-                        print(f"  {date} {t.track_id}:{t.album_id} {t.artists} — {t.title}")  # noqa: T201
+                await _print_history(client, token, show_shape=first)
             except Exception as e:
-                print(f"{stamp} history error: {e}")  # noqa: T201
+                print(f"  history error: {e}")  # noqa: T201
             try:
-                state = await yandex_ynison._read_state(token)
-                player = state.get("player_state") or {}
-                status = player.get("status") or {}
-                version = status.get("version") or {}
-                devices = [f"{(d.get('info') or {}).get('type')}/{(d.get('info') or {}).get('app_name')}"
-                           f"{'' if not d.get('is_offline') else ' offline'}"
-                           for d in state.get("devices") or []]
-                print(f"  ynison: {yandex_ynison.parse_state(state)} paused={status.get('paused')} "  # noqa: T201
-                      f"event={version.get('timestamp_ms')} active={state.get('active_device_id_optional')} "
-                      f"devices={devices}")
+                await _print_ynison(token)
             except Exception as e:
                 print(f"  ynison error: {e}")  # noqa: T201
             first = False
