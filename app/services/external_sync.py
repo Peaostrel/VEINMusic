@@ -11,6 +11,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.models import ExternalSyncConfig
+from app.services.runtime_settings import is_feature_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +157,8 @@ async def dispatch_external_exports(
     if not config:
         return
 
-    if config.is_lastfm_enabled and config.lastfm_session_key:
+    if (is_feature_enabled("integration_lastfm", db)
+            and config.is_lastfm_enabled and config.lastfm_session_key):
         await export_to_lastfm(str(config.lastfm_session_key), artist, title, album, timestamp)
 
     if config.is_listenbrainz_enabled and config.listenbrainz_token:

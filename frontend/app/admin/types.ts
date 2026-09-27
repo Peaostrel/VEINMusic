@@ -358,6 +358,10 @@ export interface IntegrationRow {
 }
 
 export interface IntegrationPage extends Paged<IntegrationRow> {
+  providers: Record<
+    "yandex" | "spotify" | "lastfm",
+    { enabled: boolean; linked: number }
+  >;
   redis: boolean;
   worker_heartbeat_ms: number | null;
   now_ms: number;

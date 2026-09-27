@@ -5,7 +5,13 @@ import { API_URL } from "@/app/lib/api";
 
 /** Features an admin can switch off (see runtime_settings.KNOWN_FEATURES). */
 export type Feature =
-  "registration" | "listen_together" | "lastfm_import" | "webhooks";
+  | "registration"
+  | "listen_together"
+  | "lastfm_import"
+  | "webhooks"
+  | "integration_yandex"
+  | "integration_spotify"
+  | "integration_lastfm";
 
 type Flags = Record<string, boolean>;
 

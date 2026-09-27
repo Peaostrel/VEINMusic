@@ -30,7 +30,7 @@ from typing import Any
 import httpx
 
 from app.database import SessionLocal
-from app.services import yandex_ynison
+from app.services import runtime_settings, yandex_ynison
 from app.services.yandex_ynison import Playback
 
 logger = logging.getLogger(__name__)
@@ -301,6 +301,8 @@ def load_linked_users() -> dict[int, str]:
     from app.models import User, UserIntegration
     db = SessionLocal()
     try:
+        if not runtime_settings.is_feature_enabled("integration_yandex", db):
+            return {}
         rows = db.query(User.id, UserIntegration).join(UserIntegration).filter(
             User.is_banned.isnot(True), UserIntegration.yandex_token.isnot(None)).all()
         return {int(uid): integ.yandex_token for uid, integ in rows if integ.yandex_token}

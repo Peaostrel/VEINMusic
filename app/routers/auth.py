@@ -177,7 +177,8 @@ def _parse_spotify_state(state: str, cookie_nonce: str | None) -> int | None:
         return None
 
 
-@router.get("/spotify/login")
+@router.get("/spotify/login",
+            dependencies=[Depends(runtime_settings.require_feature("integration_spotify"))])
 def spotify_login(current_user: Annotated[User, Depends(get_current_user)]):
     scopes = "user-read-currently-playing user-read-playback-state"
     nonce = secrets.token_hex(16)
@@ -207,6 +208,7 @@ def spotify_login(current_user: Annotated[User, Depends(get_current_user)]):
 
 
 @router.get("/spotify/callback",
+            dependencies=[Depends(runtime_settings.require_feature("integration_spotify"))],
             responses={400: {"description": "Invalid state parameter"}})
 async def spotify_callback(code: str,
                            state: str,
