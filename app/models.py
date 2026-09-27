@@ -184,6 +184,10 @@ class Scrobble(Base):
             UTC))
     source = Column(String)
     listened_sec = Column(Integer, default=0)
+    # Live player connections (Ynison) add listening only when the next
+    # player event confirms it; the stretch played since then is shown here
+    # while the track plays, but does not count yet
+    pending_sec = Column(Integer, nullable=False, default=0, server_default="0")
     is_playing = Column(Boolean, default=True)
     updated_at = Column(
         DateTime(

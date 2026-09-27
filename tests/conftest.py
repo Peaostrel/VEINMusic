@@ -14,6 +14,9 @@ TEST_DB_URL = os.getenv("TEST_DATABASE_URL", f"sqlite:///{TEST_DB_FILE}")
 # Force env vars for testing before importing database module
 os.environ["DATABASE_URL"] = TEST_DB_URL
 os.environ["REDIS_URL"] = "redis://mock_redis_disabled"
+# No background cloud polling (as in Docker, where the worker runs it): it
+# would race the tests, e.g. cache the feature flags before a test adds one
+os.environ["RUN_CLOUD_POLLING"] = "0"
 
 from app.models import (  # noqa: E402, F401
     Achievement,
