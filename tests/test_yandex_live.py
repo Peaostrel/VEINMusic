@@ -230,4 +230,5 @@ def test_app_state_is_trusted():
     state = _web_state("A", 30, 200, 100, 1)
     state["player_state"]["status"]["version"]["device_id"] = "phone"
     pb = parse_state(state, now_ms=1_101_000)
-    assert pb.pause_unknown is False and pb.playing is False
+    assert pb.pause_unknown is False
+    assert pb.playing is False
