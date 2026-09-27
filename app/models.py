@@ -19,6 +19,7 @@ from app.database import Base
 CASCADE_ALL_DELETE = "all, delete"
 FK_USERS_ID = "users.id"
 FK_SCROBBLES_ID = "scrobbles.id"
+ON_DELETE_SET_NULL = "SET NULL"
 
 
 class User(Base):
@@ -354,7 +355,7 @@ class AdminAuditLog(Base):
     """Who in the admin panel did what, and to whom."""
     __tablename__ = "admin_audit_log"
     id = Column(Integer, primary_key=True, index=True)
-    admin_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="SET NULL"), nullable=True, index=True)
+    admin_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete=ON_DELETE_SET_NULL), nullable=True, index=True)
     # Kept so the entry stays readable after the admin account is deleted
     admin_username = Column(String(64), nullable=False)
     action = Column(String(64), nullable=False, index=True)
@@ -367,10 +368,10 @@ class Report(Base):
     """A user's complaint about a profile or a comment, for the moderators."""
     __tablename__ = "reports"
     id = Column(Integer, primary_key=True, index=True)
-    reporter_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="SET NULL"), nullable=True, index=True)
+    reporter_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete=ON_DELETE_SET_NULL), nullable=True, index=True)
     # The reported profile, or the author of the reported comment
     target_user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=False, index=True)
-    comment_id = Column(Integer, ForeignKey("scrobble_comments.id", ondelete="SET NULL"), nullable=True, index=True)
+    comment_id = Column(Integer, ForeignKey("scrobble_comments.id", ondelete=ON_DELETE_SET_NULL), nullable=True, index=True)
     # Kept so the report stays readable after the comment is deleted
     comment_text = Column(String(500), nullable=True)
     reason = Column(String(32), nullable=False)

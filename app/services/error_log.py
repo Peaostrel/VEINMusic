@@ -34,7 +34,7 @@ _IGNORED = ("redis", __name__)
 # Credentials that can end up in exception texts (URLs with keys, headers)
 _SECRET_PARAM_RE = re.compile(
     r"(?i)\b(api_key|apikey|access_token|refresh_token|token|ticket|password|secret|sk|sig|signature)=[^&\s'\"]+")
-_AUTH_RE = re.compile(r"(?i)\b(OAuth|Bearer|Token)\s+[A-Za-z0-9._~+/=-]{8,}")
+_AUTH_RE = re.compile(r"(?i)\b(OAuth|Bearer|Token)\s+[\w.~+/=-]{8,}")
 
 _local: deque[dict[str, Any]] = deque(maxlen=MAX_ENTRIES)
 

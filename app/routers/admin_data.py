@@ -267,7 +267,9 @@ def _user_with_integration(db: Session, username: str) -> User:
     return user
 
 
-@router.post("/integrations/{username}/yandex/reconnect", responses={404: {"description": USER_NOT_FOUND}})
+@router.post("/integrations/{username}/yandex/reconnect", responses={
+    400: {"description": "Yandex Music is not linked"}, 404: {"description": USER_NOT_FOUND},
+    503: {"description": "Redis is unavailable"}})
 async def reconnect_yandex(username: str, db: DB, admin: AdminUser):
     """Ask the worker to reopen the user's Ynison connection."""
     from app.core.redis import get_redis_client
