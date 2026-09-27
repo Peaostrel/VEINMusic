@@ -99,22 +99,39 @@ def _first_artist(item: dict) -> str | None:
     return artists[0].get("name") if artists and isinstance(artists[0], dict) else None
 
 
+def _titled(item: dict) -> str | None:
+    """"Artist — Title", or just the title without an artist."""
+    artist = _first_artist(item)
+    return f"{artist} — {item.get('title')}" if artist and item.get("title") else item.get("title")
+
+
+def _api_album(result) -> tuple[str | None, str | None, int]:
+    if not isinstance(result, dict):
+        return None, None, 0
+    return _titled(result), _yandex_cover(result.get("coverUri")), int(result.get("trackCount") or 0)
+
+
+def _api_track(result) -> tuple[str | None, str | None, int]:
+    if not isinstance(result, list) or not result:
+        return None, None, 0
+    track = result[0]
+    albums = track.get("albums") or [{}]
+    return _titled(track), _yandex_cover(track.get("coverUri") or albums[0].get("coverUri")), 0
+
+
+def _api_artist(result) -> tuple[str | None, str | None, int]:
+    if not isinstance(result, dict):
+        return None, None, 0
+    info: dict = result.get("artist") or {}
+    return info.get("name"), _yandex_cover((info.get("cover") or {}).get("uri")), 0
+
+
+_API_PARSERS = {"album": _api_album, "track": _api_track, "artist": _api_artist}
+
+
 def _parse_api_result(kind: str, result) -> tuple[str | None, str | None, int]:
     """(title, cover, album track count) of an api.music.yandex.net answer."""
-    if kind == "album" and isinstance(result, dict):
-        artist = _first_artist(result)
-        title = f"{artist} — {result.get('title')}" if artist and result.get("title") else result.get("title")
-        return title, _yandex_cover(result.get("coverUri")), int(result.get("trackCount") or 0)
-    if kind == "track" and isinstance(result, list) and result:
-        track = result[0]
-        artist = _first_artist(track)
-        title = f"{artist} — {track.get('title')}" if artist and track.get("title") else track.get("title")
-        albums = track.get("albums") or [{}]
-        return title, _yandex_cover(track.get("coverUri") or albums[0].get("coverUri")), 0
-    if kind == "artist" and isinstance(result, dict):
-        info: dict = result.get("artist") or {}
-        return info.get("name"), _yandex_cover((info.get("cover") or {}).get("uri")), 0
-    return None, None, 0
+    return _API_PARSERS[kind](result)
 
 
 async def yandex_api_meta(url: str, token: str) -> tuple[str | None, str | None, int]:

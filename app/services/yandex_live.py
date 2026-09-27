@@ -144,16 +144,10 @@ class UserListener:
         if playback is not None and playback.event and playback.event == self._last_event:
             return  # the same player event pushed again
         expected = self.current_position()
-        if playback is not None:
-            self._last_event = playback.event
-            if playback.pause_unknown:
-                playback = dataclasses.replace(playback, playing=self._web_playing(playback, expected))
+        playback = self._interpret(playback, expected)
         now = _now_ms()
-        segment, credit = self._segment, self._confirmed_sec(now)
-        # The same track started over (repeat, seek back to the start)
-        restarted = (expected is not None and playback is not None and playback.playing
-                     and self.playback is not None and playback.track_id == self.playback.track_id
-                     and playback.progress_sec + 5 < expected[0])
+        segment, credit = self._segment, self._confirmed_sec(now) or 0
+        restarted = self._restarted(playback, expected)
         self.playback = playback
         self.received_ms = now
         self._segment = (playback.track_id, now, playback.progress_sec, playback.duration_sec) \
@@ -163,15 +157,29 @@ class UserListener:
         if closing and segment is not None:
             # The track playing until now was switched or stopped: it gets
             # the listening this event confirms
-            await self._report(segment[0], segment[2] + (credit or 0), False, credit or 0)
+            await self._report(segment[0], segment[2] + credit, False, credit)
+            credit = 0
         if playback is None:
             return
-        key = (playback.track_id, playback.playing)
-        same_track_credit = 0 if closing else (credit or 0)
         # Pure device updates (volume, another device joining) repeat the
         # same track and state: the tick loop covers those
-        if key != self._last_reported or restarted or same_track_credit:
-            await self._report(playback.track_id, playback.progress_sec, playback.playing, same_track_credit)
+        if (playback.track_id, playback.playing) != self._last_reported or restarted or credit:
+            await self._report(playback.track_id, playback.progress_sec, playback.playing, credit)
+
+    def _interpret(self, playback: Playback | None, expected: tuple[int, bool] | None) -> Playback | None:
+        """Remember the event; for the web player, work out play/pause."""
+        if playback is None:
+            return None
+        self._last_event = playback.event
+        if not playback.pause_unknown:
+            return playback
+        return dataclasses.replace(playback, playing=self._web_playing(playback, expected))
+
+    def _restarted(self, playback: Playback | None, expected: tuple[int, bool] | None) -> bool:
+        """The same track started over (repeat, seek back to the start)."""
+        return bool(expected is not None and playback is not None and playback.playing
+                    and self.playback is not None and playback.track_id == self.playback.track_id
+                    and playback.progress_sec + 5 < expected[0])
 
     def _confirmed_sec(self, now_ms: int) -> int | None:
         """Seconds of the current stretch of playback that a new player event

@@ -378,16 +378,8 @@ async def _enrich_achievement_data(rule_type: str, target_val: str, val: int, t_
         return target_val, val, target_val, meta_text
 
     title, img, api_tracks = await _link_meta(target_val, yandex_token)
-    if not img:
-        img = await _deezer_cover(rule_type, meta_text or title)
-    if img:
-        t_img = img
-
-    if title:
-        if rule_type in ["specific_track", "specific_artist"] and not meta_text:
-            meta_text = title
-        if rule_type == "specific_artist":
-            target_val = f"{title}||{target_val}"
+    t_img = img or await _deezer_cover(rule_type, meta_text or title) or t_img
+    target_val, meta_text = _apply_link_title(rule_type, title, target_val, meta_text)
 
     if rule_type == "specific_album":
         track_count = api_tracks or await get_album_track_count(target_val)
@@ -395,6 +387,18 @@ async def _enrich_achievement_data(rule_type: str, target_val: str, val: int, t_
             val = track_count
 
     return target_val, val, t_img, meta_text
+
+
+def _apply_link_title(rule_type: str, title: str | None, target_val: str, meta_text: str) -> tuple[str, str]:
+    """The link's title names a track or artist goal when none was given; an
+    artist goal keeps it in front of the link ("Name||url")."""
+    if not title:
+        return target_val, meta_text
+    if rule_type in ["specific_track", "specific_artist"] and not meta_text:
+        meta_text = title
+    if rule_type == "specific_artist":
+        target_val = f"{title}||{target_val}"
+    return target_val, meta_text
 
 
 async def get_album_track_count(url: str) -> int:
