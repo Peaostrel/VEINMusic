@@ -18,6 +18,79 @@ import {
 const section = "bg-bg border border-line-soft rounded-xl p-4 space-y-2";
 const sectionTitle = "text-[11px] font-mono text-fg-2";
 
+const SHOWCASE_LABELS = { artist: "Артист", track: "Трек", album: "Альбом" };
+
+function Showcase({
+  items,
+  act,
+  post,
+}: Readonly<{
+  items: UserDetails["showcase"];
+  act: (
+    request: () => Promise<unknown>,
+    success: string,
+    confirmText?: string,
+  ) => Promise<void>;
+  post: (suffix: string, json?: unknown) => () => Promise<unknown>;
+}>) {
+  return (
+    <div className={section}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className={sectionTitle}>Витрина</div>
+        <button
+          type="button"
+          className={buttonClass.secondary}
+          onClick={() =>
+            act(post("/showcase/refresh"), "Витрина обновлена по поиску")
+          }
+          title="Заново найти имена, картинки и ссылки; блокировки не меняются"
+        >
+          Обновить витрину
+        </button>
+      </div>
+      <ul className="space-y-2">
+        {items.map((i) => (
+          <li key={i.field} className="flex items-center gap-3 text-xs">
+            {i.cover ? (
+              <img
+                src={i.cover}
+                alt=""
+                className={`h-8 w-8 shrink-0 bg-surface-2 object-cover ${i.field === "artist" ? "rounded-full" : "rounded"}`}
+              />
+            ) : (
+              <div className="h-8 w-8 shrink-0 rounded bg-surface-2" />
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] text-fg-3">
+                {SHOWCASE_LABELS[i.field]}
+              </div>
+              <div className="truncate text-fg">{i.value || "—"}</div>
+            </div>
+            {i.locked_until ? (
+              <button
+                type="button"
+                className={buttonClass.secondary}
+                onClick={() =>
+                  act(
+                    post("/showcase/unlock", { field: i.field }),
+                    "Блокировка снята",
+                    `Снять блокировку поля «${SHOWCASE_LABELS[i.field]}»? Пользователь сможет сразу выбрать другое значение.`,
+                  )
+                }
+                title={`Заблокировано до ${formatDateTime(i.locked_until)}`}
+              >
+                Снять блокировку
+              </button>
+            ) : (
+              <span className="text-[10px] text-fg-3">можно менять</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function Flag({ on, label }: Readonly<{ on: boolean; label: string }>) {
   return (
     <span
@@ -34,11 +107,13 @@ export default function UserCard({
   achievements,
   onClose,
   onChanged,
+  onOpenScrobbles,
 }: Readonly<{
   username: string;
   achievements: Achievement[];
   onClose: () => void;
   onChanged: () => void;
+  onOpenScrobbles?: (username: string) => void;
 }>) {
   const path = `/api/admin/users/${encodeURIComponent(username)}`;
   const { data, error, reload } = useAdminResource<UserDetails>(
@@ -285,6 +360,8 @@ export default function UserCard({
           </form>
         </div>
 
+        <Showcase items={data.showcase} act={act} post={post} />
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className={section}>
             <div className={sectionTitle}>Интеграции и экспорт</div>
@@ -421,7 +498,18 @@ export default function UserCard({
         </div>
 
         <div className={section}>
-          <div className={sectionTitle}>Последние прослушивания</div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className={sectionTitle}>Последние прослушивания</div>
+            {onOpenScrobbles && (
+              <button
+                type="button"
+                className={buttonClass.secondary}
+                onClick={() => onOpenScrobbles(username)}
+              >
+                Все прослушивания →
+              </button>
+            )}
+          </div>
           <table className="w-full text-left text-xs text-fg-2">
             <tbody className="divide-y divide-white/5">
               {data.recent_scrobbles.map((s) => (

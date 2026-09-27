@@ -12,12 +12,24 @@ import AnnouncementsTab from "./tabs/AnnouncementsTab";
 import ModerationTab from "./tabs/ModerationTab";
 import SystemTab from "./tabs/SystemTab";
 import AuditTab from "./tabs/AuditTab";
+import ReportsTab from "./tabs/ReportsTab";
+import ScrobblesTab from "./tabs/ScrobblesTab";
+import IntegrationsTab from "./tabs/IntegrationsTab";
+import LogsTab from "./tabs/LogsTab";
 import UserCard from "./components/UserCard";
 import { type AdminTab, useAdminPanel } from "./useAdminPanel";
+import type { ReportPage } from "./types";
+import { useAdminResource } from "./ui";
 
 export default function AdminPanel() {
   const admin = useAdminPanel();
   const [openUser, setOpenUser] = useState<string | null>(null);
+  // User whose scrobbles the "Прослушивания" tab opens with
+  const [scrobblesUser, setScrobblesUser] = useState("");
+  const openReports = useAdminResource<ReportPage>(
+    "/api/admin/reports?status=open&limit=1",
+  );
+  const openReportCount = openReports.data?.open_count ?? 0;
   const {
     router,
     activeTab,
@@ -78,7 +90,7 @@ export default function AdminPanel() {
 
       <nav
         aria-label="Разделы админки"
-        className="hide-scrollbar flex gap-6 overflow-x-auto border-b border-line-soft"
+        className="hide-scrollbar flex gap-x-6 overflow-x-auto border-b border-line-soft md:flex-wrap md:overflow-visible"
       >
         {(
           [
@@ -90,11 +102,20 @@ export default function AdminPanel() {
               count: suspiciousUsers.length || undefined,
               alert: suspiciousUsers.length > 0,
             },
+            {
+              id: "reports",
+              label: "Жалобы",
+              count: openReportCount || undefined,
+              alert: openReportCount > 0,
+            },
             { id: "moderation", label: "Модерация" },
+            { id: "scrobbles", label: "Прослушивания" },
+            { id: "integrations", label: "Интеграции" },
             { id: "catalog", label: "Каталог" },
             { id: "gamification", label: "Геймификация" },
             { id: "announcements", label: "Оповещения и флаги" },
             { id: "system", label: "Система" },
+            { id: "logs", label: "Логи" },
             { id: "audit", label: "Журнал" },
           ] satisfies {
             id: AdminTab;
@@ -146,6 +167,20 @@ export default function AdminPanel() {
       {admin.activeTab === "announcements" && <AnnouncementsTab {...admin} />}
       {admin.activeTab === "system" && <SystemTab />}
       {admin.activeTab === "audit" && <AuditTab />}
+      {admin.activeTab === "reports" && (
+        <ReportsTab onOpenUser={setOpenUser} onChanged={openReports.reload} />
+      )}
+      {admin.activeTab === "scrobbles" && (
+        <ScrobblesTab
+          key={scrobblesUser}
+          onOpenUser={setOpenUser}
+          initialUsername={scrobblesUser}
+        />
+      )}
+      {admin.activeTab === "integrations" && (
+        <IntegrationsTab onOpenUser={setOpenUser} />
+      )}
+      {admin.activeTab === "logs" && <LogsTab />}
 
       {openUser && (
         <UserCard
@@ -153,6 +188,11 @@ export default function AdminPanel() {
           achievements={admin.achievements}
           onClose={() => setOpenUser(null)}
           onChanged={admin.loadAllData}
+          onOpenScrobbles={(name) => {
+            setOpenUser(null);
+            setScrobblesUser(name);
+            setActiveTab("scrobbles");
+          }}
         />
       )}
     </div>

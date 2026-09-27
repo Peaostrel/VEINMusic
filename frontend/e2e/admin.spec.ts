@@ -109,4 +109,18 @@ test.describe("Admin panel", () => {
     ).toBeVisible();
     await other.close();
   });
+
+  test("reports, scrobbles, integrations and logs tabs load", async ({
+    page,
+  }) => {
+    await openAdmin(page);
+    await openTab(page, /^Жалобы/);
+    await expect(page.getByText("Жалобы пользователей")).toBeVisible();
+    await openTab(page, "Прослушивания");
+    await expect(page.getByText("Массовое удаление")).toBeVisible();
+    await openTab(page, "Интеграции");
+    await expect(page.getByText("Подключённые сервисы")).toBeVisible();
+    await openTab(page, "Логи");
+    await expect(page.getByText("Ошибки и предупреждения")).toBeVisible();
+  });
 });

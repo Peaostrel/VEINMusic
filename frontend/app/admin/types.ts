@@ -178,6 +178,12 @@ export interface UserDetails {
     lastfm_username: string | null;
     last_sync: string | null;
   };
+  showcase: {
+    field: "artist" | "track" | "album";
+    value: string | null;
+    cover: string | null;
+    locked_until: string | null;
+  }[];
   export: { lastfm: boolean; listenbrainz: boolean; librefm: boolean };
   stats: {
     scrobbles: number;
@@ -283,4 +289,96 @@ export interface BlacklistFilter {
   filter_type: string;
   reason: string | null;
   is_active: boolean;
+}
+
+export interface LogEntry {
+  id: string;
+  ts: string;
+  level: "WARNING" | "ERROR" | "CRITICAL";
+  source: string;
+  logger: string;
+  message: string;
+  trace: string | null;
+}
+
+export interface LogPage extends Paged<LogEntry> {
+  shared: boolean;
+  sources: string[];
+  counts: Record<string, number>;
+}
+
+export interface AdminScrobble {
+  id: number;
+  username: string;
+  track_id: number;
+  title: string;
+  artist: string;
+  cover_url: string | null;
+  duration: number;
+  source: string | null;
+  played_at: string | null;
+  listened_sec: number;
+  xp_earned: number;
+  counted: boolean;
+  is_imported: boolean;
+}
+
+export interface ScrobblePage extends Paged<AdminScrobble> {
+  sources: string[];
+}
+
+export interface BulkDeleteResult {
+  matched: number;
+  xp: number;
+  deleted: number;
+}
+
+export interface YandexLiveStatus {
+  connected: boolean;
+  since_ms: number | null;
+  last_event_ms: number | null;
+  track_id: string | null;
+  playing: boolean;
+  web: boolean;
+  last_error: string | null;
+  last_error_ms: number | null;
+  connections: number;
+}
+
+export interface IntegrationRow {
+  username: string;
+  avatar_url: string | null;
+  is_banned: boolean;
+  yandex: boolean;
+  yandex_live: YandexLiveStatus | null;
+  spotify: boolean;
+  lastfm_username: string | null;
+  last_sync: string | null;
+  last_scrobble: string | null;
+}
+
+export interface IntegrationPage extends Paged<IntegrationRow> {
+  redis: boolean;
+  worker_heartbeat_ms: number | null;
+  now_ms: number;
+}
+
+export interface AdminReport {
+  id: number;
+  type: "user" | "comment";
+  reporter: { username: string; is_banned: boolean } | null;
+  target: { username: string; is_banned: boolean } | null;
+  target_open_reports: number;
+  comment: { id: number | null; text: string | null; exists: boolean } | null;
+  reason: string;
+  details: string | null;
+  status: "open" | "resolved" | "dismissed";
+  created_at: string | null;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  resolution: string | null;
+}
+
+export interface ReportPage extends Paged<AdminReport> {
+  open_count: number;
 }

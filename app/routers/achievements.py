@@ -81,6 +81,13 @@ def get_all_achievements(
         "total_count": len(all_achs)}
 
 
+def _admin_yandex_token(admin: User) -> str | None:
+    """Yandex Music answers metadata requests from outside Russia only with a
+    token: the admin's own, when they linked Yandex Music."""
+    integration = admin.integration
+    return integration.yandex_token if integration and integration.yandex_token else None
+
+
 # --- POST /api/admin/achievements ---
 
 
@@ -93,7 +100,7 @@ async def create_achievement(data: AchCreate, db: Annotated[Session, Depends(
     t_img = data.target_image or ""
     meta_text = data.rule_meta or ""
     target_val, val, t_img, meta_text = await _enrich_achievement_data(
-        data.rule_type, target_val, val, t_img, meta_text
+        data.rule_type, target_val, val, t_img, meta_text, _admin_yandex_token(admin)
     )
     db.add(
         Achievement(
@@ -129,7 +136,7 @@ async def update_achievement(ach_id: int,
     t_img = data.target_image or ""
     meta_text = data.rule_meta or ""
     target_val, val, t_img, meta_text = await _enrich_achievement_data(
-        data.rule_type, target_val, val, t_img, meta_text
+        data.rule_type, target_val, val, t_img, meta_text, _admin_yandex_token(admin)
     )
     ach.name, ach.description, ach.icon, ach.rule_type, ach.rule_value, ach.rule_target, ach.target_image, ach.reward_xp, ach.rule_meta = data.name, data.description, data.icon, data.rule_type, val, target_val, t_img, data.reward_xp, meta_text  # type: ignore[assignment]
     audit.record(db, admin, "achievement.update", data.name, rule=data.rule_type, value=val)

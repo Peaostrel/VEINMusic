@@ -21,6 +21,9 @@ def setup_observability(component: str = "api") -> None:
         level=getattr(logging, level_name, logging.INFO),
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
+    # Warnings and errors for the admin panel's log tab
+    from app.services import error_log
+    error_log.install(component)
 
     dsn = os.getenv("SENTRY_DSN")
     if not dsn:

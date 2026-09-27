@@ -369,15 +369,27 @@ def _update_scrobble_progress(
         last_scrobble,
         now,
         l_updated_at,
-        is_playing: bool) -> bool:
+        is_playing: bool,
+        credit_sec: int | None = None) -> bool:
     """Update listened_sec, xp, and streak on an existing scrobble.
+
+    `credit_sec` (live player connections) adds exactly the listening the
+    player confirmed, instead of the time between reports: a closed tab
+    stops sending reports, but its last reports would otherwise keep
+    adding time.
 
     Returns True when this update made the scrobble count (crossed the listen threshold)."""
     time_elapsed = (now - l_updated_at).total_seconds()
     old_listened = last_scrobble.listened_sec or 0
+    track_dur = int(track.duration) if getattr(track, 'duration', None) and track.duration > 0 else 180
 
+    if credit_sec is not None:
+        added = max(int(credit_sec), 0)
+        if added:
+            last_scrobble.listened_sec = max(old_listened, min(old_listened + added, track_dur))
+        last_scrobble.updated_at = now
     # Accumulate integer seconds cleanly to avoid drifting and rounding errors.
-    if last_scrobble.is_playing and is_playing and 0 < time_elapsed < 35:
+    elif last_scrobble.is_playing and is_playing and 0 < time_elapsed < 35:
         increment = int(time_elapsed)
         if increment > 0:
             last_scrobble.listened_sec = old_listened + increment
@@ -390,7 +402,6 @@ def _update_scrobble_progress(
     last_scrobble.is_playing = is_playing
     db.commit()
 
-    track_dur = int(track.duration) if getattr(track, 'duration', None) and track.duration > 0 else 180
     threshold = track_dur * 0.85
     if last_scrobble.listened_sec >= threshold and old_listened < threshold:
         from app.services.runtime_settings import apply_xp_multiplier
@@ -459,7 +470,7 @@ async def _dispatch_counted_scrobble(user_id: int, counted: dict[str, Any]) -> N
 
 
 def _record_scrobble(db: Session, user: User, track: Track, source: str,
-                     progress_sec: int, is_playing: bool) -> dict[str, Any]:
+                     progress_sec: int, is_playing: bool, credit_sec: int | None = None) -> dict[str, Any]:
     """Create or advance the user's current scrobble (blocking DB work).
 
     Returns plain data only, so nothing touches expired ORM objects (and the
@@ -499,7 +510,7 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
         db.commit()
         result["new_item"] = format_history_item(new_s, track)
     elif last_scrobble is not None and _update_scrobble_progress(
-            db, user, track, last_scrobble, now, l_updated_at, is_playing):
+            db, user, track, last_scrobble, now, l_updated_at, is_playing, credit_sec):
         played_at = last_scrobble.played_at
         if played_at.tzinfo is None:
             played_at = played_at.replace(tzinfo=UTC)
@@ -527,12 +538,13 @@ async def process_scrobble(
         progress_sec: int,
         is_playing: bool,
         duration: int,
-        album: str = ""):
+        album: str = "",
+        credit_sec: int | None = None):
     if await _run_db(_is_blacklisted, title, artist, album, db):
         return "blacklisted"
 
     track = await _get_or_create_track(db, title, artist, cover_url, track_url, duration, album)
-    result = await _run_db(_record_scrobble, db, user, track, source, progress_sec, is_playing)
+    result = await _run_db(_record_scrobble, db, user, track, source, progress_sec, is_playing, credit_sec)
 
     if result["new_item"] is not None:
         await manager.broadcast_to_user(result["username"], {

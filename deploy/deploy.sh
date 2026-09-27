@@ -77,6 +77,14 @@ if [[ -z "$(get_var VAPID_PRIVATE_KEY)" ]]; then
     set_var VAPID_PUBLIC_KEY "$(printf '%s\n' "$keys" | sed -n 's/^VAPID_PUBLIC_KEY=//p')"
 fi
 
+# While the containers restart, Caddy answers with the "update in
+# progress" page (see Caddyfile); open pages show the same notice and
+# reload once the new version is up. Removed on any exit.
+if compose ps -q backend 2>/dev/null | grep -q .; then
+    touch maintenance/on
+fi
+trap 'rm -f maintenance/on' EXIT
+
 echo "==> Starting"
 compose up -d --remove-orphans
 
@@ -86,6 +94,14 @@ for _ in $(seq 1 60); do
     [[ "$status" = "healthy" ]] && break
     sleep 3
 done
+echo "==> Waiting for the site"
+for _ in $(seq 1 30); do
+    compose exec -T frontend node -e \
+        "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))" \
+        >/dev/null 2>&1 && break
+    sleep 2
+done
+rm -f maintenance/on
 compose ps
 docker image prune -f >/dev/null
 # Older releases (every commit has its own tag): drop the ones no container uses

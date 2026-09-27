@@ -96,6 +96,25 @@ def test_comment_notification_keeps_excerpt(social):
     assert item["message"] == "x" * notifications.EXCERPT_LENGTH
 
 
+def test_comment_notification_points_at_the_comment(social):
+    """The bell can report a comment: the notification carries its id."""
+    from app.models import ScrobbleComment
+
+    client, scrobble_id = social
+    client.post(f"/api/scrobble/{scrobble_id}/comment", json={"content": "first"})
+    client.post(f"/api/scrobble/{scrobble_id}/comment", json={"content": "second"})
+    db = SessionLocal()
+    try:
+        ids = {c.content: c.id for c in db.query(ScrobbleComment)}
+    finally:
+        db.close()
+    client.post(f"/api/scrobble/{scrobble_id}/like")
+    items = _alice_notifications(client)["items"]
+    assert [(i["message"], i["comment_id"]) for i in items if i["kind"] == "comment"] == [
+        ("second", ids["second"]), ("first", ids["first"])]
+    assert {i["comment_id"] for i in items if i["kind"] != "comment"} == {None}
+
+
 def test_own_actions_do_not_notify(client):
     client.headers["Origin"] = "http://localhost:3000"
     _register(client, "solo")

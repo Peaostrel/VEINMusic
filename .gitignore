@@ -51,3 +51,5 @@ check_users.py
 
 # Server-side deploy state (auto-update.sh)
 deploy/.state/
+# Set by deploy.sh while it restarts the containers
+deploy/maintenance/on

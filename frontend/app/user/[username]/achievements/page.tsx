@@ -99,7 +99,9 @@ function renderDescriptionWithLinks(
   url: string | null,
   name: string,
 ) {
-  let nodes: DescriptionNode[] = [desc];
+  // 1. Markdown links [text](url) first: highlighting a name from the goal
+  // inside one ("[Проводник](…)") would break its syntax
+  let nodes: DescriptionNode[] = parseMarkdownForNode(desc, 0);
 
   const fallbackMeta = !meta || meta === "None" ? name : meta;
   const rawUrl = url?.includes("||") ? url.split("||")[1] : url;
@@ -107,7 +109,7 @@ function renderDescriptionWithLinks(
     ? rawUrl
     : `https://music.yandex.ru/search?text=${encodeURIComponent(fallbackMeta)}`;
 
-  // 1. Сначала обрабатываем rule_meta (Высший приоритет)
+  // 2. Then the names from the goal, in the remaining plain text
   const parts = fallbackMeta.split(/[-—]/).map((s) => s.trim());
 
   parts.forEach((targetWord, idx) => {
@@ -154,14 +156,7 @@ function renderDescriptionWithLinks(
     nodes = newNodes;
   });
 
-  // 2. Затем обрабатываем Markdown [Текст](Ссылка) на оставшихся текстовых нодах
-  const finalNodes: DescriptionNode[] = [];
-
-  nodes.forEach((node, nodeIdx) => {
-    finalNodes.push(...parseMarkdownForNode(node, nodeIdx));
-  });
-
-  return finalNodes;
+  return nodes;
 }
 
 export default function AchievementsPage() {

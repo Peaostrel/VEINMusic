@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LogoTile } from "@/components/brand";
+import { BetaBadge, LogoTile } from "@/components/brand";
 import NotificationsBell from "@/components/NotificationsBell";
 import AccountMenu from "./AccountMenu";
 import { navItems } from "./nav";
@@ -22,8 +22,13 @@ export function MobileTopBar({
 }>) {
   return (
     <div className="flex h-14 items-center justify-between border-b border-line-soft bg-bg/95 px-4 backdrop-blur">
-      <Link href="/" aria-label="VEINMusic — на главную" className="rounded-md">
+      <Link
+        href="/"
+        aria-label="VEINMusic (бета) — на главную"
+        className="flex items-center gap-2 rounded-md"
+      >
         <LogoTile size={28} />
+        <BetaBadge />
       </Link>
       <div className="flex items-center gap-1">
         <NotificationsBell />

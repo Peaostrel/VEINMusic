@@ -43,6 +43,8 @@ services:
       ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # "Update in progress" page; deploy.sh creates maintenance/on meanwhile
+      - ./maintenance:/srv/maintenance:ro
       - caddy_data:/data
       - caddy_config:/config
     networks:

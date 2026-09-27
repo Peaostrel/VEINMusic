@@ -24,7 +24,11 @@ export type AdminTab =
   | "gamification"
   | "announcements"
   | "system"
-  | "audit";
+  | "audit"
+  | "reports"
+  | "scrobbles"
+  | "integrations"
+  | "logs";
 
 /** All state, data loading and actions of the admin panel. */
 export function useAdminPanel() {
