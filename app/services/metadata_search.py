@@ -23,18 +23,26 @@ def _deezer_image(item: dict, key: str, size: str) -> str:
     return "" if "//" in url.split("://", 1)[-1] else url
 
 
+def _clean_name(value) -> str:
+    return PAREN_RE.sub("", str(value or "")).strip()
+
+
+def _deezer_parts(item: dict, kind: str) -> tuple[str, dict, str]:
+    """(title, dict holding the picture, picture key) of one Deezer hit."""
+    if kind == "artist":
+        return str(item.get("name") or "").strip(), item, "picture"
+    artist = _clean_name((item.get("artist") or {}).get("name"))
+    if kind == "album":
+        name, source = _clean_name(item.get("title")), item
+    else:
+        name, source = _clean_name(item.get("title_short") or item.get("title")), item.get("album") or {}
+    return (f"{artist} — {name}" if artist and name else ""), source, "cover"
+
+
 def _deezer_item(item: dict, kind: str) -> dict | None:
     """{title, image, cover, url} of one Deezer search hit: `image` is small
     (for the suggestion list), `cover` large (for the profile)."""
-    artist = PAREN_RE.sub("", str((item.get("artist") or {}).get("name") or "")).strip()
-    if kind == "artist":
-        title, source, key = str(item.get("name") or "").strip(), item, "picture"
-    elif kind == "album":
-        name = PAREN_RE.sub("", str(item.get("title") or "")).strip()
-        title, source, key = (f"{artist} — {name}" if artist and name else ""), item, "cover"
-    else:
-        name = PAREN_RE.sub("", str(item.get("title_short") or item.get("title") or "")).strip()
-        title, source, key = (f"{artist} — {name}" if artist and name else ""), item.get("album") or {}, "cover"
+    title, source, key = _deezer_parts(item, kind)
     if not title:
         return None
     return {"title": title, "image": _deezer_image(source, key, "medium"),
