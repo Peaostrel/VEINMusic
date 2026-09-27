@@ -6,6 +6,10 @@ the open connection, so the listener reports it at once. While a track plays,
 it also reports every TICK_SEC so the listened time keeps accumulating
 (process_scrobble only counts gaps shorter than 35 seconds).
 
+The music.yandex.ru web player also writes to Ynison, but always with
+paused=True; whether it plays is inferred from the order of its events
+(start, pause, resume, seek, track switch).
+
 Runs in the arq worker. A Redis lease makes sure only one process holds the
 connections; users whose connection is up are skipped by the 30-second poll
 (see `connected`), which stays as the fallback.
@@ -13,6 +17,7 @@ connections; users whose connection is up are skipped by the 30-second poll
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 import secrets
 import time
@@ -34,6 +39,10 @@ LEASE_TTL_SEC = 45
 RETRY_MIN_SEC = 5
 RETRY_MAX_SEC = 120
 SPAM_RETRY_SEC = 1.2
+# Web player events (see Playback.pause_unknown): an event this close to
+# where playback should be is a pause; one at the paused position a resume
+PAUSE_SLACK_SEC = 3
+RESUME_SLACK_SEC = 1
 
 # Users whose Ynison connection is open in this process
 connected: set[int] = set()
@@ -55,6 +64,7 @@ class UserListener:
         self.playback: Playback | None = None
         self.received_ms = 0
         self._last_reported: tuple[str, bool] | None = None
+        self._last_event: tuple = ()
         self._tasks: list[asyncio.Task] = []
 
     def start(self) -> None:
@@ -89,7 +99,13 @@ class UserListener:
             delay = min(delay * 2, RETRY_MAX_SEC)
 
     async def on_playback(self, playback: Playback | None) -> None:
+        if playback is not None and playback.event and playback.event == self._last_event:
+            return  # the same player event pushed again
         expected = self.current_position()
+        if playback is not None:
+            self._last_event = playback.event
+            if playback.pause_unknown:
+                playback = dataclasses.replace(playback, playing=self._web_playing(playback, expected))
         self.playback = playback
         self.received_ms = _now_ms()
         if playback is None:
@@ -102,6 +118,26 @@ class UserListener:
         # same track and state: the tick loop covers those
         if key != self._last_reported or restarted:
             await self._report(playback.track_id, playback.progress_sec, playback.playing)
+
+    def _web_playing(self, pb: Playback, expected: tuple[int, bool] | None) -> bool:
+        """Whether the web player plays, judged by what its event means:
+        it sends one on start, pause, resume, seek and track switch."""
+        prev = self.playback
+        if prev is None or prev.track_id != pb.track_id or expected is None:
+            # A switch arrives live; the first state after connecting may be old
+            return prev is not None or self._fresh(pb)
+        progress, playing = expected
+        if playing:
+            return abs(pb.progress_sec - progress) > PAUSE_SLACK_SEC  # else paused; a jump is a seek
+        return abs(pb.progress_sec - progress) <= RESUME_SLACK_SEC  # else a seek while paused
+
+    @staticmethod
+    def _fresh(pb: Playback) -> bool:
+        """The event is recent enough that the track could still be playing."""
+        if not pb.event_ms:
+            return False
+        left_ms = max(pb.duration_sec - pb.progress_sec, 0) * 1000 if pb.duration_sec else 0
+        return _now_ms() - pb.event_ms <= left_ms + yandex_ynison.STALE_AFTER_END_MS
 
     # --- periodic progress ---------------------------------------------
 

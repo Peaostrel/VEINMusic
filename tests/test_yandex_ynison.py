@@ -165,3 +165,18 @@ def test_error_state_raises():
     import pytest
     with pytest.raises(RuntimeError):
         yn._check({"error": {"message": "bad"}})
+
+
+def test_parse_state_marks_unlisted_paused_player():
+    state = {**STATE, "devices": [{"info": {"device_id": "app"}}]}
+    state["player_state"] = {**STATE["player_state"],
+                             "status": {**STATE["player_state"]["status"], "paused": True,
+                                        "version": {"device_id": "web", "version": 3,
+                                                    "timestamp_ms": 1_000_000}}}
+    pb = yn.parse_state(state, now_ms=1_000_000)
+    assert pb.pause_unknown is True and pb.playing is False
+    assert pb.event == ("222", "web", 3, 1_000_000) and pb.event_ms == 1_000_000
+    # Listed device, a playing status, or no device list: the flag is trusted
+    state["devices"].append({"info": {"device_id": "web"}})
+    assert yn.parse_state(state, now_ms=1_000_000).pause_unknown is False
+    assert yn.parse_state(STATE, now_ms=1_000_000).pause_unknown is False

@@ -155,3 +155,79 @@ def test_track_switch_reaches_history_immediately(client, db):
     history = client.get("/api/history/liveflow").json()["history"]
     assert [h["title"] for h in history][:1] == ["Second"]
     assert history[0]["is_playing"] is True
+
+
+def _web_state(track, pos, dur, event_s, version):
+    """A state written by the music.yandex.ru web player: it is not in the
+    device list and always says paused=True."""
+    stamp = {"device_id": "web", "version": version, "timestamp_ms": (1000 + event_s) * 1000}
+    return {
+        "player_state": {
+            "player_queue": {"current_playable_index": 0,
+                             "playable_list": [{"playable_id": track, "playable_type": "TRACK"}]},
+            "status": {"paused": True, "progress_ms": pos * 1000, "duration_ms": dur * 1000,
+                       "version": stamp},
+        },
+        "devices": [{"info": {"device_id": "phone", "type": "IOS"}, "is_offline": True}],
+    }
+
+
+def test_web_player_play_pause_resume_seek_are_inferred():
+    """The event order recorded on production: start, pause after 24 s,
+    resume 14 s later, next track, seek to the middle."""
+    from app.services.yandex_ynison import parse_state
+
+    lis = _listener()
+    clock = {"s": 0}
+    reported = []
+
+    async def report(track_id, progress, playing):
+        reported.append((track_id, progress, playing))
+        lis._last_reported = (track_id, playing)
+
+    events = [  # (receive time, state)
+        (0, _web_state("A", 0, 262, 0, 1)),     # start
+        (8, _web_state("A", 0, 262, 0, 1)),     # the same event pushed again
+        (24, _web_state("A", 24, 262, 24, 2)),  # pause
+        (36, _web_state("A", 24, 262, 24, 2)),  # pushed again
+        (38, _web_state("A", 24, 262, 38, 3)),  # resume
+        (50, _web_state("B", 0, 88, 50, 4)),    # next track
+        (52, _web_state("B", 42, 88, 52, 5)),   # seek
+    ]
+    states = []
+    with patch.object(lis, "_report", new=report), \
+            patch.object(live, "_now_ms", side_effect=lambda: (1000 + clock["s"]) * 1000):
+        async def run():
+            for at, state in events:
+                clock["s"] = at
+                await lis.on_playback(parse_state(state, now_ms=(1000 + at) * 1000))
+                states.append((lis.playback.track_id, lis.playback.playing))
+        asyncio.run(run())
+
+    assert states == [("A", True), ("A", True), ("A", False), ("A", False),
+                      ("A", True), ("B", True), ("B", True)]
+    assert reported == [("A", 0, True), ("A", 24, False), ("A", 24, True), ("B", 0, True)]
+    assert lis.current_position(1_062_000) == (52, True)  # playing on from the seek
+
+
+def test_web_player_state_found_on_connect():
+    """The first state after connecting may be long over."""
+    from app.services.yandex_ynison import parse_state
+
+    for age_s, playing in ((60, True), (3600, False)):
+        lis = _listener()
+        with patch.object(lis, "_report", new=AsyncMock()), \
+                patch.object(live, "_now_ms", return_value=11_000_000):
+            asyncio.run(lis.on_playback(parse_state(
+                _web_state("A", 30, 200, 10_000 - age_s, 1), now_ms=11_000_000)))
+        assert lis.playback.playing is playing
+
+
+def test_app_state_is_trusted():
+    """A listed device (the app) reports pause itself: no inference."""
+    from app.services.yandex_ynison import parse_state
+
+    state = _web_state("A", 30, 200, 100, 1)
+    state["player_state"]["status"]["version"]["device_id"] = "phone"
+    pb = parse_state(state, now_ms=1_101_000)
+    assert pb.pause_unknown is False and pb.playing is False
