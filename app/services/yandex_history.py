@@ -4,8 +4,8 @@ The music.yandex.ru web player does not publish its state to Ynison, but it
 does report plays to Yandex, and they show up in the account's listening
 history: days, each with groups (album, playlist, wave) of played tracks.
 
-Run as a script to watch one user's history and Ynison side by side (the
-token is never printed):
+Run as a script to watch one user's Ynison updates live next to the history
+(the token is never printed):
 
     docker compose exec -T worker python - <username> [minutes] < yandex_history.py
 """
@@ -67,62 +67,69 @@ async def fetch_history(client: httpx.AsyncClient, token: str,
     return parse_history(resp.json().get("result") or {})
 
 
-async def _print_history(client: httpx.AsyncClient, token: str, show_shape: bool) -> None:  # pragma: no cover
-    import json
+def _version(obj: dict[str, Any]) -> str:  # pragma: no cover - manual diagnostics
     import time
 
-    resp = await client.get(f"{API_URL}/music-history", headers=_headers(token),
-                            params={"fullModelsCount": 10}, timeout=10)
-    print(f"{time.strftime('%H:%M:%S')} history HTTP {resp.status_code}")  # noqa: T201
-    result = resp.json().get("result") or {}
-    if show_shape:
-        # Shape of one group, without personal data beyond ids
-        tab = (result.get("historyTabs") or [{}])[0]
-        group = (tab.get("items") or [{}])[0]
-        track = ((group.get("tracks") or [{}])[0].get("data") or {}).get("itemId")
-        print("keys:", sorted(result.keys()), "tab:", sorted(tab.keys()),  # noqa: T201
-              "group:", sorted(group.keys()), "track item:", json.dumps(track, ensure_ascii=False))
-    for date, tracks in parse_history(result)[:1]:
-        for t in tracks[:5]:
-            print(f"  {date} {t.track_id}:{t.album_id} {t.artists} — {t.title}")  # noqa: T201
+    v = obj.get("version") or {}
+    ts = int(v.get("timestamp_ms") or 0)
+    return f"{str(v.get('device_id') or '-')[:8]}@{time.strftime('%H:%M:%S', time.gmtime(ts / 1000)) if ts else '-'}"
 
 
-def _device_label(device: dict[str, Any]) -> str:  # pragma: no cover - manual diagnostics
-    info = device.get("info") or {}
-    return f"{info.get('type')}/{info.get('app_name')}{' offline' if device.get('is_offline') else ''}"
+def _describe_state(state: dict[str, Any]) -> str:  # pragma: no cover - manual diagnostics
+    player = state.get("player_state") or {}
+    queue = player.get("player_queue") or {}
+    status = player.get("status") or {}
+    items = queue.get("playable_list") or []
+    index = queue.get("current_playable_index", -1)
+    track = items[index].get("playable_id") if isinstance(index, int) and 0 <= index < len(items) else None
+    devices = [f"{str((d.get('info') or {}).get('device_id'))[:8]}:{(d.get('info') or {}).get('type')}"
+               f"{'/off' if d.get('is_offline') else ''}" for d in state.get("devices") or []]
+    return (f"track={track} idx={index}/{len(items)} queue={_version(queue)} | "
+            f"paused={status.get('paused')} pos={int(status.get('progress_ms') or 0) // 1000}s "
+            f"dur={int(status.get('duration_ms') or 0) // 1000}s status={_version(status)} | "
+            f"active={str(state.get('active_device_id_optional') or '-')[:8]} devices={devices}")
 
 
-async def _print_ynison(token: str) -> None:  # pragma: no cover - manual diagnostics
-    from app.services import yandex_ynison
+async def _print_history(client: httpx.AsyncClient, token: str) -> None:  # pragma: no cover
+    import time
 
-    state = await yandex_ynison._read_state(token)
-    status = (state.get("player_state") or {}).get("status") or {}
-    print(f"  ynison: {yandex_ynison.parse_state(state)} paused={status.get('paused')} "  # noqa: T201
-          f"event={(status.get('version') or {}).get('timestamp_ms')} "
-          f"active={state.get('active_device_id_optional')} "
-          f"devices={[_device_label(d) for d in state.get('devices') or []]}")
+    days = await fetch_history(client, token, full_models=3)
+    head = [f"{t.artists} — {t.title}" for _, tracks in days[:1] for t in tracks[:3]]
+    print(f"{time.strftime('%H:%M:%S')} history: {head}")  # noqa: T201
 
 
-async def _diagnose(token: str, minutes: float) -> None:  # pragma: no cover - manual diagnostics
+async def _watch(token: str, minutes: float) -> None:  # pragma: no cover - manual diagnostics
+    """Keep one Ynison connection open and print every state it pushes;
+    print the head of the history every 30 seconds."""
     import asyncio
+    import json
+    import secrets
     import time
 
+    from app.services import yandex_ynison as yy
+
+    device_id = secrets.token_hex(8)
+    proto = {"Ynison-Device-Id": device_id,
+             "Ynison-Device-Info": json.dumps({"app_name": "Chrome", "type": 1})}
+    async with yy._connect(yy.REDIRECT_URL, token, proto) as ws:
+        redirect = json.loads(await ws.recv())
+    if "redirect_ticket" not in redirect:
+        raise RuntimeError(f"unexpected Ynison redirect: {str(redirect)[:200]}")
+    proto["Ynison-Redirect-Ticket"] = redirect["redirect_ticket"]
     deadline = time.time() + minutes * 60
-    first = True
-    async with httpx.AsyncClient() as client:
-        while True:
+    async with httpx.AsyncClient() as client, \
+            yy._connect(yy.STATE_URL.format(host=redirect["host"]), token, proto) as ws:
+        await ws.send(json.dumps(yy._hello(device_id)))
+        next_history = 0.0
+        while time.time() < deadline:
+            if time.time() >= next_history:
+                await _print_history(client, token)
+                next_history = time.time() + 30
             try:
-                await _print_history(client, token, show_shape=first)
-            except Exception as e:
-                print(f"  history error: {e}")  # noqa: T201
-            try:
-                await _print_ynison(token)
-            except Exception as e:
-                print(f"  ynison error: {e}")  # noqa: T201
-            first = False
-            if time.time() > deadline:
-                return
-            await asyncio.sleep(20)
+                raw = await asyncio.wait_for(ws.recv(), timeout=5)
+            except asyncio.TimeoutError:
+                continue
+            print(f"{time.strftime('%H:%M:%S')} ynison: {_describe_state(json.loads(raw))}")  # noqa: T201
 
 
 def _main(username: str, minutes: float) -> None:  # pragma: no cover - manual diagnostics
@@ -140,7 +147,7 @@ def _main(username: str, minutes: float) -> None:  # pragma: no cover - manual d
     if not token:
         print(f"{username}: Yandex token is not set")  # noqa: T201
         return
-    asyncio.run(_diagnose(token, minutes))
+    asyncio.run(_watch(token, minutes or 3))
 
 
 if __name__ == "__main__":  # pragma: no cover
