@@ -157,20 +157,22 @@ async def _yandex_track_info(client, track_id: str, headers: dict, username: str
 
 async def _fetch_yandex_track_info(client, track_id, headers, process_func, db, user,
                                    changed_at: datetime | None = None,
-                                   position: tuple[int, bool] | None = None):
+                                   position: tuple[int, bool] | None = None,
+                                   credit_sec: int | None = None):
     """Look the track up and report it; returns process_func's status (None
     if the track could not be looked up). `position` is (progress_sec,
     is_playing) when known (Ynison); otherwise it is estimated from the time
-    the play queue last changed."""
+    the play queue last changed. `credit_sec`: see process_scrobble."""
     info = await _yandex_track_info(client, track_id, headers, user.username)
     if info is None:
         return None
     track_url = f"https://music.yandex.ru/track/{track_id}"
     progress, is_playing = position or _estimate_queue_position(changed_at, info["duration"])
+    extra = {} if credit_sec is None else {"credit_sec": credit_sec}
     return await process_func(
         db, user, info["title"], info["artist"], info["cover"],
         track_url, "yandex", progress, is_playing,
-        info["duration"], info["album"]
+        info["duration"], info["album"], **extra
     )
 
 

@@ -2,9 +2,12 @@
 
 Polling every 30 seconds made a track switch show up with up to half a minute
 of delay. Ynison pushes every player change (track switch, pause, seek) over
-the open connection, so the listener reports it at once. While a track plays,
-it also reports every TICK_SEC so the listened time keeps accumulating
-(process_scrobble only counts gaps shorter than 35 seconds).
+the open connection, so the listener reports it at once. Listening time is
+credited only when the next event confirms it: the player sends one on every
+pause, seek and switch, so the time between two events was played. A tab
+closed or an app unloaded mid-track sends nothing, and that stretch is not
+counted. While a track plays, a report every TICK_SEC keeps the "now
+playing" mark alive without adding time.
 
 The music.yandex.ru web player also writes to Ynison, but always with
 paused=True; whether it plays is inferred from the order of its events
@@ -49,6 +52,10 @@ SPAM_RETRY_SEC = 1.2
 # where playback should be is a pause; one at the paused position a resume
 PAUSE_SLACK_SEC = 3
 RESUME_SLACK_SEC = 1
+# A switch this late after the track's natural end still ends it normally
+CONFIRM_SLACK_SEC = 30
+# Without a known length, a stretch longer than this is not trusted
+UNKNOWN_LENGTH_MAX_SEC = 900
 
 # Users whose Ynison connection is open in this process
 connected: set[int] = set()
@@ -71,6 +78,8 @@ class UserListener:
         self.received_ms = 0
         self._last_reported: tuple[str, bool] | None = None
         self._last_event: tuple = ()
+        # The stretch of playback not yet credited: (track, since ms, from position, duration)
+        self._segment: tuple[str, int, int, int] | None = None
         self._tasks: list[asyncio.Task] = []
         self.connected_since_ms: int | None = None
         self.last_error: str | None = None
@@ -139,18 +148,48 @@ class UserListener:
             self._last_event = playback.event
             if playback.pause_unknown:
                 playback = dataclasses.replace(playback, playing=self._web_playing(playback, expected))
+        now = _now_ms()
+        segment, credit = self._segment, self._confirmed_sec(now)
+        # The same track started over (repeat, seek back to the start)
+        restarted = (expected is not None and playback is not None and playback.playing
+                     and self.playback is not None and playback.track_id == self.playback.track_id
+                     and playback.progress_sec + 5 < expected[0])
         self.playback = playback
-        self.received_ms = _now_ms()
+        self.received_ms = now
+        self._segment = (playback.track_id, now, playback.progress_sec, playback.duration_sec) \
+            if playback is not None and playback.playing else None
+
+        closing = segment is not None and (playback is None or playback.track_id != segment[0] or restarted)
+        if closing and segment is not None:
+            # The track playing until now was switched or stopped: it gets
+            # the listening this event confirms
+            await self._report(segment[0], segment[2] + (credit or 0), False, credit or 0)
         if playback is None:
             return
         key = (playback.track_id, playback.playing)
-        # The same track started over (repeat, seek back to the start)
-        restarted = (expected is not None and playback.playing
-                     and playback.progress_sec + 5 < expected[0])
+        same_track_credit = 0 if closing else (credit or 0)
         # Pure device updates (volume, another device joining) repeat the
         # same track and state: the tick loop covers those
-        if key != self._last_reported or restarted:
-            await self._report(playback.track_id, playback.progress_sec, playback.playing)
+        if key != self._last_reported or restarted or same_track_credit:
+            await self._report(playback.track_id, playback.progress_sec, playback.playing, same_track_credit)
+
+    def _confirmed_sec(self, now_ms: int) -> int | None:
+        """Seconds of the current stretch of playback that a new player event
+        confirms. Every pause, seek or switch sends one, so the player played
+        without a break until now, as long as the track could still be
+        playing. An event long after the track should have ended means the
+        player went away unseen (a closed tab, an unloaded app): nothing is
+        confirmed then."""
+        if self._segment is None:
+            return None
+        _, start_ms, start_pos, duration = self._segment
+        elapsed = max(now_ms - start_ms, 0) // 1000
+        if not duration:
+            return elapsed if elapsed <= UNKNOWN_LENGTH_MAX_SEC else None
+        remaining = max(duration - start_pos, 0)
+        if elapsed > remaining + CONFIRM_SLACK_SEC:
+            return None
+        return min(elapsed, remaining)
 
     def _web_playing(self, pb: Playback, expected: tuple[int, bool] | None) -> bool:
         """Whether the web player plays, judged by what its event means:
@@ -190,35 +229,40 @@ class UserListener:
         return progress, True
 
     async def _tick_loop(self) -> None:
+        """Keeps the "now playing" mark alive; listening time is added only
+        by player events (see _confirmed_sec)."""
         while True:
             await asyncio.sleep(TICK_SEC)
             pb, position = self.playback, self.current_position()
             if pb is None or position is None:
                 continue
             progress, playing = position
+            if not playing:
+                self._segment = None  # played past the end without a word: the player is gone
             if playing or self._last_reported == (pb.track_id, True):
-                await self._report(pb.track_id, progress, playing)
+                await self._report(pb.track_id, progress, playing, 0)
 
     # --- reporting -------------------------------------------------------
 
-    async def _report(self, track_id: str, progress: int, playing: bool) -> None:
+    async def _report(self, track_id: str, progress: int, playing: bool, credit: int = 0) -> None:
+        """Report the player state; `credit` is confirmed listening to add."""
         from app.core.redis import redis_lock
         from app.services import cloud_scrobbling as cs
         try:
             async with redis_lock(f"scrobble_lock:{self.user_id}", expire_sec=30):
-                status = await self._report_once(cs, track_id, progress, playing)
+                status = await self._report_once(cs, track_id, progress, playing, credit)
                 if status == "ignored_spam_protection":
                     # The previous report for this user was under a second
                     # ago; a track switch must not be lost to that guard
                     await asyncio.sleep(SPAM_RETRY_SEC)
-                    await self._report_once(cs, track_id, progress + 1, playing)
+                    await self._report_once(cs, track_id, progress + 1, playing, credit)
             self._last_reported = (track_id, playing)
         except asyncio.CancelledError:
             raise
         except Exception as e:
             logger.warning(f"Ynison live report for user {self.user_id} failed: {e}")
 
-    async def _report_once(self, cs, track_id: str, progress: int, playing: bool):
+    async def _report_once(self, cs, track_id: str, progress: int, playing: bool, credit: int = 0):
         from app.models import User
         db = SessionLocal()
         try:
@@ -228,7 +272,7 @@ class UserListener:
             async with httpx.AsyncClient() as client:
                 return await cs._fetch_yandex_track_info(
                     client, track_id, cs._yandex_headers(self.token), self.process_func, db, user,
-                    position=(progress, playing))
+                    position=(progress, playing), credit_sec=credit)
         finally:
             db.close()
 

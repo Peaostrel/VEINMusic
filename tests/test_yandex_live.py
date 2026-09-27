@@ -28,8 +28,9 @@ def test_track_switch_is_reported_at_once_duplicates_are_not():
             lis._last_reported = ("2", True)
             await lis.on_playback(Playback("2", False, 40, 180))  # pause
         asyncio.run(run())
+    # The switch first closes track 1 (nothing confirmed: no time passed)
     assert [c.args for c in report.await_args_list] == [
-        ("1", 3, True), ("2", 0, True), ("2", 40, False)]
+        ("1", 3, True, 0), ("1", 10, False, 0), ("2", 0, True, 0), ("2", 40, False, 0)]
 
 
 def test_same_track_restarted_is_reported():
@@ -38,7 +39,7 @@ def test_same_track_restarted_is_reported():
     with patch.object(lis, "_report", new=AsyncMock()) as report, \
             patch.object(live, "_now_ms", return_value=10_000):
         asyncio.run(lis.on_playback(Playback("1", True, 0, 200)))
-    report.assert_awaited_once_with("1", 0, True)
+    report.assert_awaited_once_with("1", 0, True, 0)
 
 
 def test_current_position_extrapolates_and_detects_stale():
@@ -181,8 +182,8 @@ def test_web_player_play_pause_resume_seek_are_inferred():
     clock = {"s": 0}
     reported = []
 
-    async def report(track_id, progress, playing):
-        reported.append((track_id, progress, playing))
+    async def report(track_id, progress, playing, credit=0):
+        reported.append((track_id, progress, playing, credit))
         lis._last_reported = (track_id, playing)
 
     events = [  # (receive time, state)
@@ -206,7 +207,10 @@ def test_web_player_play_pause_resume_seek_are_inferred():
 
     assert states == [("A", True), ("A", True), ("A", False), ("A", False),
                       ("A", True), ("B", True), ("B", True)]
-    assert reported == [("A", 0, True), ("A", 24, False), ("A", 24, True), ("B", 0, True)]
+    # Listening is credited by the event that ends each stretch: 24 s up to
+    # the pause, 12 s from the resume to the switch, 2 s before the seek
+    assert reported == [("A", 0, True, 0), ("A", 24, False, 24), ("A", 24, True, 0),
+                        ("A", 36, False, 12), ("B", 0, True, 0), ("B", 42, True, 2)]
     assert lis.current_position(1_062_000) == (52, True)  # playing on from the seek
 
 
@@ -232,3 +236,107 @@ def test_app_state_is_trusted():
     pb = parse_state(state, now_ms=1_101_000)
     assert pb.pause_unknown is False
     assert pb.playing is False
+
+
+def _app_state(track, pos, dur, event_s, version, paused=False):
+    return {
+        "player_state": {
+            "player_queue": {"current_playable_index": 0,
+                             "playable_list": [{"playable_id": track, "playable_type": "TRACK"}]},
+            "status": {"paused": paused, "progress_ms": pos * 1000, "duration_ms": dur * 1000,
+                       "version": {"device_id": "phone", "version": version,
+                                   "timestamp_ms": (1000 + event_s) * 1000}},
+        },
+        "devices": [{"info": {"device_id": "phone", "type": "IOS"}}],
+    }
+
+
+def _replay(events):
+    """Feed (receive time, state) pairs to a listener; returns the reports."""
+    from app.services.yandex_ynison import parse_state
+
+    lis = _listener()
+    clock = {"s": 0}
+    reported = []
+
+    async def report(track_id, progress, playing, credit=0):
+        reported.append((track_id, progress, playing, credit))
+        lis._last_reported = (track_id, playing)
+
+    with patch.object(lis, "_report", new=report), \
+            patch.object(live, "_now_ms", side_effect=lambda: (1000 + clock["s"]) * 1000):
+        async def run():
+            for at, state in events:
+                clock["s"] = at
+                await lis.on_playback(parse_state(state, now_ms=(1000 + at) * 1000))
+        asyncio.run(run())
+    return reported
+
+
+def test_track_played_to_its_end_is_credited_by_the_switch():
+    reported = _replay([
+        (0, _app_state("A", 0, 200, 0, 1)),
+        (203, _app_state("B", 0, 180, 203, 2)),  # the player moved on by itself
+    ])
+    assert ("A", 200, False, 200) in reported
+    assert reported[-1] == ("B", 0, True, 0)
+
+
+def test_closed_tab_or_unloaded_app_credits_nothing():
+    """The web player (or the app) went away 30 s into the track: no event
+    came, and the next one arrives an hour later. The track played for an
+    unknown part of that hour, so none of it counts."""
+    reported = _replay([
+        (0, _web_state("A", 0, 200, 0, 1)),
+        (3600, _web_state("B", 0, 180, 3600, 2)),
+    ])
+    assert ("A", 0, False, 0) in reported
+    assert sum(r[3] for r in reported if r[0] == "A") == 0
+
+
+def test_repeat_of_the_same_track_closes_the_previous_play():
+    reported = _replay([
+        (0, _app_state("A", 0, 100, 0, 1)),
+        (101, _app_state("A", 0, 100, 101, 2)),  # repeat one: back to the start
+    ])
+    assert reported == [("A", 0, True, 0), ("A", 100, False, 100), ("A", 0, True, 0)]
+
+
+def test_processor_counts_only_credited_listening(db):
+    """Reports from the live listener carry the confirmed listening: time
+    between them is not added, so a stream of "still playing" reports from a
+    tab that is gone never makes a track count."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.models import Scrobble, User
+    from app.services import scrobble_processor as sp
+
+    user = User(username="credit_user", hashed_password="x")
+    db.add(user)
+    db.commit()
+
+    async def report(progress, playing, credit):
+        with patch.object(sp, "get_track_duration", new=AsyncMock(return_value=0)), \
+                patch.object(sp, "get_track_genre", new=AsyncMock(return_value=None)), \
+                patch.object(sp.manager, "broadcast_to_user", new=AsyncMock()), \
+                patch.object(sp, "_dispatch_counted_scrobble", new=AsyncMock()):
+            return await sp.process_scrobble(db, user, "Song", "Band", "", "", "yandex", progress,
+                                             playing, 200, "", credit_sec=credit)
+
+    asyncio.run(report(0, True, 0))
+    scrobble = db.query(Scrobble).filter(Scrobble.user_id == user.id).one()
+    # "Still playing" 10 s later (inside the old 35 s window): no time added
+    scrobble.updated_at = datetime.now(UTC) - timedelta(seconds=10)
+    db.commit()
+    asyncio.run(report(10, True, 0))
+    db.refresh(scrobble)
+    assert scrobble.listened_sec == 0
+    # The switch confirms 175 s: the track counts
+    asyncio.run(report(175, False, 175))
+    db.refresh(scrobble)
+    assert scrobble.listened_sec == 175
+    assert scrobble.xp_earned >= 1
+    # Credit never goes past the track length
+    asyncio.run(report(200, False, 100))
+    db.refresh(scrobble)
+    assert scrobble.listened_sec == 200
