@@ -50,20 +50,41 @@ export function Wordmark({ className = "" }: Readonly<{ className?: string }>) {
   );
 }
 
-/** Tile + wordmark linking home. */
+/** Small "beta" pill: the project is in public beta testing. */
+export function BetaBadge({
+  className = "",
+}: Readonly<{ className?: string }>) {
+  return (
+    <span
+      title="VEINMusic на бета-тестировании: возможны ошибки и изменения"
+      className={`inline-flex h-[18px] shrink-0 items-center rounded-full border border-accent/50 px-1.5 font-mono text-[10px] font-medium uppercase leading-none tracking-[0.06em] text-accent ${className}`}
+    >
+      beta
+    </span>
+  );
+}
+
+/** Tile + wordmark (+ beta pill) linking home. */
 export function BrandLink({
   href = "/",
   size = 28,
   textClass = "text-[17px]",
-}: Readonly<{ href?: string; size?: number; textClass?: string }>) {
+  beta = true,
+}: Readonly<{
+  href?: string;
+  size?: number;
+  textClass?: string;
+  beta?: boolean;
+}>) {
   return (
     <Link
       href={href}
-      aria-label="VEINMusic — на главную"
+      aria-label={`VEINMusic${beta ? " (бета)" : ""} — на главную`}
       className="flex items-center gap-2.5 rounded-md"
     >
       <LogoTile size={size} />
       <Wordmark className={textClass} />
+      {beta && <BetaBadge className="-ml-0.5" />}
     </Link>
   );
 }

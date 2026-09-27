@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import AppShell from "./shell/AppShell";
 import PWARegistration from "../components/PWARegistration";
+import MaintenanceOverlay from "../components/MaintenanceOverlay";
 
 const plexSans = IBM_Plex_Sans({
   subsets: ["latin", "cyrillic"],
@@ -67,6 +68,7 @@ export default function RootLayout({
         </a>
         <AppShell>{children}</AppShell>
         <PWARegistration />
+        <MaintenanceOverlay />
       </body>
     </html>
   );

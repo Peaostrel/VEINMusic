@@ -4,17 +4,67 @@
 	email {$ACME_EMAIL}
 }
 
+# "Update in progress": deploy.sh creates deploy/maintenance/on while it
+# restarts the containers, and a restarting container answers 502-504.
+# Both get these answers, marked with X-Maintenance so the site's pages
+# show their "update in progress" window and reload when it is over.
+(maintenance_page) {
+	root * /srv/maintenance
+	rewrite * /index.html
+	header Cache-Control "no-store"
+	header X-Maintenance "1"
+	file_server {
+		status 503
+	}
+}
+
+(maintenance_json) {
+	# Readable by the site's scripts (another origin)
+	header Access-Control-Allow-Origin "https://{$SITE_DOMAIN}"
+	header Access-Control-Allow-Credentials "true"
+	header Access-Control-Expose-Headers "X-Maintenance"
+	header Cache-Control "no-store"
+	header X-Maintenance "1"
+	header Content-Type "application/json; charset=utf-8"
+	respond `{"detail":"Идёт обновление, пожалуйста подождите"}` 503
+}
+
+(updating) {
+	@updating file {
+		root /srv/maintenance
+		try_files /on
+	}
+}
+
 {$SITE_DOMAIN} {
 	encode zstd gzip
-	reverse_proxy frontend:3000
+	import updating
+	handle @updating {
+		import maintenance_page
+	}
+	handle {
+		reverse_proxy frontend:3000
+	}
+	handle_errors 502 503 504 {
+		import maintenance_page
+	}
 }
 
 {$API_DOMAIN} {
 	encode zstd gzip
-	# Avatar and cover uploads; the API enforces its own smaller limits
-	request_body {
-		max_size 20MB
+	import updating
+	handle @updating {
+		import maintenance_json
 	}
-	# WebSockets (rooms, live status) are proxied as-is
-	reverse_proxy backend:8000
+	handle {
+		# Avatar and cover uploads; the API enforces its own smaller limits
+		request_body {
+			max_size 20MB
+		}
+		# WebSockets (rooms, live status) are proxied as-is
+		reverse_proxy backend:8000
+	}
+	handle_errors 502 503 504 {
+		import maintenance_json
+	}
 }
