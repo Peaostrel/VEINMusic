@@ -26,6 +26,48 @@ const smallDanger = `${btn.danger} ${btn.sm}`;
 const unavailableButton =
   "disabled:border-line disabled:bg-surface-2 disabled:text-fg-3 disabled:grayscale disabled:hover:brightness-100";
 
+const SYNC_PAUSED =
+  "Интеграция временно отключена администратором. Подключение и синхронизация недоступны.";
+const IMPORT_PAUSED =
+  "Интеграция временно отключена администратором. Подключение и импорт недоступны.";
+
+function syncedStatus(linked: boolean, lastSync?: string | null): string {
+  if (!linked) return "не подключено";
+  if (!lastSync) return "подключено";
+  return `подключено · синхр. ${new Date(lastSync).toLocaleString("ru-RU")}`;
+}
+
+function providerStatus(
+  enabled: boolean,
+  linked: boolean,
+  lastSync?: string | null,
+): string {
+  if (enabled) return syncedStatus(linked, lastSync);
+  return linked ? "подключено · синхронизация на паузе" : "недоступно";
+}
+
+function lastfmStatus(enabled: boolean, username: string): string {
+  if (!enabled) {
+    return username
+      ? `аккаунт ${username} · синхронизация на паузе`
+      : "недоступно";
+  }
+  return username ? `аккаунт ${username}` : "не подключено";
+}
+
+function statusTextClass(disabled: boolean, statusOk: boolean): string {
+  if (disabled) return "text-danger";
+  return statusOk ? "text-ok" : "text-fg-3";
+}
+
+function whenEnabled<T>(enabled: boolean, available: T, unavailable: T): T {
+  return enabled ? available : unavailable;
+}
+
+function integrationTitle(enabled: boolean, title: string): string | undefined {
+  return enabled ? undefined : title;
+}
+
 function Row({
   logo,
   name,
@@ -47,7 +89,6 @@ function Row({
 }>) {
   return (
     <li
-      aria-disabled={disabled || undefined}
       className={`flex flex-col gap-4 border-b border-line-soft px-5 py-5 last:border-0 ${disabled ? "bg-surface-2/30" : ""}`}
     >
       <div className="flex flex-col gap-4 md:flex-row md:items-center">
@@ -67,7 +108,7 @@ function Row({
               )}
             </span>
             <span
-              className={`font-mono text-xs ${disabled ? "text-danger" : statusOk ? "text-ok" : "text-fg-3"}`}
+              className={`font-mono text-xs ${statusTextClass(disabled, statusOk)}`}
             >
               {status}
             </span>
@@ -103,12 +144,8 @@ export default function IntegrationsTab({
   const spotifyEnabled = useFeature("integration_spotify");
   const yandexEnabled = useFeature("integration_yandex");
   const lastfmEnabled = useFeature("integration_lastfm");
-  const synced = (linked?: boolean) => {
-    if (!linked) return "не подключено";
-    if (!userProfile?.last_sync) return "подключено";
-    const when = new Date(userProfile.last_sync).toLocaleString("ru-RU");
-    return `подключено · синхр. ${when}`;
-  };
+  const spotifyLinked = Boolean(userProfile?.spotify_linked);
+  const yandexLinked = Boolean(userProfile?.yandex_linked);
 
   return (
     <div className="flex flex-col gap-4">
@@ -137,20 +174,18 @@ export default function IntegrationsTab({
         <Row
           logo="S"
           name="Spotify"
-          status={
-            spotifyEnabled
-              ? synced(userProfile?.spotify_linked)
-              : userProfile?.spotify_linked
-                ? "подключено · синхронизация на паузе"
-                : "недоступно"
-          }
-          statusOk={spotifyEnabled && Boolean(userProfile?.spotify_linked)}
+          status={providerStatus(
+            spotifyEnabled,
+            spotifyLinked,
+            userProfile?.last_sync,
+          )}
+          statusOk={spotifyEnabled && spotifyLinked}
           disabled={!spotifyEnabled}
-          description={
-            spotifyEnabled
-              ? "Скробблинг напрямую через сервер, без расширения."
-              : "Интеграция временно отключена администратором. Подключение и синхронизация недоступны."
-          }
+          description={whenEnabled(
+            spotifyEnabled,
+            "Скробблинг напрямую через сервер, без расширения.",
+            SYNC_PAUSED,
+          )}
         >
           <div className="flex gap-2 md:justify-end">
             {userProfile?.spotify_linked && (
@@ -168,10 +203,13 @@ export default function IntegrationsTab({
                 globalThis.location.href = `${API_URL}/auth/spotify/login`;
               }}
               disabled={!spotifyEnabled}
-              title={spotifyEnabled ? undefined : "Spotify временно отключён"}
-              className={`${userProfile?.spotify_linked ? small : smallPrimary} ${unavailableButton}`}
+              title={integrationTitle(
+                spotifyEnabled,
+                "Spotify временно отключён",
+              )}
+              className={`${spotifyLinked ? small : smallPrimary} ${unavailableButton}`}
             >
-              {userProfile?.spotify_linked ? "Обновить" : "Подключить"}
+              {spotifyLinked ? "Обновить" : "Подключить"}
             </button>
           </div>
         </Row>
@@ -179,14 +217,12 @@ export default function IntegrationsTab({
         <Row
           logo="Я"
           name="Яндекс Музыка"
-          status={
-            yandexEnabled
-              ? synced(userProfile?.yandex_linked)
-              : userProfile?.yandex_linked
-                ? "подключено · синхронизация на паузе"
-                : "недоступно"
-          }
-          statusOk={yandexEnabled && Boolean(userProfile?.yandex_linked)}
+          status={providerStatus(
+            yandexEnabled,
+            yandexLinked,
+            userProfile?.last_sync,
+          )}
+          statusOk={yandexEnabled && yandexLinked}
           disabled={!yandexEnabled}
           description={
             yandexEnabled ? (
@@ -202,7 +238,7 @@ export default function IntegrationsTab({
                 </a>
               </>
             ) : (
-              "Интеграция временно отключена администратором. Подключение и синхронизация недоступны."
+              SYNC_PAUSED
             )
           }
         >
@@ -232,9 +268,10 @@ export default function IntegrationsTab({
               type="button"
               onClick={saveYandexToken}
               disabled={!yandexEnabled}
-              title={
-                yandexEnabled ? undefined : "Яндекс Музыка временно отключена"
-              }
+              title={integrationTitle(
+                yandexEnabled,
+                "Яндекс Музыка временно отключена",
+              )}
               className={`${smallPrimary} ${unavailableButton} flex-1`}
             >
               Сохранить
@@ -245,22 +282,14 @@ export default function IntegrationsTab({
         <Row
           logo="fm"
           name="Last.fm"
-          status={
-            lastfmEnabled
-              ? data.lastfmUsername
-                ? `аккаунт ${data.lastfmUsername}`
-                : "не подключено"
-              : data.lastfmUsername
-                ? `аккаунт ${data.lastfmUsername} · синхронизация на паузе`
-                : "недоступно"
-          }
+          status={lastfmStatus(lastfmEnabled, data.lastfmUsername)}
           statusOk={lastfmEnabled && Boolean(data.lastfmUsername)}
           disabled={!lastfmEnabled}
-          description={
-            lastfmEnabled
-              ? "Импорт истории. Повторный импорт добавит только новые прослушивания."
-              : "Интеграция временно отключена администратором. Подключение и импорт недоступны."
-          }
+          description={whenEnabled(
+            lastfmEnabled,
+            "Импорт истории. Повторный импорт добавит только новые прослушивания.",
+            IMPORT_PAUSED,
+          )}
           footer={<LastfmImportStatus refreshKey={importRefresh ?? 0} />}
         >
           <input
@@ -288,11 +317,10 @@ export default function IntegrationsTab({
               type="button"
               onClick={startLastfmImport}
               disabled={!importEnabled || !lastfmEnabled}
-              title={
-                importEnabled && lastfmEnabled
-                  ? undefined
-                  : "Импорт временно отключён"
-              }
+              title={integrationTitle(
+                importEnabled && lastfmEnabled,
+                "Импорт временно отключён",
+              )}
               className={`${smallPrimary} ${unavailableButton} flex-1`}
             >
               Импорт
