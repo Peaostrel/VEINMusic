@@ -373,6 +373,34 @@ def _determine_is_new(db: Session,
     return False, None
 
 
+def _apply_credit(last_scrobble, now, is_playing: bool, credit_sec: int, pending_sec: int,
+                  track_dur: int) -> None:
+    """Live player connections: add the confirmed listening, remember the
+    unconfirmed stretch (shown only while the track plays)."""
+    old_listened = last_scrobble.listened_sec or 0
+    added = max(int(credit_sec), 0)
+    if added:
+        last_scrobble.listened_sec = max(old_listened, min(old_listened + added, track_dur))
+    last_scrobble.pending_sec = max(int(pending_sec), 0) if is_playing else 0
+    last_scrobble.updated_at = now
+
+
+def _advance_by_elapsed(last_scrobble, now, l_updated_at, is_playing: bool) -> None:
+    """Other clients: add the time between two "still playing" reports."""
+    time_elapsed = (now - l_updated_at).total_seconds()
+    last_scrobble.pending_sec = 0
+    # Accumulate integer seconds cleanly to avoid drifting and rounding errors.
+    if last_scrobble.is_playing and is_playing and 0 < time_elapsed < 35:
+        increment = int(time_elapsed)
+        if increment > 0:
+            last_scrobble.listened_sec = (last_scrobble.listened_sec or 0) + increment
+            # Keep fractional precision by only advancing updated_at by the integer increment
+            last_scrobble.updated_at = l_updated_at + timedelta(seconds=increment)
+    else:
+        # If paused or elapsed time is too large, just update the ping timestamp
+        last_scrobble.updated_at = now
+
+
 def _update_scrobble_progress(
         db: Session,
         user: User,
@@ -392,28 +420,13 @@ def _update_scrobble_progress(
     event, not confirmed yet: only shown while the track plays.
 
     Returns True when this update made the scrobble count (crossed the listen threshold)."""
-    time_elapsed = (now - l_updated_at).total_seconds()
     old_listened = last_scrobble.listened_sec or 0
     track_dur = int(track.duration) if getattr(track, 'duration', None) and track.duration > 0 else 180
 
     if credit_sec is not None:
-        added = max(int(credit_sec), 0)
-        if added:
-            last_scrobble.listened_sec = max(old_listened, min(old_listened + added, track_dur))
-        last_scrobble.pending_sec = max(int(pending_sec), 0) if is_playing else 0
-        last_scrobble.updated_at = now
-    # Accumulate integer seconds cleanly to avoid drifting and rounding errors.
-    elif last_scrobble.is_playing and is_playing and 0 < time_elapsed < 35:
-        increment = int(time_elapsed)
-        if increment > 0:
-            last_scrobble.listened_sec = old_listened + increment
-            # Keep fractional precision by only advancing updated_at by the integer increment
-            last_scrobble.updated_at = l_updated_at + timedelta(seconds=increment)
+        _apply_credit(last_scrobble, now, is_playing, credit_sec, pending_sec, track_dur)
     else:
-        # If paused or elapsed time is too large, just update the ping timestamp
-        last_scrobble.updated_at = now
-    if credit_sec is None:
-        last_scrobble.pending_sec = 0
+        _advance_by_elapsed(last_scrobble, now, l_updated_at, is_playing)
 
     last_scrobble.is_playing = is_playing
     db.commit()
