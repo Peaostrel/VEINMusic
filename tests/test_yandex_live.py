@@ -119,7 +119,9 @@ def test_poll_skips_users_with_live_connection(db):
 
 def test_track_switch_reaches_history_immediately(client, db):
     """Ynison pushes a track, then a switch: the user's history shows the new
-    track right away, without waiting for a poll."""
+    track right away, without waiting for a poll. The switch arrives within a
+    second of the first report, so it also goes through the spam-guard retry
+    (a real ~1 s wait: the guard compares wall-clock time)."""
     from app.models import User, UserIntegration
     from app.services import cloud_scrobbling as cs
     from app.services.scrobble_processor import process_scrobble
@@ -145,8 +147,8 @@ def test_track_switch_reaches_history_immediately(client, db):
     lis = live.UserListener(user.id, "tok", process_scrobble)
     with patch.object(cs, "_yandex_track_info", new=fake_info), \
             patch.object(live.yandex_ynison, "listen", new=fake_listen), \
-            patch.object(live.asyncio, "sleep", new=AsyncMock()), \
             patch("app.core.redis.redis_lock", side_effect=lambda *a, **k: _NoLock()), \
+            patch("app.services.scrobble_processor.get_track_genre", new=AsyncMock(return_value=None)), \
             patch("app.services.scrobble_processor.manager.broadcast_to_user", new=AsyncMock()):
         asyncio.run(live.yandex_ynison.listen("tok", lis.on_playback, on_open=lambda: None))
 
