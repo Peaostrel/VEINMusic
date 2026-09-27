@@ -146,6 +146,9 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
+      - name: Test Browser Extension
+        run: node --test music-extension/tests/*.test.cjs
+
       - name: Run Prettier (Format Check)
         working-directory: frontend
         run: npm run format:check

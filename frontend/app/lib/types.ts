@@ -137,6 +137,7 @@ export interface UserInfo {
   social_links: string;
   theme: string;
   is_private: boolean;
+  can_view_private?: boolean;
   hidden_artists: string;
   sync_privacy: "all" | "followers" | "none";
   is_verified: boolean;

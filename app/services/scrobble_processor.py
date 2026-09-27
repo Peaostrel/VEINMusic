@@ -9,6 +9,7 @@ import httpx
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.constants import ACTIVE_PLAYBACK_WINDOW_SEC
 from app.core.websockets import manager
 from app.models import (
     Scrobble,
@@ -126,7 +127,7 @@ def format_history_item(
         played_time = played_time.replace(tzinfo=UTC)
 
     now = datetime.now(UTC)
-    is_playing = scrobble.is_playing and (now - upd_time).total_seconds() < 45
+    is_playing = scrobble.is_playing and (now - upd_time).total_seconds() < ACTIVE_PLAYBACK_WINDOW_SEC
 
     diff = now - played_time
     if diff.total_seconds() < 60:

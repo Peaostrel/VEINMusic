@@ -22,64 +22,82 @@ if (chrome.alarms) {
     });
 }
 
-function addToOfflineQueue(scrobbleData) {
-    chrome.storage.local.get(['offline_scrobbles'], (res) => {
+const storageGet = (keys) => new Promise((resolve) => chrome.storage.local.get(keys, resolve));
+const storageSet = (values) => new Promise((resolve, reject) => {
+    chrome.storage.local.set(values, () => {
+        const error = chrome.runtime.lastError;
+        if (error) reject(new Error(error.message));
+        else resolve();
+    });
+});
+
+// Chrome storage has no atomic read-modify-write. Serialize queue writes so
+// scrobbles arriving during a flush are not overwritten by its final write.
+let queueMutation = Promise.resolve();
+let flushInProgress = false;
+
+function mutateOfflineQueue(update) {
+    const operation = queueMutation.then(async () => {
+        const res = await storageGet(['offline_scrobbles']);
         const queue = Array.isArray(res.offline_scrobbles) ? res.offline_scrobbles : [];
-        // Max 500 queued items to prevent storage explosion
-        if (queue.length < 500) {
-            queue.push({
-                payload: scrobbleData,
-                queuedAt: Date.now()
-            });
-            chrome.storage.local.set({ offline_scrobbles: queue }, () => {
-                console.log(`[VEIN] Скроббл добавлен в оффлайн-очередь (всего: ${queue.length})`);
-            });
-        }
+        await storageSet({ offline_scrobbles: update(queue) });
+    });
+    queueMutation = operation.catch((error) => {
+        console.warn('[VEIN] Не удалось сохранить оффлайн-очередь:', error);
+    });
+    return operation;
+}
+
+function addToOfflineQueue(scrobbleData) {
+    return mutateOfflineQueue((queue) => {
+        if (queue.length >= 500) return queue;
+        return [...queue, { payload: scrobbleData, queuedAt: Date.now() }];
     });
 }
 
-function flushOfflineQueue() {
-    chrome.storage.local.get(['apiUrl', 'apiKey', 'offline_scrobbles'], async (res) => {
+async function flushOfflineQueue() {
+    if (flushInProgress) return;
+    flushInProgress = true;
+    try {
+        await queueMutation;
+        const res = await storageGet(['apiUrl', 'apiKey', 'offline_scrobbles']);
         const queue = Array.isArray(res.offline_scrobbles) ? res.offline_scrobbles : [];
         if (queue.length === 0 || !res.apiKey) return;
 
         const API_BASE = veinApiBase(res);
-        const apiKey = res.apiKey;
-        const remaining = [];
-        let flushedCount = 0;
-
+        let sent = 0;
         for (const item of queue) {
             try {
                 const response = await fetch(`${API_BASE}/api/scrobble`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apiKey}`
+                        'Authorization': `Bearer ${res.apiKey}`
                     },
                     body: JSON.stringify(item.payload)
                 });
-
-                if (response.ok) {
-                    flushedCount++;
-                } else if (response.status >= 500 || response.status === 429) {
-                    // Server error / rate limit: retain in queue and stop this cycle
-                    remaining.push(item);
+                if (!response.ok) {
+                    console.warn(`[VEIN] Оффлайн-очередь остановлена: сервер ответил ${response.status}.`);
                     break;
                 }
-            } catch (err) {
-                // Network still offline: log and keep remaining items in queue
-                console.warn('[VEIN] Offline queue sync paused due to network error:', err);
-                remaining.push(item);
+                sent++;
+            } catch (error) {
+                console.warn('[VEIN] Оффлайн-очередь остановлена из-за ошибки сети:', error);
                 break;
             }
         }
 
-        chrome.storage.local.set({ offline_scrobbles: remaining }, () => {
-            if (flushedCount > 0) {
-                console.log(`[VEIN] Успешно синхронизировано ${flushedCount} оффлайн-скробблов.`);
-            }
-        });
-    });
+        if (sent > 0) {
+            // Only remove the sent prefix. New items appended while the network
+            // requests were in flight remain in the queue.
+            await mutateOfflineQueue((current) => current.slice(sent));
+            console.log(`[VEIN] Успешно синхронизировано ${sent} оффлайн-скробблов.`);
+        }
+    } catch (error) {
+        console.warn('[VEIN] Не удалось синхронизировать оффлайн-очередь:', error);
+    } finally {
+        flushInProgress = false;
+    }
 }
 
 const SCROBBLE_MIN_INTERVAL_MS = 5000;
@@ -152,8 +170,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                         // Also try to flush any previously stored offline scrobbles
                         flushOfflineQueue();
                     });
-                } else if (res.status >= 500) {
-                    console.warn(`[VEIN] Серверная ошибка (${res.status}), сохраняем в оффлайн-очередь.`);
+                } else {
+                    console.warn(`[VEIN] Сервер ответил ${res.status}, сохраняем в оффлайн-очередь.`);
                     addToOfflineQueue(payload);
                 }
             })

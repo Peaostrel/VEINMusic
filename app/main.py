@@ -226,7 +226,7 @@ def _get_ws_authenticated_username(websocket: WebSocket) -> str | None:
     if not ticket and not token:
         return None
 
-    from app.core.security import _authenticate_user
+    from app.core.security import _authenticate_user_with_scopes
     from app.core.ws_ticket import verify_ticket
 
     # Use a short-lived session: a Depends(get_db) session would keep a pooled
@@ -239,7 +239,9 @@ def _get_ws_authenticated_username(websocket: WebSocket) -> str | None:
             return str(user.username) if user and not user.is_banned else None
         if not token:
             return None
-        auth_user = _authenticate_user(token, db)
+        auth_user, scopes = _authenticate_user_with_scopes(token, db)
+        if scopes is not None and not {"profile:read", "*"}.intersection(scopes.split(",")):
+            return None
         if auth_user and not auth_user.is_banned:
             return str(auth_user.username)
         return None

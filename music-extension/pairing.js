@@ -2,7 +2,7 @@
 // The extension asks the server for a short code, the user approves it on
 // the website (/link) and the extension receives its own revocable API key.
 
-var VEIN_DEFAULT_API = 'https://music.vein.guru';
+var VEIN_DEFAULT_API = 'https://api.music.vein.guru';
 
 function veinApiBase(settings) {
     return (settings && settings.apiUrl) || VEIN_DEFAULT_API;
