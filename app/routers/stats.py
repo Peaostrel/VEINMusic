@@ -11,7 +11,7 @@ from fastapi import (
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
-from app.core.constants import ORDER_PLAYS_DESC
+from app.core.constants import ACTIVE_PLAYBACK_WINDOW_SEC, ORDER_PLAYS_DESC
 from app.database import get_db
 from app.core.security import get_current_user
 from app.models import (
@@ -468,7 +468,7 @@ def get_current_track(username: str, request: Request, db: Annotated[Session, De
     last_seen = s.updated_at or s.played_at
     if last_seen.tzinfo is None:
         last_seen = last_seen.replace(tzinfo=UTC)
-    is_active = s.is_playing and (datetime.now(UTC) - last_seen).total_seconds() < 900
+    is_active = s.is_playing and (datetime.now(UTC) - last_seen).total_seconds() < ACTIVE_PLAYBACK_WINDOW_SEC
 
     if is_active:
         lvl, rank, _, _ = get_user_level_info(user, db)
@@ -503,11 +503,12 @@ def _full_ranking(db: Session) -> list[dict[str, Any]]:
             WHERE s.listened_sec * 100 >= COALESCE(NULLIF(t.duration, 0), 180) * 85
         ) s ON u.id = s.user_id
         WHERE (u.is_banned IS NULL OR u.is_banned = :not_banned)
+          AND (p.is_private IS NULL OR p.is_private = :not_private)
         GROUP BY u.id, u.username, p.display_name, p.avatar_url, i.is_verified,
                  p.theme, i.bonus_xp, u.role
         ORDER BY total_xp DESC, u.username
     """)
-    rows = db.execute(sql, {"not_banned": False}).fetchall()
+    rows = db.execute(sql, {"not_banned": False, "not_private": False}).fetchall()
     ranking = []
     for rank, (uname, dname, avatar, verified, theme, txp, urole) in enumerate(rows, 1):
         ranking.append({
@@ -574,13 +575,19 @@ def get_public_stats(db: Annotated[Session, Depends(get_db)]):
         Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85).count()
     total_tracks = db.query(Track).count()
 
-    # Считаем онлайн за последние 5 минут
-    five_mins_ago = datetime.now(UTC) - timedelta(minutes=5)
+    # Count only recent playback from public, non-banned listeners.
+    active_since = datetime.now(UTC) - timedelta(seconds=ACTIVE_PLAYBACK_WINDOW_SEC)
+    latest_scrobbles = db.query(
+        func.max(Scrobble.id).label("id")
+    ).group_by(Scrobble.user_id).subquery()
     online_count = db.query(
-        func.count(
-            func.distinct(
-                Scrobble.user_id))).filter(
-        Scrobble.updated_at >= five_mins_ago).scalar() or 0
+        func.count(Scrobble.id)).join(
+        latest_scrobbles, latest_scrobbles.c.id == Scrobble.id
+    ).join(User).join(UserProfile).filter(
+        Scrobble.updated_at >= active_since,
+        Scrobble.is_playing.is_(True),
+        UserProfile.is_private.isnot(True),
+        User.is_banned.isnot(True)).scalar() or 0
 
     return {
         "total_users": total_users,

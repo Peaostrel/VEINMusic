@@ -9,3 +9,4 @@ SCDN_CO = "scdn.co"
 YANDEX_AVATARS = "avatars.yandex.net"
 TEXT_KEY = "#text"
 USER_AGENT_MOZILLA = "Mozilla/5.0"
+ACTIVE_PLAYBACK_WINDOW_SEC = 45

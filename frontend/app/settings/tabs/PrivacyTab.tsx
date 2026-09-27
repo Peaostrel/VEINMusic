@@ -11,7 +11,8 @@ export default function PrivacyTab({
         <div>
           <p className="font-medium text-fg">Приватный профиль</p>
           <p className="text-xs text-fg-2">
-            Скрыть историю от всех, кроме подписчиков.
+            Историю и статистику видите только вы. Подписчики тоже не получают
+            доступ.
           </p>
         </div>
         <button

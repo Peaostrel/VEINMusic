@@ -9,6 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.constants import ACTIVE_PLAYBACK_WINDOW_SEC
 from app.core.rate_limit import credential_key, limiter
 from app.core.redis import redis_lock
 from app.core.security import get_current_user, get_current_user_optional
@@ -132,7 +133,7 @@ def get_history(username: str,
     # A scrobble is valid if it was listened to for >= 15 seconds, OR if it's currently playing
     # (updated_at within the last 45 seconds and is_playing is True)
     now = datetime.now(UTC)
-    active_threshold = now - timedelta(seconds=45)
+    active_threshold = now - timedelta(seconds=ACTIVE_PLAYBACK_WINDOW_SEC)
 
     scrobbles = db.query(
         Scrobble,
@@ -170,7 +171,7 @@ def get_global_history(db: Annotated[Session, Depends(get_db)]):
     if cached is not None:
         return cached
     now = datetime.now(UTC)
-    active_threshold = now - timedelta(seconds=45)
+    active_threshold = now - timedelta(seconds=ACTIVE_PLAYBACK_WINDOW_SEC)
 
     scrobbles = db.query(
         Scrobble,
@@ -220,7 +221,7 @@ def get_friends_history(username: str,
         return []
 
     now = datetime.now(UTC)
-    active_threshold = now - timedelta(seconds=45)
+    active_threshold = now - timedelta(seconds=ACTIVE_PLAYBACK_WINDOW_SEC)
 
     scrobbles = db.query(
         Scrobble,

@@ -84,7 +84,7 @@ export default function Profile() {
     console.error(e);
   }
 
-  if (u.is_private)
+  if (u.is_private && !u.can_view_private)
     return (
       <StatusScreen title="Это приватный профиль">
         Пользователь ограничил доступ к своей статистике и истории

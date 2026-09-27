@@ -94,6 +94,7 @@ def get_user_info(username: str, request: Request,
             "display_name": user.profile.display_name or user.username,
             "avatar_url": user.profile.avatar_url,
             "is_private": True,
+            "can_view_private": False,
             "role": role}
 
     ach_data = db.query(
@@ -115,6 +116,7 @@ def get_user_info(username: str, request: Request,
         "social_links": user.profile.social_links or "[]",
         "theme": user.profile.theme or "classic",
         "is_private": user.profile.is_private,
+        "can_view_private": is_owner,
         "hidden_artists": user.profile.hidden_artists,
         "sync_privacy": user.profile.sync_privacy or "all",
         "is_verified": user.integration.is_verified,

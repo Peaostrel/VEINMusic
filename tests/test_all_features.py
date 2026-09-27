@@ -87,8 +87,14 @@ def test_smart_recommendations_service(db):
     assert "recommended_artists" in recs
 
 
-def test_developer_api_keys_and_webhooks(client, db):
+def test_developer_api_keys_and_webhooks(client, db, monkeypatch):
     """Test Developer API key generation, listing, and Webhooks CRUD."""
+    # Webhook registration checks DNS for a public address. Keep the test
+    # independent of external DNS while exercising that validation.
+    import socket
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *args, **kwargs: [
+        (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("93.184.215.14", 443))
+    ])
     client.headers["Origin"] = "http://localhost:3000"
     reg_res = client.post("/auth/register", json={"username": "dev_user", "password": "password123"})
     assert reg_res.status_code == 200
