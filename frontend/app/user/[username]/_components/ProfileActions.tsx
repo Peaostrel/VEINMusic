@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import {
   ChartColumn,
   Download,
+  Flag,
   Headphones,
   Percent,
   Share2,
@@ -11,6 +13,7 @@ import {
 } from "lucide-react";
 import type { useRouter } from "next/navigation";
 import { btn } from "@/components/ui";
+import ReportDialog from "@/components/ReportDialog";
 
 export interface ProfileActionsProps {
   isLogged: boolean;
@@ -42,6 +45,7 @@ export function ProfileActions({
   onListenTogether,
   onShowCompatibility,
 }: Readonly<ProfileActionsProps>) {
+  const [reporting, setReporting] = useState(false);
   let importLabel = "Импорт Last.fm";
   if (importLoading) importLabel = "Запуск…";
   else if (hasImportedLastfm) importLabel = "Синхронизировать Last.fm";
@@ -109,6 +113,23 @@ export function ProfileActions({
       >
         <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
       </button>
+      {isLogged && !isMyProfile && (
+        <button
+          type="button"
+          onClick={() => setReporting(true)}
+          aria-label="Пожаловаться на профиль"
+          title="Пожаловаться"
+          className={`${btn.secondary} h-8 w-8 hover:text-danger`}
+        >
+          <Flag className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+      )}
+      {reporting && (
+        <ReportDialog
+          target={{ type: "user", username }}
+          onClose={() => setReporting(false)}
+        />
+      )}
     </div>
   );
 }

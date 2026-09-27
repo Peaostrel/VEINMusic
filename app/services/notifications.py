@@ -6,12 +6,13 @@ Web Push by the background worker (`send_social_push`).
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import Notification, Scrobble, Track, User
+from app.models import Notification, Scrobble, ScrobbleComment, Track, User
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ KIND_SYSTEM = "system"
 KINDS = {KIND_LIKE, KIND_COMMENT, KIND_FOLLOW, KIND_SYSTEM}
 
 MAX_LIST = 50
+COMMENT_MATCH_SLACK = timedelta(seconds=5)
 EXCERPT_LENGTH = 120
 
 
@@ -84,6 +86,27 @@ def _describe(kind: str, actor: str, track_title: Optional[str], message: Option
     return f"{actor} подписался(ась) на вас"
 
 
+def _comment_ids(db: Session, notes: list[Notification]) -> dict[int, int]:
+    """{notification id: comment id} for comment notifications, so the
+    comment can be reported from the bell. A notification stores only an
+    excerpt: the comment is the actor's latest one on that play that starts
+    with the excerpt and was made no later than the notification."""
+    wanted = [n for n in notes if n.kind == KIND_COMMENT and n.scrobble_id]
+    if not wanted:
+        return {}
+    comments = db.query(ScrobbleComment).filter(
+        ScrobbleComment.scrobble_id.in_({n.scrobble_id for n in wanted})).order_by(ScrobbleComment.id.desc()).all()
+    found = {}
+    for n in wanted:
+        for c in comments:
+            if c.scrobble_id == n.scrobble_id and c.user_id == n.actor_id \
+                    and str(c.content or "").startswith(str(n.message or "")) and (
+                    not n.created_at or not c.created_at or c.created_at <= n.created_at + COMMENT_MATCH_SLACK):
+                found[int(n.id)] = int(c.id)
+                break
+    return found
+
+
 def list_for_user(db: Session, user_id: int, limit: int = MAX_LIST) -> dict[str, Any]:
     rows = (
         db.query(Notification, User, Track.title, Track.artist)
@@ -97,11 +120,13 @@ def list_for_user(db: Session, user_id: int, limit: int = MAX_LIST) -> dict[str,
     )
     unread = db.query(Notification).filter(
         Notification.user_id == user_id, Notification.is_read.is_(False)).count()
+    comment_ids = _comment_ids(db, [n for n, *_ in rows])
     items = []
     for n, actor, title, artist in rows:
         items.append({
             "id": n.id,
             "kind": n.kind,
+            "comment_id": comment_ids.get(int(n.id)),
             "text": _describe(str(n.kind), str(actor.username), title, n.message),
             "message": n.message,
             "actor": {

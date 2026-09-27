@@ -49,6 +49,8 @@ export type NotificationKind = "like" | "comment" | "follow" | "system";
 export interface SocialNotification {
   id: number;
   kind: NotificationKind;
+  /** For comment notifications: the comment, so it can be reported */
+  comment_id?: number | null;
   text: string;
   message: string | null;
   actor: {

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import json
 import logging
 import secrets
 import time
@@ -35,6 +36,11 @@ logger = logging.getLogger(__name__)
 TICK_SEC = 15
 RECONCILE_SEC = 15
 LEASE_KEY = "yandex_live_leader"
+# Per-user connection state for the admin panel, and users to reconnect
+STATUS_KEY = "yandex_live:status"
+HEARTBEAT_KEY = "yandex_live:heartbeat"
+RESTART_KEY = "yandex_live:restart"
+STATUS_TTL_SEC = 60
 LEASE_TTL_SEC = 45
 RETRY_MIN_SEC = 5
 RETRY_MAX_SEC = 120
@@ -66,6 +72,10 @@ class UserListener:
         self._last_reported: tuple[str, bool] | None = None
         self._last_event: tuple = ()
         self._tasks: list[asyncio.Task] = []
+        self.connected_since_ms: int | None = None
+        self.last_error: str | None = None
+        self.last_error_ms: int | None = None
+        self.reconnects = 0
 
     def start(self) -> None:
         self._tasks = [asyncio.create_task(self._connection_loop()),
@@ -84,19 +94,42 @@ class UserListener:
         while True:
             opened_ms = _now_ms()
             try:
-                await yandex_ynison.listen(self.token, self.on_playback,
-                                           on_open=lambda: connected.add(self.user_id))
+                await yandex_ynison.listen(self.token, self.on_playback, on_open=self._opened)
             except asyncio.CancelledError:
                 raise
             except Exception as e:
                 logger.warning(f"Ynison live connection for user {self.user_id} failed: {e}")
+                self.last_error, self.last_error_ms = str(e)[:300], _now_ms()
             finally:
                 connected.discard(self.user_id)
+                self.connected_since_ms = None
             # A connection that stayed up for a while resets the backoff
             if _now_ms() - opened_ms > 60_000:
                 delay = RETRY_MIN_SEC
             await asyncio.sleep(delay)
             delay = min(delay * 2, RETRY_MAX_SEC)
+
+    def _opened(self) -> None:
+        connected.add(self.user_id)
+        if self.connected_since_ms is None:
+            self.reconnects += 1
+        self.connected_since_ms = _now_ms()
+
+    def status(self) -> dict[str, Any]:
+        """Connection state shown in the admin panel."""
+        pb = self.playback
+        position = self.current_position()
+        return {
+            "connected": self.user_id in connected,
+            "since_ms": self.connected_since_ms,
+            "last_event_ms": self.received_ms or None,
+            "track_id": pb.track_id if pb else None,
+            "playing": bool(position and position[1]),
+            "web": bool(pb and pb.pause_unknown),
+            "last_error": self.last_error,
+            "last_error_ms": self.last_error_ms,
+            "connections": self.reconnects,
+        }
 
     async def on_playback(self, playback: Playback | None) -> None:
         if playback is not None and playback.event and playback.event == self._last_event:
@@ -245,12 +278,45 @@ class LiveManager:
     async def stop_all(self) -> None:
         await self.reconcile({})
 
+    async def _restart_requested(self) -> None:
+        """Drop listeners the admin panel asked to reconnect; the next
+        reconcile starts them again with a fresh connection."""
+        from app.core.redis import get_redis_client
+        try:
+            client = get_redis_client()
+            ids = await client.smembers(RESTART_KEY)
+            if ids:
+                await client.delete(RESTART_KEY)
+        except Exception:
+            return
+        for raw in ids or ():
+            listener = self.listeners.pop(int(raw), None)
+            if listener is not None:
+                await listener.stop()
+
+    async def publish_status(self) -> None:
+        from app.core.redis import get_redis_client
+        try:
+            client = get_redis_client()
+            pipe = client.pipeline()
+            pipe.delete(STATUS_KEY)
+            if self.listeners:
+                pipe.hset(STATUS_KEY, mapping={str(uid): json.dumps(listener.status())
+                                               for uid, listener in self.listeners.items()})
+                pipe.expire(STATUS_KEY, STATUS_TTL_SEC)
+            pipe.set(HEARTBEAT_KEY, str(_now_ms()), ex=STATUS_TTL_SEC)
+            await pipe.execute()
+        except Exception as e:
+            logger.debug(f"Yandex live status not published: {e}")
+
     async def run(self) -> None:
         try:
             while True:
                 try:
                     if await self._hold_lease():
+                        await self._restart_requested()
                         await self.reconcile(await asyncio.to_thread(load_linked_users))
+                        await self.publish_status()
                     else:
                         await self.stop_all()
                 except asyncio.CancelledError:

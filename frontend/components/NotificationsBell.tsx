@@ -2,10 +2,18 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, Heart, Megaphone, MessageCircle, UserPlus } from "lucide-react";
+import {
+  Bell,
+  Flag,
+  Heart,
+  Megaphone,
+  MessageCircle,
+  UserPlus,
+} from "lucide-react";
 import { apiJson } from "@/app/lib/api";
 import type { NotificationList, SocialNotification } from "@/app/lib/types";
 import { useVisiblePolling } from "@/app/lib/usePolling";
+import ReportDialog, { type ReportTarget } from "@/components/ReportDialog";
 
 const POLL_MS = 60_000;
 const KIND_ICON: Record<SocialNotification["kind"], typeof Bell> = {
@@ -34,6 +42,7 @@ export default function NotificationsBell({
 }: Readonly<{ align?: "left" | "right" }>) {
   const [data, setData] = useState<NotificationList>({ items: [], unread: 0 });
   const [open, setOpen] = useState(false);
+  const [report, setReport] = useState<ReportTarget | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -134,13 +143,13 @@ export default function NotificationsBell({
               {data.items.map((n) => {
                 const Icon = KIND_ICON[n.kind];
                 return (
-                  <li key={n.id}>
+                  <li key={n.id} className="relative">
                     <Link
                       href={
                         n.kind === "system" ? "/" : `/user/${n.actor.username}`
                       }
                       onClick={() => setOpen(false)}
-                      className={`flex gap-3 px-4 py-3 transition-colors hover:bg-line ${n.is_read ? "" : "bg-white/[0.03]"}`}
+                      className={`flex gap-3 px-4 py-3 transition-colors hover:bg-line ${n.comment_id ? "pr-11" : ""} ${n.is_read ? "" : "bg-white/[0.03]"}`}
                     >
                       <Icon
                         className={`mt-0.5 h-4 w-4 shrink-0 ${n.is_read ? "text-fg-3" : "text-accent"}`}
@@ -160,12 +169,34 @@ export default function NotificationsBell({
                         </span>
                       </span>
                     </Link>
+                    {n.comment_id && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpen(false);
+                          setReport({
+                            type: "comment",
+                            commentId: n.comment_id as number,
+                            author: n.actor.username,
+                            text: n.message,
+                          });
+                        }}
+                        aria-label={`Пожаловаться на комментарий ${n.actor.username}`}
+                        title="Пожаловаться"
+                        className="absolute right-2 top-2.5 flex h-7 w-7 items-center justify-center rounded-md text-fg-3 transition-colors hover:bg-line hover:text-danger"
+                      >
+                        <Flag className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    )}
                   </li>
                 );
               })}
             </ul>
           )}
         </section>
+      )}
+      {report && (
+        <ReportDialog target={report} onClose={() => setReport(null)} />
       )}
     </div>
   );

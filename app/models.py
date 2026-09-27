@@ -363,6 +363,25 @@ class AdminAuditLog(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False, index=True)
 
 
+class Report(Base):
+    """A user's complaint about a profile or a comment, for the moderators."""
+    __tablename__ = "reports"
+    id = Column(Integer, primary_key=True, index=True)
+    reporter_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="SET NULL"), nullable=True, index=True)
+    # The reported profile, or the author of the reported comment
+    target_user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=False, index=True)
+    comment_id = Column(Integer, ForeignKey("scrobble_comments.id", ondelete="SET NULL"), nullable=True, index=True)
+    # Kept so the report stays readable after the comment is deleted
+    comment_text = Column(String(500), nullable=True)
+    reason = Column(String(32), nullable=False)
+    details = Column(String(500), nullable=True)
+    status = Column(String(16), nullable=False, default="open", index=True)  # open, resolved, dismissed
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False, index=True)
+    resolved_by = Column(String(64), nullable=True)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    resolution = Column(String(300), nullable=True)
+
+
 class SystemSetting(Base):
     """Runtime settings changed from the admin panel (e.g. the XP multiplier)."""
     __tablename__ = "system_settings"

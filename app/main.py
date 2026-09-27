@@ -21,6 +21,7 @@ from app.models import User
 from app.routers import (
     account,
     admin,
+    admin_data,
     admin_tools,
     auth,
     developer,
@@ -30,6 +31,7 @@ from app.routers import (
     lastfm_connect,
     notifications,
     profile,
+    reports,
     scrobbling,
     widgets,
 )
@@ -159,12 +161,14 @@ app.include_router(profile.router)
 app.include_router(scrobbling.router)
 app.include_router(admin.router)
 app.include_router(admin_tools.router)
+app.include_router(admin_data.router)
 app.include_router(extended.router)
 app.include_router(widgets.router)
 app.include_router(developer.router)
 app.include_router(devices.router)
 app.include_router(account.router)
 app.include_router(notifications.router)
+app.include_router(reports.router)
 app.include_router(lastfm_connect.router)
 app.include_router(geo.router)
 

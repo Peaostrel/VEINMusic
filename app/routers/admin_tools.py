@@ -31,7 +31,7 @@ from app.models import (
     UserAchievement,
     Webhook,
 )
-from app.services import audit, broadcast, system_status
+from app.services import audit, broadcast, error_log, system_status
 from app.services.cache import delete_from_cache
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -170,6 +170,24 @@ def _export_block(export: ExternalSyncConfig | None) -> dict[str, bool]:
     }
 
 
+def _showcase_block(user: User) -> list[dict[str, Any]]:
+    from app.routers.profile import FAVORITE_FIELDS, FAVORITE_LOCK, _as_utc
+
+    profile = user.profile
+    items = []
+    for field_name, kind in FAVORITE_FIELDS:
+        value = getattr(profile, field_name, None) if profile else None
+        updated = getattr(profile, f"{field_name}_updated_at", None) if profile else None
+        until = _as_utc(updated) + FAVORITE_LOCK if updated else None
+        items.append({
+            "field": kind,
+            "value": value,
+            "cover": getattr(profile, f"{field_name}_cover", None) if profile else None,
+            "locked_until": _iso(until) if until and until > datetime.now(UTC) else None,
+        })
+    return items
+
+
 @router.get("/users/{username}/details", responses={404: {"description": "User not found"}})
 def user_details(username: str, db: DB, admin: AdminUser):
     """Everything an admin needs to look into one account."""
@@ -183,6 +201,7 @@ def user_details(username: str, db: DB, admin: AdminUser):
     return {
         "user": _account_block(user),
         "integration": _integration_block(user),
+        "showcase": _showcase_block(user),
         "export": _export_block(export),
         "stats": _user_counts(db, uid),
         "api_keys": [{
@@ -414,3 +433,26 @@ def _local_status(db: Session) -> dict[str, Any]:
 async def get_system_status(db: DB, admin: AdminUser):
     local = await asyncio.to_thread(_local_status, db)
     return {"worker": await system_status.worker_status(), **local}
+
+
+# ─── ERROR LOG ────────────────────────────────────────────────────────────────
+
+@router.get("/logs")
+async def list_error_log(
+    admin: AdminUser,
+    level: Annotated[str | None, Query(pattern="^(WARNING|ERROR|CRITICAL)$")] = None,
+    source: Annotated[str | None, Query(max_length=32)] = None,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+):
+    """Recent warnings and errors of the API and the worker."""
+    return await error_log.list_entries(level=level, source=source, q=q, limit=limit, offset=offset)
+
+
+@router.delete("/logs")
+async def clear_error_log(db: DB, admin: AdminUser):
+    await error_log.clear()
+    audit.record(db, admin, "logs.clear")
+    db.commit()
+    return {"status": "ok"}
