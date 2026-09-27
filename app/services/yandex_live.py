@@ -173,7 +173,8 @@ class UserListener:
         self._last_event = playback.event
         if not playback.pause_unknown:
             return playback
-        return dataclasses.replace(playback, playing=self._web_playing(playback, expected))
+        inferred: Playback = dataclasses.replace(playback, playing=self._web_playing(playback, expected))
+        return inferred
 
     def _restarted(self, playback: Playback | None, expected: tuple[int, bool] | None) -> bool:
         """The same track started over (repeat, seek back to the start)."""
