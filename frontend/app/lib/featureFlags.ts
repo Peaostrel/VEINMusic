@@ -18,12 +18,12 @@ type Flags = Record<string, boolean>;
 let pending: Promise<Flags> | null = null;
 
 function loadFlags(): Promise<Flags> {
-  pending ??= fetch(`${API_URL}/api/feature-flags`)
+  pending ??= fetch(`${API_URL}/api/feature-flags`, { cache: "no-store" })
     .then((res) => (res.ok ? res.json() : { flags: {} }))
     .then((data: { flags?: Flags }) => data.flags ?? {})
-    .catch(() => {
-      pending = null; // retry on the next mount
-      return {};
+    .catch(() => ({}))
+    .finally(() => {
+      pending = null;
     });
   return pending;
 }
@@ -34,11 +34,24 @@ export function useFeature(feature: Feature): boolean {
   const [enabled, setEnabled] = useState(true);
   useEffect(() => {
     let active = true;
-    loadFlags().then((flags) => {
-      if (active) setEnabled(flags[feature] ?? true);
-    });
+    const update = () => {
+      loadFlags().then((flags) => {
+        if (active) setEnabled(flags[feature] ?? true);
+      });
+    };
+    const updateWhenVisible = () => {
+      if (document.visibilityState === "visible") update();
+    };
+
+    update();
+    const timer = window.setInterval(update, 30_000);
+    window.addEventListener("focus", update);
+    document.addEventListener("visibilitychange", updateWhenVisible);
     return () => {
       active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", update);
+      document.removeEventListener("visibilitychange", updateWhenVisible);
     };
   }, [feature]);
   return enabled;

@@ -23,6 +23,8 @@ interface IntegrationsTabProps {
 const small = `${btn.secondary} ${btn.sm}`;
 const smallPrimary = `${btn.primary} ${btn.sm}`;
 const smallDanger = `${btn.danger} ${btn.sm}`;
+const unavailableButton =
+  "disabled:border-line disabled:bg-surface-2 disabled:text-fg-3 disabled:grayscale disabled:hover:brightness-100";
 
 function Row({
   logo,
@@ -32,6 +34,7 @@ function Row({
   description,
   children,
   footer,
+  disabled = false,
 }: Readonly<{
   logo: React.ReactNode;
   name: string;
@@ -40,22 +43,39 @@ function Row({
   description: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  disabled?: boolean;
 }>) {
   return (
-    <li className="flex flex-col gap-4 border-b border-line-soft px-5 py-5 last:border-0">
+    <li
+      aria-disabled={disabled || undefined}
+      className={`flex flex-col gap-4 border-b border-line-soft px-5 py-5 last:border-0 ${disabled ? "bg-surface-2/30" : ""}`}
+    >
       <div className="flex flex-col gap-4 md:flex-row md:items-center">
         <div className="flex min-w-0 flex-1 items-start gap-3.5">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-xs font-semibold text-fg-2">
+          <span
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-xs font-semibold text-fg-2 ${disabled ? "opacity-50 grayscale" : ""}`}
+          >
             {logo}
           </span>
           <span className="flex min-w-0 flex-col gap-0.5">
-            <span className="text-sm font-medium">{name}</span>
+            <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
+              {name}
+              {disabled && (
+                <span className="rounded border border-danger-line bg-[#2a1b1b] px-1.5 py-0.5 font-mono text-[9px] font-medium text-danger">
+                  ВРЕМЕННО ОТКЛЮЧЕНО
+                </span>
+              )}
+            </span>
             <span
-              className={`font-mono text-xs ${statusOk ? "text-ok" : "text-fg-3"}`}
+              className={`font-mono text-xs ${disabled ? "text-danger" : statusOk ? "text-ok" : "text-fg-3"}`}
             >
               {status}
             </span>
-            <span className="mt-1 text-[13px] text-fg-2">{description}</span>
+            <span
+              className={`mt-1 text-[13px] ${disabled ? "text-accent" : "text-fg-2"}`}
+            >
+              {description}
+            </span>
           </span>
         </div>
         <div className="flex flex-col gap-2 md:w-[260px]">{children}</div>
@@ -117,12 +137,19 @@ export default function IntegrationsTab({
         <Row
           logo="S"
           name="Spotify"
-          status={synced(userProfile?.spotify_linked)}
-          statusOk={Boolean(userProfile?.spotify_linked)}
+          status={
+            spotifyEnabled
+              ? synced(userProfile?.spotify_linked)
+              : userProfile?.spotify_linked
+                ? "подключено · синхронизация на паузе"
+                : "недоступно"
+          }
+          statusOk={spotifyEnabled && Boolean(userProfile?.spotify_linked)}
+          disabled={!spotifyEnabled}
           description={
             spotifyEnabled
               ? "Скробблинг напрямую через сервер, без расширения."
-              : "Временно приостановлено администратором."
+              : "Интеграция временно отключена администратором. Подключение и синхронизация недоступны."
           }
         >
           <div className="flex gap-2 md:justify-end">
@@ -142,7 +169,7 @@ export default function IntegrationsTab({
               }}
               disabled={!spotifyEnabled}
               title={spotifyEnabled ? undefined : "Spotify временно отключён"}
-              className={userProfile?.spotify_linked ? small : smallPrimary}
+              className={`${userProfile?.spotify_linked ? small : smallPrimary} ${unavailableButton}`}
             >
               {userProfile?.spotify_linked ? "Обновить" : "Подключить"}
             </button>
@@ -152,8 +179,15 @@ export default function IntegrationsTab({
         <Row
           logo="Я"
           name="Яндекс Музыка"
-          status={synced(userProfile?.yandex_linked)}
-          statusOk={Boolean(userProfile?.yandex_linked)}
+          status={
+            yandexEnabled
+              ? synced(userProfile?.yandex_linked)
+              : userProfile?.yandex_linked
+                ? "подключено · синхронизация на паузе"
+                : "недоступно"
+          }
+          statusOk={yandexEnabled && Boolean(userProfile?.yandex_linked)}
+          disabled={!yandexEnabled}
           description={
             yandexEnabled ? (
               <>
@@ -168,7 +202,7 @@ export default function IntegrationsTab({
                 </a>
               </>
             ) : (
-              "Временно приостановлено администратором."
+              "Интеграция временно отключена администратором. Подключение и синхронизация недоступны."
             )
           }
         >
@@ -182,7 +216,7 @@ export default function IntegrationsTab({
             disabled={!yandexEnabled}
             readOnly
             onFocus={(e) => e.target.removeAttribute("readonly")}
-            className={`${inputOnCard} h-9`}
+            className={`${inputOnCard} h-9 disabled:cursor-not-allowed disabled:border-line-soft disabled:bg-surface-2 disabled:text-fg-3 disabled:opacity-60`}
           />
           <div className="flex gap-2">
             {userProfile?.yandex_linked && (
@@ -201,7 +235,7 @@ export default function IntegrationsTab({
               title={
                 yandexEnabled ? undefined : "Яндекс Музыка временно отключена"
               }
-              className={`${smallPrimary} flex-1`}
+              className={`${smallPrimary} ${unavailableButton} flex-1`}
             >
               Сохранить
             </button>
@@ -212,15 +246,20 @@ export default function IntegrationsTab({
           logo="fm"
           name="Last.fm"
           status={
-            data.lastfmUsername
-              ? `аккаунт ${data.lastfmUsername}`
-              : "не подключено"
+            lastfmEnabled
+              ? data.lastfmUsername
+                ? `аккаунт ${data.lastfmUsername}`
+                : "не подключено"
+              : data.lastfmUsername
+                ? `аккаунт ${data.lastfmUsername} · синхронизация на паузе`
+                : "недоступно"
           }
-          statusOk={Boolean(data.lastfmUsername)}
+          statusOk={lastfmEnabled && Boolean(data.lastfmUsername)}
+          disabled={!lastfmEnabled}
           description={
             lastfmEnabled
               ? "Импорт истории. Повторный импорт добавит только новые прослушивания."
-              : "Временно приостановлено администратором."
+              : "Интеграция временно отключена администратором. Подключение и импорт недоступны."
           }
           footer={<LastfmImportStatus refreshKey={importRefresh ?? 0} />}
         >
@@ -233,7 +272,7 @@ export default function IntegrationsTab({
             disabled={!lastfmEnabled}
             readOnly
             onFocus={(e) => e.target.removeAttribute("readonly")}
-            className={`${inputOnCard} h-9`}
+            className={`${inputOnCard} h-9 disabled:cursor-not-allowed disabled:border-line-soft disabled:bg-surface-2 disabled:text-fg-3 disabled:opacity-60`}
           />
           <div className="flex gap-2">
             {data.lastfmUsername && (
@@ -254,7 +293,7 @@ export default function IntegrationsTab({
                   ? undefined
                   : "Импорт временно отключён"
               }
-              className={`${smallPrimary} flex-1`}
+              className={`${smallPrimary} ${unavailableButton} flex-1`}
             >
               Импорт
             </button>
