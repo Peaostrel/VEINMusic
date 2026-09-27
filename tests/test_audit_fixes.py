@@ -5,9 +5,17 @@ import pytest
 from starlette.websockets import WebSocketDisconnect
 
 from app.models import Scrobble, Track, User
+from app.services.cache import clear_all
 
 
 ORIGIN = {"origin": "http://localhost:3000"}
+
+
+@pytest.fixture(autouse=True)
+def isolate_public_cache():
+    clear_all()
+    yield
+    clear_all()
 
 
 def register(client, username):
