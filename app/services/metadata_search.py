@@ -13,6 +13,68 @@ END_PAREN_RE = re.compile(r'\([^)]*\)$')
 FEAT_RE = re.compile(r'(?i) feat\.?| ft\.?| &|,| x ')
 
 
+DEEZER_SEARCH_URL = "https://api.deezer.com/search/{kind}"
+DEEZER_KINDS = {"artist": "artist", "track": "track", "album": "album"}
+
+
+def _deezer_image(item: dict, key: str, size: str) -> str:
+    url = item.get(f"{key}_{size}") or ""
+    # Artists without a photo get a placeholder with an empty image id
+    return "" if "//" in url.split("://", 1)[-1] else url
+
+
+def _deezer_item(item: dict, kind: str) -> dict | None:
+    """{title, image, cover, url} of one Deezer search hit: `image` is small
+    (for the suggestion list), `cover` large (for the profile)."""
+    artist = PAREN_RE.sub("", str((item.get("artist") or {}).get("name") or "")).strip()
+    if kind == "artist":
+        title, source, key = str(item.get("name") or "").strip(), item, "picture"
+    elif kind == "album":
+        name = PAREN_RE.sub("", str(item.get("title") or "")).strip()
+        title, source, key = (f"{artist} — {name}" if artist and name else ""), item, "cover"
+    else:
+        name = PAREN_RE.sub("", str(item.get("title_short") or item.get("title") or "")).strip()
+        title, source, key = (f"{artist} — {name}" if artist and name else ""), item.get("album") or {}, "cover"
+    if not title:
+        return None
+    return {"title": title, "image": _deezer_image(source, key, "medium"),
+            "cover": _deezer_image(source, key, "xl"), "url": item.get("link")}
+
+
+async def _deezer_hits(client: httpx.AsyncClient, kind: str, query: str, limit: int) -> list:
+    if not query:
+        return []
+    try:
+        r = await client.get(DEEZER_SEARCH_URL.format(kind=kind), params={"q": query, "limit": limit})
+        data = r.json() if r.status_code == 200 else {}
+    except Exception as e:
+        logger.warning(f"Deezer API Error: {e!r}")
+        return []
+    hits = data.get("data") if isinstance(data, dict) else None
+    return hits if isinstance(hits, list) else []
+
+
+async def _search_deezer(client: httpx.AsyncClient, query: str, entity_type: str,
+                         limit: int = 5) -> list[dict]:
+    """Deezer spells names the way the artists do (Cyrillic for Russian
+    ones, where iTunes has "Agatha Christie"), has artist photos and finds
+    albums without an API key."""
+    kind = DEEZER_KINDS.get(entity_type, "track")
+    hits = await _deezer_hits(client, kind, query.strip(), limit * 2)
+    if not hits and kind != "artist" and " — " in query:
+        # "Agatha Christie — Ковёр вертолёт": the artist spelled differently
+        # than on Deezer; the title alone finds it
+        hits = await _deezer_hits(client, kind, query.split(" — ", 1)[1].strip(), limit * 2)
+    results: list[dict] = []
+    for raw in hits:
+        item = _deezer_item(raw, kind) if isinstance(raw, dict) else None
+        if item and not any(r["title"].lower() == item["title"].lower() for r in results):
+            results.append(item)
+        if len(results) >= limit:
+            break
+    return results
+
+
 async def _search_itunes(client: httpx.AsyncClient,
                          query: str,
                          itunes_entity: str) -> tuple[str | None,
@@ -199,7 +261,13 @@ async def search_metadata(
     }.get(entity_type, 'song')
 
     async with httpx.AsyncClient(timeout=5.0) as client:
+        deezer = await _search_deezer(client, query, entity_type, limit=1)
+        if deezer and deezer[0]["cover"]:
+            return deezer[0]["title"], deezer[0]["cover"], deezer[0]["url"]
         title, cover, ext_url = await _search_itunes(client, query, itunes_entity)
+        if deezer:
+            # Deezer's name, another provider's picture
+            title, ext_url = deezer[0]["title"], deezer[0]["url"] or ext_url
 
         if not cover or not title:
             title, cover = await _search_genius(client, query, entity_type, title, cover)
@@ -237,8 +305,12 @@ async def search_suggestions(query: str, entity_type: str) -> list[dict]:  # NOS
         return ""
 
     async with httpx.AsyncClient(timeout=3.0) as client:
+        # 0. Deezer: right spelling, artist photos, albums
+        results = [{"title": r["title"], "image": r["image"]}
+                   for r in await _search_deezer(client, query, entity_type)]
+
         # 1. Try Genius API first if available (excellent for artists and tracks)
-        if genius_token:
+        if genius_token and len(results) < 5:
             try:
                 url = f"https://api.genius.com/search?q={urllib.parse.quote(query.strip())}"
                 headers = {"Authorization": f"Bearer {genius_token}"}

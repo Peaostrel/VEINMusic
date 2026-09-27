@@ -240,3 +240,35 @@ def test_showcase_lock_is_per_field(auth_client, auth_user):
     assert resp.status_code == 200
     profile = _profile("profileuser")
     assert profile.favorite_track is None
+
+
+def test_refresh_showcase_keeps_locks(auth_client, auth_user, capsys):
+    """Favorites saved with the old search (English name, no artist photo)
+    are looked up again without resetting their 30-day locks."""
+    from app import cli
+
+    found = {"artist": ("Джизус", "https://img/artist.jpg", "https://deezer/artist"),
+             "track": ("Агата Кристи — Ковёр вертолёт", "https://img/track.jpg", None)}
+    with patch("app.routers.profile.search_metadata",
+               side_effect=lambda value, kind: ("Agatha Christie — Ковёр вертолёт", None, None)
+               if kind == "track" else ("Джизус", None, None)):
+        auth_client.post("/api/profile/update", json={
+            "favorite_artist": "джизус", "favorite_track": "Agatha Christie — Ковёр вертолёт"})
+    before = _profile("profileuser")
+
+    with patch("app.routers.profile.search_metadata", side_effect=lambda value, kind: found[kind]):
+        assert cli.main(["refresh-showcase", "profileuser"]) == 0
+    assert "profileuser: favorite_artist, favorite_track" in capsys.readouterr().out
+
+    after = _profile("profileuser")
+    assert after.favorite_artist_cover == "https://img/artist.jpg"
+    assert after.favorite_track == "Агата Кристи — Ковёр вертолёт"
+    assert after.favorite_track_cover == "https://img/track.jpg"
+    assert after.favorite_artist_updated_at == before.favorite_artist_updated_at
+    assert after.favorite_track_updated_at == before.favorite_track_updated_at
+    assert after.favorite_album is None
+
+    # Nothing new found: nothing changes
+    with patch("app.routers.profile.search_metadata", return_value=(None, None, None)):
+        assert cli.main(["refresh-showcase"]) == 0
+    assert "profileuser: no changes" in capsys.readouterr().out
