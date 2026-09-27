@@ -340,3 +340,67 @@ def test_processor_counts_only_credited_listening(db):
     asyncio.run(report(200, False, 100))
     db.refresh(scrobble)
     assert scrobble.listened_sec == 200
+
+
+def test_tick_reports_the_unconfirmed_stretch_as_pending():
+    """Between player events the tick keeps "now playing" alive and says how
+    long the track has played since the last event: pages show that time,
+    it counts only once an event confirms it."""
+    lis = _listener()
+    lis.playback, lis.received_ms = Playback("1", True, 20, 200), 1_000_000
+    lis._segment = ("1", 1_000_000, 20, 200)
+    report = AsyncMock()
+    sleep = AsyncMock(side_effect=[None, asyncio.CancelledError])
+    with patch.object(lis, "_report", new=report), \
+            patch.object(live.asyncio, "sleep", new=sleep), \
+            patch.object(live, "_now_ms", return_value=1_045_000):
+        try:
+            asyncio.run(lis._tick_loop())
+        except asyncio.CancelledError:
+            pass
+    report.assert_awaited_once_with("1", 65, True, 0, 45)
+    # Never more than what is left of the track
+    assert lis._pending_sec(1_000_000 + 500_000) == 180
+    lis._segment = None
+    assert lis._pending_sec(1_045_000) == 0
+
+
+def test_page_reload_shows_unconfirmed_listening(db):
+    """A reloaded page shows the listening from the server: it includes the
+    stretch played since the last player event while the track plays, but
+    that stretch does not count until an event confirms it."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.models import Scrobble, Track, User
+    from app.services import scrobble_processor as sp
+
+    user = User(username="pending_user", hashed_password="x")
+    db.add(user)
+    db.commit()
+
+    async def report(progress, playing, credit, pending=0):
+        with patch.object(sp, "get_track_duration", new=AsyncMock(return_value=0)), \
+                patch.object(sp, "get_track_genre", new=AsyncMock(return_value=None)), \
+                patch.object(sp.manager, "broadcast_to_user", new=AsyncMock()), \
+                patch.object(sp, "_dispatch_counted_scrobble", new=AsyncMock()):
+            return await sp.process_scrobble(db, user, "Song", "Band", "", "", "yandex", progress,
+                                             playing, 200, "", credit_sec=credit, pending_sec=pending)
+
+    def shown():
+        scrobble = db.query(Scrobble).filter(Scrobble.user_id == user.id).one()
+        return scrobble, sp.format_history_item(scrobble, db.get(Track, scrobble.track_id))["listened_sec"]
+
+    asyncio.run(report(0, True, 0))
+    asyncio.run(report(190, True, 0, 190))  # 190 s since the start, no event yet
+    scrobble, listened = shown()
+    assert (scrobble.listened_sec, scrobble.pending_sec, listened) == (0, 190, 190)
+
+    # The tab closed: once "now playing" expires, only confirmed time is shown
+    scrobble.updated_at = datetime.now(UTC) - timedelta(minutes=5)
+    db.commit()
+    assert shown()[1] == 0
+
+    # The pause confirms the stretch: it counts, nothing is pending
+    asyncio.run(report(195, False, 195))
+    scrobble, listened = shown()
+    assert (scrobble.listened_sec, scrobble.pending_sec, listened) == (195, 0, 195)

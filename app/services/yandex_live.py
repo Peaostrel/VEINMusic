@@ -198,6 +198,15 @@ class UserListener:
             return None
         return min(elapsed, remaining)
 
+    def _pending_sec(self, now_ms: int) -> int:
+        """Seconds played since the last player event, not confirmed yet:
+        shown while the track plays, counted only by the next event."""
+        if self._segment is None:
+            return 0
+        _, start_ms, start_pos, duration = self._segment
+        elapsed = max(now_ms - start_ms, 0) // 1000
+        return min(elapsed, max(duration - start_pos, 0)) if duration else min(elapsed, UNKNOWN_LENGTH_MAX_SEC)
+
     def _web_playing(self, pb: Playback, expected: tuple[int, bool] | None) -> bool:
         """Whether the web player plays, judged by what its event means:
         it sends one on start, pause, resume, seek and track switch."""
@@ -247,29 +256,32 @@ class UserListener:
             if not playing:
                 self._segment = None  # played past the end without a word: the player is gone
             if playing or self._last_reported == (pb.track_id, True):
-                await self._report(pb.track_id, progress, playing, 0)
+                await self._report(pb.track_id, progress, playing, 0, self._pending_sec(_now_ms()))
 
     # --- reporting -------------------------------------------------------
 
-    async def _report(self, track_id: str, progress: int, playing: bool, credit: int = 0) -> None:
-        """Report the player state; `credit` is confirmed listening to add."""
+    async def _report(self, track_id: str, progress: int, playing: bool, credit: int = 0,
+                      pending: int = 0) -> None:
+        """Report the player state; `credit` is confirmed listening to add,
+        `pending` the stretch played since the last event (only shown)."""
         from app.core.redis import redis_lock
         from app.services import cloud_scrobbling as cs
         try:
             async with redis_lock(f"scrobble_lock:{self.user_id}", expire_sec=30):
-                status = await self._report_once(cs, track_id, progress, playing, credit)
+                status = await self._report_once(cs, track_id, progress, playing, credit, pending)
                 if status == "ignored_spam_protection":
                     # The previous report for this user was under a second
                     # ago; a track switch must not be lost to that guard
                     await asyncio.sleep(SPAM_RETRY_SEC)
-                    await self._report_once(cs, track_id, progress + 1, playing, credit)
+                    await self._report_once(cs, track_id, progress + 1, playing, credit, pending)
             self._last_reported = (track_id, playing)
         except asyncio.CancelledError:
             raise
         except Exception as e:
             logger.warning(f"Ynison live report for user {self.user_id} failed: {e}")
 
-    async def _report_once(self, cs, track_id: str, progress: int, playing: bool, credit: int = 0):
+    async def _report_once(self, cs, track_id: str, progress: int, playing: bool, credit: int = 0,
+                           pending: int = 0):
         from app.models import User
         db = SessionLocal()
         try:
@@ -279,7 +291,7 @@ class UserListener:
             async with httpx.AsyncClient() as client:
                 return await cs._fetch_yandex_track_info(
                     client, track_id, cs._yandex_headers(self.token), self.process_func, db, user,
-                    position=(progress, playing), credit_sec=credit)
+                    position=(progress, playing), credit_sec=credit, pending_sec=pending)
         finally:
             db.close()
 
