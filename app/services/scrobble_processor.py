@@ -477,7 +477,8 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
         l_updated_at = None
 
     result: dict[str, Any] = {"status": "ok", "username": username, "user_id": user_id,
-                              "new_item": None, "counted": None}
+                              "new_item": None, "counted": None, "state_change": None}
+    was_playing = bool(last_scrobble.is_playing) if last_scrobble else None
     is_new, early_return = _determine_is_new(
         db, track, last_scrobble, now, l_updated_at, progress_sec)
     if early_return:
@@ -508,6 +509,9 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
             "album": str(track.album) if track.album else None,
             "timestamp": int(played_at.timestamp()),
         }
+    if not is_new and last_scrobble is not None and was_playing != bool(is_playing):
+        # Pause / resume: pages update the "now playing" mark at once
+        result["state_change"] = {"id": int(last_scrobble.id), "is_playing": bool(is_playing)}
     return result
 
 
@@ -534,6 +538,9 @@ async def process_scrobble(
             "type": "NEW_SCROBBLE",
             "track": result["new_item"]
         })
+    elif result.get("state_change") is not None:
+        await manager.broadcast_to_user(result["username"], {
+            "type": "PLAYBACK_STATE", **result["state_change"]})
     if result["counted"] is not None:
         await _dispatch_counted_scrobble(result["user_id"], result["counted"])
     return result["status"]

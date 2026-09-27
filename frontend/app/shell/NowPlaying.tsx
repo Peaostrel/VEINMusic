@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { API_URL } from "@/app/lib/api";
+import { useCallback, useEffect, useState } from "react";
+import { API_URL, openSocket } from "@/app/lib/api";
 import { useVisiblePolling } from "@/app/lib/usePolling";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { PlayingBars } from "@/components/ui";
@@ -13,7 +13,9 @@ interface CurrentTrack {
   cover_url?: string | null;
 }
 
-const POLL_MS = 30_000;
+// Track switches arrive over the WebSocket; polling only catches up if the
+// socket is down
+const POLL_MS = 60_000;
 
 /** "Now playing" card for the sidebar; quiet line when nothing plays. */
 export default function NowPlaying({
@@ -34,6 +36,26 @@ export default function NowPlaying({
   }, [username]);
 
   useVisiblePolling(load, POLL_MS);
+
+  useEffect(
+    () =>
+      openSocket(
+        `/ws/${encodeURIComponent(username)}`,
+        (ws) => {
+          ws.onmessage = (event) => {
+            try {
+              const msg = JSON.parse(event.data);
+              if (msg.type === "NEW_SCROBBLE" || msg.type === "PLAYBACK_STATE")
+                load();
+            } catch {
+              // not JSON
+            }
+          };
+        },
+        { authed: true },
+      ),
+    [username, load],
+  );
 
   if (!track?.playing) {
     return (

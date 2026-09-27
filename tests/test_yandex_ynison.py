@@ -110,3 +110,58 @@ def test_fetch_playback_against_fake_ynison():
     assert first["Authorization"] == "OAuth secret-token"
     assert first["Sec-WebSocket-Protocol"].startswith("Bearer, v2, {")
     assert "ticket-1" in second["Sec-WebSocket-Protocol"]
+
+
+def test_listen_gets_every_pushed_state():
+    """The live connection passes on each state Ynison pushes, not only the first."""
+    states = [STATE, {"player_state": {
+        "player_queue": {"current_playable_index": 0, "playable_list": [{"playable_id": "333"}]},
+        "status": {"paused": True, "progress_ms": 5000, "duration_ms": 100000}}}]
+
+    async def server(reader, writer):
+        head = (await reader.readuntil(b"\r\n\r\n")).decode()
+        headers = dict(line.split(": ", 1) for line in head.split("\r\n")[1:] if ": " in line)
+        path = head.split(" ")[1]
+        accept = base64.b64encode(hashlib.sha1(
+            (headers["Sec-WebSocket-Key"] + GUID).encode()).digest()).decode()
+        writer.write((
+            "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+            f"Sec-WebSocket-Accept: {accept}\r\nSec-WebSocket-Protocol: Bearer\r\n\r\n").encode())
+        if path.startswith("/redirect"):
+            writer.write(_frame(json.dumps({"host": f"127.0.0.1:{port}", "redirect_ticket": "t"}).encode()))
+        else:
+            await _read_frame(reader)  # hello
+            for state in states:
+                writer.write(_frame(json.dumps(state).encode()))
+        await writer.drain()
+        await asyncio.sleep(0.1)
+        writer.close()
+
+    got, opened = [], []
+
+    async def on_playback(pb):
+        got.append(pb)
+
+    async def run():
+        nonlocal port
+        srv = await asyncio.start_server(server, "127.0.0.1", 0)
+        port = srv.sockets[0].getsockname()[1]
+        with patch.object(yn, "REDIRECT_URL", f"ws://127.0.0.1:{port}/redirect"), \
+                patch.object(yn, "STATE_URL", "ws://{host}/state"), \
+                patch.object(yn.time, "time", return_value=1_000.0):
+            try:
+                await yn.listen("tok", on_playback, on_open=lambda: opened.append(True))
+            except Exception:
+                pass  # the fake server just drops the connection
+        srv.close()
+
+    port = 0
+    asyncio.run(run())
+    assert opened == [True]
+    assert got == [yn.Playback("222", True, 61, 200), yn.Playback("333", False, 5, 100)]
+
+
+def test_error_state_raises():
+    import pytest
+    with pytest.raises(RuntimeError):
+        yn._check({"error": {"message": "bad"}})

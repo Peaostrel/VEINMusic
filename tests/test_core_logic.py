@@ -464,3 +464,18 @@ def test_no_auto_achievements(db):
                            ("Король рока", "specific_artist")):
             db.query(Achievement).filter_by(name=name).update({"rule_type": rule})
         db.commit()
+
+
+def test_pause_and_resume_are_broadcast(db):
+    user = _user(db, "pause_listener")
+    with patch.object(sp.manager, "broadcast_to_user", new=AsyncMock()) as broadcast:
+        asyncio.run(sp.process_scrobble(db, user, "Song", "Band", "", "", "yandex", 0, True, 200))
+        s = db.query(Scrobble).filter(Scrobble.user_id == user.id).one()
+        s.updated_at = datetime.now(UTC) - timedelta(seconds=10)
+        db.commit()
+        asyncio.run(sp.process_scrobble(db, user, "Song", "Band", "", "", "yandex", 10, False, 200))
+        # Same state again: nothing to announce
+        asyncio.run(sp.process_scrobble(db, user, "Song", "Band", "", "", "yandex", 10, False, 200))
+    messages = [c.args[1] for c in broadcast.await_args_list]
+    assert [m["type"] for m in messages] == ["NEW_SCROBBLE", "PLAYBACK_STATE"]
+    assert messages[1] == {"type": "PLAYBACK_STATE", "id": s.id, "is_playing": False}

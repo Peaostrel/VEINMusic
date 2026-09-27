@@ -3,8 +3,9 @@
 Yandex Music clients (web, desktop, mobile) no longer publish their play queue
 to the old REST API (`/queues` returns nothing); they sync the player through
 Ynison, a WebSocket service. We join it as a hidden ("shadow") device that
-cannot play or control anything, read the current player state once and
-disconnect.
+cannot play or control anything. `fetch_playback` reads the state once;
+`listen` keeps the connection open and gets every change (track switch,
+pause, seek) the moment it happens.
 
 Run as a script to check one user's connection (the token is never printed):
 
@@ -17,6 +18,7 @@ import json
 import secrets
 import time
 from dataclasses import dataclass
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import websockets
@@ -51,11 +53,12 @@ class Playback:
     duration_sec: int
 
 
-def _connect(url: str, token: str, proto: dict[str, str]):
+def _connect(url: str, token: str, proto: dict[str, str], **kwargs: Any):
     return websockets.connect(
         url,
         create_protocol=_YnisonProtocol,
         open_timeout=TIMEOUT_SEC,
+        **kwargs,
         extra_headers={
             "Sec-WebSocket-Protocol": f"Bearer, v2, {json.dumps(proto)}",
             "Origin": "https://music.yandex.ru",
@@ -159,7 +162,9 @@ def parse_state(state: dict[str, Any], now_ms: int | None = None) -> Playback | 
     )
 
 
-async def _read_state(token: str) -> dict[str, Any]:
+async def _open_state_socket(token: str, **kwargs: Any):
+    """Resolve the user's Ynison host and open the state socket, already
+    introduced as a hidden device. Returns (connection, first state)."""
     device_id = secrets.token_hex(8)
     proto = {
         "Ynison-Device-Id": device_id,
@@ -171,9 +176,42 @@ async def _read_state(token: str) -> dict[str, Any]:
     if not host or not ticket:
         raise RuntimeError(f"unexpected Ynison redirect: {str(redirect)[:200]}")
     proto["Ynison-Redirect-Ticket"] = ticket
-    async with _connect(STATE_URL.format(host=host), token, proto) as ws:
+    ws = await _connect(STATE_URL.format(host=host), token, proto, **kwargs)
+    try:
         await ws.send(json.dumps(_hello(device_id)))
-        return json.loads(await ws.recv())
+        first = json.loads(await asyncio.wait_for(ws.recv(), timeout=TIMEOUT_SEC))
+    except BaseException:
+        await ws.close()
+        raise
+    return ws, first
+
+
+def _check(state: dict[str, Any]) -> dict[str, Any]:
+    if "error" in state:
+        raise RuntimeError(f"Ynison error: {str(state['error'])[:200]}")
+    return state
+
+
+async def _read_state(token: str) -> dict[str, Any]:
+    ws, state = await _open_state_socket(token)
+    await ws.close()
+    return _check(state)
+
+
+async def listen(token: str, on_playback: Callable[[Playback | None], Awaitable[None]],
+                 on_open: Callable[[], None] | None = None) -> None:
+    """Keep one Ynison connection open and pass every player state the
+    server pushes to `on_playback` (None: nothing queued). Returns when the
+    server closes the connection; raises on errors. The caller reconnects."""
+    ws, first = await _open_state_socket(token, ping_interval=20, ping_timeout=20)
+    try:
+        if on_open is not None:
+            on_open()
+        await on_playback(parse_state(_check(first)))
+        async for raw in ws:
+            await on_playback(parse_state(_check(json.loads(raw))))
+    finally:
+        await ws.close()
 
 
 async def fetch_playback(token: str) -> Playback | None:

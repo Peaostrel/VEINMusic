@@ -253,6 +253,13 @@ export function useProfilePage() {
           if (msg.type === "NEW_SCROBBLE") {
             handleNewScrobble(msg.track);
             checkNotifications();
+          } else if (msg.type === "PLAYBACK_STATE") {
+            setData((prev) => ({
+              ...prev,
+              history: prev.history.map((h) =>
+                h.id === msg.id ? { ...h, is_playing: msg.is_playing } : h,
+              ),
+            }));
           } else if (msg.type === "SYNC_INVITE") {
             if (
               confirm(

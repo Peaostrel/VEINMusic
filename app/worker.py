@@ -120,11 +120,20 @@ async def cloud_poll(ctx: dict[str, Any]) -> None:
 
 async def startup(ctx: dict[str, Any]) -> None:
     setup_observability("worker")
+    if os.getenv("YANDEX_LIVE", "1") != "0":
+        # Open Ynison connections: Yandex Music track switches show up at once
+        from app.services.scrobble_processor import process_scrobble
+        from app.services.yandex_live import LiveManager
+        ctx["yandex_live"] = asyncio.create_task(LiveManager(process_scrobble).run())
     await asyncio.sleep(0)
     logger.info("🚀 ARQ background worker initialized and ready for tasks.")
 
 
 async def shutdown(ctx: dict[str, Any]) -> None:
+    live = ctx.get("yandex_live")
+    if live is not None:
+        live.cancel()
+        await asyncio.gather(live, return_exceptions=True)
     await asyncio.sleep(0)
     logger.info("🛑 ARQ background worker shut down cleanly.")
 
