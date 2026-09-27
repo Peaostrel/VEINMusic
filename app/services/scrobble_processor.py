@@ -113,6 +113,17 @@ _RU_MONTHS = ("янв", "фев", "мар", "апр", "мая", "июн",
               "июл", "авг", "сен", "окт", "ноя", "дек")
 
 
+def _shown_listened_sec(scrobble, track, is_playing: bool) -> int:
+    """Listening shown for a scrobble: while it plays, with the stretch a
+    live player connection has not confirmed yet (see pending_sec)."""
+    listened = int(scrobble.listened_sec or 0)
+    pending = int(getattr(scrobble, "pending_sec", 0) or 0)
+    if not is_playing or pending <= 0:
+        return listened
+    total = listened + pending
+    return min(total, int(track.duration)) if track.duration else total
+
+
 def format_history_item(
         scrobble,
         track,
@@ -152,7 +163,7 @@ def format_history_item(
         "time": str(played_time),
         "relative_time": rel_time,
         "duration": track.duration,
-        "listened_sec": scrobble.listened_sec,
+        "listened_sec": _shown_listened_sec(scrobble, track, is_playing),
         "is_playing": is_playing,
         "updated_at": str(upd_time),
         "is_imported": scrobble.is_imported}
@@ -362,6 +373,34 @@ def _determine_is_new(db: Session,
     return False, None
 
 
+def _apply_credit(last_scrobble, now, is_playing: bool, credit_sec: int, pending_sec: int,
+                  track_dur: int) -> None:
+    """Live player connections: add the confirmed listening, remember the
+    unconfirmed stretch (shown only while the track plays)."""
+    old_listened = last_scrobble.listened_sec or 0
+    added = max(int(credit_sec), 0)
+    if added:
+        last_scrobble.listened_sec = max(old_listened, min(old_listened + added, track_dur))
+    last_scrobble.pending_sec = max(int(pending_sec), 0) if is_playing else 0
+    last_scrobble.updated_at = now
+
+
+def _advance_by_elapsed(last_scrobble, now, l_updated_at, is_playing: bool) -> None:
+    """Other clients: add the time between two "still playing" reports."""
+    time_elapsed = (now - l_updated_at).total_seconds()
+    last_scrobble.pending_sec = 0
+    # Accumulate integer seconds cleanly to avoid drifting and rounding errors.
+    if last_scrobble.is_playing and is_playing and 0 < time_elapsed < 35:
+        increment = int(time_elapsed)
+        if increment > 0:
+            last_scrobble.listened_sec = (last_scrobble.listened_sec or 0) + increment
+            # Keep fractional precision by only advancing updated_at by the integer increment
+            last_scrobble.updated_at = l_updated_at + timedelta(seconds=increment)
+    else:
+        # If paused or elapsed time is too large, just update the ping timestamp
+        last_scrobble.updated_at = now
+
+
 def _update_scrobble_progress(
         db: Session,
         user: User,
@@ -370,34 +409,24 @@ def _update_scrobble_progress(
         now,
         l_updated_at,
         is_playing: bool,
-        credit_sec: int | None = None) -> bool:
+        credit_sec: int | None = None,
+        pending_sec: int = 0) -> bool:
     """Update listened_sec, xp, and streak on an existing scrobble.
 
     `credit_sec` (live player connections) adds exactly the listening the
     player confirmed, instead of the time between reports: a closed tab
     stops sending reports, but its last reports would otherwise keep
-    adding time.
+    adding time. `pending_sec` is the stretch played since the last player
+    event, not confirmed yet: only shown while the track plays.
 
     Returns True when this update made the scrobble count (crossed the listen threshold)."""
-    time_elapsed = (now - l_updated_at).total_seconds()
     old_listened = last_scrobble.listened_sec or 0
     track_dur = int(track.duration) if getattr(track, 'duration', None) and track.duration > 0 else 180
 
     if credit_sec is not None:
-        added = max(int(credit_sec), 0)
-        if added:
-            last_scrobble.listened_sec = max(old_listened, min(old_listened + added, track_dur))
-        last_scrobble.updated_at = now
-    # Accumulate integer seconds cleanly to avoid drifting and rounding errors.
-    elif last_scrobble.is_playing and is_playing and 0 < time_elapsed < 35:
-        increment = int(time_elapsed)
-        if increment > 0:
-            last_scrobble.listened_sec = old_listened + increment
-            # Keep fractional precision by only advancing updated_at by the integer increment
-            last_scrobble.updated_at = l_updated_at + timedelta(seconds=increment)
+        _apply_credit(last_scrobble, now, is_playing, credit_sec, pending_sec, track_dur)
     else:
-        # If paused or elapsed time is too large, just update the ping timestamp
-        last_scrobble.updated_at = now
+        _advance_by_elapsed(last_scrobble, now, l_updated_at, is_playing)
 
     last_scrobble.is_playing = is_playing
     db.commit()
@@ -470,7 +499,8 @@ async def _dispatch_counted_scrobble(user_id: int, counted: dict[str, Any]) -> N
 
 
 def _record_scrobble(db: Session, user: User, track: Track, source: str,
-                     progress_sec: int, is_playing: bool, credit_sec: int | None = None) -> dict[str, Any]:
+                     progress_sec: int, is_playing: bool, credit_sec: int | None = None,
+                     pending_sec: int = 0) -> dict[str, Any]:
     """Create or advance the user's current scrobble (blocking DB work).
 
     Returns plain data only, so nothing touches expired ORM objects (and the
@@ -510,7 +540,7 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
         db.commit()
         result["new_item"] = format_history_item(new_s, track)
     elif last_scrobble is not None and _update_scrobble_progress(
-            db, user, track, last_scrobble, now, l_updated_at, is_playing, credit_sec):
+            db, user, track, last_scrobble, now, l_updated_at, is_playing, credit_sec, pending_sec):
         played_at = last_scrobble.played_at
         if played_at.tzinfo is None:
             played_at = played_at.replace(tzinfo=UTC)
@@ -539,12 +569,14 @@ async def process_scrobble(
         is_playing: bool,
         duration: int,
         album: str = "",
-        credit_sec: int | None = None):
+        credit_sec: int | None = None,
+        pending_sec: int = 0):
     if await _run_db(_is_blacklisted, title, artist, album, db):
         return "blacklisted"
 
     track = await _get_or_create_track(db, title, artist, cover_url, track_url, duration, album)
-    result = await _run_db(_record_scrobble, db, user, track, source, progress_sec, is_playing, credit_sec)
+    result = await _run_db(_record_scrobble, db, user, track, source, progress_sec, is_playing,
+                           credit_sec, pending_sec)
 
     if result["new_item"] is not None:
         await manager.broadcast_to_user(result["username"], {
