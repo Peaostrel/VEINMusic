@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from app.core.security import SECRET_KEY, get_current_user
 from app.database import get_db
 from app.models import ExternalSyncConfig, User
+from app.services.runtime_settings import require_feature
 from app.services.external_sync import (
     LASTFM_API_KEY,
     LASTFM_API_URL,
@@ -66,7 +67,9 @@ def _configured() -> bool:
     return bool(LASTFM_API_KEY and LASTFM_SHARED_SIGNING_SALT)
 
 
-@router.get("/connect", responses={503: {"description": "Last.fm API is not configured"}})
+@router.get("/connect",
+            dependencies=[Depends(require_feature("integration_lastfm"))],
+            responses={503: {"description": "Last.fm API is not configured"}})
 def lastfm_connect(current_user: Annotated[User, Depends(get_current_user)]):
     if not _configured():
         raise HTTPException(503, "Last.fm API не настроен на сервере")
@@ -103,7 +106,9 @@ async def _get_session_key(token: str) -> str | None:
     return str(key) if key else None
 
 
-@router.get("/callback", responses={400: {"description": "Invalid state or token"}})
+@router.get("/callback",
+            dependencies=[Depends(require_feature("integration_lastfm"))],
+            responses={400: {"description": "Invalid state or token"}})
 async def lastfm_callback(state: str, token: str, request: Request,
                           db: Annotated[Session, Depends(get_db)]):
     # The session cookie is SameSite=Strict and isn't sent on the redirect

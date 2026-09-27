@@ -31,6 +31,9 @@ KNOWN_FEATURES: dict[str, str] = {
     "listen_together": "Комнаты «Слушать вместе»",
     "lastfm_import": "Импорт истории из Last.fm",
     "webhooks": "Создание и отправка вебхуков",
+    "integration_yandex": "Яндекс Музыка: подключения и скробблинг",
+    "integration_spotify": "Spotify: подключения и скробблинг",
+    "integration_lastfm": "Last.fm: подключения, импорт и экспорт",
 }
 
 _cache: dict[str, tuple[float, Any]] = {}

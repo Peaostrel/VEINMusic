@@ -208,6 +208,68 @@ export default function IntegrationsTab({
   return (
     <div className="space-y-4">
       <div className={panelClass}>
+        <div>
+          <PanelTitle icon={<PlugZap aria-hidden="true" />}>
+            Управление провайдерами
+          </PanelTitle>
+          <p className="mt-1 text-xs text-fg-2">
+            Пауза останавливает фоновые опросы и новые подключения, но сохраняет
+            токены пользователей.
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {(Object.entries(PROVIDER_NAMES) as [Provider, string][]).map(
+            ([id, name]) => {
+              const state = data?.providers[id];
+              const enabled = state?.enabled ?? true;
+              return (
+                <div
+                  key={id}
+                  className="flex flex-col gap-3 rounded-lg border border-line-soft bg-bg p-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-sm font-medium text-fg">{name}</span>
+                    <span
+                      className={`font-mono text-[10px] ${enabled ? "text-ok" : "text-danger"}`}
+                    >
+                      {enabled ? "РАБОТАЕТ" : "ПАУЗА"}
+                    </span>
+                  </div>
+                  <span className="text-xs text-fg-2">
+                    Подключено: {state?.linked ?? "—"}
+                  </span>
+                  <button
+                    type="button"
+                    className={
+                      enabled ? buttonClass.danger : buttonClass.primary
+                    }
+                    disabled={!state}
+                    onClick={() =>
+                      act(
+                        () =>
+                          adminRequest(
+                            `/api/admin/integrations/providers/${id}`,
+                            { method: "PUT", json: { enabled: !enabled } },
+                          ),
+                        enabled
+                          ? `${name} приостановлен`
+                          : `${name} снова работает`,
+                        enabled
+                          ? `Поставить ${name} на паузу для всех пользователей? Токены сохранятся.`
+                          : undefined,
+                      )
+                    }
+                  >
+                    {enabled ? "Поставить на паузу" : "Возобновить"}
+                  </button>
+                </div>
+              );
+            },
+          )}
+        </div>
+      </div>
+
+      <div className={panelClass}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <PanelTitle icon={<PlugZap aria-hidden="true" />}>
             Подключённые сервисы

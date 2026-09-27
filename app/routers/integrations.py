@@ -34,7 +34,8 @@ router = APIRouter(tags=["integrations"])
 
 # --- /api/import/lastfm ---
 @router.post("/api/import/lastfm",
-             dependencies=[Depends(require_feature("lastfm_import"))],
+             dependencies=[Depends(require_feature("lastfm_import")),
+                           Depends(require_feature("integration_lastfm"))],
              responses={400: {"description": "Last.fm username not set"},
                         503: {"description": "API key not configured or import switched off"}})
 async def start_lastfm_import(data: LikeRequest,
@@ -67,7 +68,8 @@ def get_lastfm_import_status(db: Annotated[Session, Depends(get_db)],
 
 
 # --- /api/integrations/yandex ---
-@router.post("/api/integrations/yandex")
+@router.post("/api/integrations/yandex",
+             dependencies=[Depends(require_feature("integration_yandex"))])
 def update_yandex_token(data: YandexTokenUpdate, db: Annotated[Session, Depends(
         get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
