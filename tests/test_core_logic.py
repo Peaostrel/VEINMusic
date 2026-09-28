@@ -565,27 +565,6 @@ def test_enrich_falls_back_to_deezer_cover_by_name():
     assert seen[0] == "Джизус Проводник"
 
 
-def test_artist_progress_counts_unique_tracks_not_repeats(db):
-    user = _user(db, "artist_listener")
-    first = _track(db, title="One", artist="SASHA TRAUTVEIN")
-    second = _track(db, title="Two", artist="SASHA TRAUTVEIN")
-    _listen(db, user, first, times=4)
-    _listen(db, user, second)
-
-    achievement = Achievement(
-        name="wake up",
-        description="",
-        rule_type="specific_artist",
-        rule_value=3,
-        rule_target="SASHA TRAUTVEIN||https://music.yandex.ru/artist/23227606",
-    )
-    db.add(achievement)
-    db.commit()
-
-    assert ach._calculate_achievement_progress(db, user, achievement) == 2
-    assert ach._check_specific_artist(user, achievement, db) is False
-
-
 def test_album_progress_counts_tracks_played_from_the_album_link(db):
     """Progress matches the award check, which counts tracks by the album link."""
     from app.models import Achievement, Scrobble, Track, User

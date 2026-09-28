@@ -146,23 +146,17 @@ def _check_specific_album(user, ach, db: Session) -> bool:
     return count >= ach.rule_value
 
 
-def _specific_artist_track_count(
-        db: Session, user_id: int, rule_target: str) -> int:
-    """Unique counted tracks by the target artist."""
-    target = rule_target.split("||", 1)[0].strip()
-    return int(db.query(func.count(func.distinct(Scrobble.track_id))).join(Track).filter(
-        Scrobble.user_id == user_id,
-        Scrobble.listened_sec * 100
-        >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,
-        Track.artist.ilike(f"%{target}%"),
-    ).scalar() or 0)
-
-
 def _check_specific_artist(user, ach, db: Session) -> bool:
     if not ach.rule_target:
         return False
-    return _specific_artist_track_count(
-        db, int(user.id), str(ach.rule_target)) >= int(ach.rule_value or 0)
+    target = ach.rule_target.split(
+        "||")[0] if "||" in ach.rule_target else ach.rule_target
+    count = db.query(Scrobble).join(Track).filter(
+        Scrobble.user_id == user.id,
+        Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,
+        Track.artist.ilike(f'%{target}%')).count()
+    return count >= ach.rule_value
+
 
 
 def check_auto_achievements(user, db: Session) -> list[Achievement]:
@@ -312,8 +306,7 @@ def _calculate_achievement_progress(db: Session, user: User, a: Achievement) -> 
     elif a.rule_type == "specific_album" and a.rule_target:
         return _calc_specific_album(db, user, a)
     elif a.rule_type == "specific_artist" and a.rule_target:
-        return _specific_artist_track_count(
-            db, int(user.id), str(a.rule_target))
+        return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85, Track.artist.ilike(f'%{a.rule_target.split("||")[0] if "||" in a.rule_target else a.rule_target}%')).count()
     return 0
 
 
