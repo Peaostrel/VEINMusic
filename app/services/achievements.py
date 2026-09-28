@@ -158,7 +158,6 @@ def _check_specific_artist(user, ach, db: Session) -> bool:
     return count >= ach.rule_value
 
 
-
 def check_auto_achievements(user, db: Session) -> list[Achievement]:
     """Award every automatic achievement the user now qualifies for.
 
