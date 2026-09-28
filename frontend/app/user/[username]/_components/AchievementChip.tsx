@@ -128,12 +128,12 @@ export function AchievementChip({ a }: Readonly<{ a: AchievementInfo }>) {
       </button>
 
       {open && (
-        <div
+        <dialog
+          open
           id={cardId}
-          role="dialog"
           aria-label={`Достижение «${a.name}»`}
-          style={{ left: offsetX }}
-          className="absolute top-full z-40 mt-2 flex w-[min(320px,calc(100vw-32px))] flex-col gap-3 rounded-xl border border-line bg-surface p-4 shadow-[0_16px_48px_rgba(0,0,0,0.45)]"
+          style={{ left: offsetX, right: "auto" }}
+          className="absolute top-full z-40 m-0 mt-2 flex w-[min(320px,calc(100vw-32px))] flex-col gap-3 rounded-xl border border-line bg-surface p-4 text-fg shadow-[0_16px_48px_rgba(0,0,0,0.45)]"
         >
           <div className="flex items-start gap-3">
             <Cover a={a} size="h-14 w-14 text-3xl" />
@@ -187,7 +187,7 @@ export function AchievementChip({ a }: Readonly<{ a: AchievementInfo }>) {
               )}
             </div>
           )}
-        </div>
+        </dialog>
       )}
     </div>
   );

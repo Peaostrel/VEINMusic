@@ -169,13 +169,10 @@ def _author_offline(state: dict[str, Any], status: dict[str, Any]) -> bool:
     return False
 
 
-def parse_state(state: dict[str, Any], now_ms: int | None = None) -> Playback | None:
-    """Current track of a Ynison state message, or None when nothing is queued."""
-    player = state.get("player_state")
-    if not isinstance(player, dict):
-        return None
+def _current_track(player: dict[str, Any]) -> str | None:
+    """Id of the queue's current track (None: nothing queued, or not a
+    track: videos, local files have nothing to look up)."""
     queue = player.get("player_queue") or {}
-    status = player.get("status") or {}
     items = queue.get("playable_list") or []
     index = queue.get("current_playable_index", -1)
     if not isinstance(index, int) or not 0 <= index < len(items):
@@ -184,28 +181,41 @@ def parse_state(state: dict[str, Any], now_ms: int | None = None) -> Playback | 
     if not isinstance(item, dict) or not item.get("playable_id"):
         return None
     if item.get("playable_type", "TRACK") != "TRACK":
-        return None  # videos, local files: nothing to look up
+        return None
+    return str(item["playable_id"])
+
+
+def _int_field(data: dict[str, Any], key: str) -> int:
+    try:
+        return int(data.get(key) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def parse_state(state: dict[str, Any], now_ms: int | None = None) -> Playback | None:
+    """Current track of a Ynison state message, or None when nothing is queued."""
+    player = state.get("player_state")
+    if not isinstance(player, dict):
+        return None
+    track_id = _current_track(player)
+    if track_id is None:
+        return None
+    status = player.get("status") or {}
     if now_ms is None:
         now_ms = int(time.time() * 1000)
     progress_ms, playing = _position(status, now_ms)
     offline = _author_offline(state, status)
     if offline:
         playing = False  # nothing plays on a device that is gone
-    try:
-        duration = max(int(status.get("duration_ms", 0)) // 1000, 0)
-    except (TypeError, ValueError):
-        duration = 0
+    duration = max(_int_field(status, "duration_ms") // 1000, 0)
     version = status.get("version") or {}
-    try:
-        event_ms = int(version.get("timestamp_ms") or 0)
-    except (TypeError, ValueError):
-        event_ms = 0
+    event_ms = _int_field(version, "timestamp_ms")
     return Playback(
-        track_id=str(item["playable_id"]),
+        track_id=track_id,
         playing=playing,
         progress_sec=progress_ms // 1000,
         duration_sec=duration,
-        event=(str(item["playable_id"]), version.get("device_id"), version.get("version"), event_ms),
+        event=(track_id, version.get("device_id"), version.get("version"), event_ms),
         event_ms=event_ms,
         pause_unknown=bool(status.get("paused", True)) and _from_unlisted_device(state, status),
         player_offline=offline,
