@@ -1,10 +1,11 @@
 import { BarStrip } from "@/components/StatsCharts";
 
-/** Local YYYY-MM-DD dates of the last `days` days, oldest first. */
-function lastDays(days: number): string[] {
+/** YYYY-MM-DD dates ending at the API-provided profile-local date. */
+function lastDays(days: number, endDate?: string | null): string[] {
   const dates: string[] = [];
+  const anchor = endDate ? new Date(`${endDate}T12:00:00`) : new Date();
   for (let i = days - 1; i >= 0; i--) {
-    const d = new Date();
+    const d = new Date(anchor);
     d.setDate(d.getDate() - i);
     dates.push(
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
@@ -17,9 +18,14 @@ function lastDays(days: number): string[] {
 export function DailyActivity({
   activity,
   days,
-}: Readonly<{ activity: Record<string, number>; days: number }>) {
+  endDate,
+}: Readonly<{
+  activity: Record<string, number>;
+  days: number;
+  endDate?: string | null;
+}>) {
   const data: Record<string, number> = {};
-  for (const date of lastDays(days)) {
+  for (const date of lastDays(days, endDate)) {
     const label = new Date(`${date}T00:00:00`).toLocaleDateString("ru-RU", {
       day: "2-digit",
       month: "2-digit",

@@ -432,6 +432,16 @@ def test_enrich_achievement_data():
         with patch.object(ach, "get_album_track_count", new=AsyncMock(return_value=12)):
             assert asyncio.run(enrich("specific_album", url, 5, "", "")) == (url, 12, "img", "")
 
+    # Editing an artist achievement sends the stored "Name||url" value back.
+    # It must be enriched again without duplicating the name prefix.
+    stored = f"Artist||{url}"
+    with patch.object(
+            ach, "_link_meta",
+            new=AsyncMock(return_value=("Artist", "img", 23))):
+        assert asyncio.run(
+            enrich("specific_artist", stored, 1, "", "Artist", "tok")
+        ) == (stored, 23, "img", "Artist")
+
 
 def test_album_track_count():
     def handler(request):
@@ -515,6 +525,11 @@ def test_yandex_api_meta_track_artist_and_errors():
         if request.url.path == "/artists/9/brief-info":
             return httpx.Response(200, json={"result": {"artist": {
                 "name": "Джизус", "cover": {"uri": "avatars.yandex.net/b/%%"}}}})
+        if request.url.path == "/artists/9/tracks":
+            assert request.url.params.get("page") == "0"
+            assert request.url.params.get("page-size") == "1"
+            return httpx.Response(200, json={"result": {
+                "tracks": [{"id": "1"}], "pager": {"total": 37}}})
         return httpx.Response(451, json={})
 
     with _mock_http(og_parser, handler):
@@ -522,7 +537,7 @@ def test_yandex_api_meta_track_artist_and_errors():
         assert run(og_parser.yandex_api_meta("https://music.yandex.ru/album/1/track/7", "t")) == (
             "Агата Кристи — Ковёр вертолёт", "https://avatars.yandex.net/a/400x400", 0)
         assert run(og_parser.yandex_api_meta("https://music.yandex.ru/artist/9", "t")) == (
-            "Джизус", "https://avatars.yandex.net/b/400x400", 0)
+            "Джизус", "https://avatars.yandex.net/b/400x400", 37)
         assert run(og_parser.yandex_api_meta("https://music.yandex.ru/album/5", "t")) == (None, None, 0)
         assert run(og_parser.yandex_api_meta("https://music.yandex.ru/album/5", "")) == (None, None, 0)
         assert run(og_parser.yandex_api_meta("https://example.com/x", "t")) == (None, None, 0)

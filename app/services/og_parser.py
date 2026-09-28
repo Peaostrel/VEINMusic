@@ -134,11 +134,41 @@ def _parse_api_result(kind: str, result) -> tuple[str | None, str | None, int]:
     return _API_PARSERS[kind](result)
 
 
+def _artist_tracks_total(result) -> int:
+    """Total tracks from an /artists/{id}/tracks response."""
+    if not isinstance(result, dict):
+        return 0
+    pager = result.get("pager") or {}
+    try:
+        return int(pager.get("total") or len(result.get("tracks") or []))
+    except (TypeError, ValueError):
+        return 0
+
+
+async def _yandex_artist_track_count(
+        client: httpx.AsyncClient, artist_id: str, headers: dict[str, str]) -> int:
+    path = f"/artists/{artist_id}/tracks"
+    try:
+        resp = await client.get(
+            YANDEX_API + path,
+            headers=headers,
+            params={"page": 0, "page-size": 1},
+        )
+        if resp.status_code != 200:
+            logger.warning(f"Yandex API {path}: HTTP {resp.status_code}")
+            return 0
+        return _artist_tracks_total(resp.json().get("result"))
+    except Exception as e:
+        logger.warning(f"Yandex API {path} error: {e}")
+        return 0
+
+
 async def yandex_api_meta(url: str, token: str) -> tuple[str | None, str | None, int]:
-    """Title, cover and album track count of a music.yandex.ru link through
-    the API with a user's token. The site and its old handlers serve only an
-    empty page outside Russia, and the API refuses requests without a token
-    (451)."""
+    """Title, cover and track count of a music.yandex.ru link through the API.
+
+    Artist track counts come from the paginated artist-tracks endpoint; the
+    pager total lets us fetch one item instead of downloading the discography.
+    """
     ids = re.search(r"/(album|track|artist)/(\d+)(?:/track/(\d+))?", url or "")
     if not ids or not token:
         return None, None, 0
@@ -147,14 +177,20 @@ async def yandex_api_meta(url: str, token: str) -> tuple[str | None, str | None,
         kind, item_id = "track", ids.group(3)
     path = {"album": f"/albums/{item_id}", "track": f"/tracks/{item_id}",
             "artist": f"/artists/{item_id}/brief-info"}[kind]
-    headers = {"Authorization": f"OAuth {token}", "X-Yandex-Music-Client": "YandexMusicAndroid/2023.12.1"}
+    headers = {"Authorization": f"OAuth {token}",
+               "X-Yandex-Music-Client": "YandexMusicAndroid/2023.12.1"}
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(YANDEX_API + path, headers=headers)
-        if resp.status_code != 200:
-            logger.warning(f"Yandex API {path}: HTTP {resp.status_code}")
-            return None, None, 0
-        return _parse_api_result(kind, resp.json().get("result"))
+            if resp.status_code != 200:
+                logger.warning(f"Yandex API {path}: HTTP {resp.status_code}")
+                return None, None, 0
+            title, image, track_count = _parse_api_result(
+                kind, resp.json().get("result"))
+            if kind == "artist":
+                track_count = await _yandex_artist_track_count(
+                    client, item_id, headers)
+            return title, image, track_count
     except Exception as e:
         logger.warning(f"Yandex API {path} error: {e}")
         return None, None, 0

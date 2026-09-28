@@ -7,7 +7,7 @@ import {
   GenreCloud,
   PlatformDistribution,
 } from "@/components/StatsCharts";
-import { Loading, PageHeader, Segmented } from "@/components/ui";
+import { Loading, PageHeader, Segmented, inputOnCard } from "@/components/ui";
 import { API_URL } from "@/app/lib/api";
 import { isValidUser } from "@/app/lib/theme";
 import type { DetailedStats } from "@/app/lib/types";
@@ -18,20 +18,26 @@ import {
   TopTracksCard,
 } from "./_components/TopLists";
 import { DailyActivity } from "./_components/DailyActivity";
+import { MusicCalendar } from "./_components/MusicCalendar";
+import { PeriodRecap } from "./_components/PeriodRecap";
 
-type Period = "7d" | "30d" | "all";
+type Period = "7d" | "30d" | "90d" | "year" | "all" | "custom";
 
 const PERIODS: { id: Period; label: string }[] = [
-  { id: "7d", label: "7 дней" },
-  { id: "30d", label: "30 дней" },
+  { id: "7d", label: "Неделя" },
+  { id: "30d", label: "Месяц" },
+  { id: "90d", label: "Сезон" },
+  { id: "year", label: "Год" },
   { id: "all", label: "Всё время" },
+  { id: "custom", label: "Даты" },
 ];
 
-const PERIOD_CAPTION: Record<Period, string> = {
-  "7d": "За последние 7 дней",
-  "30d": "За последние 30 дней",
-  all: "За всё время",
-};
+function isoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 function Panel({
   id,
@@ -74,6 +80,12 @@ export default function DetailedStatsPage() {
   const [stats, setStats] = useState<DetailedStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<Period>("30d");
+  const [dateTo, setDateTo] = useState(() => isoDate(new Date()));
+  const [dateFrom, setDateFrom] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 29);
+    return isoDate(date);
+  });
   const [hasCheckedFallback, setHasCheckedFallback] = useState(false);
   const [error, setError] = useState("");
   const [me, setMe] = useState<string | null>(null);
@@ -85,27 +97,33 @@ export default function DetailedStatsPage() {
 
   useEffect(() => {
     if (!username) return;
+    const controller = new AbortController();
+    let active = true;
     setLoading(true);
-    fetch(`${API_URL}/api/detailed-stats/${username}?period=${period}`, {
+    setError("");
+    const query = new URLSearchParams({ period });
+    if (period === "custom") {
+      query.set("date_from", dateFrom);
+      query.set("date_to", dateTo);
+    }
+    fetch(`${API_URL}/api/detailed-stats/${username}?${query}`, {
       credentials: "include",
       cache: "no-store",
+      signal: controller.signal,
     })
       .then(async (res) => {
         if (!res.ok) {
-          setError(
+          const body = await res.json().catch(() => null);
+          throw new Error(
             res.status === 403
               ? "Это приватный профиль"
-              : "Не удалось загрузить статистику",
+              : body?.detail || "Не удалось загрузить статистику",
           );
-          return null;
         }
         return (await res.json()) as DetailedStats;
       })
       .then((data) => {
-        if (!data) {
-          setLoading(false);
-          return;
-        }
+        if (!active) return;
         if (
           period === "30d" &&
           data.total_scrobbles === 0 &&
@@ -119,8 +137,20 @@ export default function DetailedStatsPage() {
           setLoading(false);
         }
       })
-      .catch(() => setLoading(false));
-  }, [username, period, hasCheckedFallback]);
+      .catch((requestError: unknown) => {
+        if (!active) return;
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Не удалось загрузить статистику",
+        );
+        setLoading(false);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [username, period, dateFrom, dateTo, hasCheckedFallback]);
 
   if (error) {
     return (
@@ -179,7 +209,7 @@ export default function DetailedStatsPage() {
         }
         subtitle={
           <>
-            {PERIOD_CAPTION[period]}
+            {stats.period.label}
             {!isMine && (
               <>
                 {" · "}
@@ -191,15 +221,45 @@ export default function DetailedStatsPage() {
           </>
         }
         actions={
-          <Segmented
-            label="Период"
-            role="radiogroup"
-            value={period}
-            onChange={setPeriod}
-            options={PERIODS}
-          />
+          <div className="flex w-[calc(100vw-2rem)] max-w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
+            <Segmented
+              label="Период"
+              role="radiogroup"
+              value={period}
+              onChange={setPeriod}
+              options={PERIODS}
+              className="max-w-full overflow-x-auto"
+            />
+            {period === "custom" && (
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <label className="flex items-center gap-1.5 text-[11px] text-fg-3">
+                  С
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    max={dateTo}
+                    onChange={(event) => setDateFrom(event.target.value)}
+                    className={`${inputOnCard} h-8 w-[142px] font-mono text-xs`}
+                  />
+                </label>
+                <label className="flex items-center gap-1.5 text-[11px] text-fg-3">
+                  по
+                  <input
+                    type="date"
+                    value={dateTo}
+                    min={dateFrom}
+                    max={isoDate(new Date())}
+                    onChange={(event) => setDateTo(event.target.value)}
+                    className={`${inputOnCard} h-8 w-[142px] font-mono text-xs`}
+                  />
+                </label>
+              </div>
+            )}
+          </div>
         }
       />
+
+      <PeriodRecap stats={stats} />
 
       <StatTiles
         totalScrobbles={total_scrobbles}
@@ -211,10 +271,15 @@ export default function DetailedStatsPage() {
         diversity={diversity}
       />
 
-      <DailyActivity
-        activity={activity_graph}
-        days={period === "7d" ? 7 : 30}
-      />
+      {(["7d", "30d", "90d"] as Period[]).includes(period) && (
+        <DailyActivity
+          activity={activity_graph}
+          days={period === "7d" ? 7 : period === "30d" ? 30 : 90}
+          endDate={stats.period.end}
+        />
+      )}
+
+      <MusicCalendar username={String(username)} />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         <Panel
