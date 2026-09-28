@@ -35,6 +35,7 @@
 | `src-tauri/src/settings.rs` | настройки (JSON в папке приложения) и ключ в хранилище Windows |
 | `src-tauri/src/discord.rs` | статус в Discord |
 | `ui/` | окно настроек (HTML/CSS/JS без сборщика) |
+| `src-tauri/installer/` | оформление установщика в цветах сайта: `hooks.nsh` (тёмная тема Modern UI), картинки `sidebar.bmp` и `header.bmp` |
 
 Окно сайта открывает удалённую страницу и доступа к командам приложения не имеет: они разрешены только локальному окну настроек (`capabilities/settings.json`, плюс проверка метки окна в каждой команде).
 
@@ -51,6 +52,8 @@ npx tauri build   # установщик: src-tauri/target/release/bundle/nsis/*
 
 Для работы с локальным сервером задайте `VEIN_API_URL=http://localhost:8000` и `VEIN_SITE_URL=http://localhost:3000`.
 
+Картинки установщика нарисованы в `src-tauri/installer/art.html`. Чтобы поменять их, снимите в браузере блоки `#side` (164×314) и `#head` (150×57) при масштабе 100% и сохраните как 24-битные BMP.
+
 Юнит-тесты и линтер:
 
 ```powershell
@@ -60,9 +63,17 @@ cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 
 ## Выпуск версии
 
-1. Поднимите версию в `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` и `package.json`.
-2. Создайте тег `desktop-vX.Y.Z` (с той же версией): командой `git push origin desktop-vX.Y.Z` или на GitHub через Releases → Draft a new release.
-3. Workflow `Desktop app (Windows)` соберёт установщик (около 12 минут) и приложит его к релизу — создаст релиз сам или дополнит созданный вручную. Приложения у пользователей увидят его при следующей проверке обновлений.
+1. В PR поднимите версию в `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` и `package.json` и обновите lock-файлы:
+
+   ```powershell
+   npm version X.Y.Z --no-git-tag-version
+   cargo update -w --manifest-path src-tauri/Cargo.toml
+   ```
+
+   Workflow проверяет, что версии в трёх файлах совпадают.
+2. Влейте PR в `VEIN`. Тег `desktop-vX.Y.Z` ставить не нужно: workflow `Desktop app (Windows)` увидит, что такого тега ещё нет, соберёт установщик (около 12 минут) и создаст тег и релиз с ним. Приложения у пользователей увидят новую версию при следующей проверке обновлений.
+
+Слияние без смены версии релиз не выпускает. Тег по-прежнему можно поставить и вручную (`git push origin desktop-vX.Y.Z` или Releases → Draft a new release): тогда workflow приложит установщик к этому релизу.
 
 Установщик не подписан: при первом запуске Windows SmartScreen покажет предупреждение («Подробнее → Выполнить в любом случае»). Чтобы его убрать, нужен сертификат подписи кода.
 
