@@ -272,3 +272,28 @@ def test_refresh_showcase_keeps_locks(auth_client, auth_user, capsys):
     with patch("app.routers.profile.search_metadata", return_value=(None, None, None)):
         assert cli.main(["refresh-showcase"]) == 0
     assert "profileuser: no changes" in capsys.readouterr().out
+
+
+def test_profile_achievements_carry_their_goal(auth_client, auth_user):
+    """The profile shows an achievement's card with links from its goal."""
+    from app.models import Achievement, UserAchievement
+
+    db = SessionLocal()
+    try:
+        ach = Achievement(name="Дух Мира", description="Прослушать [альбом](https://music.yandex.ru/album/1)",
+                          icon="🏆", rule_type="specific_album", rule_value=12,
+                          rule_target="https://music.yandex.ru/album/1", rule_meta="Джизус — Дух Мира",
+                          reward_xp=100)
+        db.add(ach)
+        db.flush()
+        db.add(UserAchievement(user_id=auth_user.id, achievement_id=ach.id))
+        db.commit()
+    finally:
+        db.close()
+
+    shown = auth_client.get("/api/user/profileuser").json()["achievements"]
+    card = next(a for a in shown if a["name"] == "Дух Мира")
+    assert card["rule_type"] == "specific_album"
+    assert card["rule_target"] == "https://music.yandex.ru/album/1"
+    assert card["rule_meta"] == "Джизус — Дух Мира"
+    assert card["earned_at"]
