@@ -35,6 +35,7 @@
 | `src-tauri/src/settings.rs` | настройки (JSON в папке приложения) и ключ в хранилище Windows |
 | `src-tauri/src/discord.rs` | статус в Discord |
 | `ui/` | окно настроек (HTML/CSS/JS без сборщика) |
+| `src-tauri/installer/` | оформление установщика в цветах сайта: `hooks.nsh` (тёмная тема Modern UI), картинки `sidebar.bmp` и `header.bmp` |
 
 Окно сайта открывает удалённую страницу и доступа к командам приложения не имеет: они разрешены только локальному окну настроек (`capabilities/settings.json`, плюс проверка метки окна в каждой команде).
 
@@ -50,6 +51,8 @@ npx tauri build   # установщик: src-tauri/target/release/bundle/nsis/*
 ```
 
 Для работы с локальным сервером задайте `VEIN_API_URL=http://localhost:8000` и `VEIN_SITE_URL=http://localhost:3000`.
+
+Картинки установщика нарисованы в `src-tauri/installer/art.html`. Чтобы поменять их, снимите в браузере блоки `#side` (164×314) и `#head` (150×57) при масштабе 100% и сохраните как 24-битные BMP.
 
 Юнит-тесты и линтер:
 
