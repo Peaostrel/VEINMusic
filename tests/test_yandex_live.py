@@ -404,3 +404,51 @@ def test_page_reload_shows_unconfirmed_listening(db):
     asyncio.run(report(195, False, 195))
     scrobble, listened = shown()
     assert (scrobble.listened_sec, scrobble.pending_sec, listened) == (195, 0, 195)
+
+
+def test_closed_app_stops_playing_at_once():
+    """The app was closed while playing: Ynison keeps its "playing" state but
+    marks the device offline. That repeat of the same event stops playback
+    right away instead of letting the track "play" to its end."""
+    offline = _app_state("A", 0, 200, 0, 1)
+    offline["devices"][0]["is_offline"] = True
+    reported = _replay([
+        (0, _app_state("A", 0, 200, 0, 1)),
+        (60, offline),
+        (90, offline),  # pushed again: nothing new
+    ])
+    assert reported == [("A", 0, True, 0), ("A", 60, False, 60)]
+
+
+def test_web_player_follow_up_event_after_a_switch_is_not_a_pause():
+    """After a switch the web player may send a second event once the audio
+    starts, at about the same position. The track keeps playing; a real
+    pause later is still recognised."""
+    from app.services.yandex_ynison import parse_state
+
+    lis = _listener()
+    clock = {"s": 0}
+    reported = []
+
+    async def report(track_id, progress, playing, credit=0):
+        reported.append((track_id, progress, playing, credit))
+        lis._last_reported = (track_id, playing)
+
+    events = [
+        (0, _web_state("A", 0, 200, 0, 1)),    # start
+        (50, _web_state("B", 0, 180, 50, 2)),  # next track
+        (51, _web_state("B", 0, 180, 51, 3)),  # the audio starts
+        (81, _web_state("B", 30, 180, 81, 4)),  # pause
+    ]
+    states = []
+    with patch.object(lis, "_report", new=report), \
+            patch.object(live, "_now_ms", side_effect=lambda: (1000 + clock["s"]) * 1000):
+        async def run():
+            for at, state in events:
+                clock["s"] = at
+                await lis.on_playback(parse_state(state, now_ms=(1000 + at) * 1000))
+                states.append((lis.playback.track_id, lis.playback.playing))
+        asyncio.run(run())
+
+    assert states == [("A", True), ("B", True), ("B", True), ("B", False)]
+    assert sum(r[3] for r in reported if r[0] == "B") == 31

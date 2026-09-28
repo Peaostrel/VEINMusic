@@ -59,11 +59,14 @@ class Playback:
     # reports paused=True; its events still carry the right position and
     # time, so the listener infers play/pause from their order
     pause_unknown: bool = field(default=False, compare=False)
+    # The device that played went offline (the app was closed or unloaded):
+    # Ynison keeps its last state, which still says "playing"
+    player_offline: bool = field(default=False, compare=False)
 
     def with_playing(self, playing: bool) -> "Playback":
         """The same state with play/pause set (inferred for the web player)."""
         return Playback(self.track_id, playing, self.progress_sec, self.duration_sec,
-                        self.event, self.event_ms, self.pause_unknown)
+                        self.event, self.event_ms, self.pause_unknown, self.player_offline)
 
 
 def _connect(url: str, token: str, proto: dict[str, str], **kwargs: Any):
@@ -154,6 +157,18 @@ def _from_unlisted_device(state: dict[str, Any], status: dict[str, Any]) -> bool
     return author not in {(d.get("info") or {}).get("device_id") for d in devices if isinstance(d, dict)}
 
 
+def _author_offline(state: dict[str, Any], status: dict[str, Any]) -> bool:
+    """The listed device that wrote the status is marked offline."""
+    devices = state.get("devices")
+    author = (status.get("version") or {}).get("device_id")
+    if not isinstance(devices, list) or not author:
+        return False
+    for device in devices:
+        if isinstance(device, dict) and (device.get("info") or {}).get("device_id") == author:
+            return bool(device.get("is_offline"))
+    return False
+
+
 def parse_state(state: dict[str, Any], now_ms: int | None = None) -> Playback | None:
     """Current track of a Ynison state message, or None when nothing is queued."""
     player = state.get("player_state")
@@ -173,6 +188,9 @@ def parse_state(state: dict[str, Any], now_ms: int | None = None) -> Playback | 
     if now_ms is None:
         now_ms = int(time.time() * 1000)
     progress_ms, playing = _position(status, now_ms)
+    offline = _author_offline(state, status)
+    if offline:
+        playing = False  # nothing plays on a device that is gone
     try:
         duration = max(int(status.get("duration_ms", 0)) // 1000, 0)
     except (TypeError, ValueError):
@@ -190,6 +208,7 @@ def parse_state(state: dict[str, Any], now_ms: int | None = None) -> Playback | 
         event=(str(item["playable_id"]), version.get("device_id"), version.get("version"), event_ms),
         event_ms=event_ms,
         pause_unknown=bool(status.get("paused", True)) and _from_unlisted_device(state, status),
+        player_offline=offline,
     )
 
 
