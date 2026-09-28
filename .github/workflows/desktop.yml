@@ -79,12 +79,17 @@ jobs:
           name: VEINMusic-windows
           path: installer
 
-      - name: Create GitHub release
+      - name: Publish the installer
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           version="${GITHUB_REF_NAME#desktop-v}"
-          gh release create "${GITHUB_REF_NAME}" installer/*.exe \
-            --title "VEINMusic для Windows ${version}" \
-            --notes "Установщик VEINMusic для Windows ${version}. Скачайте .exe ниже и запустите: приложение встанет в меню «Пуск» и в трей."
+          if gh release view "${GITHUB_REF_NAME}" > /dev/null 2>&1; then
+            # The release was created by hand on GitHub: add the installer to it
+            gh release upload "${GITHUB_REF_NAME}" installer/*.exe --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" installer/*.exe \
+              --title "VEINMusic для Windows ${version}" \
+              --notes "Установщик VEINMusic для Windows ${version}. Скачайте .exe ниже и запустите: приложение встанет в меню «Пуск» и в трей."
+          fi
