@@ -96,3 +96,62 @@ def test_get_detailed_stats(auth_client, db, auth_user):
     assert data["unique_artists"] == 1
     assert data["unique_tracks"] == 1
     assert data["top_artists"][0]["name"] == "DetailArtist"
+
+
+def test_calendar_and_custom_wrapped_use_local_days(auth_client, db, auth_user):
+    year = datetime.datetime.now(datetime.timezone.utc).year
+    first = Track(title="First", artist="Calendar Artist", duration=120)
+    second = Track(title="Second", artist="New Artist", duration=180)
+    db.add_all([first, second])
+    db.flush()
+    db.add_all([
+        # Default profile timezone is UTC+3, so this belongs to January 2.
+        Scrobble(user_id=auth_user.id, track_id=first.id,
+                 played_at=datetime.datetime(year, 1, 1, 21, 30, tzinfo=datetime.timezone.utc),
+                 listened_sec=120, source="yandex"),
+        Scrobble(user_id=auth_user.id, track_id=first.id,
+                 played_at=datetime.datetime(year, 1, 2, 10, 0, tzinfo=datetime.timezone.utc),
+                 listened_sec=120, source="yandex"),
+        Scrobble(user_id=auth_user.id, track_id=second.id,
+                 played_at=datetime.datetime(year, 1, 3, 10, 0, tzinfo=datetime.timezone.utc),
+                 listened_sec=180, source="spotify"),
+    ])
+    db.commit()
+
+    calendar = auth_client.get(
+        f"/api/stats/calendar/{auth_user.username}?year={year}")
+    assert calendar.status_code == 200
+    body = calendar.json()
+    assert [day["date"] for day in body["days"]] == [
+        f"{year}-01-02", f"{year}-01-03"]
+    assert body["days"][0]["scrobbles"] == 2
+    assert body["days"][0]["top_track"]["title"] == "First"
+    assert body["summary"]["active_days"] == 2
+    assert body["summary"]["longest_streak"] == 2
+
+    query = f"period=custom&date_from={year}-01-02&date_to={year}-01-03"
+    detailed = auth_client.get(
+        f"/api/detailed-stats/{auth_user.username}?{query}")
+    assert detailed.status_code == 200
+    stats = detailed.json()
+    assert stats["total_scrobbles"] == 3
+    assert stats["new_artists"] == 2
+    assert stats["peak_day"] == {
+        "date": f"{year}-01-02", "scrobbles": 2}
+    assert stats["comparison"]["change"]["scrobbles"] == 100
+
+    wrapped = auth_client.get(
+        f"/api/stats/wrapped?username={auth_user.username}&{query}")
+    assert wrapped.status_code == 200
+    assert wrapped.json()["total_scrobbles"] == 3
+
+
+def test_stats_reject_invalid_periods(auth_client, auth_user):
+    username = auth_user.username
+    assert auth_client.get(
+        f"/api/detailed-stats/{username}?period=unknown").status_code == 422
+    assert auth_client.get(
+        f"/api/detailed-stats/{username}?period=custom").status_code == 422
+    assert auth_client.get(
+        f"/api/detailed-stats/{username}?period=custom&date_from=2026-02-02&date_to=2026-01-01"
+    ).status_code == 422
