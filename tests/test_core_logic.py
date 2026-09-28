@@ -432,6 +432,16 @@ def test_enrich_achievement_data():
         with patch.object(ach, "get_album_track_count", new=AsyncMock(return_value=12)):
             assert asyncio.run(enrich("specific_album", url, 5, "", "")) == (url, 12, "img", "")
 
+    # Editing an artist achievement sends the stored "Name||url" value back.
+    # It must be enriched again without duplicating the name prefix.
+    stored = f"Artist||{url}"
+    with patch.object(
+            ach, "_link_meta",
+            new=AsyncMock(return_value=("Artist", "img", 23))):
+        assert asyncio.run(
+            enrich("specific_artist", stored, 1, "", "Artist", "tok")
+        ) == (stored, 23, "img", "Artist")
+
 
 def test_album_track_count():
     def handler(request):
@@ -515,6 +525,11 @@ def test_yandex_api_meta_track_artist_and_errors():
         if request.url.path == "/artists/9/brief-info":
             return httpx.Response(200, json={"result": {"artist": {
                 "name": "Джизус", "cover": {"uri": "avatars.yandex.net/b/%%"}}}})
+        if request.url.path == "/artists/9/tracks":
+            assert request.url.params.get("page") == "0"
+            assert request.url.params.get("page-size") == "1"
+            return httpx.Response(200, json={"result": {
+                "tracks": [{"id": "1"}], "pager": {"total": 37}}})
         return httpx.Response(451, json={})
 
     with _mock_http(og_parser, handler):
@@ -522,7 +537,7 @@ def test_yandex_api_meta_track_artist_and_errors():
         assert run(og_parser.yandex_api_meta("https://music.yandex.ru/album/1/track/7", "t")) == (
             "Агата Кристи — Ковёр вертолёт", "https://avatars.yandex.net/a/400x400", 0)
         assert run(og_parser.yandex_api_meta("https://music.yandex.ru/artist/9", "t")) == (
-            "Джизус", "https://avatars.yandex.net/b/400x400", 0)
+            "Джизус", "https://avatars.yandex.net/b/400x400", 37)
         assert run(og_parser.yandex_api_meta("https://music.yandex.ru/album/5", "t")) == (None, None, 0)
         assert run(og_parser.yandex_api_meta("https://music.yandex.ru/album/5", "")) == (None, None, 0)
         assert run(og_parser.yandex_api_meta("https://example.com/x", "t")) == (None, None, 0)
@@ -548,6 +563,27 @@ def test_enrich_falls_back_to_deezer_cover_by_name():
         result = asyncio.run(ach._enrich_achievement_data("specific_album", url, 15, "", "Джизус - Проводник"))
     assert result == (url, 15, "https://dz/1000.jpg", "Джизус - Проводник")
     assert seen[0] == "Джизус Проводник"
+
+
+def test_artist_progress_counts_unique_tracks_not_repeats(db):
+    user = _user(db, "artist_listener")
+    first = _track(db, title="One", artist="SASHA TRAUTVEIN")
+    second = _track(db, title="Two", artist="SASHA TRAUTVEIN")
+    _listen(db, user, first, times=4)
+    _listen(db, user, second)
+
+    achievement = Achievement(
+        name="wake up",
+        description="",
+        rule_type="specific_artist",
+        rule_value=3,
+        rule_target="SASHA TRAUTVEIN||https://music.yandex.ru/artist/23227606",
+    )
+    db.add(achievement)
+    db.commit()
+
+    assert ach._calculate_achievement_progress(db, user, achievement) == 2
+    assert ach._check_specific_artist(user, achievement, db) is False
 
 
 def test_album_progress_counts_tracks_played_from_the_album_link(db):
