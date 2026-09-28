@@ -213,10 +213,32 @@ export interface UserStats {
 /** GET /api/detailed-stats/{username} */
 export interface DetailedStats {
   user: Pick<UserCard, "username" | "display_name" | "avatar_url">;
+  period: {
+    id: string;
+    label: string;
+    start: string | null;
+    end: string | null;
+  };
   total_time_min: number;
   total_scrobbles: number;
   unique_artists: number;
   unique_tracks: number;
+  new_artists: number;
+  peak_day: { date: string; scrobbles: number } | null;
+  comparison: {
+    previous: {
+      scrobbles: number;
+      minutes: number;
+      artists: number;
+      tracks: number;
+    };
+    change: {
+      scrobbles: number;
+      minutes: number;
+      artists: number;
+      tracks: number;
+    };
+  } | null;
   top_artists: { name: string; plays: number; source: string }[];
   top_tracks: TopTrack[];
   top_albums: {
@@ -231,6 +253,32 @@ export interface DetailedStats {
   activity_graph: Record<string, number>;
   hours_activity: Record<string, number>;
   days_activity: Record<string, number>;
+}
+
+export interface CalendarDay {
+  date: string;
+  scrobbles: number;
+  minutes: number;
+  unique_artists: number;
+  top_artist: string;
+  top_track: {
+    artist: string;
+    title: string;
+    cover_url: string | null;
+  };
+}
+
+export interface ListeningCalendar {
+  year: number;
+  available_years: number[];
+  days: CalendarDay[];
+  summary: {
+    active_days: number;
+    total_scrobbles: number;
+    total_minutes: number;
+    longest_streak: number;
+    best_day: CalendarDay | null;
+  };
 }
 
 export interface CompatibilityResult {
@@ -302,6 +350,11 @@ export interface WrappedStats {
   status: string;
   top_artist: string;
   total_minutes: number;
+  total_scrobbles?: number;
+  unique_artists?: number;
+  unique_tracks?: number;
+  new_artists?: number;
+  peak_day?: { date: string; scrobbles: number } | null;
 }
 
 export interface FollowStats {

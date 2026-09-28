@@ -1,11 +1,13 @@
 """Listening statistics, leaderboard and global feed."""
 
-from datetime import UTC, datetime, timedelta, timezone
+from collections import Counter
+from datetime import UTC, date, datetime, timedelta, timezone
 from typing import Annotated, Any
 
 from fastapi import (
     APIRouter,
     Depends,
+    HTTPException,
     Request,
 )
 from sqlalchemy import func, text
@@ -37,20 +39,162 @@ LEADERBOARD_CACHE_TTL = 60
 LEADERBOARD_SIZE = 50
 WEEK_CACHE_KEY = "public-week:v1"
 WEEK_CACHE_TTL = 300
+MAX_CUSTOM_PERIOD_DAYS = 366
+
+
+def _user_timezone(user: User) -> timezone:
+    location = user.profile.location if user.profile else ""
+    return timezone(timedelta(hours=get_user_timezone_offset(location)))
+
+
+def _period_bounds(
+        user: User,
+        period: str,
+        date_from: str | None,
+        date_to: str | None) -> tuple[datetime | None, datetime | None, str]:
+    """UTC bounds (end exclusive) and a human-readable period label."""
+    user_tz = _user_timezone(user)
+    now_local = datetime.now(UTC).astimezone(user_tz)
+    labels = {
+        "7d": "За последние 7 дней",
+        "30d": "За последние 30 дней",
+        "90d": "За последние 3 месяца",
+        "year": f"С начала {now_local.year} года",
+        "all": "За всё время",
+        "custom": "Выбранный период",
+    }
+    if period not in labels:
+        raise HTTPException(422, "Неизвестный период")
+    if period == "all":
+        return None, None, labels[period]
+
+    if period == "custom":
+        if not date_from or not date_to:
+            raise HTTPException(422, "Укажите начало и конец периода")
+        try:
+            first = date.fromisoformat(date_from)
+            last = date.fromisoformat(date_to)
+        except ValueError as exc:
+            raise HTTPException(422, "Дата должна быть в формате YYYY-MM-DD") from exc
+        if first > last:
+            raise HTTPException(422, "Начало периода не может быть позже конца")
+        if (last - first).days + 1 > MAX_CUSTOM_PERIOD_DAYS:
+            raise HTTPException(422, "Период не может быть длиннее 366 дней")
+        start_local = datetime.combine(first, datetime.min.time(), tzinfo=user_tz)
+        end_local = datetime.combine(last + timedelta(days=1), datetime.min.time(), tzinfo=user_tz)
+        label = f"{first.strftime('%d.%m.%Y')} — {last.strftime('%d.%m.%Y')}"
+        return start_local.astimezone(UTC), end_local.astimezone(UTC), label
+
+    end_local = datetime.combine(
+        now_local.date() + timedelta(days=1), datetime.min.time(), tzinfo=user_tz)
+    if period == "year":
+        start_local = datetime(now_local.year, 1, 1, tzinfo=user_tz)
+    else:
+        days = {"7d": 7, "30d": 30, "90d": 90}[period]
+        start_local = datetime.combine(
+            now_local.date() - timedelta(days=days - 1),
+            datetime.min.time(),
+            tzinfo=user_tz,
+        )
+    return start_local.astimezone(UTC), end_local.astimezone(UTC), labels[period]
+
+
+def _local_period_dates(
+        user: User,
+        start: datetime | None,
+        end: datetime | None) -> tuple[str | None, str | None]:
+    """Inclusive local calendar dates for API metadata."""
+    if start is None or end is None:
+        return None, None
+    user_tz = _user_timezone(user)
+    return (
+        start.astimezone(user_tz).date().isoformat(),
+        (end - timedelta(microseconds=1)).astimezone(user_tz).date().isoformat(),
+    )
+
+
+def _counted_filter(user_id: int, start: datetime | None = None, end: datetime | None = None):
+    filters = [
+        Scrobble.user_id == user_id,
+        Scrobble.listened_sec * 100
+        >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,
+    ]
+    if start is not None:
+        filters.append(Scrobble.played_at >= start)
+    if end is not None:
+        filters.append(Scrobble.played_at < end)
+    return filters
+
+
+def _period_totals(db: Session, filters) -> dict[str, int]:
+    row = db.query(
+        func.count(Scrobble.id),
+        func.coalesce(func.sum(Scrobble.listened_sec), 0),
+        func.count(func.distinct(Track.artist)),
+        func.count(func.distinct(Track.id)),
+    ).join(Track).filter(*filters).one()
+    return {
+        "scrobbles": int(row[0] or 0),
+        "minutes": int((row[1] or 0) // 60),
+        "artists": int(row[2] or 0),
+        "tracks": int(row[3] or 0),
+    }
+
+
+def _change_percent(current: int, previous: int) -> int:
+    if previous == 0:
+        return 100 if current > 0 else 0
+    return round((current - previous) / previous * 100)
+
+
+def _period_comparison(
+        db: Session,
+        user_id: int,
+        start: datetime | None,
+        end: datetime | None,
+        current: dict[str, int]) -> dict[str, Any] | None:
+    if start is None or end is None:
+        return None
+    duration = end - start
+    previous = _period_totals(db, _counted_filter(user_id, start - duration, start))
+    return {
+        "previous": previous,
+        "change": {key: _change_percent(current[key], previous[key]) for key in current},
+    }
+
+
+def _new_artist_count(db: Session, user_id: int, start: datetime | None, end: datetime | None) -> int:
+    if start is None:
+        return 0
+    current_artists = {
+        row[0] for row in db.query(Track.artist).join(Scrobble).filter(
+            *_counted_filter(user_id, start, end)).distinct().all() if row[0]
+    }
+    if not current_artists:
+        return 0
+    known_before = {
+        row[0] for row in db.query(Track.artist).join(Scrobble).filter(
+            *_counted_filter(user_id, None, start),
+            Track.artist.in_(list(current_artists))).distinct().all() if row[0]
+    }
+    return len(current_artists - known_before)
 
 # --- /api/stats/wrapped ---
 
 
 @router.get("/api/stats/wrapped",
             responses={404: {"description": "User not found"}})
-def get_wrapped_stats(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
+def get_wrapped_stats(
+        username: str,
+        request: Request,
+        db: Annotated[Session, Depends(get_db)],
+        period: str = "30d",
+        date_from: str | None = None,
+        date_to: str | None = None):
     user = _get_visible_user(username, request, db)
-    last_month = datetime.now(UTC) - timedelta(days=30)
-    base_filter = [
-        Scrobble.user_id == user.id,
-        Scrobble.played_at >= last_month,
-        Scrobble.listened_sec *
-        100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85]
+    period_start, period_end, period_label = _period_bounds(
+        user, period, date_from, date_to)
+    base_filter = _counted_filter(int(user.id), period_start, period_end)
     top_artist = db.query(
         Track.artist,
         func.count(
@@ -63,11 +207,29 @@ def get_wrapped_stats(username: str, request: Request, db: Annotated[Session, De
         func.sum(
             Scrobble.listened_sec)).join(Track).filter(
         *base_filter).scalar() or 0
+    totals = _period_totals(db, base_filter)
+    hours_activity, days_activity, activity_graph = _get_activity_stats(
+        db, base_filter, get_user_timezone_offset(
+            user.profile.location if user.profile else ""))
+    del hours_activity, days_activity
+    peak_day = None
+    if activity_graph:
+        peak_date, peak_count = max(
+            activity_graph.items(), key=lambda item: (item[1], item[0]))
+        peak_day = {"date": peak_date, "scrobbles": peak_count}
     return {
-        "period": "За последние 30 дней",
+        "period": period_label,
         "top_artist": top_artist[0] if top_artist else "Нет данных",
         "total_minutes": int(total_min // 60),
-        "status": "Legendary" if total_min > 5000 else "Active"
+        "status": "Legendary" if total_min > 5000 else "Active",
+        "total_scrobbles": totals["scrobbles"],
+        "unique_artists": totals["artists"],
+        "unique_tracks": totals["tracks"],
+        "new_artists": _new_artist_count(
+            db, int(user.id), period_start, period_end),
+        "peak_day": peak_day,
+        "comparison": _period_comparison(
+            db, int(user.id), period_start, period_end, totals),
     }
 
 
@@ -82,45 +244,49 @@ def get_global_feed(db: Annotated[Session, Depends(get_db)]):
 
 
 def _get_activity_stats(
-        db: Session, base_filter) -> tuple[dict[str, int], dict[str, int], dict[str, int]]:
+        db: Session,
+        base_filter,
+        timezone_offset: int = 0) -> tuple[dict[str, int], dict[str, int], dict[str, int]]:
     try:
         is_postgres = db.get_bind().dialect.name == "postgresql"
     except Exception:  # NOSONAR
         is_postgres = True
 
+    timezone_offset = max(-12, min(14, int(timezone_offset)))
     if is_postgres:
+        local_played_at = Scrobble.played_at + timedelta(hours=timezone_offset)
         hours_raw = db.query(
             func.to_char(
-                Scrobble.played_at,
+                local_played_at,
                 'HH24'),
             func.count(
                 Scrobble.id)).join(Track).filter(
             *
             base_filter).group_by(
                     func.to_char(
-                        Scrobble.played_at,
+                        local_played_at,
                         'HH24')).all()
         days_raw = db.query(
             func.to_char(
-                Scrobble.played_at,
+                local_played_at,
                 'ID'),
             func.count(
                 Scrobble.id)).join(Track).filter(
             *
             base_filter).group_by(
                     func.to_char(
-                        Scrobble.played_at,
+                        local_played_at,
                         'ID')).all()
         graph_raw = db.query(
             func.to_char(
-                Scrobble.played_at,
+                local_played_at,
                 'YYYY-MM-DD'),
             func.count(
                 Scrobble.id)).join(Track).filter(
             *
             base_filter).group_by(
                     func.to_char(
-                        Scrobble.played_at,
+                        local_played_at,
                         'YYYY-MM-DD')).all()
         day_names = {
             '1': 'Пн',
@@ -131,39 +297,41 @@ def _get_activity_stats(
             '6': 'Сб',
             '7': 'Вс'}
     else:
+        local_played_at = func.datetime(
+            Scrobble.played_at, f"{timezone_offset:+d} hours")
         hours_raw = db.query(
             func.strftime(
                 '%H',
-                Scrobble.played_at),
+                local_played_at),
             func.count(
                 Scrobble.id)).join(Track).filter(
             *
             base_filter).group_by(
                     func.strftime(
                         '%H',
-                        Scrobble.played_at)).all()
+                        local_played_at)).all()
         days_raw = db.query(
             func.strftime(
                 '%w',
-                Scrobble.played_at),
+                local_played_at),
             func.count(
                 Scrobble.id)).join(Track).filter(
             *
             base_filter).group_by(
                     func.strftime(
                         '%w',
-                        Scrobble.played_at)).all()
+                        local_played_at)).all()
         graph_raw = db.query(
             func.strftime(
                 '%Y-%m-%d',
-                Scrobble.played_at),
+                local_played_at),
             func.count(
                 Scrobble.id)).join(Track).filter(
             *
             base_filter).group_by(
                     func.strftime(
                         '%Y-%m-%d',
-                        Scrobble.played_at)).all()
+                        local_played_at)).all()
         day_names = {
             '1': 'Пн',
             '2': 'Вт',
@@ -197,25 +365,13 @@ def get_detailed_stats(username: str,
                        request: Request,
                        db: Annotated[Session,
                                      Depends(get_db)],
-                       period: str = "all"):
+                       period: str = "all",
+                       date_from: str | None = None,
+                       date_to: str | None = None):
     user = _get_visible_user(username, request, db)
-
-    base_filter = [
-        Scrobble.user_id == user.id,
-        Scrobble.listened_sec *
-        100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85]
-    if period == "7d":
-        base_filter.append(
-            Scrobble.played_at >= datetime.now(
-                UTC) -
-            timedelta(
-                days=7))
-    elif period == "30d":
-        base_filter.append(
-            Scrobble.played_at >= datetime.now(
-                UTC) -
-            timedelta(
-                days=30))
+    period_start, period_end, period_label = _period_bounds(
+        user, period, date_from, date_to)
+    base_filter = _counted_filter(int(user.id), period_start, period_end)
 
     # 1. General Stats
     total_scrobbles = db.query(
@@ -304,15 +460,40 @@ def get_detailed_stats(username: str,
 
     # 6. Activity
     hours_activity, days_activity, activity_graph = _get_activity_stats(
-        db, base_filter)
+        db, base_filter, get_user_timezone_offset(
+            user.profile.location if user.profile else ""))
+
+    current_totals = {
+        "scrobbles": int(total_scrobbles),
+        "minutes": int(total_sec // 60),
+        "artists": int(unique_artists),
+        "tracks": int(unique_tracks),
+    }
+    comparison = _period_comparison(
+        db, int(user.id), period_start, period_end, current_totals)
+    peak_day = None
+    if activity_graph:
+        peak_date, peak_count = max(
+            activity_graph.items(), key=lambda item: (item[1], item[0]))
+        peak_day = {"date": peak_date, "scrobbles": peak_count}
+    local_start, local_end = _local_period_dates(
+        user, period_start, period_end)
 
     return {"user": {"username": user.username,
                      "display_name": user.profile.display_name or user.username,
                      "avatar_url": user.profile.avatar_url},
+            "period": {"id": period,
+                       "label": period_label,
+                       "start": local_start,
+                       "end": local_end},
             "total_time_min": int(total_sec // 60),
             "total_scrobbles": total_scrobbles,
             "unique_artists": unique_artists,
             "unique_tracks": unique_tracks,
+            "new_artists": _new_artist_count(
+                db, int(user.id), period_start, period_end),
+            "peak_day": peak_day,
+            "comparison": comparison,
             "top_artists": [{"name": r[0],
                              "plays": r[1],
                              "source": r[2]} for r in top_artists_raw],
@@ -446,6 +627,119 @@ def get_activity(username: str, request: Request, db: Annotated[Session, Depends
         activity_dict[date_str] = activity_dict.get(date_str, 0) + 1
 
     return activity_dict
+
+
+def _longest_day_streak(day_keys: list[str]) -> int:
+    longest = current = 0
+    previous: date | None = None
+    for key in sorted(day_keys):
+        current_day = date.fromisoformat(key)
+        current = current + 1 if previous and current_day - previous == timedelta(days=1) else 1
+        longest = max(longest, current)
+        previous = current_day
+    return longest
+
+
+# --- /api/stats/calendar/{username} ---
+@router.get("/api/stats/calendar/{username}",
+            responses={404: {"description": "User not found"}})
+def get_listening_calendar(
+        username: str,
+        request: Request,
+        db: Annotated[Session, Depends(get_db)],
+        year: int | None = None):
+    """One calendar year of listening, grouped in the user's local timezone."""
+    user = _get_visible_user(username, request, db)
+    user_tz = _user_timezone(user)
+    current_year = datetime.now(UTC).astimezone(user_tz).year
+    selected_year = year or current_year
+    if selected_year < 2000 or selected_year > current_year:
+        raise HTTPException(422, "Недоступный год")
+
+    local_start = datetime(selected_year, 1, 1, tzinfo=user_tz)
+    local_end = datetime(selected_year + 1, 1, 1, tzinfo=user_tz)
+    rows = db.query(
+        Scrobble.played_at,
+        Scrobble.listened_sec,
+        Track.artist,
+        Track.title,
+        Track.cover_url,
+    ).join(Track).filter(
+        *_counted_filter(
+            int(user.id), local_start.astimezone(UTC), local_end.astimezone(UTC))
+    ).all()
+
+    days: dict[str, dict[str, Any]] = {}
+    artist_counts: dict[str, Counter] = {}
+    track_counts: dict[str, Counter] = {}
+    track_covers: dict[tuple[str, str], str | None] = {}
+    for played_at, listened_sec, artist, title, cover_url in rows:
+        if played_at.tzinfo is None:
+            played_at = played_at.replace(tzinfo=UTC)
+        key = played_at.astimezone(user_tz).date().isoformat()
+        day = days.setdefault(key, {
+            "date": key,
+            "scrobbles": 0,
+            "seconds": 0,
+            "artists": set(),
+        })
+        day["scrobbles"] += 1
+        day["seconds"] += int(listened_sec or 0)
+        if artist:
+            day["artists"].add(artist)
+        artist_counts.setdefault(key, Counter())[artist or "Неизвестный артист"] += 1
+        track_key = (artist or "Неизвестный артист", title or "Без названия")
+        track_counts.setdefault(key, Counter())[track_key] += 1
+        track_covers[track_key] = cover_url
+
+    calendar_days = []
+    for key in sorted(days):
+        day = days[key]
+        top_artist = artist_counts[key].most_common(1)[0][0]
+        top_track = track_counts[key].most_common(1)[0][0]
+        calendar_days.append({
+            "date": key,
+            "scrobbles": day["scrobbles"],
+            "minutes": day["seconds"] // 60,
+            "unique_artists": len(day["artists"]),
+            "top_artist": top_artist,
+            "top_track": {"artist": top_track[0],
+                          "title": top_track[1],
+                          "cover_url": track_covers.get(top_track)},
+        })
+
+    first_play, last_play = db.query(
+        func.min(Scrobble.played_at), func.max(Scrobble.played_at)
+    ).join(Track).filter(*_counted_filter(int(user.id))).one()
+    available_years: list[int] = []
+    if first_play and last_play:
+        if first_play.tzinfo is None:
+            first_play = first_play.replace(tzinfo=UTC)
+        if last_play.tzinfo is None:
+            last_play = last_play.replace(tzinfo=UTC)
+        first_year = first_play.astimezone(user_tz).year
+        last_year = last_play.astimezone(user_tz).year
+        available_years = list(range(last_year, first_year - 1, -1))
+    if current_year not in available_years:
+        available_years.insert(0, current_year)
+
+    best_day = max(
+        calendar_days,
+        key=lambda item: (item["scrobbles"], item["date"]),
+        default=None,
+    )
+    return {
+        "year": selected_year,
+        "available_years": available_years,
+        "days": calendar_days,
+        "summary": {
+            "active_days": len(calendar_days),
+            "total_scrobbles": sum(day["scrobbles"] for day in calendar_days),
+            "total_minutes": sum(day["seconds"] for day in days.values()) // 60,
+            "longest_streak": _longest_day_streak(list(days)),
+            "best_day": best_day,
+        },
+    }
 
 
 # --- /api/current-track/{username} ---

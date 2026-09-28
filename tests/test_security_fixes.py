@@ -144,6 +144,7 @@ def test_webhook_to_internal_address_rejected(client):
 @pytest.mark.parametrize("path", [
     "/api/stats/henry",
     "/api/detailed-stats/henry",
+    "/api/stats/calendar/henry",
     "/api/activity/henry",
     "/api/stats/wrapped?username=henry",
     "/api/user/mood?username=henry",
