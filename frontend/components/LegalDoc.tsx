@@ -6,6 +6,16 @@ export interface LegalSection {
   list?: string[];
 }
 
+export function legalSection(
+  title: string,
+  text: string,
+  ...list: string[]
+): LegalSection {
+  const section: LegalSection = { title, text };
+  if (list.length > 0) section.list = list;
+  return section;
+}
+
 const DOCS = [
   { href: "/privacy", label: "Конфиденциальность" },
   { href: "/terms", label: "Условия использования" },
