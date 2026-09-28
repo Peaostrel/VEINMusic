@@ -365,26 +365,34 @@ async def _link_meta(target_val: str, yandex_token: str | None) -> tuple[str | N
     return title, img, tracks
 
 
+def _target_link(target_val: str) -> str | None:
+    """Raw URL, including stored artist targets in the "Name||url" form."""
+    candidate = target_val.rsplit("||", 1)[-1].strip()
+    return candidate if candidate.startswith("http") else None
+
+
 async def _enrich_achievement_data(rule_type: str, target_val: str, val: int, t_img: str, meta_text: str,
                                    yandex_token: str | None = None):
     is_valid_type = rule_type in ["specific_track", "specific_album", "specific_artist"]
-    is_http_target = target_val and target_val.startswith("http")
+    target_link = _target_link(target_val)
 
-    if not is_valid_type or not is_http_target:
+    if not is_valid_type or not target_link:
         return target_val, val, t_img, meta_text
 
-    is_internal_image = YANDEX_AVATARS in target_val or SCDN_CO in target_val
+    is_internal_image = YANDEX_AVATARS in target_link or SCDN_CO in target_link
     if is_internal_image:
-        return target_val, val, target_val, meta_text
+        return target_val, val, target_link, meta_text
 
-    title, img, api_tracks = await _link_meta(target_val, yandex_token)
+    title, img, api_tracks = await _link_meta(target_link, yandex_token)
     t_img = img or await _deezer_cover(rule_type, meta_text or title) or t_img
-    target_val, meta_text = _apply_link_title(rule_type, title, target_val, meta_text)
+    target_val, meta_text = _apply_link_title(
+        rule_type, title, target_link, meta_text)
 
-    if rule_type == "specific_album":
-        track_count = api_tracks or await get_album_track_count(target_val)
-        if track_count > 0:
-            val = track_count
+    track_count = api_tracks
+    if rule_type == "specific_album" and not track_count:
+        track_count = await get_album_track_count(target_link)
+    if rule_type in ["specific_album", "specific_artist"] and track_count > 0:
+        val = track_count
 
     return target_val, val, t_img, meta_text
 
