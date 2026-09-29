@@ -1,0 +1,138 @@
+name: Desktop app (Windows)
+
+# Builds the VEINMusic for Windows installer (desktop/). When a new version
+# reaches VEIN (the version in tauri.conf.json has no desktop-vX.Y.Z tag yet),
+# the release job creates the tag and a GitHub release with the installer;
+# the app checks those releases for updates. Pushing a tag by hand works too.
+on:
+  push:
+    branches:
+      - VEIN
+    tags:
+      - "desktop-v*"
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop.yml"
+  pull_request:
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.check.outputs.tag }}
+      release: ${{ steps.check.outputs.release }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Versions match and release is due
+        id: check
+        run: |
+          app=$(jq -r .version desktop/src-tauri/tauri.conf.json)
+          npm_version=$(jq -r .version desktop/package.json)
+          cargo_version=$(sed -n 's/^version = "\(.*\)"$/\1/p' desktop/src-tauri/Cargo.toml | head -n 1)
+          if [ "${npm_version}" != "${app}" ] || [ "${cargo_version}" != "${app}" ]; then
+            echo "::error::Versions differ: tauri.conf.json ${app}, package.json ${npm_version}, Cargo.toml ${cargo_version}"
+            exit 1
+          fi
+          tag="desktop-v${app}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+          release=false
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            if [ "${GITHUB_REF_NAME}" != "${tag}" ]; then
+              echo "::error::Tag ${GITHUB_REF_NAME} does not match version ${app} in tauri.conf.json"
+              exit 1
+            fi
+            release=true
+          elif [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            # A new version on VEIN: release it unless the tag already exists
+            if git ls-remote --exit-code --tags origin "refs/tags/${tag}" > /dev/null; then
+              echo "${tag} already exists: nothing to release"
+            else
+              echo "Releasing ${tag}"
+              release=true
+            fi
+          fi
+          echo "release=${release}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build Windows installer
+    needs: version
+    # A push to VEIN without a new version was already built in its PR
+    if: github.event_name != 'push' || needs.version.outputs.release == 'true'
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy
+          rustup default stable
+
+      - run: npm ci
+
+      - name: Unit tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+
+      - name: Clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+
+      - name: Build installer
+        env:
+          # Discord application for the "listening" status (optional)
+          VEIN_DISCORD_CLIENT_ID: ${{ vars.VEIN_DISCORD_CLIENT_ID }}
+        run: npx tauri build
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: VEINMusic-windows
+          path: desktop/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: [version, build]
+    if: needs.version.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: VEINMusic-windows
+          path: installer
+
+      - name: Publish the installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          version="${TAG#desktop-v}"
+          if gh release view "${TAG}" > /dev/null 2>&1; then
+            # The release was created by hand on GitHub: add the installer to it
+            gh release upload "${TAG}" installer/*.exe --clobber
+          else
+            # Creates the tag on this commit when it does not exist yet
+            gh release create "${TAG}" installer/*.exe \
+              --target "${GITHUB_SHA}" \
+              --title "VEINMusic для Windows ${version}" \
+              --notes "Установщик VEINMusic для Windows ${version}. Скачайте .exe ниже и запустите: приложение встанет в меню «Пуск» и в трей."
+          fi

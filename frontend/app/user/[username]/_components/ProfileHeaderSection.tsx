@@ -7,6 +7,7 @@ import { Meter } from "@/components/ui";
 import { fallbackOnce } from "@/app/lib/img";
 import { formatNumber, plural } from "@/app/lib/plural";
 import type { getNextRankInfo } from "@/app/lib/ranks";
+import { AchievementChip } from "./AchievementChip";
 import type { AchievementInfo, MoodInfo, UserInfo } from "@/app/lib/types";
 
 export interface ProfileHeaderSectionProps {
@@ -24,45 +25,6 @@ export interface ProfileHeaderSectionProps {
   nextRank: ReturnType<typeof getNextRankInfo>;
   totalScrobbles: number;
   actions: React.ReactNode;
-}
-
-function AchievementChip({ a }: Readonly<{ a: AchievementInfo }>) {
-  const body = (
-    <>
-      {a.target_image ? (
-        <img
-          src={a.target_image}
-          alt=""
-          className="h-5 w-5 shrink-0 rounded object-cover"
-        />
-      ) : (
-        <span className="text-sm leading-none" aria-hidden="true">
-          {a.icon}
-        </span>
-      )}
-      <span className="text-xs font-medium">{a.name}</span>
-    </>
-  );
-  const title = [a.description, a.reward_xp > 0 ? `+${a.reward_xp} XP` : ""]
-    .filter(Boolean)
-    .join(" · ");
-  const cls =
-    "inline-flex h-8 items-center gap-2 rounded-md border border-line px-2.5 transition-colors hover:bg-surface-2";
-  return a.rule_target?.startsWith("http") ? (
-    <a
-      href={a.rule_target}
-      target="_blank"
-      rel="noopener noreferrer"
-      title={title}
-      className={cls}
-    >
-      {body}
-    </a>
-  ) : (
-    <span title={title} className={cls}>
-      {body}
-    </span>
-  );
 }
 
 export function ProfileHeaderSection({

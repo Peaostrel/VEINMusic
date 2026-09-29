@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "VEINMusic",
+  "version": "0.1.1",
+  "identifier": "guru.vein.music",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "VEINMusic",
+    "category": "Music",
+    "shortDescription": "VEINMusic для Windows",
+    "longDescription": "Сайт VEINMusic в отдельном окне и скробблинг всего, что играет на компьютере: Spotify, приложение Яндекс Музыки, AIMP, foobar2000 и других плееров.",
+    "copyright": "© VEINMusic",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
+    "windows": {
+      "nsis": {
+        "languages": ["Russian", "English"],
+        "displayLanguageSelector": false,
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "sidebarImage": "installer/sidebar.bmp",
+        "headerImage": "installer/header.bmp",
+        "uninstallerHeaderImage": "installer/header.bmp",
+        "installerHooks": "installer/hooks.nsh"
+      }
+    }
+  }
+}

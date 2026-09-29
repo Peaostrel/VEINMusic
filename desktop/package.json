@@ -1,0 +1,14 @@
+{
+  "name": "veinmusic-desktop",
+  "private": true,
+  "version": "0.1.1",
+  "description": "VEINMusic для Windows: сайт в окне и скробблинг всего, что играет на компьютере",
+  "scripts": {
+    "tauri": "tauri",
+    "build": "tauri build",
+    "dev": "tauri dev"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

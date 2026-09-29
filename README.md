@@ -37,9 +37,13 @@
   * Считывает трек и прогресс воспроизведения на вкладках **Яндекс Музыки**, **Spotify**, **VK Музыки**, **YouTube Music**, **Apple Music** и **SoundCloud**.
   * **Офлайн-очередь**: если сервер недоступен, прослушивания сохраняются в хранилище расширения (до 500 штук) и досылаются раз в минуту через `chrome.alarms`.
   * **Подключение по коду**: расширение показывает короткий код, пользователь подтверждает его на странице `/link`, и расширение получает собственный ключ. Ключ можно отозвать в настройках.
-* **Десктопный клиент (`desktop_client/`)**:
-  * **Windows**: системные медиаэлементы управления (SMTC) и, как запасной вариант, чтение заголовков окон **Spotify**, **AIMP**, **foobar2000**, **VLC**, **VK** и **Яндекс Музыки**.
-  * **Linux**: любые плееры с поддержкой MPRIS (через `playerctl`).
+* **Приложение для Windows (`desktop/`, Tauri 2)**:
+  * Сайт VEINMusic в отдельном окне и значок в трее; запускается вместе с Windows и работает в фоне.
+  * Скробблит всё, что видно в системной панели медиа Windows: **Spotify** (без платного API), приложение **Яндекс Музыки**, **AIMP**, **foobar2000**, **VLC**, **Apple Music**, вкладки браузеров. Источники включаются по отдельности.
+  * Подключение аккаунта по коду, как у расширения; ключ хранится в диспетчере учётных данных Windows.
+  * Проверка обновлений через релизы GitHub, статус в Discord. Установщик собирает GitHub Actions ([подробнее](desktop/README.md)).
+* **Консольный клиент (`desktop_client/`, Python)** — для Linux:
+  * **Linux**: любые плееры с поддержкой MPRIS (через `playerctl`); на Windows — SMTC и заголовки окон.
   * **Discord Rich Presence** с обложкой, названием трека, артистом и таймером.
   * Локальная очередь `~/.veinmusic/queue.json`, которая досылается при восстановлении сети.
 * **Облачный скробблинг Spotify**: фоновый опрос того, что играет в **Spotify**, без открытых вкладок и плееров. Работает как задача воркера с распределённой блокировкой, поэтому опрос не дублируется при нескольких экземплярах сервера.
@@ -156,7 +160,7 @@ docker compose exec backend python -m app.cli set-role <username> admin
 
 * **Backend**: Python 3.11, **FastAPI**, SQLAlchemy 2.0, Alembic, PostgreSQL, Redis, ARQ, Pydantic v2, cryptography, PyJWT, websockets (Ynison), Sentry (опционально).
 * **Frontend**: **Next.js 16** (App Router, React 19), TypeScript 6, Tailwind CSS 4, Framer Motion, Recharts, Lucide.
-* **Desktop**: Python 3, WinRT (Windows SMTC), `playerctl`/MPRIS (Linux), Discord IPC.
+* **Desktop**: Tauri 2 (Rust, WebView2), Windows SMTC; консольный клиент на Python 3 (`playerctl`/MPRIS), Discord IPC.
 * **Расширение**: JavaScript, Chrome Extensions API (Manifest V3), совместимо с Firefox.
 * **CI/CD и качество**: GitHub Actions (тесты на SQLite и PostgreSQL, проверка миграций), ruff, flake8, mypy, bandit, ESLint 9, Prettier, Playwright E2E, CodeQL, SonarQube Cloud, GitGuardian, Dependabot.
 
@@ -174,7 +178,8 @@ VEINMusic/
 │   ├── services/                 # Бизнес-логика (антифрод, рекомендации, Ynison, экспорт, импорт, вебхуки, push, OG)
 │   ├── worker.py                 # Фоновый воркер ARQ
 │   └── main.py                   # Точка входа приложения
-├── desktop_client/               # Десктопный клиент для Windows и Linux (SMTC/MPRIS/Discord RPC)
+├── desktop/                      # Приложение для Windows (Tauri 2): окно сайта, трей, скробблинг из панели медиа
+├── desktop_client/               # Консольный клиент на Python (Linux: MPRIS, Discord RPC)
 ├── frontend/                     # Веб-приложение Next.js 16 (React 19)
 │   ├── app/                      # Страницы и маршруты (about, admin, auth, developers, feed, link, together, user…)
 │   ├── components/               # Общие компоненты (PWARegistration, StatsCharts, GlobalAnnouncementBanner)
@@ -252,7 +257,11 @@ npm run dev
 ```
 Фронтенд будет доступен по адресу: `http://localhost:3000`.
 
-### 5. Запуск нативного десктопного клиента (Опционально)
+### 5. Приложение для Windows (Опционально)
+Установщик публикуется в [релизах](https://github.com/Peaostrel/VEINMusic/releases) с тегом `desktop-v*`;
+сборка из исходников описана в [desktop/README.md](desktop/README.md).
+
+### 5а. Консольный клиент на Python (Опционально)
 ```bash
 cd desktop_client
 pip install -r requirements.txt

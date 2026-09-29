@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Настройки VEINMusic</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <header class="head">
+      <span class="tile" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="26" height="26">
+          <path d="M6 6V12.5M11 10V18M16 15V26M21 10V18M26 6V12.5" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <div class="brand"><b>VEIN</b>Music <span class="beta">BETA</span></div>
+      <span class="version" id="version"></span>
+    </header>
+
+    <div class="banner banner-update" id="update" hidden>
+      <span id="update-text"></span>
+      <button type="button" class="btn btn-small" id="update-open">Скачать</button>
+    </div>
+    <output class="banner" id="message" hidden></output>
+
+    <section class="card" aria-labelledby="account-title">
+      <h2 id="account-title">Аккаунт</h2>
+      <div id="account-none" hidden>
+        <p class="muted">Подключите аккаунт VEINMusic, чтобы музыка с этого компьютера попадала в ваш профиль.</p>
+        <button type="button" class="btn btn-primary" id="pair">Подключить аккаунт</button>
+      </div>
+      <div id="account-pairing" hidden>
+        <p class="muted">Страница подтверждения открыта в окне VEINMusic. Проверьте, что там этот код, и нажмите «Подключить».</p>
+        <p class="code" id="code"></p>
+        <button type="button" class="btn" id="cancel">Отмена</button>
+      </div>
+      <div id="account-ready" class="row" hidden>
+        <span class="user" id="username"></span>
+        <span class="actions">
+          <button type="button" class="btn btn-small" id="profile">Профиль</button>
+          <button type="button" class="btn btn-small" id="logout">Отключить</button>
+        </span>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="now-title">
+      <h2 id="now-title">Сейчас играет</h2>
+      <div id="now" class="now"></div>
+    </section>
+
+    <section class="card" aria-labelledby="sources-title">
+      <h2 id="sources-title">Скробблинг</h2>
+      <div class="toggles" id="toggles"></div>
+    </section>
+
+    <p class="foot">Окно VEINMusic можно закрыть: приложение останется в трее и продолжит скробблить.</p>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

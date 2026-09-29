@@ -52,6 +52,10 @@ SPAM_RETRY_SEC = 1.2
 # where playback should be is a pause; one at the paused position a resume
 PAUSE_SLACK_SEC = 3
 RESUME_SLACK_SEC = 1
+# After a start (track switch, resume, seek) the web player may send a second
+# event once the audio actually plays, at about the same position: that is
+# not a pause
+FOLLOW_UP_SEC = 4
 # A switch this late after the track's natural end still ends it normally
 CONFIRM_SLACK_SEC = 30
 # Without a known length, a stretch longer than this is not trusted
@@ -141,7 +145,8 @@ class UserListener:
         }
 
     async def on_playback(self, playback: Playback | None) -> None:
-        if playback is not None and playback.event and playback.event == self._last_event:
+        if playback is not None and playback.event and playback.event == self._last_event \
+                and not self._went_offline(playback):
             return  # the same player event pushed again
         expected = self.current_position()
         playback = self._interpret(playback, expected)
@@ -174,6 +179,11 @@ class UserListener:
         if not playback.pause_unknown:
             return playback
         return playback.with_playing(self._web_playing(playback, expected))
+
+    def _went_offline(self, playback: Playback) -> bool:
+        """The playing device has just gone offline: Ynison repeats its last
+        event with the device marked offline, which stops the playback."""
+        return playback.player_offline and self.playback is not None and self.playback.playing
 
     def _restarted(self, playback: Playback | None, expected: tuple[int, bool] | None) -> bool:
         """The same track started over (repeat, seek back to the start)."""
@@ -217,7 +227,10 @@ class UserListener:
             return prev is not None or self._fresh(pb)
         progress, playing = expected
         if playing:
-            return abs(pb.progress_sec - progress) > PAUSE_SLACK_SEC  # else paused; a jump is a seek
+            if abs(pb.progress_sec - progress) > PAUSE_SLACK_SEC:
+                return True  # a seek
+            # At the expected position: a pause, unless it follows a start
+            return _now_ms() - self.received_ms <= FOLLOW_UP_SEC * 1000
         return abs(pb.progress_sec - progress) <= RESUME_SLACK_SEC  # else a seek while paused
 
     @staticmethod
