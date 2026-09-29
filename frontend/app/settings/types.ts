@@ -1,4 +1,5 @@
-import type { UserInfo } from "@/app/lib/types";
+import type { UserInfo, UserPreferences } from "@/app/lib/types";
+import { DEFAULT_PREFERENCES, mergePreferences } from "@/app/lib/preferences";
 
 export type { Country, SocialLink } from "@/app/lib/types";
 
@@ -26,11 +27,18 @@ export interface SettingsData {
   syncPrivacy: string;
   yandexToken: string;
   lastfmUsername: string;
+  preferences: UserPreferences;
 }
 
 export type UpdateData = <K extends keyof SettingsData>(
   key: K,
   value: SettingsData[K],
+) => void;
+
+export type PreferenceSection = Exclude<keyof UserPreferences, "version">;
+export type UpdatePreference = <S extends PreferenceSection>(
+  section: S,
+  value: UserPreferences[S],
 ) => void;
 
 /** Fields of the form that take an uploaded image URL. */
@@ -61,12 +69,16 @@ export const EMPTY_SETTINGS: SettingsData = {
   syncPrivacy: "all",
   yandexToken: "",
   lastfmUsername: "",
+  preferences: structuredClone(DEFAULT_PREFERENCES),
 };
 
 const DEFAULT_BIO = "Этот пользователь пока ничего о себе не рассказал.";
 
 /** Form state from the profile returned by GET /api/user/{username}. */
-export function settingsFromProfile(u: UserInfo): SettingsData {
+export function settingsFromProfile(
+  u: UserInfo,
+  preferences?: Partial<UserPreferences> | null,
+): SettingsData {
   const loc = u.location || "";
   const [country = "", city = ""] = loc.split(",").map((s) => s.trim());
   return {
@@ -92,5 +104,6 @@ export function settingsFromProfile(u: UserInfo): SettingsData {
     syncPrivacy: u.sync_privacy || "all",
     yandexToken: u.yandex_token || "",
     lastfmUsername: u.lastfm_username || "",
+    preferences: mergePreferences(preferences),
   };
 }

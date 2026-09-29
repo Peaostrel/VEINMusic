@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Area } from "react-easy-crop";
 import { API_URL } from "@/app/lib/api";
-import type { UserInfo } from "@/app/lib/types";
+import {
+  DEFAULT_PREFERENCES,
+  applyAppearance,
+  storePreferences,
+} from "@/app/lib/preferences";
+import type { UserInfo, UserPreferences } from "@/app/lib/types";
 import {
   EMPTY_SETTINGS,
   settingsFromProfile,
@@ -12,6 +17,7 @@ import {
   type SettingsData,
   type SocialLink,
   type UpdateData,
+  type UpdatePreference,
 } from "./types";
 import { useLocationSuggestions } from "@/app/lib/geo";
 import { fixImageUrl, getCroppedImg } from "./utils";
@@ -20,19 +26,31 @@ export type SettingsTab =
   | "general"
   | "showcase"
   | "theme"
+  | "profile-layout"
+  | "listening"
+  | "feed"
+  | "notifications"
   | "privacy"
+  | "wrapped"
   | "security"
   | "integrations"
-  | "export";
+  | "export"
+  | "experiments";
 
 export const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
   { id: "general", label: "Общие данные" },
   { id: "showcase", label: "Витрина профиля" },
   { id: "theme", label: "Оформление" },
+  { id: "profile-layout", label: "Конструктор профиля" },
+  { id: "listening", label: "Прослушивания" },
+  { id: "feed", label: "Лента и общение" },
+  { id: "notifications", label: "Уведомления" },
   { id: "privacy", label: "Приватность" },
+  { id: "wrapped", label: "Настройки Wrapped" },
   { id: "security", label: "Безопасность и данные" },
   { id: "integrations", label: "Интеграции" },
   { id: "export", label: "Экспорт и вебхуки" },
+  { id: "experiments", label: "Экспериментальное" },
 ];
 
 function errorMessage(e: unknown): string {
@@ -56,6 +74,7 @@ export function useSettingsPage() {
   const [generatedApiKey, setGeneratedApiKey] = useState<string | null>(null);
   const [isCityInputFocused, setIsCityInputFocused] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
 
   // Image cropping (avatar / cover upload)
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
@@ -68,27 +87,42 @@ export function useSettingsPage() {
 
   const { countries, cities } = useLocationSuggestions(data.country, data.city);
 
-  const updateData: UpdateData = (key, value) =>
+  const updateData: UpdateData = (key, value) => {
     setData((prev) => ({ ...prev, [key]: value }));
+    setIsDirty(true);
+  };
+  const updatePreference: UpdatePreference = (section, value) => {
+    setData((prev) => ({
+      ...prev,
+      preferences: { ...prev.preferences, [section]: value },
+    }));
+    if (section === "appearance")
+      applyAppearance(value as UserPreferences["appearance"]);
+    setIsDirty(true);
+  };
 
   /** Load the profile into the form. Resolves false when it isn't available. */
   const loadProfile = async (username: string): Promise<boolean> => {
-    const [userRes, statsRes] = await Promise.all([
+    const [userRes, statsRes, preferencesRes] = await Promise.all([
       fetch(`${API_URL}/api/user/${username}`, { credentials: "include" }),
       fetch(`${API_URL}/api/stats/${username}`, { credentials: "include" }),
+      fetch(`${API_URL}/api/profile/preferences`, { credentials: "include" }),
     ]);
-    if (!userRes.ok || !statsRes.ok) return false;
+    if (!userRes.ok || !statsRes.ok || !preferencesRes.ok) return false;
     const u: UserInfo = await userRes.json();
+    const preferences: UserPreferences = await preferencesRes.json();
     const s: { total_xp?: number; total_scrobbles?: number } =
       await statsRes.json();
     setUserProfile(u);
     setLevel(Math.floor((s.total_xp || s.total_scrobbles || 0) / 100) + 1);
-    setData(settingsFromProfile(u));
+    setData(settingsFromProfile(u, preferences));
+    storePreferences(preferences);
     try {
       setSocialLinks(JSON.parse(u.social_links || "[]"));
     } catch (e) {
       console.error(e);
     }
+    setIsDirty(false);
     return true;
   };
 
@@ -122,6 +156,15 @@ export function useSettingsPage() {
       .catch((error) => console.error(error))
       .finally(() => setLoading(false));
   }, [router, searchParams]);
+
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (!isDirty) return;
+      event.preventDefault();
+    };
+    globalThis.addEventListener("beforeunload", warn);
+    return () => globalThis.removeEventListener("beforeunload", warn);
+  }, [isDirty]);
 
   const onSelectFile = (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -165,21 +208,27 @@ export function useSettingsPage() {
     setCropImageSrc(null);
   };
 
-  const addSocialLink = () =>
+  const addSocialLink = () => {
     setSocialLinks([
       ...socialLinks,
       { id: Date.now(), network: "telegram", username: "" },
     ]);
+    setIsDirty(true);
+  };
   const updateSocialLink = (
     id: SocialLink["id"],
     field: "network" | "username",
     value: string,
-  ) =>
+  ) => {
     setSocialLinks(
       socialLinks.map((l) => (l.id === id ? { ...l, [field]: value } : l)),
     );
-  const removeSocialLink = (id: SocialLink["id"]) =>
+    setIsDirty(true);
+  };
+  const removeSocialLink = (id: SocialLink["id"]) => {
     setSocialLinks(socialLinks.filter((l) => l.id !== id));
+    setIsDirty(true);
+  };
 
   const handleGenerateApiKey = async () => {
     if (
@@ -289,6 +338,24 @@ export function useSettingsPage() {
         }
         throw new Error(detail);
       }
+      const preferencesRes = await fetch(`${API_URL}/api/profile/preferences`, {
+        credentials: "include",
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data.preferences),
+      });
+      if (!preferencesRes.ok) {
+        let detail = "Не удалось сохранить дополнительные настройки";
+        try {
+          const body = (await preferencesRes.json()) as { detail?: unknown };
+          if (typeof body.detail === "string") detail = body.detail;
+        } catch {
+          // not JSON
+        }
+        throw new Error(detail);
+      }
+      const savedPreferences = (await preferencesRes.json()) as UserPreferences;
+      storePreferences(savedPreferences);
       localStorage.setItem("site_theme", data.theme);
       globalThis.dispatchEvent(new Event("theme_update"));
       // Refresh the form from the server (showcase locks, cleaned values)
@@ -314,6 +381,14 @@ export function useSettingsPage() {
       return;
     }
     executeSave();
+  };
+
+  const resetPreferences = () => {
+    if (!confirm("Вернуть дополнительные настройки к значениям по умолчанию?"))
+      return;
+    const defaults = structuredClone(DEFAULT_PREFERENCES);
+    applyAppearance(defaults.appearance);
+    updateData("preferences", defaults);
   };
 
   const saveYandexToken = async () => {
@@ -414,6 +489,7 @@ export function useSettingsPage() {
   return {
     data,
     updateData,
+    updatePreference,
     userProfile,
     socialLinks,
     addSocialLink,
@@ -424,6 +500,7 @@ export function useSettingsPage() {
     loading,
     activeTab,
     setActiveTab,
+    isDirty,
     importRefresh,
     copied,
     generatedApiKey,
@@ -447,6 +524,7 @@ export function useSettingsPage() {
     handleCopyKey,
     executeSave,
     handleSubmit,
+    resetPreferences,
     saveYandexToken,
     handleDisconnect,
     startLastfmImport,

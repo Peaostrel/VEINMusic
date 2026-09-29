@@ -3,6 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { API_URL } from "@/app/lib/api";
 import { isValidUser, setProfileTheme } from "@/app/lib/theme";
+import {
+  applyAppearance,
+  mergePreferences,
+  storePreferences,
+  storedPreferences,
+} from "@/app/lib/preferences";
 import type { NavUser } from "./types";
 
 /** Mirrors the signed-in state onto <html data-auth> for the shell CSS. */
@@ -42,6 +48,9 @@ export function useAuthUser(pathname: string | null) {
         .then((data: NavUser | null) => {
           if (!data) return;
           setProfile(data);
+          if (data.preferences) {
+            storePreferences(mergePreferences(data.preferences));
+          }
           // Apply the saved theme on first load only; don't override a theme
           // picked during this session.
           if (data.theme && !localStorage.getItem("site_theme")) {
@@ -55,6 +64,18 @@ export function useAuthUser(pathname: string | null) {
     globalThis.addEventListener("profile_update", load);
     return () => globalThis.removeEventListener("profile_update", load);
   }, [username]);
+
+  useEffect(() => {
+    const media = globalThis.matchMedia("(prefers-color-scheme: light)");
+    const update = () => applyAppearance(storedPreferences().appearance);
+    update();
+    media.addEventListener("change", update);
+    globalThis.addEventListener("preferences_update", update);
+    return () => {
+      media.removeEventListener("change", update);
+      globalThis.removeEventListener("preferences_update", update);
+    };
+  }, []);
 
   const logout = useCallback(async () => {
     try {
@@ -71,6 +92,8 @@ export function useAuthUser(pathname: string | null) {
       globalThis.location.origin,
     );
     localStorage.setItem("site_theme", "classic");
+    localStorage.removeItem("vein_preferences");
+    applyAppearance(mergePreferences().appearance);
     syncAuthFlag(false);
     setUsername(null);
     setProfile(null);

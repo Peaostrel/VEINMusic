@@ -97,6 +97,7 @@ class UserProfile(Base):
     is_private = Column(Boolean, default=False)
     hidden_artists = Column(String, default="")
     sync_privacy = Column(String, default="all")
+    preferences = Column(String, default="{}", server_default=text("'{}'"), nullable=False)
 
     favorite_artist = Column(String, nullable=True)
     favorite_artist_url = Column(String, nullable=True)

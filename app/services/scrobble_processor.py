@@ -20,6 +20,7 @@ from app.models import (
     User,
 )
 from app.services.metadata_cleaner import clean_track_metadata
+from app.services.user_preferences import get_preferences
 
 logger = logging.getLogger(__name__)
 
@@ -273,10 +274,11 @@ async def _get_or_create_track(
         cover_url: str,
         track_url: str,
         duration: int,
-        album: str) -> Track:
+        album: str,
+        enrich: bool = True) -> Track:
     track, may_enrich = await _run_db(
         _find_or_create_track, db, title, artist, cover_url, track_url, duration, album)
-    if not may_enrich:
+    if not may_enrich or not enrich:
         return track
 
     # Network lookups stay on the event loop; DB writes go to a thread
@@ -571,10 +573,41 @@ async def process_scrobble(
         album: str = "",
         credit_sec: int | None = None,
         pending_sec: int = 0):
+    preferences = get_preferences(user.profile)
+    listening = preferences.listening
+    integrations = preferences.integrations
+    source_name = (source or "").casefold()
+    source_key = next((item for item in listening.ignored_sources if item in source_name), None)
+    if source_key:
+        return "source_ignored"
+    integration_keys = {
+        "spotify": integrations.spotify_enabled,
+        "yandex": integrations.yandex_enabled,
+        "lastfm": integrations.lastfm_enabled,
+    }
+    if not integrations.auto_sync and any(name in source_name for name in integration_keys):
+        return "integration_paused"
+    if any(name in source_name and not enabled for name, enabled in integration_keys.items()):
+        return "integration_paused"
+    if artist.casefold() in {item.casefold() for item in listening.ignored_artists}:
+        return "artist_ignored"
+    track_labels = {title.casefold(), f"{artist} — {title}".casefold()}
+    if track_labels & {item.casefold() for item in listening.ignored_tracks}:
+        return "track_ignored"
+    if listening.ignore_short_tracks and duration and duration <= listening.short_track_seconds:
+        return "short_track_ignored"
+    private_until = listening.private_session_until
+    if private_until:
+        if private_until.tzinfo is None:
+            private_until = private_until.replace(tzinfo=UTC)
+        if datetime.now(UTC) < private_until.astimezone(UTC):
+            return "private_session"
     if await _run_db(_is_blacklisted, title, artist, album, db):
         return "blacklisted"
 
-    track = await _get_or_create_track(db, title, artist, cover_url, track_url, duration, album)
+    track = await _get_or_create_track(
+        db, title, artist, cover_url, track_url, duration, album,
+        enrich=listening.auto_metadata)
     result = await _run_db(_record_scrobble, db, user, track, source, progress_sec, is_playing,
                            credit_sec, pending_sec)
 

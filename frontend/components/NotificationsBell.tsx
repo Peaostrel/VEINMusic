@@ -9,6 +9,7 @@ import {
   Megaphone,
   MessageCircle,
   UserPlus,
+  CalendarRange,
 } from "lucide-react";
 import { apiJson } from "@/app/lib/api";
 import type { NotificationList, SocialNotification } from "@/app/lib/types";
@@ -21,6 +22,7 @@ const KIND_ICON: Record<SocialNotification["kind"], typeof Bell> = {
   comment: MessageCircle,
   follow: UserPlus,
   system: Megaphone,
+  recap: CalendarRange,
 };
 
 function timeAgo(iso: string | null): string {
@@ -146,7 +148,11 @@ export default function NotificationsBell({
                   <li key={n.id} className="relative">
                     <Link
                       href={
-                        n.kind === "system" ? "/" : `/user/${n.actor.username}`
+                        n.kind === "system"
+                          ? "/"
+                          : n.kind === "recap"
+                            ? `/user/${n.actor.username}/stats`
+                            : `/user/${n.actor.username}`
                       }
                       onClick={() => setOpen(false)}
                       className={`flex gap-3 px-4 py-3 transition-colors hover:bg-line ${n.comment_id ? "pr-11" : ""} ${n.is_read ? "" : "bg-white/[0.03]"}`}
@@ -159,11 +165,13 @@ export default function NotificationsBell({
                         <span className="block break-words text-fg">
                           {n.text}
                         </span>
-                        {n.message && n.kind !== "system" && (
-                          <span className="mt-0.5 block truncate text-xs text-fg-2">
-                            «{n.message}»
-                          </span>
-                        )}
+                        {n.message &&
+                          n.kind !== "system" &&
+                          n.kind !== "recap" && (
+                            <span className="mt-0.5 block truncate text-xs text-fg-2">
+                              «{n.message}»
+                            </span>
+                          )}
                         <span className="mt-0.5 block font-mono text-[11px] text-fg-3">
                           {timeAgo(n.created_at)}
                         </span>

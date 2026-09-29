@@ -26,7 +26,11 @@ from app.models import (
     UserAchievement,
     UserProfile,
 )
-from app.routers.common import _check_privacy_and_owner, _get_visible_user
+from app.routers.common import (
+    _can_view_section,
+    _check_privacy_and_owner,
+    _get_visible_user,
+)
 from app.schemas import (
     FollowAction,
     MarkRead,
@@ -38,6 +42,7 @@ from app.services.user_stats import (
     get_levels_for_users,
     get_user_level_info,
 )
+from app.services.user_preferences import preferences_dict, public_preferences
 
 router = APIRouter(tags=["users"])
 
@@ -104,33 +109,36 @@ def get_user_info(username: str, request: Request,
         Achievement.id == UserAchievement.achievement_id).filter(
             UserAchievement.user_id == user.id).all()
     lvl, rnk, _, _ = get_user_level_info(user, db)
+    can_showcase = _can_view_section(user, request, db, "showcase")
+    can_location = _can_view_section(user, request, db, "location")
+    can_social = _can_view_section(user, request, db, "social_links")
     return {
         "username": user.username,
         "display_name": user.profile.display_name or user.username,
         "bio": user.profile.bio or "Этот пользователь пока ничего о себе не рассказал.",
         "avatar_url": user.profile.avatar_url,
         "cover_url": user.profile.cover_url,
-        "location": user.profile.location,
+        "location": user.profile.location if can_location else None,
         "favorite_genre": user.profile.favorite_genre,
         "equipment": user.profile.equipment,
-        "social_links": user.profile.social_links or "[]",
+        "social_links": (user.profile.social_links or "[]") if can_social else "[]",
         "theme": user.profile.theme or "classic",
         "is_private": user.profile.is_private,
         "can_view_private": is_owner,
         "hidden_artists": user.profile.hidden_artists,
         "sync_privacy": user.profile.sync_privacy or "all",
         "is_verified": user.integration.is_verified,
-        "favorite_artist": user.profile.favorite_artist,
-        "favorite_artist_url": user.profile.favorite_artist_url,
-        "favorite_artist_cover": user.profile.favorite_artist_cover,
+        "favorite_artist": user.profile.favorite_artist if can_showcase else None,
+        "favorite_artist_url": user.profile.favorite_artist_url if can_showcase else None,
+        "favorite_artist_cover": user.profile.favorite_artist_cover if can_showcase else None,
         "favorite_artist_updated_at": user.profile.favorite_artist_updated_at.isoformat() if user.profile.favorite_artist_updated_at else None,
-        "favorite_track": user.profile.favorite_track,
-        "favorite_track_url": user.profile.favorite_track_url,
-        "favorite_track_cover": user.profile.favorite_track_cover,
+        "favorite_track": user.profile.favorite_track if can_showcase else None,
+        "favorite_track_url": user.profile.favorite_track_url if can_showcase else None,
+        "favorite_track_cover": user.profile.favorite_track_cover if can_showcase else None,
         "favorite_track_updated_at": user.profile.favorite_track_updated_at.isoformat() if user.profile.favorite_track_updated_at else None,
-        "favorite_album": user.profile.favorite_album,
-        "favorite_album_url": user.profile.favorite_album_url,
-        "favorite_album_cover": user.profile.favorite_album_cover,
+        "favorite_album": user.profile.favorite_album if can_showcase else None,
+        "favorite_album_url": user.profile.favorite_album_url if can_showcase else None,
+        "favorite_album_cover": user.profile.favorite_album_cover if can_showcase else None,
         "favorite_album_updated_at": user.profile.favorite_album_updated_at.isoformat() if user.profile.favorite_album_updated_at else None,
         "avatar_frame": user.profile.avatar_frame,
         "level": lvl,
@@ -158,6 +166,7 @@ def get_user_info(username: str, request: Request,
                 "earned_at": ua.earned_at} for a,
             ua in ach_data],
         "streak": get_active_streak(user),
+        "preferences": public_preferences(user.profile),
         "has_api_key": bool(user.api_key) if is_owner else False}
 
 
@@ -170,6 +179,9 @@ def get_notifications(username: str,
     if current_user.username != username:
         raise HTTPException(403)
     user = current_user
+    if not preferences_dict(user.profile)["notifications"]["in_app"].get(
+            "achievements", True):
+        return []
     new_achs = db.query(Achievement, UserAchievement).join(UserAchievement).filter(
         UserAchievement.user_id == user.id, UserAchievement.notified.is_(False)).all()
     return [{"ua_id": ua.id,
@@ -212,12 +224,14 @@ def get_comments(scrobble_id: int, request: Request, db: Annotated[Session, Depe
 # --- /api/follow-stats/{viewer}/{profile} ---
 @router.get("/api/follow-stats/{viewer}/{profile}",
             responses={404: {"description": "User not found"}})
-def get_follow_stats(viewer: str, profile: str,
+def get_follow_stats(viewer: str, profile: str, request: Request,
                      db: Annotated[Session, Depends(get_db)],
                      current_user: Annotated[User | None, Depends(get_current_user_optional)]):
     target = db.query(User).filter(User.username == profile).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    if not _can_view_section(target, request, db, "followers"):
+        return {"followers": 0, "following": 0, "is_following": False}
     followers_count = db.query(Follow).filter(
         Follow.following_id == target.id).count()
     following_count = db.query(Follow).filter(
@@ -238,8 +252,11 @@ def get_follow_stats(viewer: str, profile: str,
 @router.get("/api/follow-stats/{profile}",
             responses={404: {"description": "User not found"}})
 def get_follow_stats_fallback(
-        profile: str, db: Annotated[Session, Depends(get_db)]):
-    return get_follow_stats("null", profile, db, None)
+        profile: str,
+        request: Request,
+        db: Annotated[Session, Depends(get_db)],
+        current_user: Annotated[User | None, Depends(get_current_user_optional)] = None):
+    return get_follow_stats("null", profile, request, db, current_user)
 
 
 def _user_cards(users: list[User], db: Session) -> list[dict]:
@@ -263,8 +280,7 @@ def get_followers(username: str, request: Request,
 
     # Privacy check: the owner (authenticated via session/API key) can
     # always see their own list
-    is_hidden, _ = _check_privacy_and_owner(target, request, db)
-    if is_hidden:
+    if not _can_view_section(target, request, db, "followers"):
         return []
 
     followers = db.query(User).join(
@@ -284,8 +300,7 @@ def get_following(username: str, request: Request,
 
     # Privacy check: the owner (authenticated via session/API key) can
     # always see their own list
-    is_hidden, _ = _check_privacy_and_owner(target, request, db)
-    if is_hidden:
+    if not _can_view_section(target, request, db, "followers"):
         return []
 
     following = db.query(User).join(

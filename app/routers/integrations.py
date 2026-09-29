@@ -21,6 +21,7 @@ from app.schemas import (
     YandexTokenUpdate,
 )
 from app.services.runtime_settings import require_feature
+from app.services.user_preferences import get_preferences
 from app.services.lastfm_import import (
     LASTFM_API_KEY,
     enqueue_import,
@@ -48,6 +49,8 @@ async def start_lastfm_import(data: LikeRequest,
     The first import takes the whole history; later ones import only what was
     scrobbled since the previous import. Progress: GET /api/import/lastfm/status."""
     user = current_user
+    if not get_preferences(user.profile).integrations.lastfm_enabled:
+        raise HTTPException(409, "Last.fm приостановлен в настройках аккаунта")
     if not user.integration.lastfm_username:
         raise HTTPException(400, "Last.fm username not set in profile")
     if not LASTFM_API_KEY:

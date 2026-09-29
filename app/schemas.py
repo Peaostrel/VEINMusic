@@ -1,9 +1,22 @@
 
+from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, BeforeValidator, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
 
 SyncPrivacy = Literal["all", "followers", "none"]
+Visibility = Literal["all", "followers", "private"]
+ProfileSection = Literal[
+    "showcase", "recommendations", "history", "wrapped",
+    "top_tracks", "top_artists",
+]
+
+
+def _default_profile_section_order() -> list[ProfileSection]:
+    return [
+        "showcase", "recommendations", "history", "wrapped",
+        "top_tracks", "top_artists",
+    ]
 
 
 def _truncate(limit: int):
@@ -155,6 +168,173 @@ class PrivacyUpdate(BaseModel):
     is_private: bool | None = None
     hidden_artists: str | None = Field(None, max_length=4096)
     sync_privacy: SyncPrivacy | None = None
+
+
+class AppearancePreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    color_mode: Literal["dark", "light", "system"] = "dark"
+    density: Literal["comfortable", "compact"] = "comfortable"
+    font_scale: Literal["small", "normal", "large"] = "normal"
+    reduce_motion: bool = False
+    high_contrast: bool = False
+    background_blur: bool = True
+
+
+class ProfilePreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    section_order: list[ProfileSection] = Field(
+        default_factory=_default_profile_section_order,
+        min_length=6,
+        max_length=6,
+    )
+    hidden_sections: list[ProfileSection] = Field(
+        default_factory=list,
+        max_length=6,
+    )
+    show_online_status: bool = True
+
+    @field_validator("section_order")
+    @classmethod
+    def unique_sections(cls, value):
+        if len(set(value)) != len(value):
+            raise ValueError("Разделы профиля не должны повторяться")
+        return value
+
+
+class PrivacyPreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    history: Visibility = "all"
+    statistics: Visibility = "all"
+    current_track: Visibility = "all"
+    showcase: Visibility = "all"
+    followers: Visibility = "all"
+    location: Visibility = "all"
+    social_links: Visibility = "all"
+    show_listening_source: bool = True
+
+
+class ListeningPreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ignored_artists: list[str] = Field(default_factory=list, max_length=50)
+    ignored_tracks: list[str] = Field(default_factory=list, max_length=100)
+    ignored_sources: list[Literal[
+        "yandex", "spotify", "vk", "youtube", "apple", "soundcloud", "desktop",
+    ]] = Field(default_factory=list, max_length=7)
+    ignore_short_tracks: bool = False
+    short_track_seconds: int = Field(30, ge=15, le=120)
+    private_session_until: datetime | None = None
+    auto_metadata: bool = True
+
+    @field_validator("ignored_artists", "ignored_tracks")
+    @classmethod
+    def clean_ignore_list(cls, values):
+        clean = []
+        for value in values:
+            item = str(value).strip()[:300]
+            if item and item.casefold() not in {entry.casefold() for entry in clean}:
+                clean.append(item)
+        return clean
+
+
+class FeedPreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    share_scrobbles: bool = True
+    share_achievements: bool = True
+    allow_comments: bool = True
+    allow_likes: bool = True
+    default_scope: Literal["all", "following"] = "all"
+    hidden_sources: list[Literal[
+        "yandex", "spotify", "vk", "youtube", "apple", "soundcloud", "desktop",
+    ]] = Field(default_factory=list, max_length=7)
+
+
+class NotificationChannelPreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    likes: bool = True
+    comments: bool = True
+    follows: bool = True
+    achievements: bool = True
+    system: bool = True
+    weekly_digest: bool = True
+    new_releases: bool = False
+    room_invites: bool = True
+
+
+class NotificationPreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    in_app: NotificationChannelPreferences = Field(default_factory=NotificationChannelPreferences)
+    push: NotificationChannelPreferences = Field(default_factory=NotificationChannelPreferences)
+    quiet_hours_enabled: bool = False
+    quiet_from: str = Field("23:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    quiet_to: str = Field("08:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+class WrappedPreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    default_period: Literal["7d", "30d", "90d", "year", "all"] = "30d"
+    show_minutes: bool = True
+    show_artists: bool = True
+    show_tracks: bool = True
+    show_new_artists: bool = True
+    identity: Literal["username", "display_name"] = "username"
+    card_style: Literal["classic", "minimal", "vivid"] = "classic"
+    auto_weekly: bool = False
+    auto_monthly: bool = True
+
+
+class IntegrationPreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    spotify_enabled: bool = True
+    yandex_enabled: bool = True
+    lastfm_enabled: bool = True
+    auto_sync: bool = True
+
+
+class ExperimentPreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    smart_recommendations: bool = True
+    taste_passport: bool = False
+    new_profile_layout: bool = False
+    diagnostics: bool = False
+
+
+def _default_listening_preferences() -> ListeningPreferences:
+    # Pydantic treats constrained Field defaults as optional at runtime, while
+    # its static typing metadata still requires them in the constructor.
+    return ListeningPreferences(short_track_seconds=30)
+
+
+def _default_notification_preferences() -> NotificationPreferences:
+    return NotificationPreferences(quiet_from="23:00", quiet_to="08:00")
+
+
+class UserPreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: Literal[1] = 1
+    appearance: AppearancePreferences = Field(default_factory=AppearancePreferences)
+    profile: ProfilePreferences = Field(default_factory=ProfilePreferences)
+    privacy: PrivacyPreferences = Field(default_factory=PrivacyPreferences)
+    listening: ListeningPreferences = Field(
+        default_factory=_default_listening_preferences,
+    )
+    feed: FeedPreferences = Field(default_factory=FeedPreferences)
+    notifications: NotificationPreferences = Field(
+        default_factory=_default_notification_preferences,
+    )
+    wrapped: WrappedPreferences = Field(default_factory=WrappedPreferences)
+    integrations: IntegrationPreferences = Field(default_factory=IntegrationPreferences)
+    experiments: ExperimentPreferences = Field(default_factory=ExperimentPreferences)
 
 
 class UserBanRequest(BaseModel):

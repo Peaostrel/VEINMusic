@@ -5,7 +5,7 @@ import { ArrowDownRight, ArrowUpRight, Share2 } from "lucide-react";
 import Dialog from "@/components/Dialog";
 import { LogoTile, Wordmark } from "@/components/brand";
 import { Meter, btn } from "@/components/ui";
-import type { DetailedStats } from "@/app/lib/types";
+import type { DetailedStats, UserPreferences } from "@/app/lib/types";
 import { formatNumber } from "@/app/lib/plural";
 
 function prettyDate(value: string) {
@@ -27,11 +27,25 @@ function Change({ value }: Readonly<{ value: number }>) {
   );
 }
 
-function RecapCard({ stats }: Readonly<{ stats: DetailedStats }>) {
+function RecapCard({
+  stats,
+  preferences,
+}: Readonly<{
+  stats: DetailedStats;
+  preferences: UserPreferences["wrapped"];
+}>) {
   const artists = stats.top_artists.slice(0, 5);
   const max = artists[0]?.plays || 1;
   return (
-    <div className="flex h-[640px] w-[360px] max-w-full flex-col justify-between rounded-2xl border border-line bg-surface p-7">
+    <div
+      className={`flex h-[640px] w-[360px] max-w-full flex-col justify-between rounded-2xl border border-line p-7 ${
+        preferences.card_style === "minimal"
+          ? "bg-bg"
+          : preferences.card_style === "vivid"
+            ? "bg-[linear-gradient(160deg,var(--accent-glow-strong),var(--color-surface)_45%)]"
+            : "bg-surface"
+      }`}
+    >
       <header>
         <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-accent">
           VEIN Wrapped
@@ -39,7 +53,11 @@ function RecapCard({ stats }: Readonly<{ stats: DetailedStats }>) {
         <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em]">
           {stats.period.label}
         </h2>
-        <p className="mt-2 text-sm text-fg-2">@{stats.user.username}</p>
+        <p className="mt-2 text-sm text-fg-2">
+          {preferences.identity === "display_name"
+            ? stats.user.display_name
+            : `@${stats.user.username}`}
+        </p>
       </header>
 
       <dl className="grid grid-cols-2 gap-x-5 gap-y-4">
@@ -49,24 +67,38 @@ function RecapCard({ stats }: Readonly<{ stats: DetailedStats }>) {
             {formatNumber(stats.total_scrobbles)}
           </dd>
         </div>
-        <div>
-          <dt className="text-xs text-fg-3">минут музыки</dt>
-          <dd className="font-mono text-3xl">
-            {formatNumber(stats.total_time_min)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-fg-3">артистов</dt>
-          <dd className="font-mono text-2xl">
-            {formatNumber(stats.unique_artists)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-fg-3">новых артистов</dt>
-          <dd className="font-mono text-2xl">
-            {formatNumber(stats.new_artists)}
-          </dd>
-        </div>
+        {preferences.show_minutes && (
+          <div>
+            <dt className="text-xs text-fg-3">минут музыки</dt>
+            <dd className="font-mono text-3xl">
+              {formatNumber(stats.total_time_min)}
+            </dd>
+          </div>
+        )}
+        {preferences.show_artists && (
+          <div>
+            <dt className="text-xs text-fg-3">артистов</dt>
+            <dd className="font-mono text-2xl">
+              {formatNumber(stats.unique_artists)}
+            </dd>
+          </div>
+        )}
+        {preferences.show_tracks && (
+          <div>
+            <dt className="text-xs text-fg-3">треков</dt>
+            <dd className="font-mono text-2xl">
+              {formatNumber(stats.unique_tracks)}
+            </dd>
+          </div>
+        )}
+        {preferences.show_new_artists && (
+          <div>
+            <dt className="text-xs text-fg-3">новых артистов</dt>
+            <dd className="font-mono text-2xl">
+              {formatNumber(stats.new_artists)}
+            </dd>
+          </div>
+        )}
       </dl>
 
       <section>
@@ -102,7 +134,13 @@ function RecapCard({ stats }: Readonly<{ stats: DetailedStats }>) {
   );
 }
 
-export function PeriodRecap({ stats }: Readonly<{ stats: DetailedStats }>) {
+export function PeriodRecap({
+  stats,
+  preferences,
+}: Readonly<{
+  stats: DetailedStats;
+  preferences: UserPreferences["wrapped"];
+}>) {
   const [sharing, setSharing] = useState(false);
   const topArtist = stats.top_artists[0];
   const comparison = stats.comparison?.change;
@@ -132,23 +170,33 @@ export function PeriodRecap({ stats }: Readonly<{ stats: DetailedStats }>) {
         <div className="grid gap-px bg-line-soft sm:grid-cols-2 lg:grid-cols-4">
           {[
             ["прослушиваний", stats.total_scrobbles, comparison?.scrobbles],
-            ["минут музыки", stats.total_time_min, comparison?.minutes],
-            ["артистов", stats.unique_artists, comparison?.artists],
-            ["треков", stats.unique_tracks, comparison?.tracks],
-          ].map(([label, value, change]) => (
-            <div key={label} className="bg-surface p-5">
-              <p className="text-xs text-fg-3">{label}</p>
-              <p className="mt-1 font-mono text-2xl">
-                {formatNumber(Number(value))}
-              </p>
-              {typeof change === "number" && (
-                <p className="mt-1 text-[11px]">
-                  <Change value={change} />
-                  <span className="ml-1 text-fg-3">к прошлому периоду</span>
+            preferences.show_minutes
+              ? ["минут музыки", stats.total_time_min, comparison?.minutes]
+              : null,
+            preferences.show_artists
+              ? ["артистов", stats.unique_artists, comparison?.artists]
+              : null,
+            preferences.show_tracks
+              ? ["треков", stats.unique_tracks, comparison?.tracks]
+              : null,
+          ]
+            .filter((item): item is (string | number | undefined)[] =>
+              Boolean(item),
+            )
+            .map(([label, value, change]) => (
+              <div key={label} className="bg-surface p-5">
+                <p className="text-xs text-fg-3">{label}</p>
+                <p className="mt-1 font-mono text-2xl">
+                  {formatNumber(Number(value))}
                 </p>
-              )}
-            </div>
-          ))}
+                {typeof change === "number" && (
+                  <p className="mt-1 text-[11px]">
+                    <Change value={change} />
+                    <span className="ml-1 text-fg-3">к прошлому периоду</span>
+                  </p>
+                )}
+              </div>
+            ))}
         </div>
 
         <div className="grid gap-4 p-6 sm:grid-cols-3">
@@ -163,10 +211,12 @@ export function PeriodRecap({ stats }: Readonly<{ stats: DetailedStats }>) {
               </p>
             )}
           </div>
-          <div>
-            <p className="text-xs text-fg-3">Новые артисты</p>
-            <p className="mt-1 font-mono text-2xl">{stats.new_artists}</p>
-          </div>
+          {preferences.show_new_artists && (
+            <div>
+              <p className="text-xs text-fg-3">Новые артисты</p>
+              <p className="mt-1 font-mono text-2xl">{stats.new_artists}</p>
+            </div>
+          )}
           <div>
             <p className="text-xs text-fg-3">Самый активный день</p>
             <p className="mt-1 text-base font-medium">
@@ -188,7 +238,7 @@ export function PeriodRecap({ stats }: Readonly<{ stats: DetailedStats }>) {
           className="overflow-y-auto py-8"
         >
           <div className="my-auto flex flex-col items-center gap-4">
-            <RecapCard stats={stats} />
+            <RecapCard stats={stats} preferences={preferences} />
             <p className="text-center text-xs text-fg-3">
               Сделайте скриншот и поделитесь итогами
             </p>

@@ -51,7 +51,10 @@ test.describe("Update in progress", () => {
     await health;
     await expect(
       page.getByRole("button", { name: "Сохранить всё" }),
-    ).toBeEnabled();
+    ).toBeDisabled();
+    await expect(
+      page.getByRole("navigation", { name: "Разделы настроек" }),
+    ).toBeVisible();
     await expect(page.getByRole("alertdialog")).toHaveCount(0);
   });
 });

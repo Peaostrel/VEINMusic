@@ -23,9 +23,14 @@ from app.models import (
     User,
     UserProfile,
 )
-from app.routers.common import _check_privacy_and_owner, _get_visible_user
+from app.routers.common import (
+    _can_view_section,
+    _check_privacy_and_owner,
+    _get_visible_user,
+)
 from app.services.cache import get_from_cache, set_to_cache
 from app.services.scrobble_processor import format_history_item
+from app.services.user_preferences import preference_enabled, preferences_dict
 from app.services.user_stats import (
     get_active_streak,
     get_user_level_info,
@@ -191,7 +196,7 @@ def get_wrapped_stats(
         period: str = "30d",
         date_from: str | None = None,
         date_to: str | None = None):
-    user = _get_visible_user(username, request, db)
+    user = _get_visible_user(username, request, db, "statistics")
     period_start, period_end, period_label = _period_bounds(
         user, period, date_from, date_to)
     base_filter = _counted_filter(int(user.id), period_start, period_end)
@@ -239,8 +244,32 @@ def get_global_feed(db: Annotated[Session, Depends(get_db)]):
     # Latest scrobbles from public users
     scrobbles = db.query(Scrobble).join(User).join(UserProfile).filter(
         UserProfile.is_private.is_(False)).order_by(
-        Scrobble.id.desc()).limit(20).all()
-    return {"feed": [format_history_item(s, s.track) for s in scrobbles]}
+        Scrobble.id.desc()).limit(100).all()
+    visible = [
+        scrobble for scrobble in scrobbles
+        if preference_enabled(scrobble.user.profile, "feed", "share_scrobbles")
+    ][:20]
+    feed = []
+    for scrobble in visible:
+        item = format_history_item(scrobble, scrobble.track)
+        current_track_public = (
+            preferences_dict(scrobble.user.profile)["privacy"]["current_track"]
+            == "all"
+        )
+        show_online = preference_enabled(
+            scrobble.user.profile, "profile", "show_online_status"
+        )
+        if item["is_playing"] and (not current_track_public or not show_online):
+            continue
+        if not preference_enabled(
+                scrobble.user.profile, "privacy", "show_listening_source"):
+            item["source"] = ""
+        item["can_like"] = preference_enabled(
+            scrobble.user.profile, "feed", "allow_likes")
+        item["can_comment"] = preference_enabled(
+            scrobble.user.profile, "feed", "allow_comments")
+        feed.append(item)
+    return {"feed": feed}
 
 
 def _get_activity_stats(
@@ -368,7 +397,7 @@ def get_detailed_stats(username: str,
                        period: str = "all",
                        date_from: str | None = None,
                        date_to: str | None = None):
-    user = _get_visible_user(username, request, db)
+    user = _get_visible_user(username, request, db, "statistics")
     period_start, period_end, period_label = _period_bounds(
         user, period, date_from, date_to)
     base_filter = _counted_filter(int(user.id), period_start, period_end)
@@ -521,7 +550,7 @@ def get_detailed_stats(username: str,
 @router.get("/api/stats/{username}",
             responses={404: {"description": "User not found"}})
 def get_stats(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
-    user = _get_visible_user(username, request, db)
+    user = _get_visible_user(username, request, db, "statistics")
     streak = get_active_streak(user)
 
     # Aggregate in SQL (per track and source) instead of loading every
@@ -609,7 +638,7 @@ def get_stats(username: str, request: Request, db: Annotated[Session, Depends(ge
 @router.get("/api/activity/{username}",
             responses={404: {"description": "User not found"}})
 def get_activity(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
-    user = _get_visible_user(username, request, db)
+    user = _get_visible_user(username, request, db, "statistics")
 
     scrobbles = db.query(Scrobble.played_at).join(Track).filter(
         Scrobble.user_id == user.id,
@@ -649,7 +678,7 @@ def get_listening_calendar(
         db: Annotated[Session, Depends(get_db)],
         year: int | None = None):
     """One calendar year of listening, grouped in the user's local timezone."""
-    user = _get_visible_user(username, request, db)
+    user = _get_visible_user(username, request, db, "statistics")
     user_tz = _user_timezone(user)
     current_year = datetime.now(UTC).astimezone(user_tz).year
     selected_year = year or current_year
@@ -746,7 +775,11 @@ def get_listening_calendar(
 @router.get("/api/current-track/{username}")
 def get_current_track(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
-    if not user or _check_privacy_and_owner(user, request, db)[0]:
+    if not user or not _can_view_section(user, request, db, "current_track"):
+        return {"playing": False}
+    _, is_owner = _check_privacy_and_owner(user, request, db)
+    if not is_owner and not preference_enabled(
+            user.profile, "profile", "show_online_status"):
         return {"playing": False}
 
     last_scrobble = db.query(

@@ -11,6 +11,7 @@ import { Loading, PageHeader, Segmented, inputOnCard } from "@/components/ui";
 import { API_URL } from "@/app/lib/api";
 import { isValidUser } from "@/app/lib/theme";
 import type { DetailedStats } from "@/app/lib/types";
+import { storedPreferences } from "@/app/lib/preferences";
 import { StatTiles } from "./_components/StatTiles";
 import {
   TopAlbumsCard,
@@ -79,7 +80,13 @@ export default function DetailedStatsPage() {
   const username = useParams()?.username;
   const [stats, setStats] = useState<DetailedStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState<Period>("30d");
+  const [period, setPeriod] = useState<Period>(() => {
+    const preferred = storedPreferences().wrapped.default_period;
+    return preferred as Period;
+  });
+  const [wrappedPreferences, setWrappedPreferences] = useState(
+    () => storedPreferences().wrapped,
+  );
   const [dateTo, setDateTo] = useState(() => isoDate(new Date()));
   const [dateFrom, setDateFrom] = useState(() => {
     const date = new Date();
@@ -93,6 +100,12 @@ export default function DetailedStatsPage() {
   useEffect(() => {
     const u = localStorage.getItem("username");
     setMe(isValidUser(u) ? u : null);
+  }, []);
+
+  useEffect(() => {
+    const update = () => setWrappedPreferences(storedPreferences().wrapped);
+    globalThis.addEventListener("preferences_update", update);
+    return () => globalThis.removeEventListener("preferences_update", update);
   }, []);
 
   useEffect(() => {
@@ -259,7 +272,7 @@ export default function DetailedStatsPage() {
         }
       />
 
-      <PeriodRecap stats={stats} />
+      <PeriodRecap stats={stats} preferences={wrappedPreferences} />
 
       <StatTiles
         totalScrobbles={total_scrobbles}

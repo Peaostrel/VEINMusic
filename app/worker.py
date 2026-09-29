@@ -118,6 +118,13 @@ async def cloud_poll(ctx: dict[str, Any]) -> None:
     await _mark_cron_run(ctx, "cloud_poll")
 
 
+async def recap_notifications(ctx: dict[str, Any]) -> None:
+    """Create user-local weekly/monthly Wrapped reminders when due."""
+    from app.services.recap_notifications import send_due_recap_notifications
+    await send_due_recap_notifications()
+    await _mark_cron_run(ctx, "recap_notifications")
+
+
 async def startup(ctx: dict[str, Any]) -> None:
     setup_observability("worker")
     if os.getenv("YANDEX_LIVE", "1") != "0":
@@ -151,6 +158,8 @@ class WorkerSettings:
         # Every 30 seconds; poll_once itself takes a Redis lock, so several
         # workers never poll the same accounts concurrently.
         cron(cloud_poll, second={0, 30}, run_at_startup=True, unique=True, timeout=25),
+        # Hourly: the service delivers at 09:00 in each user's local timezone.
+        cron(recap_notifications, minute={7}, unique=True, timeout=300),
         # Daily, at a quiet hour
         cron(cleanup_uploads, hour={4}, minute={17}, unique=True, timeout=600),
     ]

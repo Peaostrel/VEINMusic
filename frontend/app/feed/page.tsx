@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { API_URL } from "@/app/lib/api";
+import { storedPreferences } from "@/app/lib/preferences";
 import { useVisiblePolling } from "@/app/lib/usePolling";
 import { sourceLabel } from "@/utils/formatters";
 import {
@@ -36,6 +37,15 @@ function matchesSource(source: string, selectedSource: string): boolean {
   return s.includes(selectedSource);
 }
 
+function isHiddenSource(source: string, hiddenSources: string[]): boolean {
+  const normalized = source.toLowerCase();
+  return hiddenSources.some((hidden) => {
+    if (hidden === "desktop")
+      return normalized.includes("desktop") || normalized.includes("app");
+    return normalized.includes(hidden);
+  });
+}
+
 function matchesSearchQuery(item: FeedItem, query: string): boolean {
   if (!query) return true;
   const q = query.toLowerCase();
@@ -60,6 +70,15 @@ export default function GlobalFeed() {
   const [selectedSource, setSelectedSource] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [hiddenSources, setHiddenSources] = useState<string[]>([]);
+
+  useEffect(() => {
+    const update = () =>
+      setHiddenSources(storedPreferences().feed.hidden_sources);
+    update();
+    globalThis.addEventListener("preferences_update", update);
+    return () => globalThis.removeEventListener("preferences_update", update);
+  }, []);
 
   const fetchFeed = useCallback(async () => {
     try {
@@ -85,10 +104,11 @@ export default function GlobalFeed() {
     const q = searchQuery.trim();
     return feed.filter(
       (item) =>
+        !isHiddenSource(item.source || "", hiddenSources) &&
         matchesSource(item.source || "", selectedSource) &&
         matchesSearchQuery(item, q),
     );
-  }, [feed, selectedSource, searchQuery]);
+  }, [feed, selectedSource, searchQuery, hiddenSources]);
 
   let list: React.ReactNode;
   if (loading) list = <Loading label="Загружаем ленту…" />;
