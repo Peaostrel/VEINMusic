@@ -199,6 +199,51 @@ def test_social_links_are_restricted_to_known_networks(client, db):
         assert resp.status_code == 400
 
 
+def test_extended_social_links_are_normalized(client, db):
+    _register(client, "moresocials")
+    links = [
+        {"id": index, "network": network, "username": username}
+        for index, (network, username) in enumerate((
+            ("X", "@vein_music"),
+            ("YouTube", "@vein.music"),
+            ("TikTok", "vein-music"),
+            ("Twitch", "veinmusic"),
+            ("Discord", "12345678901234567"),
+            ("Spotify", "vein.music"),
+            ("LastFM", "vein_music"),
+            ("SoundCloud", "vein-music"),
+            ("Bandcamp", "veinmusic"),
+            ("Reddit", "vein_music"),
+            ("Bluesky", "vein.bsky.social"),
+            ("Threads", "vein.music"),
+        ))
+    ]
+    response = client.post(
+        "/api/profile/update",
+        headers=ORIGIN,
+        json={"social_links": json.dumps(links)},
+    )
+    assert response.status_code == 200
+
+    user = db.query(User).filter_by(username="moresocials").first()
+    db.refresh(user.profile)
+    saved = json.loads(user.profile.social_links)
+    assert saved[0]["network"] == "x"
+    assert saved[0]["username"] == "vein_music"
+    assert saved[4]["network"] == "discord"
+
+
+def test_discord_social_link_requires_a_numeric_user_id(client):
+    _register(client, "discordsocial")
+    links = [{"id": 1, "network": "discord", "username": "display-name"}]
+    response = client.post(
+        "/api/profile/update",
+        headers=ORIGIN,
+        json={"social_links": json.dumps(links)},
+    )
+    assert response.status_code == 400
+
+
 # --- Listen Together ---------------------------------------------------------
 
 def test_guests_cannot_chat_in_rooms():

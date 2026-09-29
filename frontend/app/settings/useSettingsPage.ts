@@ -19,6 +19,7 @@ import {
   type UpdateData,
   type UpdatePreference,
 } from "./types";
+import { SOCIAL_NETWORKS } from "@/app/lib/socialNetworks";
 import { useLocationSuggestions } from "@/app/lib/geo";
 import { fixImageUrl, getCroppedImg } from "./utils";
 
@@ -209,9 +210,14 @@ export function useSettingsPage() {
   };
 
   const addSocialLink = () => {
+    const usedNetworks = new Set(socialLinks.map((link) => link.network));
+    const nextNetwork = SOCIAL_NETWORKS.find(
+      (network) => !usedNetworks.has(network.id),
+    );
+    if (!nextNetwork) return;
     setSocialLinks([
       ...socialLinks,
-      { id: Date.now(), network: "telegram", username: "" },
+      { id: Date.now(), network: nextNetwork.id, username: "" },
     ]);
     setIsDirty(true);
   };

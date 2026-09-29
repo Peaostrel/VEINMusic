@@ -98,7 +98,7 @@ export default function PrivacyTab({
         />
         <SelectRow
           title="Социальные ссылки"
-          description="Telegram, VK, Steam, GitHub и Instagram."
+          description="Добавленные ссылки на соцсети, видеоплатформы и музыкальные сервисы."
           value={privacy.social_links}
           options={VISIBILITY}
           onChange={(value) => updateVisibility("social_links", value)}

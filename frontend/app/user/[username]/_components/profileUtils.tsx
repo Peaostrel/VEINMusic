@@ -1,6 +1,10 @@
 "use client";
 
 import { API_URL } from "@/app/lib/api";
+import {
+  getSocialNetwork,
+  getSocialUrl as buildSocialUrl,
+} from "@/app/lib/socialNetworks";
 import type { Country, TrackLinkSource } from "@/app/lib/types";
 
 // Utility to break CodeQL taint dataflow tracking while preserving the string
@@ -192,23 +196,10 @@ export function getCountryCode(
 }
 
 export function getNetworkLabel(net: string): string {
-  const lower = net.toLowerCase();
-  if (lower === "vk") return "VK";
-  if (lower === "github") return "GitHub";
-  return net.charAt(0).toUpperCase() + net.slice(1);
+  return getSocialNetwork(net)?.label ?? net;
 }
-
-const SOCIAL_URL_PREFIXES: Record<string, string> = {
-  telegram: "https://t.me/",
-  vk: "https://vk.com/",
-  steam: "https://steamcommunity.com/id/",
-  github: "https://github.com/",
-  instagram: "https://instagram.com/",
-};
 
 /** Profile link for a known network, or null (unknown networks aren't shown). */
 export function getSocialUrl(network: string, username: string): string | null {
-  const prefix = SOCIAL_URL_PREFIXES[String(network).toLowerCase()];
-  if (!prefix || !username) return null;
-  return prefix + encodeURIComponent(String(username).replace(/^@/, ""));
+  return buildSocialUrl(network, username);
 }

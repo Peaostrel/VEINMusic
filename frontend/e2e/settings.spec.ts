@@ -29,6 +29,23 @@ test.describe("Settings", () => {
     await expect(toggle).toHaveAttribute("aria-checked", "true");
   });
 
+  test("adds an extended social link to the profile", async ({ page }) => {
+    const username = await signUp(page, "socials");
+    await page.goto("/settings");
+
+    await page.getByRole("button", { name: "Добавить ссылку" }).click();
+    await page.getByLabel("Соцсеть").selectOption("youtube");
+    await page.getByLabel("YouTube: Хэндл канала").fill("veinmusic");
+    await page.getByRole("button", { name: "Сохранить всё" }).click();
+    await expect(page.getByText("Успешно!")).toBeVisible();
+
+    await page.goto(`/user/${username}`);
+    await expect(page.getByRole("link", { name: "YouTube" })).toHaveAttribute(
+      "href",
+      "https://www.youtube.com/@veinmusic",
+    );
+  });
+
   test("connects ListenBrainz export and validates webhook URLs", async ({
     page,
   }) => {
