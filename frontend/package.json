@@ -14,22 +14,22 @@
   },
   "dependencies": {
     "framer-motion": "^13.1.0",
-    "lucide-react": "^1.31.0",
+    "lucide-react": "^1.48.0",
     "next": "^16.3.6",
-    "react": "19.2.8",
+    "react": "19.3.0",
     "react-dom": "19.2.8",
     "react-easy-crop": "^6.2.3",
     "recharts": "^3.10.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.1",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^26",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.3.1",
-    "prettier": "^3.9.6",
+    "eslint-config-next": "16.3.6",
+    "prettier": "^3.9.9",
     "tailwindcss": "^4",
     "typescript": "^6.0.3"
   },
