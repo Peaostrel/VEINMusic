@@ -6,6 +6,17 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_valida
 
 SyncPrivacy = Literal["all", "followers", "none"]
 Visibility = Literal["all", "followers", "private"]
+ProfileSection = Literal[
+    "showcase", "recommendations", "history", "wrapped",
+    "top_tracks", "top_artists",
+]
+
+
+def _default_profile_section_order() -> list[ProfileSection]:
+    return [
+        "showcase", "recommendations", "history", "wrapped",
+        "top_tracks", "top_artists",
+    ]
 
 
 def _truncate(limit: int):
@@ -173,17 +184,15 @@ class AppearancePreferences(BaseModel):
 class ProfilePreferences(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    section_order: list[Literal[
-        "showcase", "recommendations", "history", "wrapped",
-        "top_tracks", "top_artists",
-    ]] = Field(default_factory=lambda: [
-        "showcase", "recommendations", "history", "wrapped",
-        "top_tracks", "top_artists",
-    ], min_length=6, max_length=6)
-    hidden_sections: list[Literal[
-        "showcase", "recommendations", "history", "wrapped",
-        "top_tracks", "top_artists",
-    ]] = Field(default_factory=list, max_length=6)
+    section_order: list[ProfileSection] = Field(
+        default_factory=_default_profile_section_order,
+        min_length=6,
+        max_length=6,
+    )
+    hidden_sections: list[ProfileSection] = Field(
+        default_factory=list,
+        max_length=6,
+    )
     show_online_status: bool = True
 
     @field_validator("section_order")
@@ -299,6 +308,16 @@ class ExperimentPreferences(BaseModel):
     diagnostics: bool = False
 
 
+def _default_listening_preferences() -> ListeningPreferences:
+    # Pydantic treats constrained Field defaults as optional at runtime, while
+    # its static typing metadata still requires them in the constructor.
+    return ListeningPreferences(short_track_seconds=30)
+
+
+def _default_notification_preferences() -> NotificationPreferences:
+    return NotificationPreferences(quiet_from="23:00", quiet_to="08:00")
+
+
 class UserPreferences(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -306,9 +325,13 @@ class UserPreferences(BaseModel):
     appearance: AppearancePreferences = Field(default_factory=AppearancePreferences)
     profile: ProfilePreferences = Field(default_factory=ProfilePreferences)
     privacy: PrivacyPreferences = Field(default_factory=PrivacyPreferences)
-    listening: ListeningPreferences = Field(default_factory=ListeningPreferences)
+    listening: ListeningPreferences = Field(
+        default_factory=_default_listening_preferences,
+    )
     feed: FeedPreferences = Field(default_factory=FeedPreferences)
-    notifications: NotificationPreferences = Field(default_factory=NotificationPreferences)
+    notifications: NotificationPreferences = Field(
+        default_factory=_default_notification_preferences,
+    )
     wrapped: WrappedPreferences = Field(default_factory=WrappedPreferences)
     integrations: IntegrationPreferences = Field(default_factory=IntegrationPreferences)
     experiments: ExperimentPreferences = Field(default_factory=ExperimentPreferences)
