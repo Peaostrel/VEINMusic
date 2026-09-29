@@ -1,6 +1,6 @@
 "use client";
 
-import { Headphones, MapPin, Speaker } from "lucide-react";
+import { ExternalLink, Headphones, MapPin, Speaker } from "lucide-react";
 import { Meter } from "@/components/ui";
 import {
   getArtistUrl,
@@ -184,7 +184,9 @@ export function ProfileStatsSection({
               rel="noopener noreferrer"
               className="flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-[13px] text-fg-2 transition-colors hover:bg-surface-2 hover:text-fg [&_svg]:h-4 [&_svg]:w-4"
             >
-              {SocialIcons[link.network as keyof typeof SocialIcons]}
+              {SocialIcons[link.network as keyof typeof SocialIcons] ?? (
+                <ExternalLink aria-hidden="true" />
+              )}
               {getNetworkLabel(link.network)}
             </a>
           ))}

@@ -120,9 +120,14 @@ def _validate_url(url: str | None):
         raise HTTPException(400, "Invalid URL")
 
 
-SOCIAL_NETWORKS = {"telegram", "vk", "steam", "github", "instagram"}
-MAX_SOCIAL_LINKS = 10
+SOCIAL_NETWORKS = {
+    "telegram", "vk", "steam", "github", "instagram", "x", "threads",
+    "bluesky", "reddit", "discord", "youtube", "tiktok", "twitch",
+    "spotify", "lastfm", "soundcloud", "bandcamp",
+}
+MAX_SOCIAL_LINKS = len(SOCIAL_NETWORKS)
 _SOCIAL_USERNAME_RE = re.compile(r"^[A-Za-z0-9_.\-]{1,64}$")
+_DISCORD_USER_ID_RE = re.compile(r"^\d{17,20}$")
 
 
 def _normalize_social_links(raw: str) -> str:
@@ -140,9 +145,16 @@ def _normalize_social_links(raw: str) -> str:
             raise HTTPException(400, "Некорректный список соцсетей")
         network = str(item.get("network", "")).lower()
         username = str(item.get("username", "")).strip().lstrip("@")
-        if network not in SOCIAL_NETWORKS or not _SOCIAL_USERNAME_RE.match(username):
+        valid_username = (
+            _DISCORD_USER_ID_RE.match(username)
+            if network == "discord"
+            else _SOCIAL_USERNAME_RE.match(username)
+        )
+        if network not in SOCIAL_NETWORKS or not valid_username:
             raise HTTPException(
-                400, "Соцсеть: укажите ник из латинских букв, цифр, «_», «.» или «-»")
+                400,
+                "Соцсеть: укажите корректный ник или ID из подсказки в поле",
+            )
         item_id = item.get("id")
         clean.append({
             "id": item_id if isinstance(item_id, (int, str)) else len(clean),

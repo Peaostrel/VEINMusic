@@ -1,6 +1,7 @@
 "use client";
 
 import { Plus, X } from "lucide-react";
+import { getSocialNetwork, SOCIAL_NETWORKS } from "@/app/lib/socialNetworks";
 import type {
   Country,
   ImageField,
@@ -45,6 +46,13 @@ export default function GeneralTab({
   updateSocialLink,
   removeSocialLink,
 }: Readonly<GeneralTabProps>) {
+  const selectedSocialNetworks = new Set(
+    socialLinks.map((link) => link.network),
+  );
+  const socialNetworkGroups = [
+    ...new Set(SOCIAL_NETWORKS.map((network) => network.group)),
+  ];
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -200,47 +208,66 @@ export default function GeneralTab({
 
         {socialLinks && socialLinks.length > 0 ? (
           <div className="space-y-3">
-            {socialLinks.map((link) => (
-              <div
-                key={link.id}
-                className="flex gap-3 items-center bg-surface p-3 rounded-lg border border-line-soft"
-              >
-                <select
-                  aria-label="Соцсеть"
-                  value={link.network}
-                  onChange={(e) =>
-                    updateSocialLink(link.id, "network", e.target.value)
-                  }
-                  className="h-10 cursor-pointer rounded-lg border border-line bg-surface px-3 text-sm text-fg outline-none transition-colors focus:border-fg-3"
-                >
-                  <option value="telegram">Telegram</option>
-                  <option value="vk">VK</option>
-                  <option value="steam">Steam</option>
-                  <option value="github">GitHub</option>
-                  <option value="instagram">Instagram</option>
-                </select>
+            {socialLinks.map((link) => {
+              const selectedNetwork = getSocialNetwork(link.network);
 
-                <input
-                  type="text"
-                  value={link.username}
-                  onChange={(e) =>
-                    updateSocialLink(link.id, "username", e.target.value)
-                  }
-                  placeholder="Никнейм/ID"
-                  aria-label="Никнейм или ID"
-                  className="h-10 min-w-0 flex-grow rounded-lg border border-line bg-surface px-3 text-sm text-fg outline-none focus:border-fg-3"
-                />
-
-                <button
-                  type="button"
-                  onClick={() => removeSocialLink(link.id)}
-                  aria-label="Удалить ссылку"
-                  className="p-2.5 text-danger border border-danger-line rounded-lg hover:bg-[#2a1b1b] transition-colors text-sm font-medium"
+              return (
+                <div
+                  key={link.id}
+                  className="flex gap-3 items-center bg-surface p-3 rounded-lg border border-line-soft"
                 >
-                  <X className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </div>
-            ))}
+                  <select
+                    aria-label="Соцсеть"
+                    value={link.network}
+                    onChange={(e) =>
+                      updateSocialLink(link.id, "network", e.target.value)
+                    }
+                    className="h-10 cursor-pointer rounded-lg border border-line bg-surface px-3 text-sm text-fg outline-none transition-colors focus:border-fg-3"
+                  >
+                    {socialNetworkGroups.map((group) => (
+                      <optgroup key={group} label={group}>
+                        {SOCIAL_NETWORKS.filter(
+                          (network) => network.group === group,
+                        ).map((network) => (
+                          <option
+                            key={network.id}
+                            value={network.id}
+                            disabled={
+                              network.id !== link.network &&
+                              selectedSocialNetworks.has(network.id)
+                            }
+                          >
+                            {network.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+
+                  <input
+                    type="text"
+                    value={link.username}
+                    onChange={(e) =>
+                      updateSocialLink(link.id, "username", e.target.value)
+                    }
+                    placeholder={
+                      selectedNetwork?.placeholder ?? "Никнейм или ID"
+                    }
+                    aria-label={`${selectedNetwork?.label ?? "Соцсеть"}: ${selectedNetwork?.placeholder ?? "никнейм или ID"}`}
+                    className="h-10 min-w-0 flex-grow rounded-lg border border-line bg-surface px-3 text-sm text-fg outline-none focus:border-fg-3"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => removeSocialLink(link.id)}
+                    aria-label="Удалить ссылку"
+                    className="p-2.5 text-danger border border-danger-line rounded-lg hover:bg-[#2a1b1b] transition-colors text-sm font-medium"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <p className="text-sm text-fg-2">
@@ -251,7 +278,8 @@ export default function GeneralTab({
         <button
           type="button"
           onClick={addSocialLink}
-          className="bg-surface-2 hover:bg-line border border-line text-fg font-medium px-4 py-2 rounded-lg text-xs transition-all flex items-center gap-1.5"
+          disabled={socialLinks.length >= SOCIAL_NETWORKS.length}
+          className="bg-surface-2 hover:bg-line border border-line text-fg font-medium px-4 py-2 rounded-lg text-xs transition-all flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface-2"
         >
           <Plus className="h-3.5 w-3.5" aria-hidden="true" />
           Добавить ссылку
