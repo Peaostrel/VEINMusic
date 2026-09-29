@@ -10,7 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 CRON_KEY_PREFIX = "cron:last:"
-CRON_JOBS = ("cloud_poll", "cleanup_uploads")
+CRON_JOBS = ("cloud_poll", "recap_notifications", "cleanup_uploads")
 ARQ_QUEUE_KEY = "arq:queue"
 BACKUP_SUFFIX = ".dump"
 

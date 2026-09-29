@@ -3,11 +3,13 @@ import { useFeature } from "@/app/lib/featureFlags";
 import { LogoGlyph } from "@/components/brand";
 import { btn, inputOnCard } from "@/components/ui";
 import LastfmImportStatus from "../components/LastfmImportStatus";
-import type { SettingsData, UpdateData } from "../types";
+import type { SettingsData, UpdateData, UpdatePreference } from "../types";
+import { ToggleRow, settingsCard } from "../components/PreferenceControls";
 
 interface IntegrationsTabProps {
   data: SettingsData;
   updateData: UpdateData;
+  updatePreference: UpdatePreference;
   userProfile: UserInfo | null;
   handleDisconnect: (service: string) => void;
   saveYandexToken: () => void;
@@ -68,6 +70,7 @@ function Row({
 export default function IntegrationsTab({
   data,
   updateData,
+  updatePreference,
   userProfile,
   handleDisconnect,
   saveYandexToken,
@@ -83,6 +86,9 @@ export default function IntegrationsTab({
   const spotifyEnabled = useFeature("integration_spotify");
   const yandexEnabled = useFeature("integration_yandex");
   const lastfmEnabled = useFeature("integration_lastfm");
+  const preferences = data.preferences.integrations;
+  const updateIntegration = (patch: Partial<typeof preferences>) =>
+    updatePreference("integrations", { ...preferences, ...patch });
   const synced = (linked?: boolean) => {
     if (!linked) return "не подключено";
     if (!userProfile?.last_sync) return "подключено";
@@ -98,6 +104,64 @@ export default function IntegrationsTab({
           Откуда VEIN берёт ваши прослушивания.
         </p>
       </div>
+
+      <section className={settingsCard}>
+        <ToggleRow
+          title="Автоматическая синхронизация"
+          description="Разрешить фоновым подключениям получать новые прослушивания."
+          checked={preferences.auto_sync}
+          onChange={(auto_sync) => updateIntegration({ auto_sync })}
+        />
+        <ToggleRow
+          title="Spotify"
+          description="Временно приостановить запись из Spotify, не удаляя подключение."
+          checked={preferences.spotify_enabled}
+          onChange={(spotify_enabled) => updateIntegration({ spotify_enabled })}
+        />
+        <ToggleRow
+          title="Яндекс Музыка"
+          description="Временно приостановить запись из Яндекс Музыки, сохранив токен."
+          checked={preferences.yandex_enabled}
+          onChange={(yandex_enabled) => updateIntegration({ yandex_enabled })}
+        />
+        <ToggleRow
+          title="Last.fm"
+          description="Приостановить автоматическую работу с Last.fm без удаления аккаунта."
+          checked={preferences.lastfm_enabled}
+          onChange={(lastfm_enabled) => updateIntegration({ lastfm_enabled })}
+        />
+      </section>
+
+      {data.preferences.experiments.diagnostics && (
+        <section className={`${settingsCard} p-5`}>
+          <h3 className="text-sm font-medium">Диагностика интеграций</h3>
+          <p className="mb-4 mt-1 text-xs text-fg-2">
+            Текущее состояние подключений без токенов и других секретных данных.
+          </p>
+          <dl className="grid gap-3 font-mono text-xs sm:grid-cols-2">
+            <div>
+              <dt className="text-fg-3">Spotify</dt>
+              <dd>{userProfile?.spotify_linked ? "linked" : "not linked"}</dd>
+            </div>
+            <div>
+              <dt className="text-fg-3">Яндекс</dt>
+              <dd>{userProfile?.yandex_linked ? "linked" : "not linked"}</dd>
+            </div>
+            <div>
+              <dt className="text-fg-3">Last.fm</dt>
+              <dd>{data.lastfmUsername || "not linked"}</dd>
+            </div>
+            <div>
+              <dt className="text-fg-3">Последняя синхронизация</dt>
+              <dd>
+                {userProfile?.last_sync
+                  ? new Date(userProfile.last_sync).toLocaleString("ru-RU")
+                  : "нет данных"}
+              </dd>
+            </div>
+          </dl>
+        </section>
+      )}
 
       {/* Hidden fields keep browsers from autofilling the token inputs */}
       <input
@@ -135,17 +199,23 @@ export default function IntegrationsTab({
                 Отключить
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => {
-                globalThis.location.href = `${API_URL}/auth/spotify/login`;
-              }}
-              disabled={!spotifyEnabled}
-              title={spotifyEnabled ? undefined : "Spotify временно отключён"}
-              className={userProfile?.spotify_linked ? small : smallPrimary}
-            >
-              {userProfile?.spotify_linked ? "Обновить" : "Подключить"}
-            </button>
+            {spotifyEnabled ? (
+              <a
+                href={`${API_URL}/auth/spotify/login`}
+                className={userProfile?.spotify_linked ? small : smallPrimary}
+              >
+                {userProfile?.spotify_linked ? "Обновить" : "Подключить"}
+              </a>
+            ) : (
+              <button
+                type="button"
+                disabled
+                title="Spotify временно отключён"
+                className={userProfile?.spotify_linked ? small : smallPrimary}
+              >
+                {userProfile?.spotify_linked ? "Обновить" : "Подключить"}
+              </button>
+            )}
           </div>
         </Row>
 
@@ -248,11 +318,15 @@ export default function IntegrationsTab({
             <button
               type="button"
               onClick={startLastfmImport}
-              disabled={!importEnabled || !lastfmEnabled}
+              disabled={
+                !importEnabled || !lastfmEnabled || !preferences.lastfm_enabled
+              }
               title={
-                importEnabled && lastfmEnabled
+                importEnabled && lastfmEnabled && preferences.lastfm_enabled
                   ? undefined
-                  : "Импорт временно отключён"
+                  : preferences.lastfm_enabled
+                    ? "Импорт временно отключён"
+                    : "Last.fm приостановлен в настройках аккаунта"
               }
               className={`${smallPrimary} flex-1`}
             >

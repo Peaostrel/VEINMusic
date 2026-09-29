@@ -6,6 +6,7 @@ import { Heart, MessageCircle, Users } from "lucide-react";
 import About from "./about/page";
 import { API_URL } from "@/app/lib/api";
 import { formatNumber, plural } from "@/app/lib/plural";
+import { storedPreferences } from "@/app/lib/preferences";
 import { isValidUser } from "@/app/lib/theme";
 import type { TasteTwin } from "@/app/lib/types";
 import { useVisiblePolling } from "@/app/lib/usePolling";
@@ -36,6 +37,8 @@ interface FeedItem {
   comments_count: number;
   listening_with?: string[];
   is_playing?: boolean;
+  can_like?: boolean;
+  can_comment?: boolean;
 }
 
 interface WeekStats {
@@ -47,6 +50,15 @@ interface WeekStats {
 }
 
 type FeedTab = "global" | "friends";
+
+function sourceIsHidden(source: string, hiddenSources: string[]): boolean {
+  const normalized = source.toLowerCase();
+  return hiddenSources.some((hidden) => {
+    if (hidden === "desktop")
+      return normalized.includes("desktop") || normalized.includes("app");
+    return normalized.includes(hidden);
+  });
+}
 
 function Cover({ src }: Readonly<{ src?: string }>) {
   const url = sanitizeImageUrl(src);
@@ -99,11 +111,17 @@ function FeedRow({
         <button
           type="button"
           onClick={onLike}
+          disabled={item.can_like === false}
           aria-pressed={liked}
           aria-label={`Нравится: ${item.likes_count || 0}`}
+          title={
+            item.can_like === false
+              ? "Пользователь отключил реакции"
+              : undefined
+          }
           className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2 font-mono text-xs transition-colors hover:bg-surface-2 ${
             liked ? "text-accent" : "text-fg-2"
-          }`}
+          } disabled:cursor-not-allowed disabled:opacity-35`}
         >
           <Heart
             className={`h-4 w-4 ${liked ? "fill-current" : ""}`}
@@ -111,14 +129,24 @@ function FeedRow({
           />
           {item.likes_count || 0}
         </button>
-        <Link
-          href={`/user/${item.username}`}
-          aria-label={`Комментарии: ${item.comments_count || 0}`}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 font-mono text-xs text-fg-2 transition-colors hover:bg-surface-2"
-        >
-          <MessageCircle className="h-4 w-4" aria-hidden="true" />
-          {item.comments_count || 0}
-        </Link>
+        {item.can_comment === false ? (
+          <span
+            title="Пользователь отключил комментарии"
+            className="inline-flex h-8 cursor-not-allowed items-center gap-1.5 rounded-md px-2 font-mono text-xs text-fg-2 opacity-35"
+          >
+            <MessageCircle className="h-4 w-4" aria-hidden="true" />
+            {item.comments_count || 0}
+          </span>
+        ) : (
+          <Link
+            href={`/user/${item.username}`}
+            aria-label={`Комментарии: ${item.comments_count || 0}`}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 font-mono text-xs text-fg-2 transition-colors hover:bg-surface-2"
+          >
+            <MessageCircle className="h-4 w-4" aria-hidden="true" />
+            {item.comments_count || 0}
+          </Link>
+        )}
       </div>
     </li>
   );
@@ -274,11 +302,24 @@ export default function Home() {
   const [username, setUsername] = useState<string | null>(null);
   const [checked, setChecked] = useState(false);
   const [liked, setLiked] = useState<Set<number>>(new Set());
+  const [hiddenSources, setHiddenSources] = useState<string[]>([]);
 
   useEffect(() => {
     const u = localStorage.getItem("username");
+    const feed = storedPreferences().feed;
     setUsername(isValidUser(u) ? u : null);
+    setActiveFeed(feed.default_scope === "following" ? "friends" : "global");
+    setHiddenSources(feed.hidden_sources);
     setChecked(true);
+
+    const updatePreferences = () => {
+      const next = storedPreferences().feed;
+      setActiveFeed(next.default_scope === "following" ? "friends" : "global");
+      setHiddenSources(next.hidden_sources);
+    };
+    globalThis.addEventListener("preferences_update", updatePreferences);
+    return () =>
+      globalThis.removeEventListener("preferences_update", updatePreferences);
   }, []);
 
   const fetchFeed = useCallback(async () => {
@@ -327,6 +368,7 @@ export default function Home() {
   }, [username]);
 
   const toggleLike = async (scrobbleId: number) => {
+    const wasLiked = liked.has(scrobbleId);
     setLiked((prev) => {
       const next = new Set(prev);
       if (next.has(scrobbleId)) next.delete(scrobbleId);
@@ -334,14 +376,24 @@ export default function Home() {
       return next;
     });
     try {
-      await fetch(`${API_URL}/api/scrobble/${scrobbleId}/like`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-      });
+      const response = await fetch(
+        `${API_URL}/api/scrobble/${scrobbleId}/like`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+        },
+      );
+      if (!response.ok) throw new Error("Реакции отключены");
       await fetchFeed();
     } catch (e) {
       console.error(e);
+      setLiked((prev) => {
+        const next = new Set(prev);
+        if (wasLiked) next.add(scrobbleId);
+        else next.delete(scrobbleId);
+        return next;
+      });
     }
   };
 
@@ -360,7 +412,9 @@ export default function Home() {
     );
   if (!username) return <About />;
 
-  const currentFeed = activeFeed === "global" ? globalHistory : friendsHistory;
+  const currentFeed = (
+    activeFeed === "global" ? globalHistory : friendsHistory
+  ).filter((item) => !sourceIsHidden(item.source, hiddenSources));
 
   let feedBody: React.ReactNode;
   if (loading) feedBody = <SkeletonRows />;

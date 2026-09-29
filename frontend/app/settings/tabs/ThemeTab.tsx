@@ -2,7 +2,13 @@
 import { Check, Headphones, Lock } from "lucide-react";
 import React from "react";
 import { THEMES } from "../utils";
-import type { SettingsData, UpdateData } from "../types";
+import type { SettingsData, UpdateData, UpdatePreference } from "../types";
+import {
+  SelectRow,
+  SettingsIntro,
+  ToggleRow,
+  settingsCard,
+} from "../components/PreferenceControls";
 
 const FRAMES = [
   { id: "", name: "Без рамки", req: 1, class: "" },
@@ -21,19 +27,81 @@ const FRAMES = [
 interface ThemeTabProps {
   data: SettingsData;
   updateData: UpdateData;
+  updatePreference: UpdatePreference;
   level: number;
 }
 
 export default function ThemeTab({
   data,
   updateData,
+  updatePreference,
   level,
 }: Readonly<ThemeTabProps>) {
   const isThemeCustom =
     data.theme && typeof data.theme === "string" && data.theme.startsWith("#");
+  const appearance = data.preferences.appearance;
+  const updateAppearance = (patch: Partial<typeof appearance>) =>
+    updatePreference("appearance", { ...appearance, ...patch });
 
   return (
     <div className="space-y-8">
+      <SettingsIntro
+        title="Оформление"
+        description="Настройте режим, масштаб, доступность, цветовую тему и рамку аватара. Изменения интерфейса видны сразу, но сохраняются только кнопкой внизу."
+      />
+      <section className={settingsCard}>
+        <SelectRow
+          title="Режим интерфейса"
+          description="Тёмный, светлый или зависящий от настроек устройства."
+          value={appearance.color_mode}
+          options={[
+            { value: "dark", label: "Тёмный" },
+            { value: "light", label: "Светлый" },
+            { value: "system", label: "Как в системе" },
+          ]}
+          onChange={(color_mode) => updateAppearance({ color_mode })}
+        />
+        <SelectRow
+          title="Плотность интерфейса"
+          description="Компактный режим уменьшает навигацию и интервалы."
+          value={appearance.density}
+          options={[
+            { value: "comfortable", label: "Обычная" },
+            { value: "compact", label: "Компактная" },
+          ]}
+          onChange={(density) => updateAppearance({ density })}
+        />
+        <SelectRow
+          title="Размер интерфейса"
+          description="Меняет базовый размер текста и элементов сайта."
+          value={appearance.font_scale}
+          options={[
+            { value: "small", label: "Меньше" },
+            { value: "normal", label: "Обычный" },
+            { value: "large", label: "Больше" },
+          ]}
+          onChange={(font_scale) => updateAppearance({ font_scale })}
+        />
+        <ToggleRow
+          title="Сократить анимации"
+          description="Отключает декоративные переходы и движения интерфейса."
+          checked={appearance.reduce_motion}
+          onChange={(reduce_motion) => updateAppearance({ reduce_motion })}
+        />
+        <ToggleRow
+          title="Повышенный контраст"
+          description="Делает границы и вторичный текст заметнее."
+          checked={appearance.high_contrast}
+          onChange={(high_contrast) => updateAppearance({ high_contrast })}
+        />
+        <ToggleRow
+          title="Размытие фона"
+          description="Использовать backdrop-blur в плавающих панелях и окнах."
+          checked={appearance.background_blur}
+          onChange={(background_blur) => updateAppearance({ background_blur })}
+        />
+      </section>
+
       {/* Секция цветовой темы */}
       <div>
         <h2 className="text-lg font-semibold text-fg mb-6">

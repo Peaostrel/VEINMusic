@@ -44,7 +44,8 @@ export interface VapidKeyResponse {
   vapid_public_key: string | null;
 }
 
-export type NotificationKind = "like" | "comment" | "follow" | "system";
+export type NotificationKind =
+  "like" | "comment" | "follow" | "system" | "recap";
 
 export interface SocialNotification {
   id: number;
@@ -168,6 +169,112 @@ export interface UserInfo {
   /** Only present for the owner in some responses */
   api_key?: string;
   yandex_token?: string;
+  preferences?: PublicUserPreferences;
+}
+
+export type Visibility = "all" | "followers" | "private";
+export type ProfileSection =
+  | "showcase"
+  | "recommendations"
+  | "history"
+  | "wrapped"
+  | "top_tracks"
+  | "top_artists";
+
+export interface NotificationChannels {
+  likes: boolean;
+  comments: boolean;
+  follows: boolean;
+  achievements: boolean;
+  system: boolean;
+  weekly_digest: boolean;
+  new_releases: boolean;
+  room_invites: boolean;
+}
+
+export interface UserPreferences {
+  version: 1;
+  appearance: {
+    color_mode: "dark" | "light" | "system";
+    density: "comfortable" | "compact";
+    font_scale: "small" | "normal" | "large";
+    reduce_motion: boolean;
+    high_contrast: boolean;
+    background_blur: boolean;
+  };
+  profile: {
+    section_order: ProfileSection[];
+    hidden_sections: ProfileSection[];
+    show_online_status: boolean;
+  };
+  privacy: {
+    history: Visibility;
+    statistics: Visibility;
+    current_track: Visibility;
+    showcase: Visibility;
+    followers: Visibility;
+    location: Visibility;
+    social_links: Visibility;
+    show_listening_source: boolean;
+  };
+  listening: {
+    ignored_artists: string[];
+    ignored_tracks: string[];
+    ignored_sources: string[];
+    ignore_short_tracks: boolean;
+    short_track_seconds: number;
+    private_session_until: string | null;
+    auto_metadata: boolean;
+  };
+  feed: {
+    share_scrobbles: boolean;
+    share_achievements: boolean;
+    allow_comments: boolean;
+    allow_likes: boolean;
+    default_scope: "all" | "following";
+    hidden_sources: string[];
+  };
+  notifications: {
+    in_app: NotificationChannels;
+    push: NotificationChannels;
+    quiet_hours_enabled: boolean;
+    quiet_from: string;
+    quiet_to: string;
+  };
+  wrapped: {
+    default_period: "7d" | "30d" | "90d" | "year" | "all";
+    show_minutes: boolean;
+    show_artists: boolean;
+    show_tracks: boolean;
+    show_new_artists: boolean;
+    identity: "username" | "display_name";
+    card_style: "classic" | "minimal" | "vivid";
+    auto_weekly: boolean;
+    auto_monthly: boolean;
+  };
+  integrations: {
+    spotify_enabled: boolean;
+    yandex_enabled: boolean;
+    lastfm_enabled: boolean;
+    auto_sync: boolean;
+  };
+  experiments: {
+    smart_recommendations: boolean;
+    taste_passport: boolean;
+    new_profile_layout: boolean;
+    diagnostics: boolean;
+  };
+}
+
+export interface PublicUserPreferences {
+  appearance: UserPreferences["appearance"];
+  profile: UserPreferences["profile"];
+  privacy: UserPreferences["privacy"];
+  wrapped: UserPreferences["wrapped"];
+  experiments: Pick<
+    UserPreferences["experiments"],
+    "smart_recommendations" | "taste_passport" | "new_profile_layout"
+  >;
 }
 
 /** One scrobble in history / feeds. */
@@ -191,6 +298,8 @@ export interface HistoryEntry {
   likes_count: number;
   comments_count: number;
   is_liked?: boolean;
+  can_like?: boolean;
+  can_comment?: boolean;
 }
 
 export interface TopTrack {

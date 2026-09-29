@@ -23,6 +23,7 @@ export interface ProfileStatsSectionProps {
   socialLinks: SocialLink[];
   countries: Country[];
   favoriteAlbumRedirectUrl: string;
+  showShowcase?: boolean;
 }
 
 function Fact({
@@ -96,6 +97,7 @@ export function ProfileStatsSection({
   socialLinks,
   countries,
   favoriteAlbumRedirectUrl,
+  showShowcase = true,
 }: Readonly<ProfileStatsSectionProps>) {
   let location: React.ReactNode = null;
   if (u.location) {
@@ -131,9 +133,9 @@ export function ProfileStatsSection({
     .map((link) => ({ link, href: getSocialUrl(link.network, link.username) }))
     .filter((x): x is { link: SocialLink; href: string } => Boolean(x.href));
   const hasFacts = Boolean(location || u.favorite_genre || u.equipment);
-  const hasShowcase = Boolean(
-    u.favorite_artist || u.favorite_track || u.favorite_album,
-  );
+  const hasShowcase =
+    showShowcase &&
+    Boolean(u.favorite_artist || u.favorite_track || u.favorite_album);
 
   if (!taste?.match && !links.length && !hasFacts && !hasShowcase) return null;
 

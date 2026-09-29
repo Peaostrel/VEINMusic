@@ -102,6 +102,7 @@ export default function Profile() {
 
   const displayedAchs =
     u.achievements?.filter((a) => a.is_displayed !== false) || [];
+  const hiddenSections = new Set(u.preferences?.profile.hidden_sections ?? []);
 
   const view = {
     ...profile,
@@ -180,6 +181,7 @@ export default function Profile() {
         socialLinks={socialLinks}
         countries={countries}
         favoriteAlbumRedirectUrl={favoriteAlbumRedirectUrl}
+        showShowcase={!hiddenSections.has("showcase")}
       />
 
       <ProfileMainGrid {...view} />

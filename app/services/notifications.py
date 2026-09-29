@@ -6,13 +6,15 @@ Web Push by the background worker (`send_social_push`).
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import Notification, Scrobble, ScrobbleComment, Track, User
+from app.services.user_preferences import preferences_dict
+from app.services.user_stats import get_user_timezone_offset
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +23,15 @@ KIND_COMMENT = "comment"
 KIND_FOLLOW = "follow"
 # Announcements sent from the admin panel; the actor is the sending admin
 KIND_SYSTEM = "system"
-KINDS = {KIND_LIKE, KIND_COMMENT, KIND_FOLLOW, KIND_SYSTEM}
+KIND_RECAP = "recap"
+KINDS = {KIND_LIKE, KIND_COMMENT, KIND_FOLLOW, KIND_SYSTEM, KIND_RECAP}
+PREFERENCE_KEYS = {
+    KIND_LIKE: "likes",
+    KIND_COMMENT: "comments",
+    KIND_FOLLOW: "follows",
+    KIND_SYSTEM: "system",
+    KIND_RECAP: "weekly_digest",
+}
 
 MAX_LIST = 50
 COMMENT_MATCH_SLACK = timedelta(seconds=5)
@@ -34,6 +44,12 @@ def create(db: Session, *, recipient_id: int, actor_id: int, kind: str,
     nothing to notify: own actions, or a repeated like/follow."""
     if kind not in KINDS or recipient_id == actor_id:
         return None
+    recipient = db.query(User).filter(User.id == recipient_id).first()
+    if recipient and recipient.profile:
+        channels = preferences_dict(recipient.profile)["notifications"]
+        key = PREFERENCE_KEYS[kind]
+        if not channels["in_app"].get(key, True) and not channels["push"].get(key, True):
+            return None
     if kind in (KIND_LIKE, KIND_FOLLOW):
         # Toggling a like/follow on and off must not spam the recipient
         exists = db.query(Notification.id).filter(
@@ -76,7 +92,7 @@ def delete_for_user(db: Session, user_id: int) -> None:
 
 
 def _describe(kind: str, actor: str, track_title: Optional[str], message: Optional[str] = None) -> str:
-    if kind == KIND_SYSTEM:
+    if kind in (KIND_SYSTEM, KIND_RECAP):
         return message or ""
     target = f"«{track_title}»" if track_title else "ваше прослушивание"
     if kind == KIND_LIKE:
@@ -108,18 +124,27 @@ def _comment_ids(db: Session, notes: list[Notification]) -> dict[int, int]:
 
 
 def list_for_user(db: Session, user_id: int, limit: int = MAX_LIST) -> dict[str, Any]:
+    user = db.query(User).filter(User.id == user_id).first()
+    in_app = preferences_dict(user.profile)["notifications"]["in_app"] if user else {}
+    enabled_kinds = [
+        kind for kind, key in PREFERENCE_KEYS.items() if in_app.get(key, True)
+    ]
+    if not enabled_kinds:
+        return {"items": [], "unread": 0}
     rows = (
         db.query(Notification, User, Track.title, Track.artist)
         .join(User, User.id == Notification.actor_id)
         .outerjoin(Scrobble, Scrobble.id == Notification.scrobble_id)
         .outerjoin(Track, Track.id == Scrobble.track_id)
-        .filter(Notification.user_id == user_id)
+        .filter(Notification.user_id == user_id, Notification.kind.in_(enabled_kinds))
         .order_by(Notification.created_at.desc(), Notification.id.desc())
         .limit(max(1, min(limit, MAX_LIST)))
         .all()
     )
     unread = db.query(Notification).filter(
-        Notification.user_id == user_id, Notification.is_read.is_(False)).count()
+        Notification.user_id == user_id,
+        Notification.kind.in_(enabled_kinds),
+        Notification.is_read.is_(False)).count()
     comment_ids = _comment_ids(db, [n for n, *_ in rows])
     items = []
     for n, actor, title, artist in rows:
@@ -164,13 +189,45 @@ def _push_payload(notification_id: int) -> Optional[tuple[int, str, str, str]]:
         if row is None:
             return None
         n, actor, title = row
+        recipient = db.query(User).filter(User.id == n.user_id).first()
+        if recipient and not push_allowed(
+                recipient, PREFERENCE_KEYS.get(str(n.kind), "system")):
+            return None
         body = _describe(str(n.kind), str(actor.username), title)
         if n.message:
             body = f"{body}: {n.message}"
-        url = f"/user/{actor.username}" if n.kind == KIND_FOLLOW else "/"
+        if n.kind == KIND_FOLLOW:
+            url = f"/user/{actor.username}"
+        elif n.kind == KIND_RECAP:
+            url = f"/user/{actor.username}/stats"
+        else:
+            url = "/"
         return int(n.user_id), "VEIN Music", body, url
     finally:
         db.close()
+
+
+def _in_quiet_hours(user: User, start: str, end: str) -> bool:
+    offset = get_user_timezone_offset(
+        user.profile.location if user.profile else "")
+    local_time = datetime.now(UTC).astimezone(
+        timezone(timedelta(hours=offset))).strftime("%H:%M")
+    if start == end:
+        return True
+    if start < end:
+        return start <= local_time < end
+    return local_time >= start or local_time < end
+
+
+def push_allowed(user: User, preference_key: str) -> bool:
+    """Whether this kind of Web Push may be sent right now."""
+    settings = preferences_dict(user.profile)["notifications"]
+    if not settings["push"].get(preference_key, True):
+        return False
+    return not (
+        settings.get("quiet_hours_enabled")
+        and _in_quiet_hours(user, settings["quiet_from"], settings["quiet_to"])
+    )
 
 
 async def send_social_push(notification_id: int) -> None:

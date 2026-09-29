@@ -12,15 +12,35 @@ from app.core.rate_limit import limiter
 from app.core.security import SECRET_KEY, get_current_user
 from app.database import get_db
 from app.models import User
-from app.schemas import PrivacyUpdate, ProfileUpdate
+from app.schemas import PrivacyUpdate, ProfileUpdate, UserPreferences
 from app.services.cache import clear_all
 from app.services.metadata_search import search_metadata
+from app.services.user_preferences import preferences_dict, save_preferences
 from app.utils import sanitize_text
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])
 
 
 FAVORITE_LOCK = timedelta(days=30)
+
+
+@router.get("/preferences")
+def get_user_preferences(
+        current_user: Annotated[User, Depends(get_current_user)]):
+    return preferences_dict(current_user.profile)
+
+
+@router.put("/preferences")
+@limiter.limit("20/minute")
+def update_user_preferences(
+        request: Request,
+        data: UserPreferences,
+        db: Annotated[Session, Depends(get_db)],
+        current_user: Annotated[User, Depends(get_current_user)]):
+    save_preferences(current_user.profile, data)
+    db.commit()
+    clear_all()
+    return preferences_dict(current_user.profile)
 
 
 def _as_utc(value: datetime) -> datetime:

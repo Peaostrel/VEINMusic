@@ -27,6 +27,7 @@ from app.models import (
     UserAchievement,
 )
 from app.services.og_parser import parse_og_meta, yandex_api_meta
+from app.services.notifications import push_allowed
 from app.services.user_stats import get_user_timezone_offset
 
 logger = logging.getLogger(__name__)
@@ -204,15 +205,18 @@ async def notify_achievements_unlocked(user_id: int, achievements: list[dict]) -
     from app.services.webhooks import dispatch_webhook_event
     db = SessionLocal()
     try:
+        user = db.query(User).filter(User.id == user_id).first()
+        push_enabled = not user or push_allowed(user, "achievements")
         for ach in achievements:
             await dispatch_webhook_event("achievement.unlocked", ach, user_id, db)
-            await notify_user_push(
-                user_id=user_id,
-                title=f"{ach.get('icon') or '🏆'} Новое достижение!",
-                body=f"{ach['name']} (+{ach.get('reward_xp') or 0} XP)",
-                url="/",
-                db=db,
-            )
+            if push_enabled:
+                await notify_user_push(
+                    user_id=user_id,
+                    title=f"{ach.get('icon') or '🏆'} Новое достижение!",
+                    body=f"{ach['name']} (+{ach.get('reward_xp') or 0} XP)",
+                    url="/",
+                    db=db,
+                )
     except Exception:
         logger.exception("Failed to send achievement notifications")
     finally:

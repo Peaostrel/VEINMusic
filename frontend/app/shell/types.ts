@@ -8,4 +8,5 @@ export interface NavUser {
   is_verified?: boolean;
   level?: number;
   theme?: string;
+  preferences?: import("@/app/lib/types").PublicUserPreferences;
 }

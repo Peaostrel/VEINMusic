@@ -23,10 +23,12 @@ from app.models import (
     User,
     UserProfile,
 )
+from app.routers.common import _can_view_section, _check_privacy_and_owner
 from app.schemas import CommentRequest, ScrobbleData
 from app.services import notifications
 from app.services.cache import delete_from_cache, get_from_cache, set_to_cache
 from app.services.scrobble_processor import format_history_item, process_scrobble
+from app.services.user_preferences import preference_enabled, preferences_dict
 
 logger = logging.getLogger(__name__)
 
@@ -121,14 +123,8 @@ def get_history(username: str,
     if not user:
         raise HTTPException(404)
 
-    # Privacy check: if user is private, only the user themselves can view
-    # their history
-    if user.profile and user.profile.is_private:
-        is_owner = current_user and current_user.id == user.id
-        if not is_owner:
-            raise HTTPException(
-                status_code=403,
-                detail="Это приватный профиль")
+    if not _can_view_section(user, request, db, "history"):
+        raise HTTPException(status_code=403, detail="Это приватный профиль")
 
     # A scrobble is valid if it was listened to for >= 15 seconds, OR if it's currently playing
     # (updated_at within the last 45 seconds and is_playing is True)
@@ -148,14 +144,29 @@ def get_history(username: str,
     s_ids = [s.id for s, t in scrobbles]
     counters = get_scrobble_counters(db, s_ids)
 
+    history = [
+        format_history_item(s, t, counters=counters) for s, t in scrobbles
+    ]
+    _, is_owner = _check_privacy_and_owner(user, request, db)
+    can_see_live = _can_view_section(user, request, db, "current_track")
+    show_online = preference_enabled(
+        user.profile, "profile", "show_online_status"
+    )
+    if not can_see_live or (not is_owner and not show_online):
+        history = [item for item in history if not item["is_playing"]]
+    if not preference_enabled(user.profile, "privacy", "show_listening_source"):
+        for item in history:
+            item["source"] = ""
+    for item in history:
+        item["can_like"] = preference_enabled(
+            user.profile, "feed", "allow_likes"
+        )
+        item["can_comment"] = preference_enabled(
+            user.profile, "feed", "allow_comments"
+        )
     return {
         "user": username,
-        "history": [
-            format_history_item(
-                s,
-                t,
-                counters=counters) for s,
-            t in scrobbles]}
+        "history": history}
 
 
 GLOBAL_HISTORY_CACHE_KEY = "global_history"
@@ -185,12 +196,36 @@ def get_global_history(db: Annotated[Session, Depends(get_db)]):
                     Scrobble.is_playing.is_(True) & (Scrobble.updated_at >= active_threshold)
                 )
             ).order_by(
-                    Scrobble.id.desc()).limit(20).all()
+                    Scrobble.id.desc()).limit(100).all()
+
+    scrobbles = [
+        row for row in scrobbles
+        if preference_enabled(row[0].user.profile, "feed", "share_scrobbles")
+    ][:20]
 
     s_ids = [s.id for s, t in scrobbles]
     counters = get_scrobble_counters(db, s_ids)
 
-    result = [format_history_item(s, t, counters=counters) for s, t in scrobbles]
+    result = []
+    for scrobble, track in scrobbles:
+        item = format_history_item(scrobble, track, counters=counters)
+        show_online = preference_enabled(
+            scrobble.user.profile, "profile", "show_online_status"
+        )
+        current_track_public = (
+            preferences_dict(scrobble.user.profile)["privacy"]["current_track"]
+            == "all"
+        )
+        if item["is_playing"] and (not show_online or not current_track_public):
+            continue
+        if not preference_enabled(
+                scrobble.user.profile, "privacy", "show_listening_source"):
+            item["source"] = ""
+        item["can_like"] = preference_enabled(
+            scrobble.user.profile, "feed", "allow_likes")
+        item["can_comment"] = preference_enabled(
+            scrobble.user.profile, "feed", "allow_comments")
+        result.append(item)
     set_to_cache(GLOBAL_HISTORY_CACHE_KEY, jsonable_encoder(result))
     return result
 
@@ -232,12 +267,37 @@ def get_friends_history(username: str,
             Scrobble.is_playing.is_(True) & (Scrobble.updated_at >= active_threshold)
         )
     ).order_by(
-            Scrobble.id.desc()).limit(20).all()
+            Scrobble.id.desc()).limit(100).all()
+
+    scrobbles = [
+        row for row in scrobbles
+        if preference_enabled(row[0].user.profile, "feed", "share_scrobbles")
+    ][:20]
 
     s_ids = [s.id for s, t in scrobbles]
     counters = get_scrobble_counters(db, s_ids)
 
-    return [format_history_item(s, t, counters=counters) for s, t in scrobbles]
+    result = []
+    for scrobble, track in scrobbles:
+        item = format_history_item(scrobble, track, counters=counters)
+        if item["is_playing"] and (
+            not _can_view_section(
+                scrobble.user, request, db, "current_track"
+            )
+            or not preference_enabled(
+                scrobble.user.profile, "profile", "show_online_status"
+            )
+        ):
+            continue
+        if not preference_enabled(
+                scrobble.user.profile, "privacy", "show_listening_source"):
+            item["source"] = ""
+        item["can_like"] = preference_enabled(
+            scrobble.user.profile, "feed", "allow_likes")
+        item["can_comment"] = preference_enabled(
+            scrobble.user.profile, "feed", "allow_comments")
+        result.append(item)
+    return result
 
 
 @router.get("/discovery/taste-twins",
@@ -275,6 +335,9 @@ def toggle_like(scrobble_id: int, request: Request, background_tasks: Background
         scrobble_owner_profile = db.query(UserProfile).filter(UserProfile.user_id == scrobble.user_id).first()
         if scrobble_owner_profile and scrobble_owner_profile.is_private:
             raise HTTPException(status_code=403, detail="Доступ запрещен (приватный профиль)")
+        if scrobble_owner_profile and not preference_enabled(
+                scrobble_owner_profile, "feed", "allow_likes"):
+            raise HTTPException(status_code=403, detail="Пользователь отключил реакции")
 
     like = db.query(ScrobbleLike).filter_by(
         user_id=user.id, scrobble_id=scrobble_id).first()
@@ -322,6 +385,9 @@ def add_comment(scrobble_id: int,
         scrobble_owner_profile = db.query(UserProfile).filter(UserProfile.user_id == scrobble.user_id).first()
         if scrobble_owner_profile and scrobble_owner_profile.is_private:
             raise HTTPException(status_code=403, detail="Доступ запрещен (приватный профиль)")
+        if scrobble_owner_profile and not preference_enabled(
+                scrobble_owner_profile, "feed", "allow_comments"):
+            raise HTTPException(status_code=403, detail="Пользователь отключил комментарии")
 
     clean_content = sanitize_text(data.content)
     db.add(
