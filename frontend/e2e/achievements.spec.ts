@@ -72,9 +72,24 @@ test("shows the exact album tracks that remain", async ({ page }) => {
             rule_target: "https://music.yandex.ru/album/42",
             track_progress_available: true,
           },
+          {
+            id: 43,
+            name: "Дискография исполнителя",
+            description: "Прослушать все треки артиста",
+            icon: "🎤",
+            target_image: null,
+            reward_xp: 100,
+            is_earned: false,
+            rarity: 2,
+            current_progress: 1,
+            target_value: 3,
+            rule_type: "specific_artist",
+            rule_target: "Исполнитель||https://music.yandex.ru/artist/55",
+            track_progress_available: true,
+          },
         ],
         earned_count: 0,
-        total_count: 1,
+        total_count: 2,
       }),
     });
   });
@@ -116,6 +131,37 @@ test("shows the exact album tracks that remain", async ({ page }) => {
       });
     },
   );
+  await page.route(
+    "**/api/achievements/artist-progress/alice/43",
+    async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        headers: corsHeaders,
+        body: JSON.stringify({
+          available: true,
+          listened_count: 1,
+          remaining_count: 2,
+          total_count: 3,
+          tracks: [
+            {
+              id: "11",
+              title: "Засчитан артисту",
+              artist: "Исполнитель",
+              url: "https://music.yandex.ru/album/7/track/11",
+              listened: true,
+            },
+            {
+              id: "12",
+              title: "Ещё не слушал",
+              artist: "Исполнитель",
+              url: "https://music.yandex.ru/album/7/track/12",
+              listened: false,
+            },
+          ],
+        }),
+      });
+    },
+  );
 
   await page.goto("/user/alice/achievements");
   await page.getByRole("button", { name: /Какие треки остались/ }).click();
@@ -124,4 +170,10 @@ test("shows the exact album tracks that remain", async ({ page }) => {
   await expect(page.getByText("Остался второй")).toBeVisible();
   await page.getByText("Уже засчитано: 1").click();
   await expect(page.getByText("Уже был")).toBeVisible();
+
+  await page.getByRole("button", { name: /Незасчитанные треки/ }).click();
+  await expect(page.getByText("Ещё не слушал")).toBeVisible();
+  await expect(
+    page.getByText("Для достижения нужно ещё 2 уникальных трека."),
+  ).toBeVisible();
 });

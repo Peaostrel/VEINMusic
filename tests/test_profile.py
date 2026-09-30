@@ -348,3 +348,51 @@ def test_album_track_details_are_available_only_to_profile_owner(auth_client, au
         f"/api/achievements/album-progress/profileuser/{achievement_id}"
     )
     assert response.status_code == 403
+
+
+def test_artist_track_details_are_available_only_to_profile_owner(auth_client, auth_user):
+    from app.models import Achievement
+
+    db = SessionLocal()
+    try:
+        achievement = Achievement(
+            name="Дискография",
+            description="Прослушать треки исполнителя",
+            icon="🎤",
+            rule_type="specific_artist",
+            rule_value=83,
+            rule_target="LAZZY2WICE||https://music.yandex.ru/artist/55",
+        )
+        db.add(achievement)
+        db.commit()
+        db.refresh(achievement)
+        achievement_id = achievement.id
+    finally:
+        db.close()
+
+    listing = auth_client.get("/api/achievements/all/profileuser")
+    card = next(item for item in listing.json()["achievements"] if item["id"] == achievement_id)
+    assert card["track_progress_available"] is True
+
+    artist_progress = {
+        "available": True,
+        "tracks": [],
+        "listened_count": 6,
+        "remaining_count": 77,
+        "total_count": 83,
+    }
+    with patch(
+        "app.routers.achievements.get_artist_track_progress",
+        new=AsyncMock(return_value=artist_progress),
+    ):
+        response = auth_client.get(
+            f"/api/achievements/artist-progress/profileuser/{achievement_id}"
+        )
+    assert response.status_code == 200
+    assert response.json()["remaining_count"] == 77
+
+    auth_client.cookies.clear()
+    response = auth_client.get(
+        f"/api/achievements/artist-progress/profileuser/{achievement_id}"
+    )
+    assert response.status_code == 403

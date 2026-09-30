@@ -34,6 +34,7 @@ from app.services.achievements import (
     _format_achievement_data,
     check_auto_achievements,
     get_album_track_progress,
+    get_artist_track_progress,
 )
 
 router = APIRouter(tags=["achievements"])
@@ -67,7 +68,7 @@ def get_all_achievements(
     for a in all_achs:
         item = _format_achievement_data(db, user, a, user_achs.get(a.id), total_users)
         item["track_progress_available"] = bool(
-            is_owner and a.rule_type == "specific_album"
+            is_owner and a.rule_type in {"specific_album", "specific_artist"}
         )
         res.append(item)
 
@@ -114,6 +115,37 @@ async def get_achievement_album_progress(
         raise HTTPException(404, "Альбомное достижение не найдено")
 
     result = await get_album_track_progress(db, user, achievement)
+    return {"achievement_id": achievement.id, **result}
+
+
+@router.get(
+    "/api/achievements/artist-progress/{username}/{achievement_id}",
+    responses={
+        403: {"description": "Only the profile owner can view track progress"},
+        404: {"description": "User or achievement not found"},
+    },
+)
+async def get_achievement_artist_progress(
+        username: str,
+        achievement_id: int,
+        request: Request,
+        db: Annotated[Session, Depends(get_db)]):
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    _, is_owner = _check_privacy_and_owner(user, request, db)
+    if not is_owner:
+        raise HTTPException(
+            403, "Подробный прогресс доступен только владельцу профиля")
+
+    achievement = db.query(Achievement).filter(
+        Achievement.id == achievement_id,
+        Achievement.rule_type == "specific_artist",
+    ).first()
+    if not achievement:
+        raise HTTPException(404, "Достижение исполнителя не найдено")
+
+    result = await get_artist_track_progress(db, user, achievement)
     return {"achievement_id": achievement.id, **result}
 
 

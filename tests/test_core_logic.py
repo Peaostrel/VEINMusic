@@ -313,12 +313,19 @@ def test_specific_artist_and_track_rules(db):
     one_word = _achievement(db, name="one-word", rule_type="specific_track", rule_target="Kukla", rule_value=3)
     too_many = _achievement(db, name="too-many", rule_type="specific_track", rule_target="Kukla", rule_value=50)
     names = _awarded_names(db, user)
-    assert {"artist", "track-text", "one-word"} <= names
+    assert {"track-text", "one-word"} <= names
+    assert "artist" not in names  # replaying one song does not count as new tracks
     assert "too-many" not in names
+    assert ach._calculate_achievement_progress(db, user, artist) == 1
+
+    _listen(db, user, _track(db, title="Lesnik", artist="Korol i Shut"))
+    _listen(db, user, _track(db, title="Prignu so skaly", artist="Korol i Shut"))
+    assert "artist" in _awarded_names(db, user)
     assert user.integration.bonus_xp >= 30
     # Already earned achievements are not awarded twice
     assert not ({"artist", "track-text"} & _awarded_names(db, user))
-    for a in (artist, track_text, one_word, too_many):
+    assert ach._calculate_achievement_progress(db, user, artist) == 3
+    for a in (track_text, one_word, too_many):
         assert ach._calculate_achievement_progress(db, user, a) == 3
 
 
@@ -537,6 +544,52 @@ def test_album_track_progress_reports_unavailable_for_incomplete_catalog(db):
         "remaining_count": 2,
         "total_count": 3,
     }
+
+
+def test_yandex_artist_track_list_and_unique_progress(db):
+    user = _user(db, "artist_details")
+    first = _track(
+        db,
+        title="Первый",
+        artist="Исполнитель",
+        track_url="https://music.yandex.ru/album/7/track/101",
+    )
+    _listen(db, user, first, times=3)
+    achievement = _achievement(
+        db,
+        name="Дискография",
+        rule_type="specific_artist",
+        rule_target="Исполнитель||https://music.yandex.ru/artist/55",
+        rule_value=3,
+    )
+    user.integration.yandex_token = "secret"
+    db.commit()
+
+    def handler(request):
+        assert request.url.path == "/artists/55/tracks"
+        assert request.headers["Authorization"] == "OAuth secret"
+        assert request.url.params["page-size"] == "100"
+        return httpx.Response(200, json={"result": {
+            "tracks": [
+                {"id": "101", "title": "Первый", "artists": [{"name": "Исполнитель"}],
+                 "albums": [{"id": "7"}]},
+                {"id": "102", "title": "Второй", "artists": [{"name": "Исполнитель"}],
+                 "albums": [{"id": "7"}]},
+                {"id": "103", "title": "Третий", "artists": [{"name": "Исполнитель"}],
+                 "albums": [{"id": "8"}]},
+            ],
+            "pager": {"total": 3},
+        }})
+
+    with _mock_http(ach, handler):
+        progress = asyncio.run(ach.get_artist_track_progress(db, user, achievement))
+
+    assert progress["available"] is True
+    assert progress["listened_count"] == 1
+    assert progress["remaining_count"] == 2
+    assert [track["title"] for track in progress["tracks"] if not track["listened"]] == [
+        "Второй", "Третий"]
+    assert ach._calculate_achievement_progress(db, user, achievement) == 1
 
 
 def test_no_auto_achievements(db):
