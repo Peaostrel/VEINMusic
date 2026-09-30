@@ -443,15 +443,16 @@ def _catalog_album_tracks(db: Session, a: Achievement) -> list[dict]:
     result: list[dict] = []
     seen: set[str] = set()
     for track in tracks:
-        identity = _normal_track_title(track.title)
+        title = str(track.title or "")
+        identity = _normal_track_title(title)
         if not identity or identity in seen:
             continue
         seen.add(identity)
         result.append({
             "id": None,
-            "title": track.title,
-            "artist": track.artist,
-            "url": track.track_url,
+            "title": title,
+            "artist": str(track.artist or ""),
+            "url": str(track.track_url) if track.track_url else None,
         })
     return result
 
@@ -464,7 +465,7 @@ def _track_id_from_url(value: str | None) -> str | None:
 async def get_album_track_progress(
         db: Session, user: User, a: Achievement) -> dict:
     """Return the exact album tracks already counted and still required."""
-    target = a.rule_target or ""
+    target = str(a.rule_target or "")
     token = (
         str(user.integration.yandex_token)
         if user.integration and user.integration.yandex_token else None
@@ -487,9 +488,14 @@ async def get_album_track_progress(
         }
 
     listened = _specific_album_tracks(db, user, a)
-    listened_ids = {_track_id_from_url(track.track_url) for track in listened}
+    listened_ids = {
+        _track_id_from_url(str(track.track_url) if track.track_url else None)
+        for track in listened
+    }
     listened_ids.discard(None)
-    listened_titles = {_normal_track_title(track.title) for track in listened}
+    listened_titles = {
+        _normal_track_title(str(track.title or "")) for track in listened
+    }
     rows = []
     for track in canonical:
         is_listened = (
