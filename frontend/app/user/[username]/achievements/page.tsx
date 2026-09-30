@@ -183,11 +183,15 @@ export default function AchievementsPage() {
                   </div>
                   <Meter value={currentVal} max={targetVal} accent={false} />
                   {a.track_progress_available &&
-                    a.rule_type === "specific_album" && (
+                    (a.rule_type === "specific_album" ||
+                      a.rule_type === "specific_artist") && (
                       <AchievementTrackProgress
                         username={data.user.username}
                         achievementId={a.id}
                         remaining={Math.max(targetVal - currentVal, 0)}
+                        kind={
+                          a.rule_type === "specific_artist" ? "artist" : "album"
+                        }
                       />
                     )}
                 </div>

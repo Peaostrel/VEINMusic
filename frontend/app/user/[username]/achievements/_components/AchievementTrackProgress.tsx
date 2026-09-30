@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
 
-interface AlbumTrack {
+interface ProgressTrack {
   id: string | null;
   title: string;
   artist: string;
@@ -18,9 +18,9 @@ interface AlbumTrack {
   listened: boolean;
 }
 
-interface AlbumProgressResponse {
+interface TrackProgressResponse {
   available: boolean;
-  tracks: AlbumTrack[];
+  tracks: ProgressTrack[];
   listened_count: number;
   remaining_count: number;
   total_count: number;
@@ -30,9 +30,20 @@ interface Props {
   username: string;
   achievementId: number;
   remaining: number;
+  kind: "album" | "artist";
 }
 
-function TrackLink({ track }: Readonly<{ track: AlbumTrack }>) {
+function uniqueTrackPhrase(value: number): string {
+  const mod100 = value % 100;
+  const mod10 = value % 10;
+  if (mod10 === 1 && mod100 !== 11) return `${value} уникальный трек`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+    return `${value} уникальных трека`;
+  }
+  return `${value} уникальных треков`;
+}
+
+function TrackLink({ track }: Readonly<{ track: ProgressTrack }>) {
   const content = (
     <>
       <span className="min-w-0 flex-1 truncate">{track.title}</span>
@@ -65,10 +76,11 @@ export function AchievementTrackProgress({
   username,
   achievementId,
   remaining,
+  kind,
 }: Readonly<Props>) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<AlbumProgressResponse | null>(null);
+  const [data, setData] = useState<TrackProgressResponse | null>(null);
   const [error, setError] = useState(false);
   const panelId = useId();
 
@@ -78,10 +90,10 @@ export function AchievementTrackProgress({
     setError(false);
     try {
       const response = await fetch(
-        `${API_URL}/api/achievements/album-progress/${encodeURIComponent(username)}/${achievementId}`,
+        `${API_URL}/api/achievements/${kind}-progress/${encodeURIComponent(username)}/${achievementId}`,
         { credentials: "include" },
       );
-      if (!response.ok) throw new Error("Album progress request failed");
+      if (!response.ok) throw new Error("Track progress request failed");
       setData(await response.json());
     } catch {
       setError(true);
@@ -110,7 +122,7 @@ export function AchievementTrackProgress({
       >
         <span className="inline-flex items-center gap-1.5">
           <Music2 className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
-          Какие треки остались
+          {kind === "artist" ? "Незасчитанные треки" : "Какие треки остались"}
           <span className="font-mono text-fg-3">
             · {data?.remaining_count ?? remaining}
           </span>
@@ -143,16 +155,28 @@ export function AchievementTrackProgress({
           )}
           {data && !data.available && (
             <p className="py-1 text-xs leading-relaxed text-fg-3">
-              Сервис альбома пока не отдал трек-лист. Общий прогресс продолжает
-              считаться.
+              Музыкальный сервис пока не отдал трек-лист. Общий прогресс
+              продолжает считаться.
             </p>
           )}
           {data?.available && (
             <>
               <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.06em] text-fg-3">
-                <span>Осталось послушать</span>
-                <span>{data.remaining_count}</span>
+                <span>
+                  {kind === "artist"
+                    ? "Ещё не засчитаны"
+                    : "Осталось послушать"}
+                </span>
+                <span>
+                  {kind === "artist" ? missing.length : data.remaining_count}
+                </span>
               </div>
+              {kind === "artist" && (
+                <p className="text-[11px] text-fg-3">
+                  Для достижения нужно ещё{" "}
+                  {uniqueTrackPhrase(data.remaining_count)}.
+                </p>
+              )}
               {missing.length === 0 ? (
                 <p className="text-xs text-accent">Все треки прослушаны.</p>
               ) : (
@@ -191,6 +215,8 @@ export function AchievementTrackProgress({
                 </details>
               )}
               <p className="text-[10px] leading-relaxed text-fg-3">
+                {kind === "artist" &&
+                  "Каждая композиция считается только один раз. "}
                 Трек засчитывается после прослушивания не менее 85%.
               </p>
             </>
