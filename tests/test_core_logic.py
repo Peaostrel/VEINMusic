@@ -462,6 +462,83 @@ def test_album_track_count():
         assert asyncio.run(ach.get_album_track_count("https://music.yandex.ru/album/42")) == 0
 
 
+def test_yandex_album_track_list_and_progress(db):
+    user = _user(db, "album_details")
+    first = _track(
+        db,
+        title="Первый",
+        artist="Группа",
+        album="Альбом",
+        track_url="https://music.yandex.ru/album/42/track/101",
+    )
+    third = _track(
+        db,
+        title="Третий!",
+        artist="Группа",
+        album="Альбом",
+        track_url="https://music.yandex.ru/album/42/track/999",
+    )
+    _listen(db, user, first)
+    _listen(db, user, third)
+    achievement = _achievement(
+        db,
+        name="Альбом целиком",
+        rule_type="specific_album",
+        rule_target="https://music.yandex.ru/album/42",
+        rule_value=3,
+    )
+    user.integration.yandex_token = "secret"
+    db.commit()
+
+    seen = []
+
+    def handler(request):
+        seen.append((request.url.path, request.headers.get("Authorization")))
+        if request.url.host == "api.music.yandex.net":
+            return httpx.Response(503)
+        return httpx.Response(200, json={"result": {"volumes": [[
+            {"id": "101", "title": "Первый", "artists": [{"name": "Группа"}]},
+            {"id": "102", "title": "Второй", "artists": [{"name": "Группа"}]},
+            {"id": "103", "title": "Третий", "artists": [{"name": "Группа"}]},
+        ]]}})
+
+    with _mock_http(ach, handler):
+        progress = asyncio.run(ach.get_album_track_progress(db, user, achievement))
+
+    assert seen == [
+        ("/albums/42/with-tracks", "OAuth secret"),
+        ("/handlers/album.jsx", None),
+    ]
+    assert progress["available"] is True
+    assert progress["listened_count"] == 2
+    assert progress["remaining_count"] == 1
+    assert [track["title"] for track in progress["tracks"] if not track["listened"]] == ["Второй"]
+    assert progress["tracks"][1]["url"].endswith("/album/42/track/102")
+
+
+def test_album_track_progress_reports_unavailable_for_incomplete_catalog(db):
+    user = _user(db, "incomplete_album")
+    track = _track(db, title="Known", album="Album", artist="Artist")
+    _listen(db, user, track)
+    achievement = _achievement(
+        db,
+        name="Incomplete",
+        rule_type="specific_album",
+        rule_target="Artist - Album",
+        rule_value=3,
+    )
+
+    progress = asyncio.run(ach.get_album_track_progress(db, user, achievement))
+
+    assert progress == {
+        "available": False,
+        "tracks": [],
+        "listened_count": 1,
+        "remaining_count": 2,
+        "total_count": 3,
+    }
+
+
 def test_no_auto_achievements(db):
     db.query(Achievement).update({"rule_type": "manual"})
     db.commit()
