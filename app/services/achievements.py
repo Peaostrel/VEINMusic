@@ -422,8 +422,11 @@ def _yandex_track_item(item: dict) -> dict | None:
 
 
 def _parse_yandex_artist_tracks(payload: dict) -> tuple[list[dict], int]:
-    root = payload.get("result") if isinstance(payload.get("result"), dict) else payload
-    raw_tracks = root.get("tracks") if isinstance(root, dict) else None
+    candidate = payload.get("result") if isinstance(payload.get("result"), dict) else payload
+    if not isinstance(candidate, dict):
+        return [], 0
+    root: dict = candidate
+    raw_tracks = root.get("tracks")
     if not isinstance(raw_tracks, list):
         return [], 0
     tracks = []
