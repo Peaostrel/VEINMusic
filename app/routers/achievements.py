@@ -33,6 +33,7 @@ from app.services.achievements import (
     _enrich_achievement_data,
     _format_achievement_data,
     check_auto_achievements,
+    get_album_track_progress,
 )
 
 router = APIRouter(tags=["achievements"])
@@ -64,7 +65,11 @@ def get_all_achievements(
     res = []
 
     for a in all_achs:
-        res.append(_format_achievement_data(db, user, a, user_achs.get(a.id), total_users))
+        item = _format_achievement_data(db, user, a, user_achs.get(a.id), total_users)
+        item["track_progress_available"] = bool(
+            is_owner and a.rule_type == "specific_album"
+        )
+        res.append(item)
 
     earned = [x for x in res if x["is_earned"]]
     unearned = [x for x in res if not x["is_earned"]]
@@ -79,6 +84,37 @@ def get_all_achievements(
         "achievements": res,
         "earned_count": len(user_achs),
         "total_count": len(all_achs)}
+
+
+@router.get(
+    "/api/achievements/album-progress/{username}/{achievement_id}",
+    responses={
+        403: {"description": "Only the profile owner can view track progress"},
+        404: {"description": "User or achievement not found"},
+    },
+)
+async def get_achievement_album_progress(
+        username: str,
+        achievement_id: int,
+        request: Request,
+        db: Annotated[Session, Depends(get_db)]):
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    _, is_owner = _check_privacy_and_owner(user, request, db)
+    if not is_owner:
+        raise HTTPException(
+            403, "Подробный прогресс доступен только владельцу профиля")
+
+    achievement = db.query(Achievement).filter(
+        Achievement.id == achievement_id,
+        Achievement.rule_type == "specific_album",
+    ).first()
+    if not achievement:
+        raise HTTPException(404, "Альбомное достижение не найдено")
+
+    result = await get_album_track_progress(db, user, achievement)
+    return {"achievement_id": achievement.id, **result}
 
 
 def _admin_yandex_token(admin: User) -> str | None:

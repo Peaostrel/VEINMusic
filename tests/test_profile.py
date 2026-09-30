@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 import pytest
 from app.core.security import create_session_token
 from app.database import SessionLocal
@@ -297,3 +297,54 @@ def test_profile_achievements_carry_their_goal(auth_client, auth_user):
     assert card["rule_target"] == "https://music.yandex.ru/album/1"
     assert card["rule_meta"] == "Джизус — Дух Мира"
     assert card["earned_at"]
+
+
+def test_album_track_details_are_available_only_to_profile_owner(auth_client, auth_user):
+    from app.models import Achievement
+
+    db = SessionLocal()
+    try:
+        achievement = Achievement(
+            name="Трек-лист",
+            description="Прослушать альбом",
+            icon="💿",
+            rule_type="specific_album",
+            rule_value=2,
+            rule_target="https://music.yandex.ru/album/42",
+        )
+        db.add(achievement)
+        db.commit()
+        db.refresh(achievement)
+        achievement_id = achievement.id
+    finally:
+        db.close()
+
+    listing = auth_client.get("/api/achievements/all/profileuser")
+    card = next(item for item in listing.json()["achievements"] if item["id"] == achievement_id)
+    assert card["track_progress_available"] is True
+
+    album_progress = {
+        "available": True,
+        "tracks": [],
+        "listened_count": 0,
+        "remaining_count": 2,
+        "total_count": 2,
+    }
+    with patch(
+        "app.routers.achievements.get_album_track_progress",
+        new=AsyncMock(return_value=album_progress),
+    ):
+        response = auth_client.get(
+            f"/api/achievements/album-progress/profileuser/{achievement_id}"
+        )
+    assert response.status_code == 200
+    assert response.json()["remaining_count"] == 2
+
+    auth_client.cookies.clear()
+    listing = auth_client.get("/api/achievements/all/profileuser")
+    card = next(item for item in listing.json()["achievements"] if item["id"] == achievement_id)
+    assert card["track_progress_available"] is False
+    response = auth_client.get(
+        f"/api/achievements/album-progress/profileuser/{achievement_id}"
+    )
+    assert response.status_code == 403

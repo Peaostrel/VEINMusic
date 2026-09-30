@@ -6,6 +6,7 @@ import { API_URL } from "@/app/lib/api";
 import { Avatar, EmptyState, Loading, Meter, btn } from "@/components/ui";
 import type { AchievementInfo } from "@/app/lib/types";
 import { renderDescriptionWithLinks } from "@/app/lib/achievementText";
+import { AchievementTrackProgress } from "./_components/AchievementTrackProgress";
 
 /** GET /api/achievements/all/{username} */
 interface AchievementsResponse {
@@ -181,6 +182,14 @@ export default function AchievementsPage() {
                     </span>
                   </div>
                   <Meter value={currentVal} max={targetVal} accent={false} />
+                  {a.track_progress_available &&
+                    a.rule_type === "specific_album" && (
+                      <AchievementTrackProgress
+                        username={data.user.username}
+                        achievementId={a.id}
+                        remaining={Math.max(targetVal - currentVal, 0)}
+                      />
+                    )}
                 </div>
               )}
               <span className="mt-auto font-mono text-[11px] text-fg-3">

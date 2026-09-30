@@ -123,6 +123,7 @@ export interface AchievementInfo {
   rule_type?: string;
   rule_target?: string | null;
   rule_meta?: string | null;
+  track_progress_available?: boolean;
 }
 
 /** GET /api/user/{username} */

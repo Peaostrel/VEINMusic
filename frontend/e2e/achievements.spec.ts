@@ -40,3 +40,88 @@ test.describe("Achievements Page Flow", () => {
     }
   });
 });
+
+test("shows the exact album tracks that remain", async ({ page }) => {
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": "http://localhost:3000",
+    "Access-Control-Allow-Credentials": "true",
+  };
+  await page.route("**/api/achievements/all/alice", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      headers: corsHeaders,
+      body: JSON.stringify({
+        user: {
+          username: "alice",
+          display_name: "Alice",
+          avatar_url: null,
+        },
+        achievements: [
+          {
+            id: 42,
+            name: "Альбом целиком",
+            description: "Прослушать весь альбом",
+            icon: "💿",
+            target_image: null,
+            reward_xp: 50,
+            is_earned: false,
+            rarity: 10,
+            current_progress: 1,
+            target_value: 3,
+            rule_type: "specific_album",
+            rule_target: "https://music.yandex.ru/album/42",
+            track_progress_available: true,
+          },
+        ],
+        earned_count: 0,
+        total_count: 1,
+      }),
+    });
+  });
+  await page.route(
+    "**/api/achievements/album-progress/alice/42",
+    async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        headers: corsHeaders,
+        body: JSON.stringify({
+          available: true,
+          listened_count: 1,
+          remaining_count: 2,
+          total_count: 3,
+          tracks: [
+            {
+              id: "1",
+              title: "Уже был",
+              artist: "Исполнитель",
+              url: "https://music.yandex.ru/album/42/track/1",
+              listened: true,
+            },
+            {
+              id: "2",
+              title: "Остался первый",
+              artist: "Исполнитель",
+              url: "https://music.yandex.ru/album/42/track/2",
+              listened: false,
+            },
+            {
+              id: "3",
+              title: "Остался второй",
+              artist: "Исполнитель",
+              url: "https://music.yandex.ru/album/42/track/3",
+              listened: false,
+            },
+          ],
+        }),
+      });
+    },
+  );
+
+  await page.goto("/user/alice/achievements");
+  await page.getByRole("button", { name: /Какие треки остались/ }).click();
+
+  await expect(page.getByText("Остался первый")).toBeVisible();
+  await expect(page.getByText("Остался второй")).toBeVisible();
+  await page.getByText("Уже засчитано: 1").click();
+  await expect(page.getByText("Уже был")).toBeVisible();
+});
