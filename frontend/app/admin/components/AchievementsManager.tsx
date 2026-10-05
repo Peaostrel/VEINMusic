@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Pencil, Plus, Trash2, Trophy, X } from "lucide-react";
 import type { Achievement } from "../types";
 import {
@@ -49,22 +49,131 @@ const EMPTY: Form = {
   reward_xp: "50",
 };
 
+function textValue(value: string | null | undefined): string {
+  return value ?? "";
+}
+
+function numberValue(value: number | null | undefined): string {
+  return String(value ?? 0);
+}
+
+function achievementArtistTargets(a: Achievement): string[] {
+  if (a.artist_targets?.length) return a.artist_targets;
+  return [textValue(a.rule_target)];
+}
+
 function toForm(a: Achievement): Form {
   return {
     name: a.name,
-    description: a.description ?? "",
-    icon: a.icon ?? "",
+    description: textValue(a.description),
+    icon: textValue(a.icon),
     rule_type: a.rule_type,
-    rule_value: String(a.rule_value ?? 0),
-    rule_target: a.rule_target ?? "",
-    artist_targets:
-      a.artist_targets && a.artist_targets.length > 0
-        ? a.artist_targets
-        : [a.rule_target ?? ""],
-    rule_meta: a.rule_meta ?? "",
-    target_image: a.target_image ?? "",
-    reward_xp: String(a.reward_xp ?? 0),
+    rule_value: numberValue(a.rule_value),
+    rule_target: textValue(a.rule_target),
+    artist_targets: achievementArtistTargets(a),
+    rule_meta: textValue(a.rule_meta),
+    target_image: textValue(a.target_image),
+    reward_xp: numberValue(a.reward_xp),
   };
+}
+
+function emptyAsNull(value: string): string | null {
+  return value || null;
+}
+
+function artistTargetsPayload(form: Form): string[] | null {
+  if (form.rule_type !== "specific_artist") return null;
+  return form.artist_targets.map((value) => value.trim()).filter(Boolean);
+}
+
+function toPayload(form: Form) {
+  return {
+    ...form,
+    rule_value: Number(form.rule_value || 0),
+    reward_xp: Number(form.reward_xp || 0),
+    rule_target: emptyAsNull(form.rule_target),
+    artist_targets: artistTargetsPayload(form),
+    rule_meta: emptyAsNull(form.rule_meta),
+    target_image: emptyAsNull(form.target_image),
+  };
+}
+
+function formHeading(editingId: number | null): string {
+  return editingId === null
+    ? "Новое достижение"
+    : `Редактирование #${editingId}`;
+}
+
+function submitLabel(editingId: number | null): string {
+  return editingId === null ? "Создать" : "Сохранить";
+}
+
+function CancelEditButton({
+  editingId,
+  onCancel,
+}: Readonly<{ editingId: number | null; onCancel: () => void }>) {
+  if (editingId === null) return null;
+  return (
+    <button type="button" className={buttonClass.secondary} onClick={onCancel}>
+      Отмена
+    </button>
+  );
+}
+
+interface ArtistTargetsEditorProps {
+  ids: string[];
+  targets: string[];
+  onAdd: () => void;
+  onChange: (index: number, value: string) => void;
+  onRemove: (index: number) => void;
+}
+
+function ArtistTargetsEditor({
+  ids,
+  targets,
+  onAdd,
+  onChange,
+  onRemove,
+}: Readonly<ArtistTargetsEditorProps>) {
+  return (
+    <fieldset className="sm:col-span-4 space-y-2">
+      <legend className={labelClass}>Артисты</legend>
+      {targets.map((target, index) => (
+        <div key={ids[index]} className="flex items-center gap-2">
+          <input
+            value={target}
+            onChange={(event) => onChange(index, event.target.value)}
+            required
+            placeholder="Имя или ссылка на артиста Яндекс Музыки"
+            aria-label={`Артист ${index + 1}`}
+            className={inputClass}
+          />
+          <button
+            type="button"
+            onClick={() => onRemove(index)}
+            aria-label={`Удалить артиста ${index + 1}`}
+            className="rounded-lg p-2 text-fg-3 hover:bg-line hover:text-danger"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={onAdd}
+        disabled={targets.length >= 20}
+        className="inline-flex items-center gap-1.5 text-xs text-accent hover:underline disabled:text-fg-3 disabled:no-underline"
+      >
+        <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+        Добавить артиста
+      </button>
+      <p className="text-[11px] text-fg-3">
+        Все добавленные артисты войдут в одно достижение. В описании{" "}
+        <code className="font-mono text-fg-2">{"{artists}"}</code> превратится в
+        кликабельный список имён.
+      </p>
+    </fieldset>
+  );
 }
 
 /** Create, edit and delete achievements and their unlock rules. */
@@ -72,7 +181,12 @@ export default function AchievementsManager({
   achievements,
   onChanged,
 }: Readonly<{ achievements: Achievement[]; onChanged: () => void }>) {
+  const artistFieldPrefix = useId();
+  const nextArtistField = useRef(1);
   const [form, setForm] = useState<Form>(EMPTY);
+  const [artistTargetIds, setArtistTargetIds] = useState(() => [
+    `${artistFieldPrefix}-0`,
+  ]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const { notice, run } = useNotice();
   const set =
@@ -89,15 +203,25 @@ export default function AchievementsManager({
 
   const addArtistTarget = () => {
     if (form.artist_targets.length >= 20) return;
+    const fieldNumber = nextArtistField.current;
+    nextArtistField.current += 1;
     setForm({ ...form, artist_targets: [...form.artist_targets, ""] });
+    setArtistTargetIds([
+      ...artistTargetIds,
+      `${artistFieldPrefix}-new-${fieldNumber}`,
+    ]);
   };
 
   const removeArtistTarget = (index: number) => {
     const artistTargets = form.artist_targets.filter((_, i) => i !== index);
+    const remainingIds = artistTargetIds.filter((_, i) => i !== index);
     setForm({
       ...form,
       artist_targets: artistTargets.length ? artistTargets : [""],
     });
+    setArtistTargetIds(
+      remainingIds.length ? remainingIds : [`${artistFieldPrefix}-empty`],
+    );
   };
 
   const insertArtistsPlaceholder = () => {
@@ -113,18 +237,7 @@ export default function AchievementsManager({
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    const json = {
-      ...form,
-      rule_value: Number(form.rule_value || 0),
-      reward_xp: Number(form.reward_xp || 0),
-      rule_target: form.rule_target || null,
-      artist_targets:
-        form.rule_type === "specific_artist"
-          ? form.artist_targets.map((value) => value.trim()).filter(Boolean)
-          : null,
-      rule_meta: form.rule_meta || null,
-      target_image: form.target_image || null,
-    };
+    const json = toPayload(form);
     const ok = await run(
       () =>
         editingId === null
@@ -137,6 +250,7 @@ export default function AchievementsManager({
     );
     if (ok) {
       setForm(EMPTY);
+      setArtistTargetIds([`${artistFieldPrefix}-0`]);
       setEditingId(null);
       onChanged();
     }
@@ -155,17 +269,19 @@ export default function AchievementsManager({
       onChanged();
   };
 
+  const cancelEditing = () => {
+    setEditingId(null);
+    setForm(EMPTY);
+    setArtistTargetIds([`${artistFieldPrefix}-0`]);
+  };
+
   return (
     <section className="space-y-4" aria-labelledby="achievements-heading">
       <form onSubmit={save} className={panelClass}>
         <PanelTitle
           icon={<Trophy className="w-4 h-4 text-fg-2" aria-hidden="true" />}
         >
-          <span id="achievements-heading">
-            {editingId === null
-              ? "Новое достижение"
-              : `Редактирование #${editingId}`}
-          </span>
+          <span id="achievements-heading">{formHeading(editingId)}</span>
         </PanelTitle>
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <label className="sm:col-span-2">
@@ -262,47 +378,13 @@ export default function AchievementsManager({
           )}
           {needsTarget && form.rule_type === "specific_artist" && (
             <>
-              <fieldset className="sm:col-span-4 space-y-2">
-                <legend className={labelClass}>Артисты</legend>
-                {form.artist_targets.map((target, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <input
-                      value={target}
-                      onChange={(event) =>
-                        setArtistTarget(index, event.target.value)
-                      }
-                      required
-                      placeholder="Имя или ссылка на артиста Яндекс Музыки"
-                      aria-label={`Артист ${index + 1}`}
-                      className={inputClass}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeArtistTarget(index)}
-                      aria-label={`Удалить артиста ${index + 1}`}
-                      className="rounded-lg p-2 text-fg-3 hover:bg-line hover:text-danger"
-                    >
-                      <X className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={addArtistTarget}
-                  disabled={form.artist_targets.length >= 20}
-                  className="inline-flex items-center gap-1.5 text-xs text-accent hover:underline disabled:text-fg-3 disabled:no-underline"
-                >
-                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                  Добавить артиста
-                </button>
-                <p className="text-[11px] text-fg-3">
-                  Все добавленные артисты войдут в одно достижение. В описании
-                  <code className="mx-1 font-mono text-fg-2">
-                    {"{artists}"}
-                  </code>
-                  превратится в кликабельный список имён.
-                </p>
-              </fieldset>
+              <ArtistTargetsEditor
+                ids={artistTargetIds}
+                targets={form.artist_targets}
+                onAdd={addArtistTarget}
+                onChange={setArtistTarget}
+                onRemove={removeArtistTarget}
+              />
               <label className="sm:col-span-2">
                 <span className={labelClass}>Подпись (необязательно)</span>
                 <input
@@ -365,20 +447,9 @@ export default function AchievementsManager({
         <Notice text={notice} />
         <div className="flex gap-2">
           <button type="submit" className={buttonClass.primary}>
-            {editingId === null ? "Создать" : "Сохранить"}
+            {submitLabel(editingId)}
           </button>
-          {editingId !== null && (
-            <button
-              type="button"
-              className={buttonClass.secondary}
-              onClick={() => {
-                setEditingId(null);
-                setForm(EMPTY);
-              }}
-            >
-              Отмена
-            </button>
-          )}
+          <CancelEditButton editingId={editingId} onCancel={cancelEditing} />
         </div>
       </form>
 
@@ -413,8 +484,14 @@ export default function AchievementsManager({
                 aria-label={`Изменить ${a.name}`}
                 className="p-1.5 hover:bg-line rounded-lg text-fg-2"
                 onClick={() => {
+                  const nextForm = toForm(a);
                   setEditingId(a.id);
-                  setForm(toForm(a));
+                  setForm(nextForm);
+                  setArtistTargetIds(
+                    nextForm.artist_targets.map(
+                      (_, index) => `${artistFieldPrefix}-${a.id}-${index}`,
+                    ),
+                  );
                 }}
               >
                 <Pencil className="w-3.5 h-3.5" aria-hidden="true" />

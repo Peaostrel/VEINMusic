@@ -363,6 +363,24 @@ def test_multi_artist_achievement_counts_every_artist_and_renders_links(db):
     )
 
 
+def test_multi_artist_target_tolerates_invalid_track_count():
+    artist_url = f"https://{ach.YANDEX_MUSIC_DOMAIN}/artist/1"
+    target = json.dumps({
+        "mode": "all",
+        "artists": [{
+            "name": "Artist A",
+            "url": artist_url,
+            ach.TRACK_COUNT_FIELD: "unknown",
+        }],
+    })
+
+    assert ach._artist_targets(target) == [{
+        "name": "Artist A",
+        "url": artist_url,
+        ach.TRACK_COUNT_FIELD: 0,
+    }]
+
+
 def test_multi_artist_progress_is_grouped(db):
     user = _user(db, "multi_artist_details")
     listened_a = _track(db, title="A1", artist="Artist A")
