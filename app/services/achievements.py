@@ -8,7 +8,7 @@ import unicodedata
 import urllib.parse
 from collections.abc import Sequence
 from datetime import UTC, timedelta
-from typing import Final, TypedDict
+from typing import Final, NotRequired, TypeAlias, TypedDict, cast
 
 import httpx
 from sqlalchemy import func
@@ -52,6 +52,42 @@ class ArtistTarget(TypedDict):
     name: str
     url: str
     track_count: int
+
+
+JsonObject: TypeAlias = dict[str, object]
+
+
+class TrackInfo(TypedDict):
+    """Canonical track fields shared by provider and catalogue results."""
+
+    id: str | None
+    title: str
+    artist: str
+    url: str | None
+
+
+class ProgressTrack(TrackInfo):
+    listened: bool
+    achievement_artist: NotRequired[str]
+
+
+class ArtistProgressGroup(TypedDict):
+    name: str
+    url: str | None
+    available: bool
+    tracks: list[ProgressTrack]
+    listened_count: int
+    remaining_count: int
+    total_count: int
+
+
+class TrackProgressPayload(TypedDict):
+    available: bool
+    tracks: list[ProgressTrack]
+    listened_count: int
+    remaining_count: int
+    total_count: int
+    artists: NotRequired[list[ArtistProgressGroup]]
 
 
 def _check_total_scrobbles(user, ach, db: Session) -> bool:
@@ -478,15 +514,18 @@ def _normal_track_title(value: str | None) -> str:
     return " ".join(re.findall(r"[\w]+", normalized, flags=re.UNICODE))
 
 
-def _track_artist(item: dict) -> str:
-    artists = item.get("artists") or []
+def _track_artist(item: JsonObject) -> str:
+    artists = item.get("artists")
+    if not isinstance(artists, list):
+        return ""
     return ", ".join(
         str(artist.get("name")) for artist in artists
         if isinstance(artist, dict) and artist.get("name")
     )
 
 
-def _album_track_item(item: object, album_id: str) -> tuple[str, dict] | None:
+def _album_track_item(
+        item: object, album_id: str) -> tuple[str, TrackInfo] | None:
     if not isinstance(item, dict) or not item.get("title"):
         return None
     title = str(item["title"])
@@ -505,14 +544,15 @@ def _album_track_item(item: object, album_id: str) -> tuple[str, dict] | None:
     }
 
 
-def _parse_yandex_album_tracks(payload: dict, album_id: str) -> list[dict]:
+def _parse_yandex_album_tracks(
+        payload: JsonObject, album_id: str) -> list[TrackInfo]:
     """Flatten both the public handler and /with-tracks API responses."""
     root = payload.get("result") if isinstance(payload.get("result"), dict) else payload
     volumes = root.get("volumes") if isinstance(root, dict) else None
     if not isinstance(volumes, list):
         return []
 
-    result: list[dict] = []
+    result: list[TrackInfo] = []
     seen: set[str] = set()
     for volume in volumes:
         if not isinstance(volume, list):
@@ -529,12 +569,14 @@ def _parse_yandex_album_tracks(payload: dict, album_id: str) -> list[dict]:
     return result
 
 
-def _yandex_track_item(item: dict) -> dict | None:
+def _yandex_track_item(item: JsonObject) -> TrackInfo | None:
     if not item.get("title"):
         return None
     track_id = str(item.get("id") or item.get("realId") or "")
-    albums = item.get("albums") or []
-    album_id = str(albums[0].get("id") or "") if albums and isinstance(albums[0], dict) else ""
+    albums = item.get("albums")
+    first_album = albums[0] if isinstance(albums, list) and albums else None
+    album_id = str(first_album.get("id") or "") if isinstance(
+        first_album, dict) else ""
     if album_id and track_id:
         url = f"https://{YANDEX_MUSIC_DOMAIN}/album/{album_id}/track/{track_id}"
     elif track_id:
@@ -549,15 +591,16 @@ def _yandex_track_item(item: dict) -> dict | None:
     }
 
 
-def _parse_yandex_artist_tracks(payload: dict) -> tuple[list[dict], int]:
+def _parse_yandex_artist_tracks(
+        payload: JsonObject) -> tuple[list[TrackInfo], int]:
     candidate = payload.get("result") if isinstance(payload.get("result"), dict) else payload
     if not isinstance(candidate, dict):
         return [], 0
-    root: dict = candidate
+    root = cast(JsonObject, candidate)
     raw_tracks = root.get("tracks")
     if not isinstance(raw_tracks, list):
         return [], 0
-    tracks = []
+    tracks: list[TrackInfo] = []
     for item in raw_tracks:
         parsed = _yandex_track_item(item) if isinstance(item, dict) else None
         if parsed:
@@ -567,7 +610,8 @@ def _parse_yandex_artist_tracks(payload: dict) -> tuple[list[dict], int]:
     return tracks, total
 
 
-async def _yandex_album_tracks(url: str, token: str | None = None) -> list[dict]:
+async def _yandex_album_tracks(
+        url: str, token: str | None = None) -> list[TrackInfo]:
     match = re.search(r"/album/(\d+)", url or "")
     if not match:
         return []
@@ -575,7 +619,7 @@ async def _yandex_album_tracks(url: str, token: str | None = None) -> list[dict]
     cache_key = f"achievement-album-tracks:yandex:{album_id}"
     cached = get_from_cache(cache_key, ttl=21600)
     if isinstance(cached, list):
-        return cached
+        return cast(list[TrackInfo], cached)
 
     headers = {"User-Agent": USER_AGENT_MOZILLA}
     requests: list[tuple[str, dict[str, str]]] = []
@@ -607,7 +651,8 @@ async def _yandex_album_tracks(url: str, token: str | None = None) -> list[dict]
     return []
 
 
-async def _yandex_artist_tracks(url: str, token: str | None = None) -> list[dict]:
+async def _yandex_artist_tracks(
+        url: str, token: str | None = None) -> list[TrackInfo]:
     match = re.search(r"/artist/(\d+)", url or "")
     if not match or not token:
         return []
@@ -615,7 +660,7 @@ async def _yandex_artist_tracks(url: str, token: str | None = None) -> list[dict
     cache_key = f"achievement-artist-tracks:yandex:{artist_id}"
     cached = get_from_cache(cache_key, ttl=21600)
     if isinstance(cached, list):
-        return cached
+        return cast(list[TrackInfo], cached)
 
     headers = {
         "Authorization": f"OAuth {token}",
@@ -624,7 +669,7 @@ async def _yandex_artist_tracks(url: str, token: str | None = None) -> list[dict
     try:
         async with httpx.AsyncClient(timeout=7.0) as client:
             tracks = await _fetch_yandex_artist_tracks(client, artist_id, headers)
-    except Exception as e:
+    except (httpx.HTTPError, TypeError, ValueError) as e:
         logger.warning("Yandex artist track list error: %s", e)
         return []
     if tracks:
@@ -633,7 +678,9 @@ async def _yandex_artist_tracks(url: str, token: str | None = None) -> list[dict
 
 
 def _append_unique_tracks(
-        tracks: list[dict], batch: list[dict], seen: set[str]) -> None:
+        tracks: list[TrackInfo],
+        batch: list[TrackInfo],
+        seen: set[str]) -> None:
     for track in batch:
         identity = str(
             track.get("id") or _normal_track_title(track.get("title")))
@@ -646,8 +693,8 @@ def _append_unique_tracks(
 async def _fetch_yandex_artist_tracks(
         client: httpx.AsyncClient,
         artist_id: str,
-        headers: dict[str, str]) -> list[dict]:
-    tracks: list[dict] = []
+        headers: dict[str, str]) -> list[TrackInfo]:
+    tracks: list[TrackInfo] = []
     seen: set[str] = set()
     page = 0
     total = 1
@@ -667,7 +714,7 @@ async def _fetch_yandex_artist_tracks(
     return tracks
 
 
-def _catalog_album_tracks(db: Session, a: Achievement) -> list[dict]:
+def _catalog_album_tracks(db: Session, a: Achievement) -> list[TrackInfo]:
     """Use the local catalogue when the provider cannot return a track list."""
     queries = []
     if a.target_image:
@@ -686,20 +733,22 @@ def _catalog_album_tracks(db: Session, a: Achievement) -> list[dict]:
     return _catalog_track_rows(max(queries, key=len, default=[]), with_id=False)
 
 
-def _catalog_artist_tracks(db: Session, a: Achievement) -> list[dict]:
+def _catalog_artist_tracks(db: Session, a: Achievement) -> list[TrackInfo]:
     artist = _artist_name(a)
     return _catalog_artist_tracks_for_name(db, artist)
 
 
-def _catalog_artist_tracks_for_name(db: Session, artist: str) -> list[dict]:
+def _catalog_artist_tracks_for_name(
+        db: Session, artist: str) -> list[TrackInfo]:
     if not artist:
         return []
     tracks = db.query(Track).filter(Track.artist.ilike(f"%{artist}%")).all()
     return _catalog_track_rows(tracks, with_id=True)
 
 
-def _catalog_track_rows(tracks: list[Track], *, with_id: bool) -> list[dict]:
-    result: list[dict] = []
+def _catalog_track_rows(
+        tracks: list[Track], *, with_id: bool) -> list[TrackInfo]:
+    result: list[TrackInfo] = []
     seen: set[str] = set()
     for track in tracks:
         title = str(track.title or "")
@@ -722,7 +771,8 @@ def _track_id_from_url(value: str | None) -> str | None:
     return match.group(1) if match else None
 
 
-def _track_progress_rows(canonical: list[dict], listened: list[Track]) -> list[dict]:
+def _track_progress_rows(
+        canonical: list[TrackInfo], listened: list[Track]) -> list[ProgressTrack]:
     listened_ids = {
         _track_id_from_url(str(track.track_url) if track.track_url else None)
         for track in listened
@@ -731,43 +781,43 @@ def _track_progress_rows(canonical: list[dict], listened: list[Track]) -> list[d
     listened_titles = {
         _normal_track_title(str(track.title or "")) for track in listened
     }
-    rows = []
-    for track in canonical:
+    rows: list[ProgressTrack] = []
+    for catalog_track in canonical:
         is_listened = (
-            (track.get("id") and str(track["id"]) in listened_ids)
-            or _normal_track_title(track.get("title")) in listened_titles
+            (catalog_track.get("id") and str(catalog_track["id"]) in listened_ids)
+            or _normal_track_title(catalog_track.get("title")) in listened_titles
         )
-        rows.append({**track, "listened": bool(is_listened)})
+        rows.append({**catalog_track, "listened": bool(is_listened)})
     represented_titles = {
         _normal_track_title(track.get("title"))
         for track in rows if track["listened"]
     }
-    for track in listened:
-        title = str(track.title or "")
+    for listened_track in listened:
+        title = str(listened_track.title or "")
         identity = _normal_track_title(title)
         if not identity or identity in represented_titles:
             continue
         represented_titles.add(identity)
         rows.append({
             "id": _track_id_from_url(
-                str(track.track_url) if track.track_url else None),
+                str(listened_track.track_url) if listened_track.track_url else None),
             "title": title,
-            "artist": str(track.artist or ""),
-            "url": str(track.track_url) if track.track_url else None,
+            "artist": str(listened_track.artist or ""),
+            "url": str(listened_track.track_url) if listened_track.track_url else None,
             "listened": True,
         })
     return rows
 
 
 async def get_album_track_progress(
-        db: Session, user: User, a: Achievement) -> dict:
+        db: Session, user: User, a: Achievement) -> TrackProgressPayload:
     """Return the exact album tracks already counted and still required."""
     target = str(a.rule_target or "")
     token = (
         str(user.integration.yandex_token)
         if user.integration and user.integration.yandex_token else None
     )
-    canonical: list[dict] = []
+    canonical: list[TrackInfo] = []
     if YANDEX_MUSIC_DOMAIN in target:
         canonical = await _yandex_album_tracks(target, token)
     if not canonical:
@@ -807,11 +857,11 @@ async def _artist_progress_group(
         user: User,
         target: ArtistTarget,
         token: str | None,
-        fallback_total: int = 0) -> dict:
+        fallback_total: int = 0) -> ArtistProgressGroup:
     name = target["name"]
     url = target["url"]
     expected = target[TRACK_COUNT_FIELD] or fallback_total
-    canonical: list[dict] = []
+    canonical: list[TrackInfo] = []
     if YANDEX_MUSIC_DOMAIN in url:
         canonical = await _yandex_artist_tracks(url, token)
     if not canonical:
@@ -825,7 +875,10 @@ async def _artist_progress_group(
         raw_listened = len(listened)
     total = expected or len(canonical)
     listened_count = min(raw_listened, total) if total else raw_listened
-    tagged_rows = [{**row, "achievement_artist": name} for row in rows]
+    tagged_rows = [
+        cast(ProgressTrack, {**row, "achievement_artist": name})
+        for row in rows
+    ]
     return {
         "name": name,
         "url": url or None,
@@ -838,7 +891,7 @@ async def _artist_progress_group(
 
 
 async def get_artist_track_progress(
-        db: Session, user: User, a: Achievement) -> dict:
+        db: Session, user: User, a: Achievement) -> TrackProgressPayload:
     """Return unique artist tracks already counted and possible next tracks."""
     targets = _artist_targets(str(a.rule_target or ""))
     fallback_total = int(a.rule_value or 0) if len(targets) == 1 else 0
