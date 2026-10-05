@@ -84,6 +84,126 @@ function TrackLink({ track }: Readonly<{ track: ProgressTrack }>) {
   );
 }
 
+function trackKey(track: ProgressTrack): string {
+  return [
+    track.achievement_artist,
+    track.id,
+    track.artist,
+    track.title,
+    track.url,
+  ].join("|");
+}
+
+function ArtistGroups({
+  artists,
+}: Readonly<{ artists: ArtistProgressGroup[] }>) {
+  if (artists.length <= 1) return null;
+  return (
+    <ul className="grid gap-1.5 sm:grid-cols-2">
+      {artists.map((artist) => (
+        <li
+          key={artist.url ?? artist.name}
+          className="rounded-md border border-line-soft bg-surface/50 px-2.5 py-2"
+        >
+          <div className="flex items-center justify-between gap-2 text-[11px]">
+            {artist.url ? (
+              <a
+                href={artist.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="truncate text-fg-2 hover:text-fg hover:underline"
+              >
+                {artist.name}
+              </a>
+            ) : (
+              <span className="truncate text-fg-2">{artist.name}</span>
+            )}
+            <span className="shrink-0 font-mono text-fg-3">
+              {artist.listened_count} / {artist.total_count}
+            </span>
+          </div>
+          <progress
+            className="mt-1 block h-1 w-full overflow-hidden rounded-full accent-accent"
+            value={artist.listened_count}
+            max={Math.max(artist.total_count, 1)}
+            aria-label={`Прогресс по артисту ${artist.name}`}
+          />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function TrackList({ tracks }: Readonly<{ tracks: ProgressTrack[] }>) {
+  if (tracks.length === 0) {
+    return <p className="text-xs text-accent">Все треки прослушаны.</p>;
+  }
+  return (
+    <ul className="flex max-h-48 flex-col overflow-y-auto rounded-md border border-line-soft bg-surface/50">
+      {tracks.map((track) => (
+        <li
+          key={trackKey(track)}
+          className="flex items-center gap-2 border-b border-line-soft px-2.5 py-2 text-xs text-fg-2 last:border-b-0"
+        >
+          <span className="h-2 w-2 shrink-0 rounded-full border border-fg-3" />
+          <TrackLink track={track} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ProgressDetails({
+  data,
+  kind,
+}: Readonly<{ data: TrackProgressResponse; kind: Props["kind"] }>) {
+  const missing = data.tracks.filter((track) => !track.listened);
+  const listened = data.tracks.filter((track) => track.listened);
+  const isArtist = kind === "artist";
+  const remainingLabel = isArtist ? "Ещё не засчитаны" : "Осталось послушать";
+  const remainingCount = isArtist ? missing.length : data.remaining_count;
+  return (
+    <>
+      {isArtist && <ArtistGroups artists={data.artists ?? []} />}
+      <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.06em] text-fg-3">
+        <span>{remainingLabel}</span>
+        <span>{remainingCount}</span>
+      </div>
+      {isArtist && (
+        <p className="text-[11px] text-fg-3">
+          Для достижения нужно ещё {uniqueTrackPhrase(data.remaining_count)}.
+        </p>
+      )}
+      <TrackList tracks={missing} />
+      {listened.length > 0 && (
+        <details className="group">
+          <summary className="cursor-pointer list-none text-[11px] text-fg-3 hover:text-fg-2">
+            Уже засчитано: {listened.length}
+          </summary>
+          <ul className="mt-1 flex max-h-32 flex-col overflow-y-auto">
+            {listened.map((track) => (
+              <li
+                key={trackKey(track)}
+                className="flex items-center gap-2 py-1 text-[11px] text-fg-3"
+              >
+                <Check
+                  className="h-3 w-3 shrink-0 text-accent"
+                  aria-hidden="true"
+                />
+                <TrackLink track={track} />
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      <p className="text-[10px] leading-relaxed text-fg-3">
+        {isArtist && "Каждая композиция считается только один раз. "}
+        Трек засчитывается после прослушивания не менее 85%.
+      </p>
+    </>
+  );
+}
+
 export function AchievementTrackProgress({
   username,
   achievementId,
@@ -120,9 +240,6 @@ export function AchievementTrackProgress({
     if (next) void load();
   };
 
-  const missing = data?.tracks.filter((track) => !track.listened) ?? [];
-  const listened = data?.tracks.filter((track) => track.listened) ?? [];
-
   return (
     <div className="mt-1 border-t border-line-soft pt-2">
       <button
@@ -149,7 +266,10 @@ export function AchievementTrackProgress({
         <div id={panelId} className="mt-2 flex flex-col gap-2">
           {loading && (
             <span className="flex items-center gap-2 py-2 text-xs text-fg-3">
-              <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+              <LoaderCircle
+                className="h-3.5 w-3.5 animate-spin"
+                aria-hidden="true"
+              />
               Получаем трек-лист…
             </span>
           )}
@@ -171,111 +291,7 @@ export function AchievementTrackProgress({
               продолжает считаться.
             </p>
           )}
-          {data?.available && (
-            <>
-              {kind === "artist" && data.artists && data.artists.length > 1 && (
-                <ul className="grid gap-1.5 sm:grid-cols-2">
-                  {data.artists.map((artist) => (
-                    <li
-                      key={artist.name}
-                      className="rounded-md border border-line-soft bg-surface/50 px-2.5 py-2"
-                    >
-                      <div className="flex items-center justify-between gap-2 text-[11px]">
-                        {artist.url ? (
-                          <a
-                            href={artist.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="truncate text-fg-2 hover:text-fg hover:underline"
-                          >
-                            {artist.name}
-                          </a>
-                        ) : (
-                          <span className="truncate text-fg-2">
-                            {artist.name}
-                          </span>
-                        )}
-                        <span className="shrink-0 font-mono text-fg-3">
-                          {artist.listened_count} / {artist.total_count}
-                        </span>
-                      </div>
-                      <div className="mt-1 h-1 overflow-hidden rounded-full bg-line">
-                        <div
-                          className="h-full rounded-full bg-accent"
-                          style={{
-                            width: `${Math.min(
-                              (artist.listened_count /
-                                Math.max(artist.total_count, 1)) *
-                                100,
-                              100,
-                            )}%`,
-                          }}
-                        />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.06em] text-fg-3">
-                <span>
-                  {kind === "artist"
-                    ? "Ещё не засчитаны"
-                    : "Осталось послушать"}
-                </span>
-                <span>
-                  {kind === "artist" ? missing.length : data.remaining_count}
-                </span>
-              </div>
-              {kind === "artist" && (
-                <p className="text-[11px] text-fg-3">
-                  Для достижения нужно ещё{" "}
-                  {uniqueTrackPhrase(data.remaining_count)}.
-                </p>
-              )}
-              {missing.length === 0 ? (
-                <p className="text-xs text-accent">Все треки прослушаны.</p>
-              ) : (
-                <ul className="flex max-h-48 flex-col overflow-y-auto rounded-md border border-line-soft bg-surface/50">
-                  {missing.map((track, index) => (
-                    <li
-                      key={track.id ?? `${track.title}-${index}`}
-                      className="flex items-center gap-2 border-b border-line-soft px-2.5 py-2 text-xs text-fg-2 last:border-b-0"
-                    >
-                      <span className="h-2 w-2 shrink-0 rounded-full border border-fg-3" />
-                      <TrackLink track={track} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {listened.length > 0 && (
-                <details className="group">
-                  <summary className="cursor-pointer list-none text-[11px] text-fg-3 hover:text-fg-2">
-                    Уже засчитано: {listened.length}
-                  </summary>
-                  <ul className="mt-1 flex max-h-32 flex-col overflow-y-auto">
-                    {listened.map((track, index) => (
-                      <li
-                        key={track.id ?? `${track.title}-${index}`}
-                        className="flex items-center gap-2 py-1 text-[11px] text-fg-3"
-                      >
-                        <Check
-                          className="h-3 w-3 shrink-0 text-accent"
-                          aria-hidden="true"
-                        />
-                        <TrackLink track={track} />
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-              <p className="text-[10px] leading-relaxed text-fg-3">
-                {kind === "artist" &&
-                  "Каждая композиция считается только один раз. "}
-                Трек засчитывается после прослушивания не менее 85%.
-              </p>
-            </>
-          )}
+          {data?.available && <ProgressDetails data={data} kind={kind} />}
         </div>
       )}
     </div>

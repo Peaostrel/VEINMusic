@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Pencil, Plus, Trash2, Trophy, X } from "lucide-react";
 import type { Achievement } from "../types";
 import {
@@ -67,12 +67,73 @@ function toForm(a: Achievement): Form {
   };
 }
 
+interface ArtistTargetsEditorProps {
+  ids: string[];
+  targets: string[];
+  onAdd: () => void;
+  onChange: (index: number, value: string) => void;
+  onRemove: (index: number) => void;
+}
+
+function ArtistTargetsEditor({
+  ids,
+  targets,
+  onAdd,
+  onChange,
+  onRemove,
+}: Readonly<ArtistTargetsEditorProps>) {
+  return (
+    <fieldset className="sm:col-span-4 space-y-2">
+      <legend className={labelClass}>Артисты</legend>
+      {targets.map((target, index) => (
+        <div key={ids[index]} className="flex items-center gap-2">
+          <input
+            value={target}
+            onChange={(event) => onChange(index, event.target.value)}
+            required
+            placeholder="Имя или ссылка на артиста Яндекс Музыки"
+            aria-label={`Артист ${index + 1}`}
+            className={inputClass}
+          />
+          <button
+            type="button"
+            onClick={() => onRemove(index)}
+            aria-label={`Удалить артиста ${index + 1}`}
+            className="rounded-lg p-2 text-fg-3 hover:bg-line hover:text-danger"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={onAdd}
+        disabled={targets.length >= 20}
+        className="inline-flex items-center gap-1.5 text-xs text-accent hover:underline disabled:text-fg-3 disabled:no-underline"
+      >
+        <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+        Добавить артиста
+      </button>
+      <p className="text-[11px] text-fg-3">
+        Все добавленные артисты войдут в одно достижение. В описании
+        <code className="mx-1 font-mono text-fg-2">{"{artists}"}</code>
+        превратится в кликабельный список имён.
+      </p>
+    </fieldset>
+  );
+}
+
 /** Create, edit and delete achievements and their unlock rules. */
 export default function AchievementsManager({
   achievements,
   onChanged,
 }: Readonly<{ achievements: Achievement[]; onChanged: () => void }>) {
+  const artistFieldPrefix = useId();
+  const nextArtistField = useRef(1);
   const [form, setForm] = useState<Form>(EMPTY);
+  const [artistTargetIds, setArtistTargetIds] = useState(() => [
+    `${artistFieldPrefix}-0`,
+  ]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const { notice, run } = useNotice();
   const set =
@@ -90,14 +151,22 @@ export default function AchievementsManager({
   const addArtistTarget = () => {
     if (form.artist_targets.length >= 20) return;
     setForm({ ...form, artist_targets: [...form.artist_targets, ""] });
+    setArtistTargetIds([
+      ...artistTargetIds,
+      `${artistFieldPrefix}-new-${nextArtistField.current++}`,
+    ]);
   };
 
   const removeArtistTarget = (index: number) => {
     const artistTargets = form.artist_targets.filter((_, i) => i !== index);
+    const remainingIds = artistTargetIds.filter((_, i) => i !== index);
     setForm({
       ...form,
       artist_targets: artistTargets.length ? artistTargets : [""],
     });
+    setArtistTargetIds(
+      remainingIds.length ? remainingIds : [`${artistFieldPrefix}-empty`],
+    );
   };
 
   const insertArtistsPlaceholder = () => {
@@ -137,6 +206,7 @@ export default function AchievementsManager({
     );
     if (ok) {
       setForm(EMPTY);
+      setArtistTargetIds([`${artistFieldPrefix}-0`]);
       setEditingId(null);
       onChanged();
     }
@@ -262,47 +332,13 @@ export default function AchievementsManager({
           )}
           {needsTarget && form.rule_type === "specific_artist" && (
             <>
-              <fieldset className="sm:col-span-4 space-y-2">
-                <legend className={labelClass}>Артисты</legend>
-                {form.artist_targets.map((target, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <input
-                      value={target}
-                      onChange={(event) =>
-                        setArtistTarget(index, event.target.value)
-                      }
-                      required
-                      placeholder="Имя или ссылка на артиста Яндекс Музыки"
-                      aria-label={`Артист ${index + 1}`}
-                      className={inputClass}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeArtistTarget(index)}
-                      aria-label={`Удалить артиста ${index + 1}`}
-                      className="rounded-lg p-2 text-fg-3 hover:bg-line hover:text-danger"
-                    >
-                      <X className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={addArtistTarget}
-                  disabled={form.artist_targets.length >= 20}
-                  className="inline-flex items-center gap-1.5 text-xs text-accent hover:underline disabled:text-fg-3 disabled:no-underline"
-                >
-                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                  Добавить артиста
-                </button>
-                <p className="text-[11px] text-fg-3">
-                  Все добавленные артисты войдут в одно достижение. В описании
-                  <code className="mx-1 font-mono text-fg-2">
-                    {"{artists}"}
-                  </code>
-                  превратится в кликабельный список имён.
-                </p>
-              </fieldset>
+              <ArtistTargetsEditor
+                ids={artistTargetIds}
+                targets={form.artist_targets}
+                onAdd={addArtistTarget}
+                onChange={setArtistTarget}
+                onRemove={removeArtistTarget}
+              />
               <label className="sm:col-span-2">
                 <span className={labelClass}>Подпись (необязательно)</span>
                 <input
@@ -374,6 +410,7 @@ export default function AchievementsManager({
               onClick={() => {
                 setEditingId(null);
                 setForm(EMPTY);
+                setArtistTargetIds([`${artistFieldPrefix}-0`]);
               }}
             >
               Отмена
@@ -413,8 +450,14 @@ export default function AchievementsManager({
                 aria-label={`Изменить ${a.name}`}
                 className="p-1.5 hover:bg-line rounded-lg text-fg-2"
                 onClick={() => {
+                  const nextForm = toForm(a);
                   setEditingId(a.id);
-                  setForm(toForm(a));
+                  setForm(nextForm);
+                  setArtistTargetIds(
+                    nextForm.artist_targets.map(
+                      (_, index) => `${artistFieldPrefix}-${a.id}-${index}`,
+                    ),
+                  );
                 }}
               >
                 <Pencil className="w-3.5 h-3.5" aria-hidden="true" />

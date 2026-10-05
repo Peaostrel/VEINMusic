@@ -39,6 +39,9 @@ from app.services.achievements import (
 )
 
 router = APIRouter(tags=["achievements"])
+MAX_ACHIEVEMENT_ARTISTS = 20
+SPECIFIC_ALBUM_RULE = "specific_album"
+SPECIFIC_ARTIST_RULE = "specific_artist"
 
 # --- /api/achievements/all/{username} ---
 
@@ -69,7 +72,7 @@ def get_all_achievements(
     for a in all_achs:
         item = _format_achievement_data(db, user, a, user_achs.get(a.id), total_users)
         item["track_progress_available"] = bool(
-            is_owner and a.rule_type in {"specific_album", "specific_artist"}
+            is_owner and a.rule_type in {SPECIFIC_ALBUM_RULE, SPECIFIC_ARTIST_RULE}
         )
         res.append(item)
 
@@ -110,7 +113,7 @@ async def get_achievement_album_progress(
 
     achievement = db.query(Achievement).filter(
         Achievement.id == achievement_id,
-        Achievement.rule_type == "specific_album",
+        Achievement.rule_type == SPECIFIC_ALBUM_RULE,
     ).first()
     if not achievement:
         raise HTTPException(404, "Альбомное достижение не найдено")
@@ -141,7 +144,7 @@ async def get_achievement_artist_progress(
 
     achievement = db.query(Achievement).filter(
         Achievement.id == achievement_id,
-        Achievement.rule_type == "specific_artist",
+        Achievement.rule_type == SPECIFIC_ARTIST_RULE,
     ).first()
     if not achievement:
         raise HTTPException(404, "Достижение исполнителя не найдено")
@@ -157,26 +160,32 @@ def _admin_yandex_token(admin: User) -> str | None:
     return integration.yandex_token if integration and integration.yandex_token else None
 
 
+async def _enrich_admin_achievement(
+        data: AchCreate | AchUpdate, admin: User) -> tuple[str, int, str, str]:
+    """Resolve achievement metadata shared by create and update endpoints."""
+    target = data.rule_target or ""
+    image = data.target_image or ""
+    metadata = data.rule_meta or ""
+    token = _admin_yandex_token(admin)
+    if data.rule_type != SPECIFIC_ARTIST_RULE or not data.artist_targets:
+        return await _enrich_achievement_data(
+            data.rule_type, target, data.rule_value, image, metadata, token)
+    if len(data.artist_targets) > MAX_ACHIEVEMENT_ARTISTS:
+        raise HTTPException(
+            422,
+            f"В одном достижении можно указать до {MAX_ACHIEVEMENT_ARTISTS} артистов",
+        )
+    return await enrich_artist_targets(
+        data.artist_targets, data.rule_value, image, metadata, token)
+
+
 # --- POST /api/admin/achievements ---
 
 
 @router.post("/api/admin/achievements")
-# NOSONAR
 async def create_achievement(data: AchCreate, db: Annotated[Session, Depends(
         get_db)], admin: Annotated[User, Depends(get_admin_user)]):
-    target_val = data.rule_target or ""
-    val = data.rule_value
-    t_img = data.target_image or ""
-    meta_text = data.rule_meta or ""
-    if data.rule_type == "specific_artist" and data.artist_targets:
-        if len(data.artist_targets) > 20:
-            raise HTTPException(422, "В одном достижении можно указать до 20 артистов")
-        target_val, val, t_img, meta_text = await enrich_artist_targets(
-            data.artist_targets, val, t_img, meta_text, _admin_yandex_token(admin))
-    else:
-        target_val, val, t_img, meta_text = await _enrich_achievement_data(
-            data.rule_type, target_val, val, t_img, meta_text, _admin_yandex_token(admin)
-        )
+    target_val, val, t_img, meta_text = await _enrich_admin_achievement(data, admin)
     db.add(
         Achievement(
             name=data.name,
@@ -196,7 +205,6 @@ async def create_achievement(data: AchCreate, db: Annotated[Session, Depends(
 # --- PUT /api/admin/achievements/{ach_id} ---
 @router.put("/api/admin/achievements/{ach_id}",
             responses={404: {"description": "Achievement not found"}})
-# NOSONAR
 async def update_achievement(ach_id: int,
                              data: AchUpdate,
                              db: Annotated[Session,
@@ -206,19 +214,7 @@ async def update_achievement(ach_id: int,
     ach = db.query(Achievement).filter(Achievement.id == ach_id).first()
     if not ach:
         raise HTTPException(404)
-    target_val = data.rule_target or ""
-    val = data.rule_value
-    t_img = data.target_image or ""
-    meta_text = data.rule_meta or ""
-    if data.rule_type == "specific_artist" and data.artist_targets:
-        if len(data.artist_targets) > 20:
-            raise HTTPException(422, "В одном достижении можно указать до 20 артистов")
-        target_val, val, t_img, meta_text = await enrich_artist_targets(
-            data.artist_targets, val, t_img, meta_text, _admin_yandex_token(admin))
-    else:
-        target_val, val, t_img, meta_text = await _enrich_achievement_data(
-            data.rule_type, target_val, val, t_img, meta_text, _admin_yandex_token(admin)
-        )
+    target_val, val, t_img, meta_text = await _enrich_admin_achievement(data, admin)
     ach.name, ach.description, ach.icon, ach.rule_type, ach.rule_value, ach.rule_target, ach.target_image, ach.reward_xp, ach.rule_meta = data.name, data.description, data.icon, data.rule_type, val, target_val, t_img, data.reward_xp, meta_text  # type: ignore[assignment]
     audit.record(db, admin, "achievement.update", data.name, rule=data.rule_type, value=val)
     db.commit()
