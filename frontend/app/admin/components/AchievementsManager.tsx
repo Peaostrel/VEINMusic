@@ -168,9 +168,9 @@ function ArtistTargetsEditor({
         Добавить артиста
       </button>
       <p className="text-[11px] text-fg-3">
-        Все добавленные артисты войдут в одно достижение. В описании
-        <code className="mx-1 font-mono text-fg-2">{"{artists}"}</code>
-        превратится в кликабельный список имён.
+        Все добавленные артисты войдут в одно достижение. В описании{" "}
+        <code className="font-mono text-fg-2">{"{artists}"}</code> превратится в
+        кликабельный список имён.
       </p>
     </fieldset>
   );

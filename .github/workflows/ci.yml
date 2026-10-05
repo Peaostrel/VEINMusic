@@ -14,16 +14,6 @@ permissions:
   contents: read
 
 jobs:
-  sonar-diagnostics:
-    name: Sonar issue diagnostics
-    runs-on: ubuntu-latest
-    steps:
-      - name: Fetch open Sonar issues for this PR
-        run: |
-          curl --fail-with-body --location --silent --show-error \
-            'https://sonarcloud.io/api/issues/search?componentKeys=Peaostrel_VEINMusic&pullRequest=144&issueStatuses=OPEN%2CCONFIRMED&ps=100' \
-            | jq -r '.issues[] | [.rule, .component, (.line // 0), .message] | @tsv'
-
   backend-test:
     name: Backend Tests & Lint
     runs-on: ubuntu-latest

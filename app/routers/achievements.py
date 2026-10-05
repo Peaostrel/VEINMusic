@@ -182,7 +182,10 @@ async def _enrich_admin_achievement(
 # --- POST /api/admin/achievements ---
 
 
-@router.post("/api/admin/achievements")
+@router.post(
+    "/api/admin/achievements",
+    responses={422: {"description": "Too many artists in one achievement"}},
+)
 async def create_achievement(data: AchCreate, db: Annotated[Session, Depends(
         get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     target_val, val, t_img, meta_text = await _enrich_admin_achievement(data, admin)
@@ -204,7 +207,10 @@ async def create_achievement(data: AchCreate, db: Annotated[Session, Depends(
 
 # --- PUT /api/admin/achievements/{ach_id} ---
 @router.put("/api/admin/achievements/{ach_id}",
-            responses={404: {"description": "Achievement not found"}})
+            responses={
+                404: {"description": "Achievement not found"},
+                422: {"description": "Too many artists in one achievement"},
+            })
 async def update_achievement(ach_id: int,
                              data: AchUpdate,
                              db: Annotated[Session,
