@@ -49,22 +49,75 @@ const EMPTY: Form = {
   reward_xp: "50",
 };
 
+function textValue(value: string | null | undefined): string {
+  return value ?? "";
+}
+
+function numberValue(value: number | null | undefined): string {
+  return String(value ?? 0);
+}
+
+function achievementArtistTargets(a: Achievement): string[] {
+  if (a.artist_targets?.length) return a.artist_targets;
+  return [textValue(a.rule_target)];
+}
+
 function toForm(a: Achievement): Form {
   return {
     name: a.name,
-    description: a.description ?? "",
-    icon: a.icon ?? "",
+    description: textValue(a.description),
+    icon: textValue(a.icon),
     rule_type: a.rule_type,
-    rule_value: String(a.rule_value ?? 0),
-    rule_target: a.rule_target ?? "",
-    artist_targets:
-      a.artist_targets && a.artist_targets.length > 0
-        ? a.artist_targets
-        : [a.rule_target ?? ""],
-    rule_meta: a.rule_meta ?? "",
-    target_image: a.target_image ?? "",
-    reward_xp: String(a.reward_xp ?? 0),
+    rule_value: numberValue(a.rule_value),
+    rule_target: textValue(a.rule_target),
+    artist_targets: achievementArtistTargets(a),
+    rule_meta: textValue(a.rule_meta),
+    target_image: textValue(a.target_image),
+    reward_xp: numberValue(a.reward_xp),
   };
+}
+
+function emptyAsNull(value: string): string | null {
+  return value || null;
+}
+
+function artistTargetsPayload(form: Form): string[] | null {
+  if (form.rule_type !== "specific_artist") return null;
+  return form.artist_targets.map((value) => value.trim()).filter(Boolean);
+}
+
+function toPayload(form: Form) {
+  return {
+    ...form,
+    rule_value: Number(form.rule_value || 0),
+    reward_xp: Number(form.reward_xp || 0),
+    rule_target: emptyAsNull(form.rule_target),
+    artist_targets: artistTargetsPayload(form),
+    rule_meta: emptyAsNull(form.rule_meta),
+    target_image: emptyAsNull(form.target_image),
+  };
+}
+
+function formHeading(editingId: number | null): string {
+  return editingId === null
+    ? "Новое достижение"
+    : `Редактирование #${editingId}`;
+}
+
+function submitLabel(editingId: number | null): string {
+  return editingId === null ? "Создать" : "Сохранить";
+}
+
+function CancelEditButton({
+  editingId,
+  onCancel,
+}: Readonly<{ editingId: number | null; onCancel: () => void }>) {
+  if (editingId === null) return null;
+  return (
+    <button type="button" className={buttonClass.secondary} onClick={onCancel}>
+      Отмена
+    </button>
+  );
 }
 
 interface ArtistTargetsEditorProps {
@@ -150,10 +203,12 @@ export default function AchievementsManager({
 
   const addArtistTarget = () => {
     if (form.artist_targets.length >= 20) return;
+    const fieldNumber = nextArtistField.current;
+    nextArtistField.current += 1;
     setForm({ ...form, artist_targets: [...form.artist_targets, ""] });
     setArtistTargetIds([
       ...artistTargetIds,
-      `${artistFieldPrefix}-new-${nextArtistField.current++}`,
+      `${artistFieldPrefix}-new-${fieldNumber}`,
     ]);
   };
 
@@ -182,18 +237,7 @@ export default function AchievementsManager({
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    const json = {
-      ...form,
-      rule_value: Number(form.rule_value || 0),
-      reward_xp: Number(form.reward_xp || 0),
-      rule_target: form.rule_target || null,
-      artist_targets:
-        form.rule_type === "specific_artist"
-          ? form.artist_targets.map((value) => value.trim()).filter(Boolean)
-          : null,
-      rule_meta: form.rule_meta || null,
-      target_image: form.target_image || null,
-    };
+    const json = toPayload(form);
     const ok = await run(
       () =>
         editingId === null
@@ -225,17 +269,19 @@ export default function AchievementsManager({
       onChanged();
   };
 
+  const cancelEditing = () => {
+    setEditingId(null);
+    setForm(EMPTY);
+    setArtistTargetIds([`${artistFieldPrefix}-0`]);
+  };
+
   return (
     <section className="space-y-4" aria-labelledby="achievements-heading">
       <form onSubmit={save} className={panelClass}>
         <PanelTitle
           icon={<Trophy className="w-4 h-4 text-fg-2" aria-hidden="true" />}
         >
-          <span id="achievements-heading">
-            {editingId === null
-              ? "Новое достижение"
-              : `Редактирование #${editingId}`}
-          </span>
+          <span id="achievements-heading">{formHeading(editingId)}</span>
         </PanelTitle>
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <label className="sm:col-span-2">
@@ -401,21 +447,9 @@ export default function AchievementsManager({
         <Notice text={notice} />
         <div className="flex gap-2">
           <button type="submit" className={buttonClass.primary}>
-            {editingId === null ? "Создать" : "Сохранить"}
+            {submitLabel(editingId)}
           </button>
-          {editingId !== null && (
-            <button
-              type="button"
-              className={buttonClass.secondary}
-              onClick={() => {
-                setEditingId(null);
-                setForm(EMPTY);
-                setArtistTargetIds([`${artistFieldPrefix}-0`]);
-              }}
-            >
-              Отмена
-            </button>
-          )}
+          <CancelEditButton editingId={editingId} onCancel={cancelEditing} />
         </div>
       </form>
 
