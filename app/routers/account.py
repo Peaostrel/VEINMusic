@@ -29,6 +29,7 @@ from app.models import (
     Webhook,
 )
 from app.services import notifications
+from app.services.achievements import render_achievement_description
 
 router = APIRouter(prefix="/api/account", tags=["account"])
 
@@ -57,7 +58,8 @@ def build_account_export(user: User, db: Session) -> dict[str, Any]:
     followers = [u for (u,) in db.query(User.username).join(Follow, Follow.follower_id == User.id)
                  .filter(Follow.following_id == user.id)]
     achievements = [
-        {"name": a.name, "description": a.description, "earned_at": _iso(ua.earned_at)}
+        {"name": a.name, "description": render_achievement_description(a),
+         "earned_at": _iso(ua.earned_at)}
         for ua, a in db.query(UserAchievement, Achievement).join(Achievement)
         .filter(UserAchievement.user_id == user.id)
     ]

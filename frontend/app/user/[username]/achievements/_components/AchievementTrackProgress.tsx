@@ -16,6 +16,17 @@ interface ProgressTrack {
   artist: string;
   url: string | null;
   listened: boolean;
+  achievement_artist?: string;
+}
+
+interface ArtistProgressGroup {
+  name: string;
+  url: string | null;
+  available: boolean;
+  tracks: ProgressTrack[];
+  listened_count: number;
+  remaining_count: number;
+  total_count: number;
 }
 
 interface TrackProgressResponse {
@@ -24,6 +35,7 @@ interface TrackProgressResponse {
   listened_count: number;
   remaining_count: number;
   total_count: number;
+  artists?: ArtistProgressGroup[];
 }
 
 interface Props {
@@ -47,9 +59,9 @@ function TrackLink({ track }: Readonly<{ track: ProgressTrack }>) {
   const content = (
     <>
       <span className="min-w-0 flex-1 truncate">{track.title}</span>
-      {track.artist && (
+      {(track.achievement_artist || track.artist) && (
         <span className="hidden max-w-[42%] truncate text-fg-3 sm:block">
-          {track.artist}
+          {track.achievement_artist || track.artist}
         </span>
       )}
       {track.url && (
@@ -161,6 +173,49 @@ export function AchievementTrackProgress({
           )}
           {data?.available && (
             <>
+              {kind === "artist" && data.artists && data.artists.length > 1 && (
+                <ul className="grid gap-1.5 sm:grid-cols-2">
+                  {data.artists.map((artist) => (
+                    <li
+                      key={artist.name}
+                      className="rounded-md border border-line-soft bg-surface/50 px-2.5 py-2"
+                    >
+                      <div className="flex items-center justify-between gap-2 text-[11px]">
+                        {artist.url ? (
+                          <a
+                            href={artist.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="truncate text-fg-2 hover:text-fg hover:underline"
+                          >
+                            {artist.name}
+                          </a>
+                        ) : (
+                          <span className="truncate text-fg-2">
+                            {artist.name}
+                          </span>
+                        )}
+                        <span className="shrink-0 font-mono text-fg-3">
+                          {artist.listened_count} / {artist.total_count}
+                        </span>
+                      </div>
+                      <div className="mt-1 h-1 overflow-hidden rounded-full bg-line">
+                        <div
+                          className="h-full rounded-full bg-accent"
+                          style={{
+                            width: `${Math.min(
+                              (artist.listened_count /
+                                Math.max(artist.total_count, 1)) *
+                                100,
+                              100,
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.06em] text-fg-3">
                 <span>
                   {kind === "artist"

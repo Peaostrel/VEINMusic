@@ -33,6 +33,7 @@ from app.services.achievements import (
     _enrich_achievement_data,
     _format_achievement_data,
     check_auto_achievements,
+    enrich_artist_targets,
     get_album_track_progress,
     get_artist_track_progress,
 )
@@ -167,9 +168,15 @@ async def create_achievement(data: AchCreate, db: Annotated[Session, Depends(
     val = data.rule_value
     t_img = data.target_image or ""
     meta_text = data.rule_meta or ""
-    target_val, val, t_img, meta_text = await _enrich_achievement_data(
-        data.rule_type, target_val, val, t_img, meta_text, _admin_yandex_token(admin)
-    )
+    if data.rule_type == "specific_artist" and data.artist_targets:
+        if len(data.artist_targets) > 20:
+            raise HTTPException(422, "В одном достижении можно указать до 20 артистов")
+        target_val, val, t_img, meta_text = await enrich_artist_targets(
+            data.artist_targets, val, t_img, meta_text, _admin_yandex_token(admin))
+    else:
+        target_val, val, t_img, meta_text = await _enrich_achievement_data(
+            data.rule_type, target_val, val, t_img, meta_text, _admin_yandex_token(admin)
+        )
     db.add(
         Achievement(
             name=data.name,
@@ -203,9 +210,15 @@ async def update_achievement(ach_id: int,
     val = data.rule_value
     t_img = data.target_image or ""
     meta_text = data.rule_meta or ""
-    target_val, val, t_img, meta_text = await _enrich_achievement_data(
-        data.rule_type, target_val, val, t_img, meta_text, _admin_yandex_token(admin)
-    )
+    if data.rule_type == "specific_artist" and data.artist_targets:
+        if len(data.artist_targets) > 20:
+            raise HTTPException(422, "В одном достижении можно указать до 20 артистов")
+        target_val, val, t_img, meta_text = await enrich_artist_targets(
+            data.artist_targets, val, t_img, meta_text, _admin_yandex_token(admin))
+    else:
+        target_val, val, t_img, meta_text = await _enrich_achievement_data(
+            data.rule_type, target_val, val, t_img, meta_text, _admin_yandex_token(admin)
+        )
     ach.name, ach.description, ach.icon, ach.rule_type, ach.rule_value, ach.rule_target, ach.target_image, ach.reward_xp, ach.rule_meta = data.name, data.description, data.icon, data.rule_type, val, target_val, t_img, data.reward_xp, meta_text  # type: ignore[assignment]
     audit.record(db, admin, "achievement.update", data.name, rule=data.rule_type, value=val)
     db.commit()

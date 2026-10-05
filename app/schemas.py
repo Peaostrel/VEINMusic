@@ -103,6 +103,7 @@ class AchCreate(BaseModel):
     rule_type: str = "manual"
     rule_value: int = 0
     rule_target: str | None = None
+    artist_targets: list[str] | None = None
     rule_meta: str | None = None
     target_image: str | None = None
     reward_xp: int = 0
@@ -116,6 +117,7 @@ class AchUpdate(BaseModel):
     rule_type: str = "manual"
     rule_value: int = 0
     rule_target: str | None = None
+    artist_targets: list[str] | None = None
     rule_meta: str | None = None
     target_image: str | None = None
     reward_xp: int = 0
