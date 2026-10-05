@@ -37,6 +37,7 @@ from app.schemas import (
     ToggleAch,
 )
 from app.services import notifications
+from app.services.achievements import render_achievement_description
 from app.services.user_stats import (
     get_active_streak,
     get_levels_for_users,
@@ -155,7 +156,7 @@ def get_user_info(username: str, request: Request,
             {
                 "id": a.id,
                 "name": a.name,
-                "description": a.description,
+                "description": render_achievement_description(a),
                 "icon": a.icon,
                 "target_image": a.target_image,
                 "reward_xp": a.reward_xp,

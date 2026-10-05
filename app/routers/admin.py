@@ -37,6 +37,10 @@ from app.schemas import (
     VerifyUserRequest,
 )
 from app.services import audit, cache, runtime_settings
+from app.services.achievements import (
+    _artist_target_values,
+    render_achievement_description,
+)
 from app.services.antifraud import get_all_suspicious_users
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -93,10 +97,13 @@ def get_admin_stats(db: Annotated[Session, Depends(get_db)], admin: Annotated[Us
             "id": a.id,
             "name": a.name,
             "description": a.description,
+            "rendered_description": render_achievement_description(a),
             "icon": a.icon,
             "rule_type": a.rule_type,
             "rule_value": a.rule_value,
             "rule_target": a.rule_target,
+            "artist_targets": _artist_target_values(str(a.rule_target or ""))
+            if a.rule_type == "specific_artist" else [],
             "rule_meta": a.rule_meta,
             "target_image": a.target_image,
             "reward_xp": a.reward_xp,

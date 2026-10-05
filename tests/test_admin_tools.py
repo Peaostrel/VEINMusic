@@ -1,6 +1,7 @@
 """Admin audit log, moderation, user card, catalog editing, analytics,
 broadcasts and system status."""
 import asyncio
+import json
 import os
 import time
 from datetime import UTC, datetime, timedelta
@@ -132,6 +133,46 @@ def test_achievement_endpoints_are_audited(admin_client):
         "catalog.delete_track", "user.wipe_scrobbles", "achievement.delete"]
     assert admin_client.delete(f"/api/admin/achievements/{ach_id}").status_code == 404
     assert admin_client.delete(f"/api/admin/tracks/{track_id}").status_code == 404
+
+
+def test_admin_creates_one_achievement_for_multiple_artists(admin_client):
+    stored_target = json.dumps({
+        "mode": "all",
+        "artists": [
+            {"name": "Artist A", "url": "https://music.yandex.ru/artist/1", "track_count": 2},
+            {"name": "Artist B", "url": "https://music.yandex.ru/artist/2", "track_count": 3},
+        ],
+    })
+    with patch(
+        "app.routers.achievements.enrich_artist_targets",
+        new=AsyncMock(return_value=(stored_target, 5, "cover", "Artist A, Artist B")),
+    ) as enrich:
+        response = admin_client.post("/api/admin/achievements", json={
+            "name": "Коллекция артистов API",
+            "description": "Прослушать все треки {artists}",
+            "icon": "🎤",
+            "rule_type": "specific_artist",
+            "rule_value": 1,
+            "artist_targets": [
+                "https://music.yandex.ru/artist/1",
+                "https://music.yandex.ru/artist/2",
+            ],
+            "reward_xp": 250,
+        })
+
+    assert response.status_code == 200
+    enrich.assert_awaited_once()
+    data = admin_client.get("/api/admin/stats").json()
+    item = next(a for a in data["achievements"] if a["name"] == "Коллекция артистов API")
+    assert item["rule_value"] == 5
+    assert item["artist_targets"] == [
+        "https://music.yandex.ru/artist/1",
+        "https://music.yandex.ru/artist/2",
+    ]
+    assert item["rendered_description"] == (
+        "Прослушать все треки [Artist A](https://music.yandex.ru/artist/1) "
+        "и [Artist B](https://music.yandex.ru/artist/2)"
+    )
 
 
 def test_level_is_based_on_xp_not_play_count(admin_client):

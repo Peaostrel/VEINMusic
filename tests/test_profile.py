@@ -1,3 +1,4 @@
+import json
 from unittest.mock import AsyncMock, patch
 import pytest
 from app.core.security import create_session_token
@@ -396,3 +397,38 @@ def test_artist_track_details_are_available_only_to_profile_owner(auth_client, a
         f"/api/achievements/artist-progress/profileuser/{achievement_id}"
     )
     assert response.status_code == 403
+
+
+def test_multi_artist_description_is_expanded_for_profile(auth_client):
+    from app.models import Achievement
+
+    db = SessionLocal()
+    try:
+        achievement = Achievement(
+            name="Две дискографии",
+            description="Прослушать все треки {artists}",
+            icon="🎤",
+            rule_type="specific_artist",
+            rule_value=5,
+            rule_target=json.dumps({
+                "mode": "all",
+                "artists": [
+                    {"name": "Artist A", "url": "https://music.yandex.ru/artist/1", "track_count": 2},
+                    {"name": "Artist B", "url": "https://music.yandex.ru/artist/2", "track_count": 3},
+                ],
+            }),
+        )
+        db.add(achievement)
+        db.commit()
+        db.refresh(achievement)
+        achievement_id = achievement.id
+    finally:
+        db.close()
+
+    listing = auth_client.get("/api/achievements/all/profileuser").json()
+    item = next(a for a in listing["achievements"] if a["id"] == achievement_id)
+    assert item["description"] == (
+        "Прослушать все треки [Artist A](https://music.yandex.ru/artist/1) "
+        "и [Artist B](https://music.yandex.ru/artist/2)"
+    )
+    assert item["track_progress_available"] is True

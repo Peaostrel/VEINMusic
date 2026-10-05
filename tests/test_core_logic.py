@@ -1,6 +1,7 @@
 """Scrobble processing and achievement rules: the logic that decides what
 counts, how much XP it earns and which achievements unlock."""
 import asyncio
+import json
 import time
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
@@ -329,6 +330,83 @@ def test_specific_artist_and_track_rules(db):
         assert ach._calculate_achievement_progress(db, user, a) == 3
 
 
+def test_multi_artist_achievement_counts_every_artist_and_renders_links(db):
+    user = _user(db, "multi_artist")
+    _listen(db, user, _track(db, title="A1", artist="Artist A"), times=3)
+    _listen(db, user, _track(db, title="A2", artist="Artist A"))
+    artist_b_track = _track(db, title="B1", artist="Artist B")
+    target = json.dumps({
+        "mode": "all",
+        "artists": [
+            {"name": "Artist A", "url": "https://music.yandex.ru/artist/1", "track_count": 2},
+            {"name": "Artist B", "url": "https://music.yandex.ru/artist/2", "track_count": 1},
+        ],
+    })
+    achievement = _achievement(
+        db,
+        name="Две дискографии",
+        description="Прослушать все треки {artists}",
+        rule_type="specific_artist",
+        rule_target=target,
+        rule_value=3,
+    )
+
+    assert ach._calculate_achievement_progress(db, user, achievement) == 2
+    assert "Две дискографии" not in _awarded_names(db, user)
+
+    _listen(db, user, artist_b_track)
+    assert ach._calculate_achievement_progress(db, user, achievement) == 3
+    assert "Две дискографии" in _awarded_names(db, user)
+    assert ach.render_achievement_description(achievement) == (
+        "Прослушать все треки [Artist A](https://music.yandex.ru/artist/1) "
+        "и [Artist B](https://music.yandex.ru/artist/2)"
+    )
+
+
+def test_multi_artist_progress_is_grouped(db):
+    user = _user(db, "multi_artist_details")
+    listened_a = _track(db, title="A1", artist="Artist A")
+    listened_b = _track(db, title="B1", artist="Artist B")
+    _listen(db, user, listened_a)
+    _listen(db, user, listened_b)
+    achievement = _achievement(
+        db,
+        name="Группа артистов",
+        rule_type="specific_artist",
+        rule_target=json.dumps({
+            "mode": "all",
+            "artists": [
+                {"name": "Artist A", "url": "https://music.yandex.ru/artist/1", "track_count": 2},
+                {"name": "Artist B", "url": "https://music.yandex.ru/artist/2", "track_count": 2},
+            ],
+        }),
+        rule_value=4,
+    )
+    user.integration.yandex_token = "secret"
+    db.commit()
+
+    async def artist_tracks(url, _token):
+        name = "Artist A" if url.endswith("/1") else "Artist B"
+        prefix = "A" if name.endswith("A") else "B"
+        return [
+            {"id": None, "title": f"{prefix}1", "artist": name, "url": None},
+            {"id": None, "title": f"{prefix}2", "artist": name, "url": None},
+        ]
+
+    with patch.object(ach, "_yandex_artist_tracks", side_effect=artist_tracks):
+        progress = asyncio.run(ach.get_artist_track_progress(db, user, achievement))
+
+    assert progress["listened_count"] == 2
+    assert progress["remaining_count"] == 2
+    assert [(item["name"], item["listened_count"], item["total_count"])
+            for item in progress["artists"]] == [
+        ("Artist A", 1, 2),
+        ("Artist B", 1, 2),
+    ]
+    assert {track["achievement_artist"] for track in progress["tracks"]} == {
+        "Artist A", "Artist B"}
+
+
 def test_track_rules_by_url(db):
     user = _user(db)
     _listen(db, user, _track(db, title="T", artist="A", track_url="https://music.yandex.ru/album/9/track/77"))
@@ -448,6 +526,25 @@ def test_enrich_achievement_data():
         assert asyncio.run(
             enrich("specific_artist", stored, 1, "", "Artist", "tok")
         ) == (stored, 23, "img", "Artist")
+
+
+def test_enrich_artist_collection():
+    async def enrich(_kind, target, _value, _image, _meta, _token):
+        artist_id = target.rsplit("/", 1)[-1]
+        return f"Artist {artist_id}||{target}", int(artist_id), f"img-{artist_id}", f"Artist {artist_id}"
+
+    with patch.object(ach, "_enrich_achievement_data", side_effect=enrich):
+        target, value, image, meta = asyncio.run(ach.enrich_artist_targets(
+            ["https://music.yandex.ru/artist/2", "https://music.yandex.ru/artist/3"],
+            1, "", "", "token"))
+
+    assert value == 5
+    assert image == "img-2"
+    assert meta == "Artist 2, Artist 3"
+    assert ach._artist_target_values(target) == [
+        "https://music.yandex.ru/artist/2",
+        "https://music.yandex.ru/artist/3",
+    ]
 
 
 def test_album_track_count():

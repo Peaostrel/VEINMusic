@@ -34,10 +34,12 @@ export interface Achievement {
   id: number;
   name: string;
   description: string;
+  rendered_description?: string;
   icon: string;
   rule_type: string;
   rule_value: number;
   rule_target: string | null;
+  artist_targets?: string[];
   rule_meta: string | null;
   target_image: string | null;
   reward_xp: number;

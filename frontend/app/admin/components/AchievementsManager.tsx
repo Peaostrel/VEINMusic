@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Trash2, Trophy } from "lucide-react";
+import { Pencil, Plus, Trash2, Trophy, X } from "lucide-react";
 import type { Achievement } from "../types";
 import {
   Notice,
@@ -30,6 +30,7 @@ type Form = {
   rule_type: string;
   rule_value: string;
   rule_target: string;
+  artist_targets: string[];
   rule_meta: string;
   target_image: string;
   reward_xp: string;
@@ -42,6 +43,7 @@ const EMPTY: Form = {
   rule_type: "manual",
   rule_value: "1",
   rule_target: "",
+  artist_targets: [""],
   rule_meta: "",
   target_image: "",
   reward_xp: "50",
@@ -55,6 +57,10 @@ function toForm(a: Achievement): Form {
     rule_type: a.rule_type,
     rule_value: String(a.rule_value ?? 0),
     rule_target: a.rule_target ?? "",
+    artist_targets:
+      a.artist_targets && a.artist_targets.length > 0
+        ? a.artist_targets
+        : [a.rule_target ?? ""],
     rule_meta: a.rule_meta ?? "",
     target_image: a.target_image ?? "",
     reward_xp: String(a.reward_xp ?? 0),
@@ -75,6 +81,36 @@ export default function AchievementsManager({
       setForm({ ...form, [key]: e.target.value });
   const needsTarget = form.rule_type.startsWith("specific_");
 
+  const setArtistTarget = (index: number, value: string) => {
+    const artistTargets = [...form.artist_targets];
+    artistTargets[index] = value;
+    setForm({ ...form, artist_targets: artistTargets });
+  };
+
+  const addArtistTarget = () => {
+    if (form.artist_targets.length >= 20) return;
+    setForm({ ...form, artist_targets: [...form.artist_targets, ""] });
+  };
+
+  const removeArtistTarget = (index: number) => {
+    const artistTargets = form.artist_targets.filter((_, i) => i !== index);
+    setForm({
+      ...form,
+      artist_targets: artistTargets.length ? artistTargets : [""],
+    });
+  };
+
+  const insertArtistsPlaceholder = () => {
+    if (form.description.includes("{artists}")) return;
+    const description = form.description.trim();
+    setForm({
+      ...form,
+      description: description
+        ? `${description} {artists}`
+        : "Прослушать все треки {artists}",
+    });
+  };
+
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     const json = {
@@ -82,6 +118,10 @@ export default function AchievementsManager({
       rule_value: Number(form.rule_value || 0),
       reward_xp: Number(form.reward_xp || 0),
       rule_target: form.rule_target || null,
+      artist_targets:
+        form.rule_type === "specific_artist"
+          ? form.artist_targets.map((value) => value.trim()).filter(Boolean)
+          : null,
       rule_meta: form.rule_meta || null,
       target_image: form.target_image || null,
     };
@@ -156,22 +196,49 @@ export default function AchievementsManager({
               className={inputClass}
             />
           </label>
-          <label className="sm:col-span-4">
-            <span className={labelClass}>
-              Описание (ссылки: [текст](https://…))
+          <div className="sm:col-span-4">
+            <span className="mb-1 flex items-center justify-between gap-3">
+              <label
+                htmlFor="achievement-description"
+                className="text-[11px] text-fg-2"
+              >
+                Описание (ссылки: [текст](https://…))
+              </label>
+              {form.rule_type === "specific_artist" && (
+                <button
+                  type="button"
+                  onClick={insertArtistsPlaceholder}
+                  className="text-[11px] text-accent hover:underline disabled:text-fg-3 disabled:no-underline"
+                  disabled={form.description.includes("{artists}")}
+                >
+                  Вставить список артистов
+                </button>
+              )}
             </span>
             <input
+              id="achievement-description"
               value={form.description}
               onChange={set("description")}
               required
               className={inputClass}
             />
-          </label>
+          </div>
           <label className="sm:col-span-2">
             <span className={labelClass}>Правило</span>
             <select
               value={form.rule_type}
-              onChange={set("rule_type")}
+              onChange={(event) => {
+                const ruleType = event.target.value;
+                setForm({
+                  ...form,
+                  rule_type: ruleType,
+                  artist_targets:
+                    ruleType === "specific_artist" &&
+                    form.artist_targets.length === 0
+                      ? [""]
+                      : form.artist_targets,
+                });
+              }}
               className={inputClass}
             >
               {Object.entries(RULES).map(([id, label]) => (
@@ -193,7 +260,69 @@ export default function AchievementsManager({
               />
             </label>
           )}
-          {needsTarget && (
+          {needsTarget && form.rule_type === "specific_artist" && (
+            <>
+              <fieldset className="sm:col-span-4 space-y-2">
+                <legend className={labelClass}>Артисты</legend>
+                {form.artist_targets.map((target, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <input
+                      value={target}
+                      onChange={(event) =>
+                        setArtistTarget(index, event.target.value)
+                      }
+                      required
+                      placeholder="Имя или ссылка на артиста Яндекс Музыки"
+                      aria-label={`Артист ${index + 1}`}
+                      className={inputClass}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeArtistTarget(index)}
+                      aria-label={`Удалить артиста ${index + 1}`}
+                      className="rounded-lg p-2 text-fg-3 hover:bg-line hover:text-danger"
+                    >
+                      <X className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addArtistTarget}
+                  disabled={form.artist_targets.length >= 20}
+                  className="inline-flex items-center gap-1.5 text-xs text-accent hover:underline disabled:text-fg-3 disabled:no-underline"
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                  Добавить артиста
+                </button>
+                <p className="text-[11px] text-fg-3">
+                  Все добавленные артисты войдут в одно достижение. В описании
+                  <code className="mx-1 font-mono text-fg-2">
+                    {"{artists}"}
+                  </code>
+                  превратится в кликабельный список имён.
+                </p>
+              </fieldset>
+              <label className="sm:col-span-2">
+                <span className={labelClass}>Подпись (необязательно)</span>
+                <input
+                  value={form.rule_meta}
+                  onChange={set("rule_meta")}
+                  className={inputClass}
+                />
+              </label>
+              <label className="sm:col-span-2">
+                <span className={labelClass}>Обложка достижения (URL)</span>
+                <input
+                  type="url"
+                  value={form.target_image}
+                  onChange={set("target_image")}
+                  className={inputClass}
+                />
+              </label>
+            </>
+          )}
+          {needsTarget && form.rule_type !== "specific_artist" && (
             <>
               <label className="sm:col-span-2">
                 <span className={labelClass}>
@@ -270,7 +399,7 @@ export default function AchievementsManager({
                 {a.name}
               </div>
               <div className="text-[11px] text-fg-2 truncate">
-                {a.description}
+                {a.rendered_description ?? a.description}
               </div>
               <div className="text-[10px] font-mono mt-0.5 text-fg-2">
                 {RULES[a.rule_type] ?? a.rule_type}

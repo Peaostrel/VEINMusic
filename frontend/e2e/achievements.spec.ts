@@ -74,15 +74,16 @@ test("shows the exact album tracks that remain", async ({ page }) => {
           },
           {
             id: 43,
-            name: "Дискография исполнителя",
-            description: "Прослушать все треки артиста",
+            name: "Две дискографии",
+            description:
+              "Прослушать все треки [Первого](https://music.yandex.ru/artist/55) и [Второго](https://music.yandex.ru/artist/56)",
             icon: "🎤",
             target_image: null,
             reward_xp: 100,
             is_earned: false,
             rarity: 2,
-            current_progress: 1,
-            target_value: 3,
+            current_progress: 2,
+            target_value: 4,
             rule_type: "specific_artist",
             rule_target: "Исполнитель||https://music.yandex.ru/artist/55",
             track_progress_available: true,
@@ -139,9 +140,29 @@ test("shows the exact album tracks that remain", async ({ page }) => {
         headers: corsHeaders,
         body: JSON.stringify({
           available: true,
-          listened_count: 1,
+          listened_count: 2,
           remaining_count: 2,
-          total_count: 3,
+          total_count: 4,
+          artists: [
+            {
+              name: "Первый артист",
+              url: "https://music.yandex.ru/artist/55",
+              available: true,
+              listened_count: 1,
+              remaining_count: 1,
+              total_count: 2,
+              tracks: [],
+            },
+            {
+              name: "Второй артист",
+              url: "https://music.yandex.ru/artist/56",
+              available: true,
+              listened_count: 1,
+              remaining_count: 1,
+              total_count: 2,
+              tracks: [],
+            },
+          ],
           tracks: [
             {
               id: "11",
@@ -155,6 +176,14 @@ test("shows the exact album tracks that remain", async ({ page }) => {
               title: "Ещё не слушал",
               artist: "Исполнитель",
               url: "https://music.yandex.ru/album/7/track/12",
+              listened: false,
+            },
+            {
+              id: "13",
+              title: "Второму осталось",
+              artist: "Второй артист",
+              achievement_artist: "Второй артист",
+              url: "https://music.yandex.ru/album/8/track/13",
               listened: false,
             },
           ],
@@ -173,6 +202,9 @@ test("shows the exact album tracks that remain", async ({ page }) => {
 
   await page.getByRole("button", { name: /Незасчитанные треки/ }).click();
   await expect(page.getByText("Ещё не слушал")).toBeVisible();
+  await expect(page.getByText("Второму осталось")).toBeVisible();
+  await expect(page.getByText("Первый артист")).toBeVisible();
+  await expect(page.getByText("Второй артист").first()).toBeVisible();
   await expect(
     page.getByText("Для достижения нужно ещё 2 уникальных трека."),
   ).toBeVisible();
