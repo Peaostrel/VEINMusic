@@ -160,6 +160,7 @@ export interface UserInfo {
   rank: string;
   spotify_linked: boolean;
   yandex_linked: boolean;
+  soundcloud_linked: boolean;
   lastfm_username: string | null;
   has_imported_lastfm: boolean;
   last_sync: string | null;
@@ -256,6 +257,7 @@ export interface UserPreferences {
   integrations: {
     spotify_enabled: boolean;
     yandex_enabled: boolean;
+    soundcloud_enabled: boolean;
     lastfm_enabled: boolean;
     auto_sync: boolean;
   };

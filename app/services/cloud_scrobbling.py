@@ -1,7 +1,10 @@
 import asyncio
+import json
 import logging
 import os
-from datetime import UTC, datetime
+import re
+from datetime import UTC, datetime, timedelta
+from typing import cast
 
 import httpx
 from sqlalchemy import or_
@@ -23,6 +26,10 @@ YANDEX_PLAYING_MARGIN_SEC = 45
 
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
+SOUNDCLOUD_CLIENT_ID = os.getenv("SOUNDCLOUD_CLIENT_ID")
+SOUNDCLOUD_CLIENT_SECRET = os.getenv("SOUNDCLOUD_CLIENT_SECRET")
+SOUNDCLOUD_RECENT_URL = "https://api.soundcloud.com/me/recently-played/tracks"
+SOUNDCLOUD_PLAYING_MARGIN_SEC = 45
 
 
 async def refresh_spotify_token(user: User, db: Session):
@@ -80,6 +87,270 @@ async def sync_spotify_status(user: User, db: Session, process_func):
                     await process_func(db, user, title, artist, cover, track_url, "spotify", progress, True, duration, album)
         except Exception as e:
             logger.warning(f"Spotify sync error: {e}")
+
+
+def _soundcloud_expiry(expires_in) -> datetime:
+    try:
+        seconds = max(int(expires_in), 60)
+    except (TypeError, ValueError):
+        seconds = 3600
+    return datetime.now(UTC) + timedelta(seconds=seconds)
+
+
+def _utc(value: datetime | None) -> datetime | None:
+    if value is None or value.tzinfo is not None:
+        return value
+    return value.replace(tzinfo=UTC)
+
+
+async def refresh_soundcloud_token(user: User, db: Session) -> str | None:
+    refresh_token = cast(str | None, user.integration.soundcloud_refresh_token)
+    if not refresh_token or not SOUNDCLOUD_CLIENT_ID or not SOUNDCLOUD_CLIENT_SECRET:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                "https://secure.soundcloud.com/oauth/token",
+                data={
+                    "grant_type": "refresh_token",
+                    "client_id": SOUNDCLOUD_CLIENT_ID,
+                    "client_secret": SOUNDCLOUD_CLIENT_SECRET,
+                    "refresh_token": refresh_token,
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+        if response.status_code != 200:
+            logger.warning(
+                "SoundCloud token refresh answered %s for user %s",
+                response.status_code,
+                user.username,
+            )
+            return None
+        data = response.json()
+        access_token = data.get("access_token")
+        if not access_token:
+            return None
+        user.integration.soundcloud_access_token = access_token
+        if data.get("refresh_token"):
+            user.integration.soundcloud_refresh_token = data["refresh_token"]
+        user.integration.soundcloud_token_expires_at = _soundcloud_expiry(
+            data.get("expires_in")
+        )
+        db.commit()
+        return str(access_token)
+    except Exception as exc:
+        logger.warning("SoundCloud token refresh error: %s", exc)
+        return None
+
+
+def _soundcloud_tracks(payload) -> list[dict]:
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if not isinstance(payload, dict):
+        return []
+    for key in ("collection", "tracks"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+    return []
+
+
+def _soundcloud_track_key(track: dict) -> str:
+    return str(
+        track.get("urn")
+        or track.get("id")
+        or track.get("permalink_url")
+        or ""
+    )
+
+
+def _soundcloud_history(value: str | None) -> list[str]:
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(parsed, list):
+        return []
+    return [str(item) for item in parsed if item]
+
+
+def _new_soundcloud_items(previous: list[str], current: list[str]) -> list[str]:
+    """Return items inserted at the front of SoundCloud's recent history.
+
+    Comparing the whole queue, rather than only its head, detects a replay of
+    the same track (``[A, A, B]`` after ``[A, B, C]``). If no overlap exists,
+    treat the response as a new baseline instead of importing uncertain plays.
+    """
+    if not previous or not current:
+        return []
+    # Exclude ``added == len(current)``: an empty remainder would match every
+    # previous queue and falsely classify a completely unrelated response as
+    # all-new history.
+    for added in range(len(current)):
+        remainder = current[added:]
+        if remainder == previous[:len(remainder)]:
+            return current[:added]
+    return []
+
+
+def _soundcloud_artwork(url: str | None) -> str:
+    if not url:
+        return ""
+    return re.sub(r"-(?:large|t\d+x\d+)(?=\.[a-z]+(?:\?|$))", "-t500x500", url)
+
+
+def _soundcloud_metadata(track: dict) -> dict | None:
+    title = str(track.get("title") or "").strip()
+    user = track.get("user") if isinstance(track.get("user"), dict) else {}
+    publisher = (
+        track.get("publisher_metadata")
+        if isinstance(track.get("publisher_metadata"), dict)
+        else {}
+    )
+    artist = str(
+        user.get("username")
+        or publisher.get("artist")
+        or publisher.get("writer_composer")
+        or ""
+    ).strip()
+    if not title or not artist:
+        return None
+    try:
+        duration = max(int(track.get("duration") or 0) // 1000, 0)
+    except (TypeError, ValueError):
+        duration = 0
+    return {
+        "title": title,
+        "artist": artist,
+        "cover": _soundcloud_artwork(track.get("artwork_url")),
+        "track_url": str(track.get("permalink_url") or ""),
+        "duration": duration,
+        "album": str(
+            publisher.get("album_title")
+            or publisher.get("release_title")
+            or ""
+        ),
+    }
+
+
+async def _soundcloud_recent_response(user: User, db: Session) -> httpx.Response | None:
+    token = cast(str | None, user.integration.soundcloud_access_token)
+    expires_at = _utc(
+        cast(datetime | None, user.integration.soundcloud_token_expires_at)
+    )
+    if expires_at and expires_at <= datetime.now(UTC) + timedelta(seconds=30):
+        token = await refresh_soundcloud_token(user, db)
+    if not token:
+        return None
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        headers = {
+            "Accept": "application/json; charset=utf-8",
+            "Authorization": f"OAuth {token}",
+        }
+        response = await client.get(
+            SOUNDCLOUD_RECENT_URL,
+            params={"limit": 25, "linked_partitioning": "true"},
+            headers=headers,
+        )
+        if response.status_code == 401:
+            token = await refresh_soundcloud_token(user, db)
+            if not token:
+                return response
+            headers["Authorization"] = f"OAuth {token}"
+            response = await client.get(
+                SOUNDCLOUD_RECENT_URL,
+                params={"limit": 25, "linked_partitioning": "true"},
+                headers=headers,
+            )
+        return response
+
+
+async def sync_soundcloud_status(user: User, db: Session, process_func) -> None:
+    """Poll official listening history and maintain an approximate live play.
+
+    SoundCloud exposes recent tracks but not a live position. A newly inserted
+    history item starts a server-timed session; repeated polls advance it until
+    the track duration. The first response is only a baseline, so linking an
+    account never imports old listens or grants achievements retroactively.
+    """
+    try:
+        response = await _soundcloud_recent_response(user, db)
+        if response is None:
+            return
+        if response.status_code != 200:
+            logger.warning(
+                "SoundCloud recent tracks answered %s for user %s",
+                response.status_code,
+                user.username,
+            )
+            return
+        tracks = _soundcloud_tracks(response.json())
+        keys = [_soundcloud_track_key(track) for track in tracks]
+        keys = [key for key in keys if key]
+        if not keys:
+            return
+
+        integration = user.integration
+        previous = _soundcloud_history(
+            cast(str | None, integration.soundcloud_recent_tracks)
+        )
+        new_items = _new_soundcloud_items(previous, keys)
+        integration.soundcloud_recent_tracks = json.dumps(keys, separators=(",", ":"))
+
+        # First poll establishes a baseline. Without timestamps, treating its
+        # head as live would create a phantom play from an old history entry.
+        if not previous:
+            integration.soundcloud_current_track = None
+            integration.soundcloud_track_started_at = None
+            db.commit()
+            return
+
+        head = keys[0]
+        now = datetime.now(UTC)
+        if new_items:
+            integration.soundcloud_current_track = head
+            integration.soundcloud_track_started_at = now
+            db.commit()
+        elif integration.soundcloud_current_track != head:
+            db.commit()
+            return
+
+        started_at = _utc(
+            cast(datetime | None, integration.soundcloud_track_started_at)
+        )
+        if started_at is None:
+            db.commit()
+            return
+        metadata = _soundcloud_metadata(tracks[0])
+        if metadata is None:
+            db.commit()
+            return
+
+        progress = max(int((now - started_at).total_seconds()), 0)
+        duration = metadata["duration"] or 180
+        is_playing = progress < duration + SOUNDCLOUD_PLAYING_MARGIN_SEC
+        await process_func(
+            db,
+            user,
+            metadata["title"],
+            metadata["artist"],
+            metadata["cover"],
+            metadata["track_url"],
+            "soundcloud",
+            min(progress, duration),
+            is_playing,
+            metadata["duration"],
+            metadata["album"],
+        )
+        if not is_playing:
+            integration.soundcloud_current_track = None
+            integration.soundcloud_track_started_at = None
+            db.commit()
+    except Exception as exc:
+        logger.warning("SoundCloud sync error for user %s: %s", user.username, exc)
 
 
 def _parse_yandex_now_playing(data: dict):
@@ -304,6 +575,7 @@ async def poll_user(user_id: int, process_func):
         from app.core.redis import redis_lock
         spotify_enabled = runtime_settings.is_feature_enabled("integration_spotify", local_db)
         yandex_enabled = runtime_settings.is_feature_enabled("integration_yandex", local_db)
+        soundcloud_enabled = runtime_settings.is_feature_enabled("integration_soundcloud", local_db)
         async with redis_lock(f"scrobble_lock:{user_id}", expire_sec=30):
             if (spotify_enabled and integrations.spotify_enabled
                     and u.integration.spotify_refresh_token):
@@ -315,6 +587,10 @@ async def poll_user(user_id: int, process_func):
                     and u.integration.yandex_token and user_id not in live_users):
                 await sync_yandex_status(u, local_db, process_func)
 
+            if (soundcloud_enabled and integrations.soundcloud_enabled
+                    and u.integration.soundcloud_refresh_token):
+                await sync_soundcloud_status(u, local_db, process_func)
+
         u.integration.last_sync = datetime.now(UTC)
         local_db.commit()
     except Exception as e:
@@ -324,7 +600,7 @@ async def poll_user(user_id: int, process_func):
 
 
 def get_pollable_user_ids(db: Session) -> list[int]:
-    """IDs of non-banned users with a linked Spotify or Yandex account."""
+    """IDs of non-banned users with a linked cloud music account."""
     from app.models import UserIntegration
     # NB: must be SQL expressions (.isnot); a Python `x is not None` on a
     # Column evaluates to True and would select every user.
@@ -333,6 +609,8 @@ def get_pollable_user_ids(db: Session) -> list[int]:
         providers.append(UserIntegration.spotify_refresh_token.isnot(None))
     if runtime_settings.is_feature_enabled("integration_yandex", db):
         providers.append(UserIntegration.yandex_token.isnot(None))
+    if runtime_settings.is_feature_enabled("integration_soundcloud", db):
+        providers.append(UserIntegration.soundcloud_refresh_token.isnot(None))
     if not providers:
         return []
     return [row[0] for row in db.query(User.id).join(UserIntegration).filter(

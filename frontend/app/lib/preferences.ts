@@ -89,6 +89,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   integrations: {
     spotify_enabled: true,
     yandex_enabled: true,
+    soundcloud_enabled: true,
     lastfm_enabled: true,
     auto_sync: true,
   },

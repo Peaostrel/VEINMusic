@@ -94,6 +94,21 @@ def disconnect_spotify(data: LikeRequest, db: Annotated[Session, Depends(
     return {"status": "ok"}
 
 
+# --- /api/integrations/soundcloud/disconnect ---
+@router.post("/api/integrations/soundcloud/disconnect")
+def disconnect_soundcloud(data: LikeRequest, db: Annotated[Session, Depends(
+        get_db)], current_user: Annotated[User, Depends(get_current_user)]):
+    integration = current_user.integration
+    integration.soundcloud_access_token = None
+    integration.soundcloud_refresh_token = None
+    integration.soundcloud_token_expires_at = None
+    integration.soundcloud_recent_tracks = None
+    integration.soundcloud_current_track = None
+    integration.soundcloud_track_started_at = None
+    db.commit()
+    return {"status": "ok"}
+
+
 # --- /api/integrations/yandex/disconnect ---
 @router.post("/api/integrations/yandex/disconnect")
 def disconnect_yandex(data: LikeRequest, db: Annotated[Session, Depends(

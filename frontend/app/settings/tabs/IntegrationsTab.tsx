@@ -85,6 +85,7 @@ export default function IntegrationsTab({
   const importEnabled = useFeature("lastfm_import");
   const spotifyEnabled = useFeature("integration_spotify");
   const yandexEnabled = useFeature("integration_yandex");
+  const soundcloudEnabled = useFeature("integration_soundcloud");
   const lastfmEnabled = useFeature("integration_lastfm");
   const preferences = data.preferences.integrations;
   const updateIntegration = (patch: Partial<typeof preferences>) =>
@@ -125,6 +126,14 @@ export default function IntegrationsTab({
           onChange={(yandex_enabled) => updateIntegration({ yandex_enabled })}
         />
         <ToggleRow
+          title="SoundCloud"
+          description="Временно приостановить облачный скробблинг SoundCloud, сохранив подключение."
+          checked={preferences.soundcloud_enabled}
+          onChange={(soundcloud_enabled) =>
+            updateIntegration({ soundcloud_enabled })
+          }
+        />
+        <ToggleRow
           title="Last.fm"
           description="Приостановить автоматическую работу с Last.fm без удаления аккаунта."
           checked={preferences.lastfm_enabled}
@@ -146,6 +155,12 @@ export default function IntegrationsTab({
             <div>
               <dt className="text-fg-3">Яндекс</dt>
               <dd>{userProfile?.yandex_linked ? "linked" : "not linked"}</dd>
+            </div>
+            <div>
+              <dt className="text-fg-3">SoundCloud</dt>
+              <dd>
+                {userProfile?.soundcloud_linked ? "linked" : "not linked"}
+              </dd>
             </div>
             <div>
               <dt className="text-fg-3">Last.fm</dt>
@@ -214,6 +229,51 @@ export default function IntegrationsTab({
                 className={userProfile?.spotify_linked ? small : smallPrimary}
               >
                 {userProfile?.spotify_linked ? "Обновить" : "Подключить"}
+              </button>
+            )}
+          </div>
+        </Row>
+
+        <Row
+          logo="SC"
+          name="SoundCloud"
+          status={synced(userProfile?.soundcloud_linked)}
+          statusOk={Boolean(userProfile?.soundcloud_linked)}
+          description={
+            soundcloudEnabled
+              ? "Скробблинг напрямую через сервер, без расширения. После подключения включите следующий трек — старая история не импортируется."
+              : "Временно приостановлено администратором."
+          }
+        >
+          <div className="flex gap-2 md:justify-end">
+            {userProfile?.soundcloud_linked && (
+              <button
+                type="button"
+                onClick={() => handleDisconnect("soundcloud")}
+                className={smallDanger}
+              >
+                Отключить
+              </button>
+            )}
+            {soundcloudEnabled ? (
+              <a
+                href={`${API_URL}/auth/soundcloud/login`}
+                className={
+                  userProfile?.soundcloud_linked ? small : smallPrimary
+                }
+              >
+                {userProfile?.soundcloud_linked ? "Обновить" : "Подключить"}
+              </a>
+            ) : (
+              <button
+                type="button"
+                disabled
+                title="SoundCloud временно отключён"
+                className={
+                  userProfile?.soundcloud_linked ? small : smallPrimary
+                }
+              >
+                {userProfile?.soundcloud_linked ? "Обновить" : "Подключить"}
               </button>
             )}
           </div>
