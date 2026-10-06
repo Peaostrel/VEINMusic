@@ -148,6 +148,8 @@ def get_user_info(username: str, request: Request,
             user.integration.spotify_refresh_token),
         "yandex_linked": bool(
             user.integration.yandex_token),
+        "soundcloud_linked": bool(
+            user.integration.soundcloud_refresh_token),
         "lastfm_username": user.integration.lastfm_username,
         "has_imported_lastfm": user.integration.has_imported_lastfm,
         "last_sync": user.integration.last_sync,

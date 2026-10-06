@@ -92,7 +92,7 @@ async def lifespan(app: FastAPI):
 
     _migrate_plaintext_api_keys()
 
-    # Cloud scrobbling (Spotify / Yandex polling). In Docker it runs in the
+    # Cloud scrobbling (Spotify / Yandex / SoundCloud polling). In Docker it runs in the
     # arq worker instead (RUN_CLOUD_POLLING=0), so that several API workers
     # don't poll the same accounts.
     if os.getenv("RUN_CLOUD_POLLING", "1") == "1":

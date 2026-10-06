@@ -26,6 +26,9 @@ x-backend-env: &backend-env
   SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
   SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
   SPOTIFY_REDIRECT_URI: https://${API_DOMAIN}/auth/spotify/callback
+  SOUNDCLOUD_CLIENT_ID: ${SOUNDCLOUD_CLIENT_ID:-}
+  SOUNDCLOUD_CLIENT_SECRET: ${SOUNDCLOUD_CLIENT_SECRET:-}
+  SOUNDCLOUD_REDIRECT_URI: https://${API_DOMAIN}/auth/soundcloud/callback
   # 0 turns off the open Ynison connections (Yandex Music falls back to polling)
   YANDEX_LIVE: ${YANDEX_LIVE:-1}
 
@@ -135,7 +138,7 @@ services:
       <<: *backend-env
       # The API applies Alembic migrations on start (see docker-entrypoint.sh)
       RUN_MIGRATIONS: "1"
-      # Spotify/Yandex polling runs in the worker (arq cron job)
+      # Spotify/Yandex/SoundCloud polling runs in the worker (arq cron job)
       RUN_CLOUD_POLLING: "0"
       FORWARDED_ALLOW_IPS: 172.30.0.10
       BACKUP_DIR: /backups
