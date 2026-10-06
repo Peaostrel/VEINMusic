@@ -29,7 +29,7 @@ function getPlatformSource(hostname) {
     if (isHostOrSubdomain(hostname, 'spotify.com')) return 'spotify';
     if (isHostOrSubdomain(hostname, 'music.youtube.com')) return 'youtube_music';
     if (isHostOrSubdomain(hostname, 'soundcloud.com')) {
-        const adBadge = document.querySelector('.sc-snippet-ad, .adOverlay, [aria-label="Advertisement"]');
+        const adBadge = document.querySelector('.playbackSoundBadge .sc-snippet-ad, .playbackSoundBadge .adOverlay, .playbackSoundBadge [aria-label="Advertisement"]');
         const titleEl = document.querySelector('.playbackSoundBadge__titleLink');
         if (adBadge || titleEl?.href?.includes('/ads/')) return null; 
         return 'soundcloud';
@@ -51,7 +51,21 @@ function getArtworkCover(metadata, source) {
     if (source === 'youtube_music') {
         return coverRaw.includes('=') ? coverRaw.split('=')[0] + '=w500-h500' : coverRaw;
     }
+    if (source === 'soundcloud') {
+        return upgradeSoundCloudArtwork(coverRaw);
+    }
     return coverRaw;
+}
+
+function upgradeSoundCloudArtwork(url) {
+    return (url || '').replace(/-t\d+x\d+(?=\.[a-z]+(?:\?|$))/i, '-t500x500');
+}
+
+function backgroundImageUrl(element) {
+    if (!element) return '';
+    const background = globalThis.getComputedStyle(element).backgroundImage || element.style?.backgroundImage || '';
+    const match = background.match(/^url\(["']?(.*?)["']?\)$/);
+    return match ? match[1] : '';
 }
 
 function getTrackUrlForSource(source, trackTitle) {
@@ -64,7 +78,50 @@ function getTrackUrlForSource(source, trackTitle) {
         const trackLink = document.querySelector('a[data-testid="context-item-link"]');
         return trackLink ? trackLink.href : globalThis.location.href;
     }
+    if (source === 'soundcloud') {
+        const trackLink = document.querySelector('.playbackSoundBadge__titleLink');
+        return trackLink?.href || globalThis.location.href;
+    }
     return globalThis.location.href;
+}
+
+function getSoundCloudMeta() {
+    const badge = document.querySelector('.playbackSoundBadge');
+    const titleEl = badge?.querySelector('.playbackSoundBadge__titleLink') ||
+        document.querySelector('.playbackSoundBadge__titleLink');
+    const artistEl = badge?.querySelector('.playbackSoundBadge__lightLink') ||
+        document.querySelector('.playbackSoundBadge__lightLink');
+    if (!titleEl || !artistEl) return null;
+
+    const trackTitle = (titleEl.getAttribute('title') || titleEl.textContent || '').trim();
+    const trackArtist = (artistEl.getAttribute('title') || artistEl.textContent || '').trim();
+    const combined = `${trackArtist} ${trackTitle}`.toLowerCase();
+    if (!trackTitle || !trackArtist || titleEl.href?.includes('/ads/') ||
+        combined.includes('advertisement')) return null;
+
+    const coverEl = badge?.querySelector('.playbackSoundBadge__avatar [style*="background-image"]');
+    return {
+        trackTitle,
+        trackArtist,
+        trackAlbum: '',
+        trackCover: upgradeSoundCloudArtwork(backgroundImageUrl(coverEl)),
+        trackUrl: titleEl.href || globalThis.location.href
+    };
+}
+
+function getSoundCloudProgress() {
+    const timeline = document.querySelector('.playbackTimeline__progressWrapper');
+    const playButton = document.querySelector('.playControls__play');
+    const badge = document.querySelector('.playbackSoundBadge');
+    if (!timeline && !playButton && !badge) return null;
+
+    const label = (playButton?.getAttribute('aria-label') || playButton?.getAttribute('title') || '').toLowerCase();
+    const progressSec = Math.max(Number(timeline?.getAttribute('aria-valuenow')) || 0, 0);
+    const durationSec = Math.max(Number(timeline?.getAttribute('aria-valuemax')) || 0, 0);
+    const isPlaying = label.startsWith('pause') || Boolean(
+        badge && !badge.classList.contains('paused') && progressSec > 0
+    );
+    return { isPlaying, progressSec: Math.floor(progressSec), durationSec: Math.floor(durationSec) };
 }
 
 function getVkMetadata() {
@@ -95,7 +152,11 @@ function getVkMetadata() {
     };
 }
 
-function getMediaProgress(sessionPlaying) {
+function getMediaProgress(sessionPlaying, source) {
+    if (source === 'soundcloud') {
+        const soundCloudProgress = getSoundCloudProgress();
+        if (soundCloudProgress) return soundCloudProgress;
+    }
     const allMedia = Array.from(globalThis.__vein_audio_elements || []).concat(Array.from(document.querySelectorAll('audio, video')));
     const activeMedia = allMedia.filter(m => !m.paused && m.duration > 0).sort((a, b) => b.currentTime - a.currentTime)[0];
     
@@ -175,6 +236,10 @@ function getVkMetaForWorld() {
 }
 
 function getTrackMetadataForSource(source) {
+    if (source === 'soundcloud') {
+        return getSoundCloudMeta() || getMediaSessionMeta(source);
+    }
+
     let meta = getMediaSessionMeta(source);
     if (meta) return meta;
     
@@ -201,7 +266,10 @@ setInterval(() => {
 
         if (trackTitle) {
             const sessionPlaying = navigator.mediaSession?.playbackState === 'playing';
-            const { isPlaying, progressSec, durationSec } = getMediaProgress(sessionPlaying);
+            const { isPlaying, progressSec, durationSec } = getMediaProgress(sessionPlaying, source);
+            // SoundCloud populates the mini-player as soon as a track is selected.
+            // Do not create a zero-second scrobble until playback has actually begun.
+            if (source === 'soundcloud' && !isPlaying && progressSec <= 0) return;
             globalThis.postMessage({
                 type: 'VEIN_SCROBBLE',
                 payload: {
