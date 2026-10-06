@@ -260,7 +260,8 @@ def test_soundcloud_oauth_uses_pkce_and_links_account(client, db):
         state = location.params["state"]
         nonce = client.cookies.get("soundcloud_auth_state")
         verifier = client.cookies.get("soundcloud_pkce_verifier")
-        assert nonce and verifier
+        assert nonce
+        assert verifier
 
         client.cookies.clear()
         client.cookies.set("soundcloud_auth_state", nonce)

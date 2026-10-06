@@ -30,6 +30,7 @@ from app.services import runtime_settings
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 MIN_PASSWORD_LENGTH = 8
+INVALID_STATE_PARAMETER = "Invalid state parameter"
 
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
@@ -216,7 +217,7 @@ def spotify_login(current_user: Annotated[User, Depends(get_current_user)]):
 
 @router.get("/spotify/callback",
             dependencies=[Depends(runtime_settings.require_feature("integration_spotify"))],
-            responses={400: {"description": "Invalid state parameter"}})
+            responses={400: {"description": INVALID_STATE_PARAMETER}})
 async def spotify_callback(code: str,
                            state: str,
                            request: Request,
@@ -226,11 +227,11 @@ async def spotify_callback(code: str,
     # through the signed OAuth state bound to the Lax state cookie instead.
     user_id = _parse_spotify_state(state, request.cookies.get(SPOTIFY_STATE_COOKIE))
     if user_id is None:
-        raise HTTPException(status_code=400, detail="Invalid state parameter")
+        raise HTTPException(status_code=400, detail=INVALID_STATE_PARAMETER)
 
     user = db.query(User).filter(User.id == user_id).first()
     if not user or user.is_banned:
-        raise HTTPException(status_code=400, detail="Invalid state parameter")
+        raise HTTPException(status_code=400, detail=INVALID_STATE_PARAMETER)
 
     result = "error"
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -336,7 +337,7 @@ def soundcloud_login(current_user: Annotated[User, Depends(get_current_user)]):
 @router.get(
     "/soundcloud/callback",
     dependencies=[Depends(runtime_settings.require_feature("integration_soundcloud"))],
-    responses={400: {"description": "Invalid state parameter"}},
+    responses={400: {"description": INVALID_STATE_PARAMETER}},
 )
 async def soundcloud_callback(
     code: str,
@@ -349,11 +350,11 @@ async def soundcloud_callback(
     )
     verifier = request.cookies.get(SOUNDCLOUD_PKCE_COOKIE)
     if user_id is None or not verifier:
-        raise HTTPException(status_code=400, detail="Invalid state parameter")
+        raise HTTPException(status_code=400, detail=INVALID_STATE_PARAMETER)
 
     user = db.query(User).filter(User.id == user_id).first()
     if not user or user.is_banned:
-        raise HTTPException(status_code=400, detail="Invalid state parameter")
+        raise HTTPException(status_code=400, detail=INVALID_STATE_PARAMETER)
 
     result = "error"
     async with httpx.AsyncClient(timeout=10.0) as client:
