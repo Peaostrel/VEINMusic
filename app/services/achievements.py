@@ -304,9 +304,14 @@ def _calc_specific_track(db: Session, user: User, a: Achievement) -> int:
     if a.rule_target.startswith("http"):
         url_count = _count_by_url(db, user.id, a.rule_target.split('?')[0])
         if hasattr(a, 'rule_meta') and a.rule_meta:
-            return max(url_count, _count_by_track_text(db, user.id, a.rule_meta))
+            return max(
+                url_count,
+                _count_by_track_text(db, int(user.id), str(a.rule_meta)),
+            )
         return url_count
-    return _count_by_track_text(db, user.id, a.rule_target.split("||")[0])
+    return _count_by_track_text(
+        db, int(user.id), str(a.rule_target).split("||")[0]
+    )
 
 
 def _calc_specific_album(db: Session, user: User, a: Achievement) -> int:
