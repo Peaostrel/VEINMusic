@@ -203,12 +203,10 @@ def _soundcloud_artwork(url: str | None) -> str:
 
 def _soundcloud_metadata(track: dict) -> dict | None:
     title = str(track.get("title") or "").strip()
-    user = track.get("user") if isinstance(track.get("user"), dict) else {}
-    publisher = (
-        track.get("publisher_metadata")
-        if isinstance(track.get("publisher_metadata"), dict)
-        else {}
-    )
+    raw_user = track.get("user")
+    user = raw_user if isinstance(raw_user, dict) else {}
+    raw_publisher = track.get("publisher_metadata")
+    publisher = raw_publisher if isinstance(raw_publisher, dict) else {}
     artist = str(
         user.get("username")
         or publisher.get("artist")
