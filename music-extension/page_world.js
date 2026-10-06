@@ -114,9 +114,10 @@ function getYouTubeMusicMeta() {
     if (combined.includes('advertisement') || combined.includes('реклама')) return null;
 
     const rawCover = sessionMeta?.trackCover || coverEl?.src || '';
-    const trackCover = rawCover
-        ? (rawCover.includes('=') ? rawCover.split('=')[0] + '=w500-h500' : rawCover)
-        : '';
+    let trackCover = rawCover;
+    if (rawCover.includes('=')) {
+        trackCover = rawCover.split('=')[0] + '=w500-h500';
+    }
     return {
         trackTitle,
         trackArtist,

@@ -301,25 +301,23 @@ export default function IntegrationsTab({
               : "Временно приостановлено администратором."
           }
         >
-          {youtubeMusicEnabled ? (
-            <a
-              href="https://music.youtube.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className={smallPrimary}
-            >
-              Открыть YouTube Music
-            </a>
-          ) : (
-            <button
-              type="button"
-              disabled
-              title="YouTube Music временно отключён"
-              className={smallPrimary}
-            >
-              Открыть YouTube Music
-            </button>
-          )}
+          <a
+            href={
+              youtubeMusicEnabled ? "https://music.youtube.com/" : undefined
+            }
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-disabled={!youtubeMusicEnabled}
+            tabIndex={youtubeMusicEnabled ? undefined : -1}
+            title={
+              youtubeMusicEnabled
+                ? undefined
+                : "YouTube Music временно отключён"
+            }
+            className={`${smallPrimary} ${youtubeMusicEnabled ? "" : "cursor-not-allowed opacity-50"}`}
+          >
+            Открыть YouTube Music
+          </a>
         </Row>
 
         <Row

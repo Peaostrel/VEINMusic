@@ -23,6 +23,29 @@ function element({ text = '', title = '', href = '', src = '', attributes = {}, 
     };
 }
 
+function runPageWorld({ nodes, hostname, href, media = [] }) {
+    let intervalHandler;
+    const messages = [];
+    class HTMLMediaElement {}
+    HTMLMediaElement.prototype.play = function play() {};
+    const context = vm.createContext({
+        console: { log() {}, debug() {}, error() {} },
+        document: {
+            querySelector: (selector) => nodes[selector] || null,
+            querySelectorAll: (selector) => selector === 'audio, video' ? media : []
+        },
+        getComputedStyle: (node) => node.style,
+        HTMLMediaElement,
+        location: { hostname, href },
+        navigator: { mediaSession: null },
+        postMessage: (message) => messages.push(message),
+        setInterval: (handler) => { intervalHandler = handler; }
+    });
+    context.top = context;
+    vm.runInContext(source, context);
+    return { context, messages, runInterval: () => intervalHandler() };
+}
+
 function harness({ playing = true, progress = 42 } = {}) {
     const cover = element();
     cover.style.backgroundImage = 'url("https://i1.sndcdn.com/artworks-test-t50x50.jpg")';
@@ -45,26 +68,11 @@ function harness({ playing = true, progress = 42 } = {}) {
         '.playbackTimeline__progressWrapper': timeline,
         '.playControls__play': playButton
     };
-    let intervalHandler;
-    const messages = [];
-    class HTMLMediaElement {}
-    HTMLMediaElement.prototype.play = function play() {};
-    const context = vm.createContext({
-        console: { log() {}, debug() {}, error() {} },
-        document: {
-            querySelector: (selector) => nodes[selector] || null,
-            querySelectorAll: () => []
-        },
-        getComputedStyle: (node) => node.style,
-        HTMLMediaElement,
-        location: { hostname: 'soundcloud.com', href: 'https://soundcloud.com/discover' },
-        navigator: { mediaSession: null },
-        postMessage: (message) => messages.push(message),
-        setInterval: (handler) => { intervalHandler = handler; }
+    return runPageWorld({
+        nodes,
+        hostname: 'soundcloud.com',
+        href: 'https://soundcloud.com/discover'
     });
-    context.top = context;
-    vm.runInContext(source, context);
-    return { context, messages, runInterval: () => intervalHandler() };
 }
 
 test('reads the current SoundCloud track from the mini-player', () => {
@@ -130,26 +138,12 @@ function youtubeHarness({ ad = false } = {}) {
         'ytmusic-player-bar a[href*="watch?v="]': trackLink,
         '.html5-video-player.ad-showing, .ytp-ad-player-overlay': null
     };
-    let intervalHandler;
-    const messages = [];
-    class HTMLMediaElement {}
-    HTMLMediaElement.prototype.play = function play() {};
-    const context = vm.createContext({
-        console: { log() {}, debug() {}, error() {} },
-        document: {
-            querySelector: (selector) => nodes[selector] || null,
-            querySelectorAll: (selector) => selector === 'audio, video' ? [video] : []
-        },
-        getComputedStyle: (node) => node.style,
-        HTMLMediaElement,
-        location: { hostname: 'music.youtube.com', href: 'https://music.youtube.com/watch?v=abc123' },
-        navigator: { mediaSession: null },
-        postMessage: (message) => messages.push(message),
-        setInterval: (handler) => { intervalHandler = handler; }
+    return runPageWorld({
+        nodes,
+        hostname: 'music.youtube.com',
+        href: 'https://music.youtube.com/watch?v=abc123',
+        media: [video]
     });
-    context.top = context;
-    vm.runInContext(source, context);
-    return { context, messages, runInterval: () => intervalHandler() };
 }
 
 test('reads and emits the current YouTube Music track', () => {
