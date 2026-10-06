@@ -297,6 +297,7 @@ class IntegrationPreferences(BaseModel):
 
     spotify_enabled: bool = True
     yandex_enabled: bool = True
+    youtube_music_enabled: bool = True
     soundcloud_enabled: bool = True
     lastfm_enabled: bool = True
     auto_sync: bool = True

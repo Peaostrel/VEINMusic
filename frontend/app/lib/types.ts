@@ -257,6 +257,7 @@ export interface UserPreferences {
   integrations: {
     spotify_enabled: boolean;
     yandex_enabled: boolean;
+    youtube_music_enabled: boolean;
     soundcloud_enabled: boolean;
     lastfm_enabled: boolean;
     auto_sync: boolean;

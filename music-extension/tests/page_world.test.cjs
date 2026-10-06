@@ -6,10 +6,11 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '../page_world.js'), 'utf8');
 
-function element({ text = '', title = '', href = '', attributes = {}, classes = [], children = {} } = {}) {
+function element({ text = '', title = '', href = '', src = '', attributes = {}, classes = [], children = {} } = {}) {
     return {
         textContent: text,
         href,
+        src,
         style: {},
         classList: { contains: (name) => classes.includes(name) },
         getAttribute(name) {
@@ -102,6 +103,80 @@ test('emits a complete SoundCloud scrobble payload', () => {
 
 test('does not scrobble a selected SoundCloud track before playback starts', () => {
     const { messages, runInterval } = harness({ playing: false, progress: 0 });
+    runInterval();
+    assert.equal(messages.length, 0);
+});
+
+function youtubeHarness({ ad = false } = {}) {
+    const title = element({ text: 'YouTube Song' });
+    const artistLink = element({ text: 'YouTube Artist' });
+    const byline = element({
+        text: 'YouTube Artist • Test Album',
+        children: { a: artistLink }
+    });
+    const cover = element({ src: 'https://lh3.googleusercontent.com/test=s120' });
+    const trackLink = element({ href: 'https://music.youtube.com/watch?v=abc123' });
+    const playerBar = element({
+        children: {
+            '.title.ytmusic-player-bar, yt-formatted-string.title, .title': title,
+            '.byline.ytmusic-player-bar, .subtitle.ytmusic-player-bar, .byline': byline,
+            'img.image, .thumbnail img, img': cover,
+            '[class*="ad-badge"], [aria-label*="Advertisement"], [aria-label*="Реклама"]': ad ? element() : null
+        }
+    });
+    const video = { paused: false, currentTime: 37, duration: 201 };
+    const nodes = {
+        'ytmusic-player-bar': playerBar,
+        'ytmusic-player-bar a[href*="watch?v="]': trackLink,
+        '.html5-video-player.ad-showing, .ytp-ad-player-overlay': null
+    };
+    let intervalHandler;
+    const messages = [];
+    class HTMLMediaElement {}
+    HTMLMediaElement.prototype.play = function play() {};
+    const context = vm.createContext({
+        console: { log() {}, debug() {}, error() {} },
+        document: {
+            querySelector: (selector) => nodes[selector] || null,
+            querySelectorAll: (selector) => selector === 'audio, video' ? [video] : []
+        },
+        getComputedStyle: (node) => node.style,
+        HTMLMediaElement,
+        location: { hostname: 'music.youtube.com', href: 'https://music.youtube.com/watch?v=abc123' },
+        navigator: { mediaSession: null },
+        postMessage: (message) => messages.push(message),
+        setInterval: (handler) => { intervalHandler = handler; }
+    });
+    context.top = context;
+    vm.runInContext(source, context);
+    return { context, messages, runInterval: () => intervalHandler() };
+}
+
+test('reads and emits the current YouTube Music track', () => {
+    const { context, messages, runInterval } = youtubeHarness();
+    const meta = vm.runInContext('getYouTubeMusicMeta()', context);
+    assert.equal(meta.trackTitle, 'YouTube Song');
+    assert.equal(meta.trackArtist, 'YouTube Artist');
+    assert.equal(meta.trackCover, 'https://lh3.googleusercontent.com/test=w500-h500');
+    assert.equal(meta.trackUrl, 'https://music.youtube.com/watch?v=abc123');
+
+    runInterval();
+    assert.equal(messages.length, 1);
+    assert.deepEqual(JSON.parse(JSON.stringify(messages[0].payload)), {
+        title: 'YouTube Song',
+        artist: 'YouTube Artist',
+        album: '',
+        cover_url: 'https://lh3.googleusercontent.com/test=w500-h500',
+        track_url: 'https://music.youtube.com/watch?v=abc123',
+        source: 'youtube_music',
+        progress_sec: 37,
+        is_playing: true,
+        duration: 201
+    });
+});
+
+test('does not scrobble YouTube Music advertisements', () => {
+    const { messages, runInterval } = youtubeHarness({ ad: true });
     runInterval();
     assert.equal(messages.length, 0);
 });

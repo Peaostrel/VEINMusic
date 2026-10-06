@@ -19,6 +19,7 @@ from app.models import (
     TrackAlias,
     User,
 )
+from app.services import runtime_settings
 from app.services.metadata_cleaner import clean_track_metadata
 from app.services.user_preferences import get_preferences
 
@@ -583,11 +584,25 @@ async def process_scrobble(
     integration_keys = {
         "spotify": integrations.spotify_enabled,
         "yandex": integrations.yandex_enabled,
+        "youtube": integrations.youtube_music_enabled,
+        "soundcloud": integrations.soundcloud_enabled,
         "lastfm": integrations.lastfm_enabled,
+    }
+    integration_features = {
+        "spotify": "integration_spotify",
+        "yandex": "integration_yandex",
+        "youtube": "integration_youtube_music",
+        "soundcloud": "integration_soundcloud",
+        "lastfm": "integration_lastfm",
     }
     if not integrations.auto_sync and any(name in source_name for name in integration_keys):
         return "integration_paused"
     if any(name in source_name and not enabled for name, enabled in integration_keys.items()):
+        return "integration_paused"
+    if any(
+        name in source_name and not runtime_settings.is_feature_enabled(feature, db)
+        for name, feature in integration_features.items()
+    ):
         return "integration_paused"
     if artist.casefold() in {item.casefold() for item in listening.ignored_artists}:
         return "artist_ignored"
