@@ -85,6 +85,7 @@ export default function IntegrationsTab({
   const importEnabled = useFeature("lastfm_import");
   const spotifyEnabled = useFeature("integration_spotify");
   const yandexEnabled = useFeature("integration_yandex");
+  const youtubeMusicEnabled = useFeature("integration_youtube_music");
   const soundcloudEnabled = useFeature("integration_soundcloud");
   const lastfmEnabled = useFeature("integration_lastfm");
   const preferences = data.preferences.integrations;
@@ -124,6 +125,14 @@ export default function IntegrationsTab({
           description="Временно приостановить запись из Яндекс Музыки, сохранив токен."
           checked={preferences.yandex_enabled}
           onChange={(yandex_enabled) => updateIntegration({ yandex_enabled })}
+        />
+        <ToggleRow
+          title="YouTube Music"
+          description="Временно приостановить запись YouTube Music через расширение VEIN."
+          checked={preferences.youtube_music_enabled}
+          onChange={(youtube_music_enabled) =>
+            updateIntegration({ youtube_music_enabled })
+          }
         />
         <ToggleRow
           title="SoundCloud"
@@ -277,6 +286,38 @@ export default function IntegrationsTab({
               </button>
             )}
           </div>
+        </Row>
+
+        <Row
+          logo="YT"
+          name="YouTube Music"
+          status={
+            youtubeMusicEnabled ? "через расширение VEIN" : "приостановлено"
+          }
+          statusOk={youtubeMusicEnabled}
+          description={
+            youtubeMusicEnabled
+              ? "Откройте YouTube Music в браузере с подключённым расширением VEIN — текущий трек, пауза и прогресс определяются автоматически."
+              : "Временно приостановлено администратором."
+          }
+        >
+          <a
+            href={
+              youtubeMusicEnabled ? "https://music.youtube.com/" : undefined
+            }
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-disabled={!youtubeMusicEnabled}
+            tabIndex={youtubeMusicEnabled ? undefined : -1}
+            title={
+              youtubeMusicEnabled
+                ? undefined
+                : "YouTube Music временно отключён"
+            }
+            className={`${smallPrimary} ${youtubeMusicEnabled ? "" : "cursor-not-allowed opacity-50"}`}
+          >
+            Открыть YouTube Music
+          </a>
         </Row>
 
         <Row

@@ -82,7 +82,49 @@ function getTrackUrlForSource(source, trackTitle) {
         const trackLink = document.querySelector('.playbackSoundBadge__titleLink');
         return trackLink?.href || globalThis.location.href;
     }
+    if (source === 'youtube_music') {
+        const trackLink = document.querySelector('ytmusic-player-bar a[href*="watch?v="]');
+        return trackLink?.href || globalThis.location.href;
+    }
     return globalThis.location.href;
+}
+
+function getYouTubeMusicMeta() {
+    const playerBar = document.querySelector('ytmusic-player-bar');
+    if (!playerBar) return getMediaSessionMeta('youtube_music');
+
+    // YouTube Music keeps the regular player bar visible during ads. Do not
+    // turn the ad title or advertiser into a listening event.
+    const adPlaying = document.querySelector('.html5-video-player.ad-showing, .ytp-ad-player-overlay') ||
+        playerBar.querySelector('[class*="ad-badge"], [aria-label*="Advertisement"], [aria-label*="Реклама"]');
+    if (adPlaying) return null;
+
+    const sessionMeta = getMediaSessionMeta('youtube_music');
+    const titleEl = playerBar.querySelector('.title.ytmusic-player-bar, yt-formatted-string.title, .title');
+    const bylineEl = playerBar.querySelector('.byline.ytmusic-player-bar, .subtitle.ytmusic-player-bar, .byline');
+    const artistLink = bylineEl?.querySelector('a');
+    const coverEl = playerBar.querySelector('img.image, .thumbnail img, img');
+
+    const trackTitle = (sessionMeta?.trackTitle || titleEl?.textContent || '').trim();
+    const byline = (artistLink?.textContent || bylineEl?.textContent || '').trim();
+    const trackArtist = (sessionMeta?.trackArtist || byline.split('•')[0] || '').trim();
+    if (!trackTitle || !trackArtist) return null;
+
+    const combined = `${trackTitle} ${trackArtist}`.toLowerCase();
+    if (combined.includes('advertisement') || combined.includes('реклама')) return null;
+
+    const rawCover = sessionMeta?.trackCover || coverEl?.src || '';
+    let trackCover = rawCover;
+    if (rawCover.includes('=')) {
+        trackCover = rawCover.split('=')[0] + '=w500-h500';
+    }
+    return {
+        trackTitle,
+        trackArtist,
+        trackAlbum: sessionMeta?.trackAlbum || '',
+        trackCover,
+        trackUrl: getTrackUrlForSource('youtube_music', trackTitle)
+    };
 }
 
 function getSoundCloudMeta() {
@@ -238,6 +280,9 @@ function getVkMetaForWorld() {
 function getTrackMetadataForSource(source) {
     if (source === 'soundcloud') {
         return getSoundCloudMeta() || getMediaSessionMeta(source);
+    }
+    if (source === 'youtube_music') {
+        return getYouTubeMusicMeta();
     }
 
     let meta = getMediaSessionMeta(source);

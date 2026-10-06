@@ -51,7 +51,7 @@ const features = [
   {
     icon: Zap,
     title: "Скроблинг из браузера",
-    text: "Расширение видит, что играет в Яндекс Музыке, Spotify, VK и SoundCloud, и сохраняет каждый трек. Иногда думает пару секунд, но забирает всё честно.",
+    text: "Расширение видит, что играет в Яндекс Музыке, Spotify, YouTube Music, VK и SoundCloud, и сохраняет каждый трек. Иногда думает пару секунд, но забирает всё честно.",
   },
   {
     icon: ChartColumn,
@@ -83,7 +83,7 @@ const steps = [
 const faq = [
   {
     q: "Какие сервисы поддерживаются?",
-    a: "Яндекс Музыка, Spotify, VK Музыка и SoundCloud в браузере — через расширение. Историю из Last.fm можно импортировать в настройках.",
+    a: "Яндекс Музыка, Spotify, YouTube Music, VK Музыка и SoundCloud в браузере — через расширение. Историю из Last.fm можно импортировать в настройках.",
   },
   {
     q: "Обязательно ставить расширение?",
@@ -310,9 +310,9 @@ export default function About() {
             <span className="text-fg-3">Твоя история.</span>
           </h1>
           <p className="max-w-[520px] text-lg leading-relaxed text-fg-2">
-            VEIN собирает всё, что вы слушаете в Яндекс Музыке, Spotify, VK и
-            SoundCloud, в одну историю — с топами, статистикой по часам и лентой
-            друзей.
+            VEIN собирает всё, что вы слушаете в Яндекс Музыке, Spotify, YouTube
+            Music, VK и SoundCloud, в одну историю — с топами, статистикой по
+            часам и лентой друзей.
           </p>
           <div className="flex flex-col gap-2.5 sm:flex-row">
             <Link href={primaryHref} className={`${btn.primary} ${btn.lg}`}>
@@ -334,6 +334,7 @@ export default function About() {
           >
             <li>Яндекс Музыка</li>
             <li>Spotify</li>
+            <li>YouTube Music</li>
             <li>VK Музыка</li>
             <li>SoundCloud</li>
             <li>Last.fm (импорт)</li>
