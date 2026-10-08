@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 import anyio
 import httpx
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.core.constants import ACTIVE_PLAYBACK_WINDOW_SEC
@@ -111,6 +111,38 @@ async def get_track_genre(url: str) -> str | None:
     return None
 
 
+async def get_fallback_genre(title: str, artist: str) -> str | None:
+    """Best-effort genre enrichment for services that omit genres.
+
+    Deezer exposes the album genre without requiring a user token. Failure is
+    deliberately silent: a scrobble must never fail because metadata did.
+    """
+    if not title or not artist:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            search = await client.get(
+                "https://api.deezer.com/search",
+                params={"q": f'artist:"{artist}" track:"{title}"', "limit": 1},
+            )
+            if search.status_code != 200:
+                return None
+            hits = search.json().get("data") or []
+            album_id = (hits[0].get("album") or {}).get("id") if hits else None
+            if not album_id:
+                return None
+            album = await client.get(f"https://api.deezer.com/album/{album_id}")
+            if album.status_code != 200:
+                return None
+            payload = album.json()
+            genres = (payload.get("genres") or {}).get("data") or []
+            genre = genres[0].get("name") if genres else None
+            return str(genre).strip()[:128] if genre else None
+    except Exception as exc:
+        logger.debug("Fallback genre enrichment failed: %s", exc)
+        return None
+
+
 _RU_MONTHS = ("янв", "фев", "мар", "апр", "мая", "июн",
               "июл", "авг", "сен", "окт", "ноя", "дек")
 
@@ -154,6 +186,7 @@ def format_history_item(
 
     data = {
         "id": scrobble.id,
+        "track_id": track.id,
         "username": scrobble.user.username if scrobble.user else None,
         "avatar_url": scrobble.user.profile.avatar_url if (
             scrobble.user and scrobble.user.profile) else None,
@@ -215,7 +248,8 @@ def _find_or_create_track(
         cover_url: str,
         track_url: str,
         duration: int,
-        album: str) -> tuple[Track, bool]:
+        album: str,
+        user_id: int | None = None) -> tuple[Track, bool]:
     """Catalog lookup/insert (blocking DB work). Returns (track, may_enrich)."""
     norm_title, norm_artist = clean_track_metadata(title, artist)
     cover_url = _safe_http_url(cover_url)
@@ -224,8 +258,9 @@ def _find_or_create_track(
 
     alias = db.query(TrackAlias).filter(
         func.lower(TrackAlias.original_title) == func.lower(title),
-        func.lower(TrackAlias.original_artist) == func.lower(artist)
-    ).first()
+        func.lower(TrackAlias.original_artist) == func.lower(artist),
+        or_(TrackAlias.user_id == user_id, TrackAlias.user_id.is_(None)),
+    ).order_by(TrackAlias.user_id.desc().nullslast()).first()
 
     if alias and alias.canonical_track:
         return alias.canonical_track, False
@@ -259,7 +294,7 @@ def _find_or_create_track(
 
 def _track_enrichment_needs(track: Track) -> tuple[str | None, bool, bool]:
     url = str(track.track_url) if track.track_url else None
-    return url, bool(url and track.duration == 0), bool(url and not track.genre)
+    return url, bool(url and track.duration == 0), not bool(track.genre)
 
 
 def _set_track_fields(db: Session, track: Track, fields: dict[str, Any]) -> None:
@@ -276,9 +311,10 @@ async def _get_or_create_track(
         track_url: str,
         duration: int,
         album: str,
-        enrich: bool = True) -> Track:
+        enrich: bool = True,
+        user_id: int | None = None) -> Track:
     track, may_enrich = await _run_db(
-        _find_or_create_track, db, title, artist, cover_url, track_url, duration, album)
+        _find_or_create_track, db, title, artist, cover_url, track_url, duration, album, user_id)
     if not may_enrich or not enrich:
         return track
 
@@ -289,6 +325,9 @@ async def _get_or_create_track(
         fields["duration"] = await get_track_duration(url)
     if need_genre and url:
         fields["genre"] = await get_track_genre(url)
+    if need_genre and not fields.get("genre"):
+        fields["genre"] = await get_fallback_genre(str(track.title), str(track.artist))
+    fields = {name: value for name, value in fields.items() if value}
     if fields:
         await _run_db(_set_track_fields, db, track, fields)
     return track
@@ -622,7 +661,7 @@ async def process_scrobble(
 
     track = await _get_or_create_track(
         db, title, artist, cover_url, track_url, duration, album,
-        enrich=listening.auto_metadata)
+        enrich=listening.auto_metadata, user_id=int(user.id))
     result = await _run_db(_record_scrobble, db, user, track, source, progress_sec, is_playing,
                            credit_sec, pending_sec)
 

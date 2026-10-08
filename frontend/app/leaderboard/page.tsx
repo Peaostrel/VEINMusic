@@ -16,8 +16,9 @@ import { isValidUser } from "@/app/lib/theme";
 import type { LeaderboardEntry, MyRank } from "@/app/lib/types";
 
 type Scope = "all" | "following";
+type Period = "7d" | "30d" | "all";
 
-function useBoard(scope: Scope, signedIn: boolean) {
+function useBoard(scope: Scope, period: Period, signedIn: boolean) {
   const [users, setUsers] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -25,7 +26,7 @@ function useBoard(scope: Scope, signedIn: boolean) {
     const path =
       scope === "following" ? "/api/leaderboard/following" : "/api/leaderboard";
     let cancelled = false;
-    fetch(`${API_URL}${path}`, { credentials: "include" })
+    fetch(`${API_URL}${path}?period=${period}`, { credentials: "include" })
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         if (!cancelled) setUsers(Array.isArray(data) ? data : []);
@@ -37,7 +38,7 @@ function useBoard(scope: Scope, signedIn: boolean) {
     return () => {
       cancelled = true;
     };
-  }, [scope, signedIn]);
+  }, [scope, period, signedIn]);
   return { users, loading, setLoading };
 }
 
@@ -211,18 +212,21 @@ const rules: [string, React.ReactNode][] = [
 export default function Leaderboard() {
   const [me, setMe] = useState<string | null>(null);
   const [scope, setScope] = useState<Scope>("all");
+  const [period, setPeriod] = useState<Period>("all");
   const [myRank, setMyRank] = useState<MyRank | null>(null);
-  const { users, loading, setLoading } = useBoard(scope, Boolean(me));
+  const { users, loading, setLoading } = useBoard(scope, period, Boolean(me));
 
   useEffect(() => {
     const u = localStorage.getItem("username");
     if (!isValidUser(u)) return;
     setMe(u);
-    fetch(`${API_URL}/api/leaderboard/me`, { credentials: "include" })
+    fetch(`${API_URL}/api/leaderboard/me?period=${period}`, {
+      credentials: "include",
+    })
       .then((res) => (res.ok ? res.json() : null))
       .then(setMyRank)
       .catch(() => {});
-  }, []);
+  }, [period]);
 
   const podium = users.slice(0, 3);
   const rest = users.slice(3);
@@ -254,22 +258,37 @@ export default function Leaderboard() {
       <section className="flex min-w-0 flex-1 flex-col gap-6">
         <PageHeader
           title="Топ слушателей"
-          subtitle="По опыту за всё время · обновляется раз в минуту"
+          subtitle={`${period === "7d" ? "По опыту за неделю" : period === "30d" ? "По опыту за месяц" : "По опыту за всё время"} · обновляется раз в минуту`}
           actions={
-            me ? (
+            <div className="flex flex-wrap justify-end gap-2">
               <Segmented
-                label="Кого показывать"
-                value={scope}
-                onChange={(v) => {
+                label="Период рейтинга"
+                value={period}
+                onChange={(value) => {
                   setLoading(true);
-                  setScope(v);
+                  setPeriod(value);
                 }}
                 options={[
-                  { id: "all", label: "Все" },
-                  { id: "following", label: "Подписки" },
+                  { id: "7d", label: "Неделя" },
+                  { id: "30d", label: "Месяц" },
+                  { id: "all", label: "Всё время" },
                 ]}
               />
-            ) : undefined
+              {me && (
+                <Segmented
+                  label="Кого показывать"
+                  value={scope}
+                  onChange={(v) => {
+                    setLoading(true);
+                    setScope(v);
+                  }}
+                  options={[
+                    { id: "all", label: "Все" },
+                    { id: "following", label: "Подписки" },
+                  ]}
+                />
+              )}
+            </div>
           }
         />
         {body}

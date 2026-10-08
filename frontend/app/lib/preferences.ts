@@ -48,6 +48,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
     showcase: "all",
     followers: "all",
     location: "all",
+    location_precision: "city",
     social_links: "all",
     show_listening_source: true,
   },
@@ -100,6 +101,9 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
     new_profile_layout: false,
     diagnostics: false,
   },
+  goals: {
+    items: [],
+  },
 };
 
 export function mergePreferences(
@@ -135,6 +139,7 @@ export function mergePreferences(
       ...DEFAULT_PREFERENCES.experiments,
       ...value.experiments,
     },
+    goals: { ...DEFAULT_PREFERENCES.goals, ...value.goals },
   };
 }
 

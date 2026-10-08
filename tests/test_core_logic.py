@@ -106,6 +106,17 @@ def test_track_duration_and_genre_lookups():
         assert asyncio.run(sp.get_track_duration("https://music.yandex.ru/track/2")) == 180
         assert asyncio.run(sp.get_track_genre("https://music.yandex.ru/track/2")) is None
 
+    def deezer(request):
+        if request.url.path == "/search":
+            return httpx.Response(200, json={"data": [{"album": {"id": 77}}]})
+        return httpx.Response(
+            200,
+            json={"genres": {"data": [{"id": 1, "name": "Alternative"}]}},
+        )
+
+    with _mock_http(sp, deezer):
+        assert asyncio.run(sp.get_fallback_genre("A Song", "An Artist")) == "Alternative"
+
 
 @pytest.mark.parametrize("age,expected", [
     (timedelta(seconds=10), "только что"), (timedelta(minutes=5), "5м назад"),

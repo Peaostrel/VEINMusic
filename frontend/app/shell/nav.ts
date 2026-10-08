@@ -1,6 +1,7 @@
 import {
   ChartColumn,
   Headphones,
+  LibraryBig,
   Rss,
   Shield,
   SlidersHorizontal,
@@ -34,6 +35,12 @@ export function navItems(username: string): NavItem[] {
       href: `/user/${me}/stats`,
       icon: ChartColumn,
     },
+    {
+      id: "library",
+      label: "Моя библиотека",
+      href: "/library",
+      icon: LibraryBig,
+    },
     { id: "profile", label: "Профиль", href: `/user/${me}`, icon: User },
     {
       id: "settings",
@@ -61,6 +68,8 @@ export function activeSection(
   if (pathname.startsWith("/leaderboard")) return "top";
   if (pathname.startsWith("/together")) return "together";
   if (pathname.startsWith("/settings")) return "settings";
+  if (pathname.startsWith("/library") || pathname.startsWith("/goals"))
+    return "library";
   if (pathname.startsWith("/admin")) return "admin";
   if (username) {
     const mine = `/user/${encodeURIComponent(username)}`.toLowerCase();

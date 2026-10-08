@@ -10,6 +10,7 @@ import {
   MessageCircle,
   UserPlus,
   CalendarRange,
+  Trophy,
 } from "lucide-react";
 import { apiJson } from "@/app/lib/api";
 import type { NotificationList, SocialNotification } from "@/app/lib/types";
@@ -23,6 +24,7 @@ const KIND_ICON: Record<SocialNotification["kind"], typeof Bell> = {
   follow: UserPlus,
   system: Megaphone,
   recap: CalendarRange,
+  achievement: Trophy,
 };
 
 function timeAgo(iso: string | null): string {
@@ -150,9 +152,11 @@ export default function NotificationsBell({
                       href={
                         n.kind === "system"
                           ? "/"
-                          : n.kind === "recap"
-                            ? `/user/${n.actor.username}/stats`
-                            : `/user/${n.actor.username}`
+                          : n.kind === "achievement"
+                            ? `/user/${n.actor.username}/achievements`
+                            : n.kind === "recap"
+                              ? `/user/${n.actor.username}/stats`
+                              : `/user/${n.actor.username}`
                       }
                       onClick={() => setOpen(false)}
                       className={`flex gap-3 px-4 py-3 transition-colors hover:bg-line ${n.comment_id ? "pr-11" : ""} ${n.is_read ? "" : "bg-white/[0.03]"}`}
@@ -167,7 +171,8 @@ export default function NotificationsBell({
                         </span>
                         {n.message &&
                           n.kind !== "system" &&
-                          n.kind !== "recap" && (
+                          n.kind !== "recap" &&
+                          n.kind !== "achievement" && (
                             <span className="mt-0.5 block truncate text-xs text-fg-2">
                               «{n.message}»
                             </span>

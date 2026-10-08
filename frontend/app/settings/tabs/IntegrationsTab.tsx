@@ -1,4 +1,6 @@
 import type { UserInfo } from "@/app/lib/types";
+import { useCallback, useEffect, useState } from "react";
+import { Cloud, Import, Puzzle, RefreshCw } from "lucide-react";
 import { useFeature } from "@/app/lib/featureFlags";
 import { LogoGlyph } from "@/components/brand";
 import { btn, inputOnCard } from "@/components/ui";
@@ -25,6 +27,130 @@ interface IntegrationsTabProps {
 const small = `${btn.secondary} ${btn.sm}`;
 const smallPrimary = `${btn.primary} ${btn.sm}`;
 const smallDanger = `${btn.danger} ${btn.sm}`;
+
+interface IntegrationStatus {
+  auto_sync: boolean;
+  last_sync?: string | null;
+  services: {
+    id: string;
+    name: string;
+    linked: boolean;
+    mode: "cloud" | "extension" | "import";
+    user_enabled: boolean;
+    admin_enabled: boolean;
+  }[];
+}
+
+function IntegrationHealth({ API_URL }: Readonly<{ API_URL: string }>) {
+  const [status, setStatus] = useState<IntegrationStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [message, setMessage] = useState("");
+  const load = useCallback(() => {
+    setLoading(true);
+    fetch(`${API_URL}/api/integrations/status`, { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then(setStatus)
+      .finally(() => setLoading(false));
+  }, [API_URL]);
+  useEffect(load, [load]);
+  const syncNow = async () => {
+    setSyncing(true);
+    setMessage("");
+    try {
+      const response = await fetch(`${API_URL}/api/integrations/sync`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ service: "all" }),
+      });
+      const result = await response.json().catch(() => ({}));
+      setMessage(
+        response.ok
+          ? "Синхронизация завершена."
+          : result.detail || "Не удалось запустить синхронизацию.",
+      );
+      load();
+    } finally {
+      setSyncing(false);
+    }
+  };
+  const icon = (mode: string) => {
+    if (mode === "cloud") return <Cloud className="h-3.5 w-3.5" />;
+    if (mode === "import") return <Import className="h-3.5 w-3.5" />;
+    return <Puzzle className="h-3.5 w-3.5" />;
+  };
+  return (
+    <section className={`${settingsCard} p-5`}>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-medium">Состояние синхронизации</h3>
+          <p className="mt-1 text-xs text-fg-3">
+            {status?.last_sync
+              ? `Последняя активность ${new Date(status.last_sync).toLocaleString("ru-RU")}`
+              : "VEIN пока не получил данные от облачных подключений."}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={load}
+            disabled={loading}
+            className={small}
+          >
+            <RefreshCw
+              className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
+            />
+            Проверить
+          </button>
+          <button
+            type="button"
+            onClick={syncNow}
+            disabled={syncing || !status?.auto_sync}
+            className={smallPrimary}
+          >
+            <RefreshCw
+              className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`}
+            />
+            Синхронизировать
+          </button>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {(status?.services ?? []).map((service) => {
+          let label = service.linked ? "подключено" : "не подключено";
+          let color = service.linked ? "text-ok" : "text-fg-3";
+          if (!service.admin_enabled) {
+            label = "отключено администратором";
+            color = "text-danger";
+          } else if (!status?.auto_sync || !service.user_enabled) {
+            label = "приостановлено вами";
+            color = "text-fg-3";
+          }
+          return (
+            <div
+              key={service.id}
+              className="rounded-lg border border-line-soft bg-bg p-3"
+            >
+              <span className="flex items-center gap-2 text-xs font-medium">
+                {icon(service.mode)}
+                {service.name}
+              </span>
+              <span className={`mt-1 block font-mono text-[10px] ${color}`}>
+                {label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {message && (
+        <p role="status" className="mt-3 text-xs text-fg-2">
+          {message}
+        </p>
+      )}
+    </section>
+  );
+}
 
 function Row({
   logo,
@@ -106,6 +232,8 @@ export default function IntegrationsTab({
           Откуда VEIN берёт ваши прослушивания.
         </p>
       </div>
+
+      <IntegrationHealth API_URL={API_URL} />
 
       <section className={settingsCard}>
         <ToggleRow

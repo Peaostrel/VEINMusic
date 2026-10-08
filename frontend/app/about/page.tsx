@@ -50,8 +50,8 @@ const QUIET_WEEK = 20;
 const features = [
   {
     icon: Zap,
-    title: "Скроблинг из браузера",
-    text: "Расширение видит, что играет в Яндекс Музыке, Spotify, YouTube Music, VK и SoundCloud, и сохраняет каждый трек. Иногда думает пару секунд, но забирает всё честно.",
+    title: "Скроблинг из разных сервисов",
+    text: "Яндекс Музыка, Spotify и SoundCloud подключаются напрямую. Для YouTube Music, VK и других веб-плееров доступно расширение VEIN.",
   },
   {
     icon: ChartColumn,
@@ -67,12 +67,12 @@ const features = [
 
 const steps = [
   {
-    title: "Установите расширение",
-    text: "Без него VEIN не видит музыку. Расширение тихо работает во вкладке с плеером.",
+    title: "Создайте профиль",
+    text: "После регистрации откройте центр интеграций и выберите музыкальные сервисы.",
   },
   {
-    title: "Включите музыку",
-    text: "Через секунду после старта трека расширение его заметит. Больше ничего делать не нужно.",
+    title: "Подключите сервис",
+    text: "Яндекс Музыка, Spotify и SoundCloud работают напрямую. Для остальных плееров установите расширение.",
   },
   {
     title: "Смотрите статистику",
@@ -83,11 +83,11 @@ const steps = [
 const faq = [
   {
     q: "Какие сервисы поддерживаются?",
-    a: "Яндекс Музыка, Spotify, YouTube Music, VK Музыка и SoundCloud в браузере — через расширение. Историю из Last.fm можно импортировать в настройках.",
+    a: "Яндекс Музыка, Spotify и SoundCloud подключаются напрямую. YouTube Music, VK Музыка и другие веб-плееры работают через расширение. Историю из Last.fm можно импортировать в настройках.",
   },
   {
     q: "Обязательно ставить расширение?",
-    a: "Для веб-плееров — да: без него VEIN не знает, что у вас играет. Часть сервисов можно подключить напрямую в настройках.",
+    a: "Нет. Для Яндекс Музыки, Spotify и SoundCloud достаточно прямого подключения. Расширение нужно для YouTube Music, VK и неподдерживаемых напрямую веб-плееров.",
   },
   {
     q: "Когда трек засчитывается?",
@@ -138,9 +138,20 @@ function weekRange(week: Week) {
 
 /** "VEIN за неделю": site-wide plays per day, totals and artist of the week. */
 function WeekCard({ week }: Readonly<{ week: Week | null }>) {
+  if (!week)
+    return (
+      <section
+        aria-label="Загружаем статистику за неделю"
+        className="flex min-h-[230px] animate-pulse flex-col gap-4 rounded-xl border border-line bg-surface p-5"
+      >
+        <span className="h-4 w-36 rounded bg-surface-2" />
+        <span className="h-[104px] rounded-lg bg-surface-2" />
+        <span className="h-10 rounded bg-surface-2" />
+      </section>
+    );
   const days = week?.days ?? [];
   const max = Math.max(1, ...days.map((d) => d.plays));
-  const quiet = !week || week.total_plays < QUIET_WEEK;
+  const quiet = week.total_plays < QUIET_WEEK;
   const totals = [
     {
       label: plural(
@@ -276,7 +287,7 @@ export default function About() {
   const online = stats?.online ?? 0;
   const numbers = [
     { label: "прослушиваний", value: stats?.total_scrobbles },
-    { label: "треков в базе", value: stats?.total_tracks },
+    { label: "уникальных треков", value: stats?.total_tracks },
     { label: "слушателей", value: stats?.total_users },
     { label: "онлайн сейчас", value: stats?.online },
   ];

@@ -24,7 +24,10 @@ export default function PrivacyTab({
 }>) {
   const privacy = data.preferences.privacy;
   const updateVisibility = (
-    key: keyof Omit<typeof privacy, "show_listening_source">,
+    key: keyof Omit<
+      typeof privacy,
+      "show_listening_source" | "location_precision"
+    >,
     value: Visibility,
   ) => updatePreference("privacy", { ...privacy, [key]: value });
   return (
@@ -95,6 +98,18 @@ export default function PrivacyTab({
           value={privacy.location}
           options={VISIBILITY}
           onChange={(value) => updateVisibility("location", value)}
+        />
+        <SelectRow
+          title="Точность местоположения"
+          description="Можно оставить публичной только страну, не показывая город. Владелец профиля всегда видит полное значение."
+          value={privacy.location_precision}
+          options={[
+            { value: "city", label: "Страна и город" },
+            { value: "country", label: "Только страна" },
+          ]}
+          onChange={(location_precision) =>
+            updatePreference("privacy", { ...privacy, location_precision })
+          }
         />
         <SelectRow
           title="Социальные ссылки"

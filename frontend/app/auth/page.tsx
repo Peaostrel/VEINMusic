@@ -9,9 +9,9 @@ import { Segmented, btn, input, label } from "@/components/ui";
 type Mode = "login" | "register";
 
 const nextSteps = [
-  ["Поставьте расширение", "Chrome, Edge или Firefox"],
-  ["Подтвердите устройство", "Код из расширения вводится на сайте"],
-  ["Включите музыку", "Первые треки появятся в профиле через пару секунд"],
+  ["Подключите сервис", "Яндекс, Spotify или SoundCloud работают напрямую"],
+  ["При необходимости — расширение", "Для YouTube Music, VK и веб-плееров"],
+  ["Включите музыку", "Первые треки появятся в профиле автоматически"],
 ];
 
 /** Page to open after signing in: the one that sent the user here, or the profile. */
