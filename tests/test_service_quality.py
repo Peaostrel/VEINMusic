@@ -127,6 +127,22 @@ def test_feedback_changes_recommendations_and_reset(client, db, people):
     assert client.get("/api/recommendations/me").json()["recommendations"][0]["reason_type"] == "feedback_similarity"
 
 
+def test_like_without_genre_prioritizes_other_tracks_by_artist(client, db, people):
+    liked = play(db, people[1], artist="Liked artist", title="Liked")
+    candidate = play(db, people[1], artist="Liked artist", title="Another")
+    liked.track.genre = None
+    candidate.track.genre = None
+    for index in range(12):
+        play(db, people[1], artist="Popular artist", title=f"Popular {index}")
+    db.commit()
+    client.post(f"/api/me/recommendations/{liked.track_id}/feedback", json={"value": "like"})
+    recs = client.get("/api/recommendations/me").json()["recommendations"]
+    recommendation = next(item for item in recs if item["id"] == candidate.track_id)
+    assert recommendation["reason_type"] == "feedback_similarity"
+    assert recommendation["confidence_score"] > 0.9
+    assert recs[0]["artist"] == "Liked artist"
+
+
 def test_hidden_listeners_do_not_supply_recommendations(client, db, people):
     play(db, people[0], title="Mine")
     play(db, people[1], title="Secret")
