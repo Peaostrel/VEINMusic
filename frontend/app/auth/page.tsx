@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
 import { useFeature } from "@/app/lib/featureFlags";
+import { clearOfflineCache } from "@/app/lib/offline";
 import { isValidUser } from "@/app/lib/theme";
 import { Segmented, btn, input, label } from "@/components/ui";
 
@@ -152,6 +153,7 @@ export default function Auth() {
         return;
       }
       localStorage.setItem("username", data.username);
+      clearOfflineCache();
       globalThis.dispatchEvent(new Event("themeChanged"));
 
       // The raw API key is only returned once, on registration (the server

@@ -26,7 +26,7 @@ export default function PrivacyTab({
   const updateVisibility = (
     key: keyof Omit<
       typeof privacy,
-      "show_listening_source" | "location_precision"
+      "show_listening_source" | "location_precision" | "search_indexing"
     >,
     value: Visibility,
   ) => updatePreference("privacy", { ...privacy, [key]: value });
@@ -124,6 +124,14 @@ export default function PrivacyTab({
           checked={privacy.show_listening_source}
           onChange={(show_listening_source) =>
             updatePreference("privacy", { ...privacy, show_listening_source })
+          }
+        />
+        <ToggleRow
+          title="Показывать профиль в поисковиках"
+          description="Яндекс и Google смогут найти страницу профиля. Если выключить, профиль останется доступен по ссылке, но поисковикам будет запрещено его показывать."
+          checked={privacy.search_indexing}
+          onChange={(search_indexing) =>
+            updatePreference("privacy", { ...privacy, search_indexing })
           }
         />
       </section>

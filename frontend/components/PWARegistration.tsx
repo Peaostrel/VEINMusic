@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { LogoTile } from "@/components/brand";
+import { SERVICE_WORKER_URL } from "@/app/lib/offline";
 
 const DISMISSED_KEY = "vein_pwa_banner_dismissed_at";
 const DISMISS_MS = 30 * 24 * 60 * 60 * 1000;
@@ -37,7 +38,7 @@ export default function PWARegistration() {
         handleControllerChange,
       );
       navigator.serviceWorker
-        .register("/sw.js", { updateViaCache: "none" })
+        .register(SERVICE_WORKER_URL, { updateViaCache: "none" })
         .then((reg) => {
           console.log("[PWA] Service Worker registered with scope:", reg.scope);
           return reg.update();

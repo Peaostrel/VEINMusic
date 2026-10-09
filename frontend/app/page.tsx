@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Heart, MessageCircle, Users } from "lucide-react";
 
 import About from "./about/page";
+import GoalsCard from "./goals/GoalsCard";
 import { API_URL } from "@/app/lib/api";
 import { formatNumber, plural } from "@/app/lib/plural";
 import { storedPreferences } from "@/app/lib/preferences";
@@ -285,21 +286,14 @@ function Twins({ twins }: Readonly<{ twins: TasteTwin[] }>) {
 
 function DashboardStatus({
   integrations,
-  goals,
-  week,
 }: Readonly<{
   integrations: IntegrationSummary | null;
-  goals: UserPreferences["goals"]["items"];
-  week: WeekStats | null;
 }>) {
   const connected =
     integrations?.services.filter((service) => service.linked) ?? [];
   const problems = connected.filter(
     (service) => !service.admin_enabled || !service.user_enabled,
   ).length;
-  const weeklyGoal = goals.find(
-    (goal) => goal.active && goal.type === "weekly_scrobbles",
-  );
   let integrationMessage = "Проверяем подключения…";
   if (integrations) {
     if (connected.length === 0)
@@ -322,31 +316,6 @@ function DashboardStatus({
       <p className={`mt-3 text-sm ${problems ? "text-fg-2" : "text-ok"}`}>
         {integrationMessage}
       </p>
-      {weeklyGoal ? (
-        <Link
-          href="/goals"
-          className="mt-4 block border-t border-line-soft pt-4"
-        >
-          <span className="flex justify-between text-xs">
-            <span>{weeklyGoal.title}</span>
-            <span className="font-mono">
-              {week?.total_scrobbles ?? 0} / {weeklyGoal.target}
-            </span>
-          </span>
-          <Meter
-            className="mt-2"
-            value={week?.total_scrobbles ?? 0}
-            max={weeklyGoal.target}
-          />
-        </Link>
-      ) : (
-        <Link
-          href="/goals"
-          className="mt-4 block border-t border-line-soft pt-4 text-xs text-fg-2 hover:text-accent"
-        >
-          Поставить музыкальную цель →
-        </Link>
-      )}
     </section>
   );
 }
@@ -567,12 +536,13 @@ export default function Home() {
       </section>
 
       <aside className="flex w-full shrink-0 flex-col gap-6 lg:w-[320px] lg:pt-1.5">
-        <DashboardStatus
-          integrations={integrationSummary}
+        <GoalsCard
+          username={username}
           goals={goals}
-          week={week}
+          weekScrobbles={week?.total_scrobbles ?? null}
         />
         <YourWeek username={username} stats={week} />
+        <DashboardStatus integrations={integrationSummary} />
         {twins.length > 0 && <Twins twins={twins} />}
       </aside>
     </div>

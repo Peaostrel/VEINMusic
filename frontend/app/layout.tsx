@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import AppShell from "./shell/AppShell";
 import PWARegistration from "../components/PWARegistration";
+import { SITE_URL, openGraph } from "./lib/preview";
 import MaintenanceOverlay from "../components/MaintenanceOverlay";
 
 const plexSans = IBM_Plex_Sans({
@@ -25,9 +26,14 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
+const description = "Вся музыка, что вы слушаете, — в одной истории";
+
 export const metadata: Metadata = {
-  title: "VEINMusic",
-  description: "Вся музыка, что вы слушаете, — в одной истории",
+  metadataBase: new URL(SITE_URL),
+  title: { default: "VEINMusic", template: "%s — VEINMusic" },
+  description,
+  openGraph: openGraph("VEINMusic", description, "/"),
+  twitter: { card: "summary_large_image" },
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

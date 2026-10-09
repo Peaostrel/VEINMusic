@@ -173,6 +173,11 @@ services:
   frontend:
     image: ${FRONTEND_IMAGE:-ghcr.io/peaostrel/veinmusic-frontend}:${IMAGE_TAG:-latest}
     restart: always
+    environment:
+      # Link previews and sitemap.xml: absolute links to the site, and the
+      # API reached directly inside the network instead of through Caddy
+      SITE_URL: https://${SITE_DOMAIN}
+      API_INTERNAL_URL: http://backend:8000
     depends_on:
       - backend
     mem_limit: 256m

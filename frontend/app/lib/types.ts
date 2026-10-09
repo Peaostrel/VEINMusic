@@ -219,6 +219,7 @@ export interface UserPreferences {
     location_precision: "city" | "country";
     social_links: Visibility;
     show_listening_source: boolean;
+    search_indexing: boolean;
   };
   listening: {
     ignored_artists: string[];

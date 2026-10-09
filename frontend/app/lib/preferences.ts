@@ -51,6 +51,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
     location_precision: "city",
     social_links: "all",
     show_listening_source: true,
+    search_indexing: true,
   },
   listening: {
     ignored_artists: [],
