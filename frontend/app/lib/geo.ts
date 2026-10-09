@@ -62,7 +62,7 @@ export function useCountries(): Country[] {
   const [countries, setCountries] = useState<Country[]>(LOCAL_COUNTRIES);
   useEffect(() => {
     let active = true;
-    loadCountries().then((list) => {
+    void loadCountries().then((list) => {
       if (active && list.length > 0) setCountries(list);
     });
     return () => {

@@ -186,6 +186,12 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
     <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-6 px-4 py-8 sm:px-8 lg:px-12 lg:py-8">
       <header className="flex flex-col gap-2.5">
         <Link
+          href="/library/discover"
+          className="text-xs text-fg-2 hover:text-fg"
+        >
+          Подборка для двоих
+        </Link>
+        <Link
           href="/together"
           className="self-start text-[13px] text-fg-2 hover:text-fg"
         >

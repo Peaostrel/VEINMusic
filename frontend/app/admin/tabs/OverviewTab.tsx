@@ -2,6 +2,7 @@
 
 import { Users, Disc3, Server, Zap, Flame, Radio } from "lucide-react";
 import type { AdminPanelState } from "../useAdminPanel";
+import QualityMetrics from "../components/QualityMetrics";
 import AnalyticsCharts from "../components/AnalyticsCharts";
 
 export default function OverviewTab({
@@ -16,6 +17,7 @@ export default function OverviewTab({
   return (
     <div className="space-y-6">
       <AnalyticsCharts />
+      <QualityMetrics />
       {/* Quick Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-surface border border-line-soft p-5 rounded-xl">

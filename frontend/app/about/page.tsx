@@ -112,11 +112,24 @@ function useLandingData() {
       fetch(`${API_URL}${path}`)
         .then((r) => (r.ok ? (r.json() as Promise<T>) : null))
         .catch(() => null);
-    get<PublicStats>("/api/public-stats").then(setStats);
-    get<Week>("/api/public-stats/week").then(setWeek);
-    get<{ feed: FeedItem[] }>("/api/feed/global").then((d) =>
-      setFeed(Array.isArray(d?.feed) ? d.feed : []),
-    );
+    let active = true;
+    Promise.all([
+      get<PublicStats>("/api/public-stats"),
+      get<Week>("/api/public-stats/week"),
+      get<{ feed: FeedItem[] }>("/api/feed/global"),
+    ])
+      .then(([stats, week, data]) => {
+        if (!active) return;
+        setStats(stats);
+        setWeek(week);
+        setFeed(Array.isArray(data?.feed) ? data.feed : []);
+      })
+      .catch(() => {
+        /* The landing page remains usable without statistics. */
+      });
+    return () => {
+      active = false;
+    };
   }, []);
   return { stats, week, feed };
 }

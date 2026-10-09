@@ -81,7 +81,7 @@ export default function PWARegistration() {
 
   const handleInstallClick = async () => {
     if (!installPrompt) return;
-    installPrompt.prompt();
+    await installPrompt.prompt();
     const { outcome } = await installPrompt.userChoice;
     if (outcome === "accepted") {
       setShowInstallBanner(false);

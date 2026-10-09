@@ -12,11 +12,12 @@ from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user
 from app.database import get_db
-from app.models import Scrobble, Track, TrackAlias, User, UserProfile
+from app.models import Scrobble, SourceHealth, Track, TrackAlias, User, UserProfile
 from app.schemas import ScrobbleMergeRequest
 from app.services import runtime_settings
 from app.services.cache import clear_all
 from app.services.user_preferences import get_preferences
+from app.services.source_health import MESSAGES, source_key
 
 router = APIRouter(tags=["library"])
 TRACK_NOT_FOUND = "Трек не найден"
@@ -228,7 +229,7 @@ def manageable_scrobbles(
     limit: Annotated[int, Query(ge=1, le=200)] = 100,
 ):
     query = (
-        db.query(Scrobble, Track)
+        db.query(Scrobble, Track).execution_options(include_excluded=True)
         .join(Track, Track.id == Scrobble.track_id)
         .filter(Scrobble.user_id == current_user.id)
     )
@@ -242,6 +243,9 @@ def manageable_scrobbles(
             "played_at": scrobble.played_at,
             "source": scrobble.source,
             "listened_sec": int(scrobble.listened_sec or 0),
+            "excluded_from_stats": bool(scrobble.excluded_from_stats),
+            "is_imported": bool(scrobble.is_imported),
+            "import_job_id": scrobble.import_job_id,
             "track": _track_dict(track),
         }
         for scrobble, track in rows
@@ -257,7 +261,7 @@ def delete_own_scrobble(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ):
-    scrobble = db.query(Scrobble).filter(
+    scrobble = db.query(Scrobble).execution_options(include_excluded=True).filter(
         Scrobble.id == scrobble_id, Scrobble.user_id == current_user.id
     ).first()
     if not scrobble:
@@ -389,11 +393,20 @@ def integration_status(
         ("youtube_music", "YouTube Music", bool(current_user.api_key), "extension", preferences.youtube_music_enabled),
         ("lastfm", "Last.fm", bool(integration.lastfm_username), "import", preferences.lastfm_enabled),
     ]
+    diagnostics = {row.source: row for row in db.query(SourceHealth).filter_by(user_id=current_user.id).all()}
+
+    def diagnostic(key):
+        row = diagnostics.get(source_key(key))
+        return {"last_event_at": row.received_at if row else None,
+                "diagnostic": MESSAGES.get(str(row.status), "Нет свежих событий. Включите музыку и проверьте подключение.") if row else "Событий пока нет. Запустите проверку первого прослушивания.",
+                "error": bool(row and row.status in ("token_expired", "network_error", "provider_error"))}
+
     return {
         "auto_sync": preferences.auto_sync,
         "last_sync": integration.last_sync,
         "services": [
             {
+                **diagnostic(key),
                 "id": key,
                 "name": name,
                 "linked": linked,

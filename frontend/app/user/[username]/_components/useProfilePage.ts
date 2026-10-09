@@ -240,7 +240,7 @@ export function useProfilePage() {
     };
 
     const checkNotifications = () => {
-      fetchAndShowNotifications(
+      void fetchAndShowNotifications(
         username as string,
         isMyProfile,
         setToasts,
@@ -248,7 +248,7 @@ export function useProfilePage() {
       );
     };
 
-    fetchAllData();
+    void fetchAllData();
     checkNotifications();
 
     // Live updates: the server only opens a user's own channel
@@ -274,7 +274,7 @@ export function useProfilePage() {
             }
           } else if (msg.type === "IMPORT_FINISHED") {
             alert(msg.message);
-            fetchAllData();
+            void fetchAllData();
           }
         };
       },

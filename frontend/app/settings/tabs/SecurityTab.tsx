@@ -53,7 +53,7 @@ export default function SecurityTab() {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       if (!isPushSupported()) {
         if (!cancelled) setPushAvailable(false);
         return;
@@ -70,7 +70,7 @@ export default function SecurityTab() {
         if (!cancelled) setPushAvailable(false);
       }
     })();
-    loadDevices();
+    void loadDevices();
     return () => {
       cancelled = true;
     };

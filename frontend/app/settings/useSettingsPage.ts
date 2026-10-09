@@ -286,9 +286,16 @@ export function useSettingsPage() {
     }
   };
 
-  const handleCopyKey = () => {
+  const handleCopyKey = async () => {
     if (generatedApiKey) {
-      navigator.clipboard.writeText(generatedApiKey);
+      try {
+        await navigator.clipboard.writeText(generatedApiKey);
+      } catch {
+        setStatus(
+          "Не удалось скопировать ключ. Проверьте разрешение на доступ к буферу обмена.",
+        );
+        return;
+      }
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       setStatus("✅ API ключ скопирован в буфер обмена");
@@ -394,7 +401,7 @@ export function useSettingsPage() {
       setShowConfirmModal(true);
       return;
     }
-    executeSave();
+    await executeSave();
   };
 
   const resetPreferences = () => {

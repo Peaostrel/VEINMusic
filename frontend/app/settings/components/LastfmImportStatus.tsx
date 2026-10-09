@@ -33,7 +33,7 @@ export default function LastfmImportStatus({
         // not signed in or backend unavailable: just hide the status
       }
     };
-    load();
+    void load();
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);

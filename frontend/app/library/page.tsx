@@ -57,6 +57,12 @@ export default function LibraryPage() {
           text="Поставить цель на неделю или месяц и отслеживать прогресс."
         />
       </div>
+      <ActionCard
+        href="/library/discover"
+        icon={<Sparkles className="h-5 w-5" />}
+        title="Открытия и ваш вкус"
+        text="Рекомендации с обратной связью, музыка для двоих и итоги недели"
+      />
       <MemorySection
         title="В этот день"
         subtitle="Что играло в эту дату в прошлые годы"

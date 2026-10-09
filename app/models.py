@@ -18,6 +18,7 @@ from app.database import Base
 
 CASCADE_ALL_DELETE = "all, delete"
 FK_USERS_ID = "users.id"
+FK_TRACKS_ID = "tracks.id"
 FK_SCROBBLES_ID = "scrobbles.id"
 ON_DELETE_SET_NULL = "SET NULL"
 
@@ -185,7 +186,7 @@ class Scrobble(Base):
     track_id = Column(
         Integer,
         ForeignKey(
-            "tracks.id",
+            FK_TRACKS_ID,
             ondelete="CASCADE"),
         index=True)
     played_at = Column(
@@ -205,6 +206,8 @@ class Scrobble(Base):
             UTC))
     xp_earned = Column(Integer, default=1)
     is_imported = Column(Boolean, default=False)
+    excluded_from_stats = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    import_job_id = Column(Integer, ForeignKey("lastfm_import_jobs.id", ondelete="SET NULL"), nullable=True, index=True)
 
     user = relationship("User", back_populates="scrobbles", lazy="joined")
     track = relationship("Track")
@@ -424,7 +427,7 @@ class TrackAlias(Base):
     canonical_track_id = Column(
         Integer,
         ForeignKey(
-            "tracks.id",
+            FK_TRACKS_ID,
             ondelete="CASCADE"),
         index=True)
     created_at = Column(
@@ -597,3 +600,29 @@ class Notification(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     actor = relationship("User", foreign_keys=[actor_id])
+
+
+class RecommendationFeedback(Base):
+    """Private signals; never exposed on another user's profile."""
+    __tablename__ = "recommendation_feedback"
+    __table_args__ = (Index("uq_recommendation_feedback_user_track", "user_id", "track_id", unique=True),)
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=False)
+    track_id = Column(Integer, ForeignKey(FK_TRACKS_ID, ondelete="CASCADE"), nullable=False)
+    value = Column(String(16), nullable=False)
+
+
+class SourceHealth(Base):
+    """Bounded diagnostics: one row per account/source, no tokens or payloads."""
+    __tablename__ = "source_health"
+    __table_args__ = (Index("uq_source_health_user_source", "user_id", "source", unique=True),)
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=False)
+    source = Column(String(32), nullable=False)
+    status = Column(String(40), nullable=False)
+    received_at = Column(DateTime(timezone=True), nullable=False)
+    first_success_at = Column(DateTime(timezone=True), nullable=True)
+    last_success_at = Column(DateTime(timezone=True), nullable=True)
+    received_count = Column(Integer, nullable=False, default=0, server_default="0")
+    error_count = Column(Integer, nullable=False, default=0, server_default="0")
+    processing_ms = Column(Integer, nullable=False, default=0, server_default="0")
