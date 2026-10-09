@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import LegalDoc, { legalSection } from "@/components/LegalDoc";
 
 export const metadata: Metadata = {
-  title: "Условия использования · VEINMusic",
+  title: "Условия использования",
 };
 
 const sections = [

@@ -48,8 +48,10 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
     showcase: "all",
     followers: "all",
     location: "all",
+    location_precision: "city",
     social_links: "all",
     show_listening_source: true,
+    search_indexing: true,
   },
   listening: {
     ignored_artists: [],
@@ -89,6 +91,8 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   integrations: {
     spotify_enabled: true,
     yandex_enabled: true,
+    youtube_music_enabled: true,
+    soundcloud_enabled: true,
     lastfm_enabled: true,
     auto_sync: true,
   },
@@ -97,6 +101,9 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
     taste_passport: false,
     new_profile_layout: false,
     diagnostics: false,
+  },
+  goals: {
+    items: [],
   },
 };
 
@@ -133,6 +140,7 @@ export function mergePreferences(
       ...DEFAULT_PREFERENCES.experiments,
       ...value.experiments,
     },
+    goals: { ...DEFAULT_PREFERENCES.goals, ...value.goals },
   };
 }
 

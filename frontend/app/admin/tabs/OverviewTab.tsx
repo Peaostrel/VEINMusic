@@ -92,6 +92,12 @@ export default function OverviewTab({
                 {health?.cloud_scrobblers.spotify_users || 0} аккаунтов
               </span>
             </div>
+            <div className="flex justify-between items-center p-3 bg-bg rounded-xl border border-line-soft">
+              <span className="text-fg-2">Синхронизация SoundCloud</span>
+              <span className="font-mono text-fg font-medium">
+                {health?.cloud_scrobblers.soundcloud_users || 0} аккаунтов
+              </span>
+            </div>
           </div>
         </div>
 

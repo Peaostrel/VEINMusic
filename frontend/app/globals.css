@@ -17,7 +17,9 @@
   --color-fg-3: #80848c;
   --color-bar: #3a3d42;
   --color-ok: #5fb58e;
+  --color-ok-soft: color-mix(in srgb, var(--color-ok) 10%, transparent);
   --color-danger: #e98a8a;
+  --color-danger-soft: color-mix(in srgb, var(--color-danger) 10%, transparent);
   --color-danger-line: #6b3434;
   --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, monospace;
@@ -25,6 +27,7 @@
 
 @theme inline {
   --color-accent: var(--accent);
+  --color-accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
   --color-on-accent: var(--text-on-accent);
 }
 
@@ -86,6 +89,10 @@ html[data-background-blur="0"] * {
 
 html {
   background-color: var(--color-bg);
+}
+
+html.pwa-banner-visible body {
+  padding-bottom: 92px;
 }
 
 body {

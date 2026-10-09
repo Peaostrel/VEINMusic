@@ -1,4 +1,6 @@
 import type { UserInfo } from "@/app/lib/types";
+import { useCallback, useEffect, useState } from "react";
+import { Cloud, Import, Puzzle, RefreshCw } from "lucide-react";
 import { useFeature } from "@/app/lib/featureFlags";
 import { LogoGlyph } from "@/components/brand";
 import { btn, inputOnCard } from "@/components/ui";
@@ -25,6 +27,131 @@ interface IntegrationsTabProps {
 const small = `${btn.secondary} ${btn.sm}`;
 const smallPrimary = `${btn.primary} ${btn.sm}`;
 const smallDanger = `${btn.danger} ${btn.sm}`;
+
+interface IntegrationStatus {
+  auto_sync: boolean;
+  last_sync?: string | null;
+  services: {
+    id: string;
+    name: string;
+    linked: boolean;
+    mode: "cloud" | "extension" | "import";
+    user_enabled: boolean;
+    admin_enabled: boolean;
+  }[];
+}
+
+function IntegrationHealth({ API_URL }: Readonly<{ API_URL: string }>) {
+  const [status, setStatus] = useState<IntegrationStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [message, setMessage] = useState("");
+  const load = useCallback(() => {
+    setLoading(true);
+    fetch(`${API_URL}/api/integrations/status`, { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then(setStatus)
+      .catch(() => setStatus(null))
+      .finally(() => setLoading(false));
+  }, [API_URL]);
+  useEffect(load, [load]);
+  const syncNow = async () => {
+    setSyncing(true);
+    setMessage("");
+    try {
+      const response = await fetch(`${API_URL}/api/integrations/sync`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ service: "all" }),
+      });
+      const result = await response.json().catch(() => ({}));
+      setMessage(
+        response.ok
+          ? "Синхронизация завершена."
+          : result.detail || "Не удалось запустить синхронизацию.",
+      );
+      load();
+    } finally {
+      setSyncing(false);
+    }
+  };
+  const icon = (mode: string) => {
+    if (mode === "cloud") return <Cloud className="h-3.5 w-3.5" />;
+    if (mode === "import") return <Import className="h-3.5 w-3.5" />;
+    return <Puzzle className="h-3.5 w-3.5" />;
+  };
+  return (
+    <section className={`${settingsCard} p-5`}>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-medium">Состояние синхронизации</h3>
+          <p className="mt-1 text-xs text-fg-3">
+            {status?.last_sync
+              ? `Последняя активность ${new Date(status.last_sync).toLocaleString("ru-RU")}`
+              : "VEIN пока не получил данные от облачных подключений."}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={load}
+            disabled={loading}
+            className={small}
+          >
+            <RefreshCw
+              className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
+            />
+            Проверить
+          </button>
+          <button
+            type="button"
+            onClick={syncNow}
+            disabled={syncing || !status?.auto_sync}
+            className={smallPrimary}
+          >
+            <RefreshCw
+              className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`}
+            />
+            Синхронизировать
+          </button>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {(status?.services ?? []).map((service) => {
+          let label = service.linked ? "подключено" : "не подключено";
+          let color = service.linked ? "text-ok" : "text-fg-3";
+          if (!service.admin_enabled) {
+            label = "отключено администратором";
+            color = "text-danger";
+          } else if (!status?.auto_sync || !service.user_enabled) {
+            label = "приостановлено вами";
+            color = "text-fg-3";
+          }
+          return (
+            <div
+              key={service.id}
+              className="rounded-lg border border-line-soft bg-bg p-3"
+            >
+              <span className="flex items-center gap-2 text-xs font-medium">
+                {icon(service.mode)}
+                {service.name}
+              </span>
+              <span className={`mt-1 block font-mono text-[10px] ${color}`}>
+                {label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {message && (
+        <output aria-live="polite" className="mt-3 block text-xs text-fg-2">
+          {message}
+        </output>
+      )}
+    </section>
+  );
+}
 
 function Row({
   logo,
@@ -85,6 +212,8 @@ export default function IntegrationsTab({
   const importEnabled = useFeature("lastfm_import");
   const spotifyEnabled = useFeature("integration_spotify");
   const yandexEnabled = useFeature("integration_yandex");
+  const youtubeMusicEnabled = useFeature("integration_youtube_music");
+  const soundcloudEnabled = useFeature("integration_soundcloud");
   const lastfmEnabled = useFeature("integration_lastfm");
   const preferences = data.preferences.integrations;
   const updateIntegration = (patch: Partial<typeof preferences>) =>
@@ -105,6 +234,8 @@ export default function IntegrationsTab({
         </p>
       </div>
 
+      <IntegrationHealth API_URL={API_URL} />
+
       <section className={settingsCard}>
         <ToggleRow
           title="Автоматическая синхронизация"
@@ -123,6 +254,22 @@ export default function IntegrationsTab({
           description="Временно приостановить запись из Яндекс Музыки, сохранив токен."
           checked={preferences.yandex_enabled}
           onChange={(yandex_enabled) => updateIntegration({ yandex_enabled })}
+        />
+        <ToggleRow
+          title="YouTube Music"
+          description="Временно приостановить запись YouTube Music через расширение VEIN."
+          checked={preferences.youtube_music_enabled}
+          onChange={(youtube_music_enabled) =>
+            updateIntegration({ youtube_music_enabled })
+          }
+        />
+        <ToggleRow
+          title="SoundCloud"
+          description="Временно приостановить облачный скробблинг SoundCloud, сохранив подключение."
+          checked={preferences.soundcloud_enabled}
+          onChange={(soundcloud_enabled) =>
+            updateIntegration({ soundcloud_enabled })
+          }
         />
         <ToggleRow
           title="Last.fm"
@@ -146,6 +293,12 @@ export default function IntegrationsTab({
             <div>
               <dt className="text-fg-3">Яндекс</dt>
               <dd>{userProfile?.yandex_linked ? "linked" : "not linked"}</dd>
+            </div>
+            <div>
+              <dt className="text-fg-3">SoundCloud</dt>
+              <dd>
+                {userProfile?.soundcloud_linked ? "linked" : "not linked"}
+              </dd>
             </div>
             <div>
               <dt className="text-fg-3">Last.fm</dt>
@@ -217,6 +370,83 @@ export default function IntegrationsTab({
               </button>
             )}
           </div>
+        </Row>
+
+        <Row
+          logo="SC"
+          name="SoundCloud"
+          status={synced(userProfile?.soundcloud_linked)}
+          statusOk={Boolean(userProfile?.soundcloud_linked)}
+          description={
+            soundcloudEnabled
+              ? "Скробблинг напрямую через сервер, без расширения. После подключения включите следующий трек — старая история не импортируется."
+              : "Временно приостановлено администратором."
+          }
+        >
+          <div className="flex gap-2 md:justify-end">
+            {userProfile?.soundcloud_linked && (
+              <button
+                type="button"
+                onClick={() => handleDisconnect("soundcloud")}
+                className={smallDanger}
+              >
+                Отключить
+              </button>
+            )}
+            {soundcloudEnabled ? (
+              <a
+                href={`${API_URL}/auth/soundcloud/login`}
+                className={
+                  userProfile?.soundcloud_linked ? small : smallPrimary
+                }
+              >
+                {userProfile?.soundcloud_linked ? "Обновить" : "Подключить"}
+              </a>
+            ) : (
+              <button
+                type="button"
+                disabled
+                title="SoundCloud временно отключён"
+                className={
+                  userProfile?.soundcloud_linked ? small : smallPrimary
+                }
+              >
+                {userProfile?.soundcloud_linked ? "Обновить" : "Подключить"}
+              </button>
+            )}
+          </div>
+        </Row>
+
+        <Row
+          logo="YT"
+          name="YouTube Music"
+          status={
+            youtubeMusicEnabled ? "через расширение VEIN" : "приостановлено"
+          }
+          statusOk={youtubeMusicEnabled}
+          description={
+            youtubeMusicEnabled
+              ? "Откройте YouTube Music в браузере с подключённым расширением VEIN — текущий трек, пауза и прогресс определяются автоматически."
+              : "Временно приостановлено администратором."
+          }
+        >
+          <a
+            href={
+              youtubeMusicEnabled ? "https://music.youtube.com/" : undefined
+            }
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-disabled={!youtubeMusicEnabled}
+            tabIndex={youtubeMusicEnabled ? undefined : -1}
+            title={
+              youtubeMusicEnabled
+                ? undefined
+                : "YouTube Music временно отключён"
+            }
+            className={`${smallPrimary} ${youtubeMusicEnabled ? "" : "cursor-not-allowed opacity-50"}`}
+          >
+            Открыть YouTube Music
+          </a>
         </Row>
 
         <Row

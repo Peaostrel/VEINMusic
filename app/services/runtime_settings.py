@@ -33,6 +33,8 @@ KNOWN_FEATURES: dict[str, str] = {
     "webhooks": "Создание и отправка вебхуков",
     "integration_yandex": "Яндекс Музыка: подключения и скробблинг",
     "integration_spotify": "Spotify: подключения и скробблинг",
+    "integration_youtube_music": "YouTube Music: скробблинг через расширение",
+    "integration_soundcloud": "SoundCloud: подключения и облачный скробблинг",
     "integration_lastfm": "Last.fm: подключения, импорт и экспорт",
 }
 

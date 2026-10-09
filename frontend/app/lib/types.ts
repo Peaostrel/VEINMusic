@@ -45,7 +45,7 @@ export interface VapidKeyResponse {
 }
 
 export type NotificationKind =
-  "like" | "comment" | "follow" | "system" | "recap";
+  "like" | "comment" | "follow" | "system" | "recap" | "achievement";
 
 export interface SocialNotification {
   id: number;
@@ -160,6 +160,7 @@ export interface UserInfo {
   rank: string;
   spotify_linked: boolean;
   yandex_linked: boolean;
+  soundcloud_linked: boolean;
   lastfm_username: string | null;
   has_imported_lastfm: boolean;
   last_sync: string | null;
@@ -215,8 +216,10 @@ export interface UserPreferences {
     showcase: Visibility;
     followers: Visibility;
     location: Visibility;
+    location_precision: "city" | "country";
     social_links: Visibility;
     show_listening_source: boolean;
+    search_indexing: boolean;
   };
   listening: {
     ignored_artists: string[];
@@ -256,6 +259,8 @@ export interface UserPreferences {
   integrations: {
     spotify_enabled: boolean;
     yandex_enabled: boolean;
+    youtube_music_enabled: boolean;
+    soundcloud_enabled: boolean;
     lastfm_enabled: boolean;
     auto_sync: boolean;
   };
@@ -264,6 +269,15 @@ export interface UserPreferences {
     taste_passport: boolean;
     new_profile_layout: boolean;
     diagnostics: boolean;
+  };
+  goals: {
+    items: {
+      id: string;
+      type: "weekly_scrobbles" | "monthly_minutes" | "new_artists" | "streak";
+      title: string;
+      target: number;
+      active: boolean;
+    }[];
   };
 }
 
@@ -281,6 +295,7 @@ export interface PublicUserPreferences {
 /** One scrobble in history / feeds. */
 export interface HistoryEntry {
   id: number;
+  track_id: number;
   username: string;
   avatar_url: string | null;
   artist: string;
@@ -343,10 +358,10 @@ export interface DetailedStats {
       tracks: number;
     };
     change: {
-      scrobbles: number;
-      minutes: number;
-      artists: number;
-      tracks: number;
+      scrobbles: number | null;
+      minutes: number | null;
+      artists: number | null;
+      tracks: number | null;
     };
   } | null;
   top_artists: { name: string; plays: number; source: string }[];

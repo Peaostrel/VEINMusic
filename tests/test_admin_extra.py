@@ -266,6 +266,7 @@ def test_provider_can_be_paused_without_removing_credentials(admin_client):
     assert initial == {
         "yandex": {"enabled": True, "linked": 1},
         "spotify": {"enabled": True, "linked": 1},
+        "soundcloud": {"enabled": True, "linked": 0},
         "lastfm": {"enabled": True, "linked": 1},
     }
 
