@@ -216,7 +216,7 @@ export function MusicCalendar({ username }: Readonly<{ username: string }>) {
             ))}
           </dl>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2">
             {MONTHS.map((_, month) => (
               <Month
                 key={month}

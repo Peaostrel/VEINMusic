@@ -28,6 +28,7 @@ from app.routers import (
     devices,
     extended,
     geo,
+    preview,
     lastfm_connect,
     notifications,
     profile,
@@ -92,7 +93,7 @@ async def lifespan(app: FastAPI):
 
     _migrate_plaintext_api_keys()
 
-    # Cloud scrobbling (Spotify / Yandex polling). In Docker it runs in the
+    # Cloud scrobbling (Spotify / Yandex / SoundCloud polling). In Docker it runs in the
     # arq worker instead (RUN_CLOUD_POLLING=0), so that several API workers
     # don't poll the same accounts.
     if os.getenv("RUN_CLOUD_POLLING", "1") == "1":
@@ -171,6 +172,7 @@ app.include_router(notifications.router)
 app.include_router(reports.router)
 app.include_router(lastfm_connect.router)
 app.include_router(geo.router)
+app.include_router(preview.router)
 
 
 @app.get("/health", tags=["health"], responses={503: {"description": "A dependency is down"}})

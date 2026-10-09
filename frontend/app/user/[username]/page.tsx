@@ -8,6 +8,7 @@
 "use client";
 import Link from "next/link";
 import { API_URL } from "@/app/lib/api";
+import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { Loading, btn } from "@/components/ui";
 import { getRankInfo, getNextRankInfo } from "@/app/lib/ranks";
 import { ProfileActions } from "./_components/ProfileActions";
@@ -129,16 +130,22 @@ export default function Profile() {
       <FollowModal {...view} />
       <CompatibilityModal {...view} />
 
-      {u.cover_url && (
-        <div
-          aria-hidden="true"
-          className="relative -mb-4 h-40 overflow-hidden rounded-2xl border border-line-soft bg-surface bg-cover bg-center sm:h-52 md:h-64"
-          style={{ backgroundImage: `url(${u.cover_url})` }}
-        >
-          {/* Fades into the page so the avatar sits on it */}
-          <div className="absolute inset-0 bg-linear-to-t from-bg/80 via-bg/10 to-transparent" />
-        </div>
-      )}
+      <div
+        aria-hidden="true"
+        className="relative -mb-4 h-40 overflow-hidden rounded-2xl border border-line-soft bg-[radial-gradient(circle_at_20%_10%,var(--accent-glow-strong),transparent_55%),linear-gradient(135deg,var(--surface-2),var(--bg))] sm:h-52 md:h-64"
+      >
+        {sanitizeImageUrl(u.cover_url) && (
+          <img
+            src={sanitizeImageUrl(u.cover_url)}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            onError={(event) => {
+              event.currentTarget.hidden = true;
+            }}
+          />
+        )}
+        <div className="absolute inset-0 bg-linear-to-t from-bg/80 via-bg/10 to-transparent" />
+      </div>
 
       <ProfileHeaderSection
         u={u}
@@ -173,6 +180,7 @@ export default function Profile() {
             onShowCompatibility={handleShowCompatibility}
           />
         }
+        hasBanner
       />
 
       <ProfileStatsSection

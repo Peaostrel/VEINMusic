@@ -26,6 +26,7 @@ const LIMIT = 30;
 const PROVIDER_NAMES = {
   yandex: "Яндекс Музыка",
   spotify: "Spotify",
+  soundcloud: "SoundCloud",
   lastfm: "Last.fm",
 } as const;
 type Provider = keyof typeof PROVIDER_NAMES;
@@ -105,6 +106,7 @@ function Row({
     [
       ["yandex", r.yandex],
       ["spotify", r.spotify],
+      ["soundcloud", r.soundcloud],
       ["lastfm", Boolean(r.lastfm_username)],
     ] as [Provider, boolean][]
   ).filter(([, on]) => on);
@@ -141,7 +143,7 @@ function Row({
               {provider === "lastfm" && (
                 <span className="font-mono text-fg-2">{r.lastfm_username}</span>
               )}
-              {provider === "spotify" && (
+              {(provider === "spotify" || provider === "soundcloud") && (
                 <span className="text-fg-2">опрос раз в 30 с</span>
               )}
             </span>
@@ -217,7 +219,7 @@ export default function IntegrationsTab({
             токены пользователей.
           </p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {(Object.entries(PROVIDER_NAMES) as [Provider, string][]).map(
             ([id, name]) => {
               const state = data?.providers[id];

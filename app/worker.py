@@ -111,7 +111,7 @@ async def broadcast_push(ctx: dict[str, Any], title: str, body: str, url: str,
 
 
 async def cloud_poll(ctx: dict[str, Any]) -> None:
-    """arq cron job: poll Spotify / Yandex for currently playing tracks."""
+    """arq cron job: poll Spotify, Yandex and SoundCloud for new playback."""
     from app.services.cloud_scrobbling import poll_once
     from app.services.scrobble_processor import process_scrobble
     await poll_once(process_scrobble)

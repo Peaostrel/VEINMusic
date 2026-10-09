@@ -51,7 +51,7 @@ ACME_EMAIL=you@example.com /opt/veinmusic/deploy/deploy.sh
 
 Первый `deploy.sh` создаёт `deploy/.env` (права 600) с паролями базы и Redis,
 `SECRET_KEY`, ключом шифрования токенов и ключами Web Push. Ключи Last.fm и
-Spotify впишите в `.env` сами и запустите `deploy.sh` ещё раз.
+Ключи Spotify и SoundCloud впишите в `.env` сами и запустите `deploy.sh` ещё раз.
 
 Сделать себя администратором:
 

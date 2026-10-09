@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { LogoTile } from "@/components/brand";
+import { SERVICE_WORKER_URL } from "@/app/lib/offline";
+
+const DISMISSED_KEY = "vein_pwa_banner_dismissed_at";
+const DISMISS_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Chromium's install prompt event (not in the DOM typings). */
 interface BeforeInstallPromptEvent extends Event {
@@ -16,12 +20,28 @@ export default function PWARegistration() {
   const [showInstallBanner, setShowInstallBanner] = useState(false);
 
   useEffect(() => {
+    let reloadingForUpdate = false;
+    // The first install also fires controllerchange. Reloading at that point
+    // interrupts forms and dialogs; only reload pages that were already
+    // controlled by an older worker and are genuinely receiving an update.
+    const wasControlled = Boolean(navigator.serviceWorker?.controller);
+    const handleControllerChange = () => {
+      if (!wasControlled || reloadingForUpdate) return;
+      reloadingForUpdate = true;
+      window.location.reload();
+    };
+
     // 1. Register Service Worker
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.addEventListener(
+        "controllerchange",
+        handleControllerChange,
+      );
       navigator.serviceWorker
-        .register("/sw.js")
+        .register(SERVICE_WORKER_URL, { updateViaCache: "none" })
         .then((reg) => {
           console.log("[PWA] Service Worker registered with scope:", reg.scope);
+          return reg.update();
         })
         .catch((err) => {
           console.warn("[PWA] Service Worker registration failed:", err);
@@ -32,13 +52,32 @@ export default function PWARegistration() {
     const handleBeforeInstall = (e: Event) => {
       e.preventDefault();
       setInstallPrompt(e as BeforeInstallPromptEvent);
-      setShowInstallBanner(true);
+      const standalone = globalThis.matchMedia?.(
+        "(display-mode: standalone)",
+      ).matches;
+      const dismissed = Number(localStorage.getItem(DISMISSED_KEY) || 0);
+      if (!standalone && Date.now() - dismissed > DISMISS_MS)
+        setShowInstallBanner(true);
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstall);
-    return () =>
+    return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
+      navigator.serviceWorker?.removeEventListener(
+        "controllerchange",
+        handleControllerChange,
+      );
+    };
   }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle(
+      "pwa-banner-visible",
+      showInstallBanner,
+    );
+    return () =>
+      document.documentElement.classList.remove("pwa-banner-visible");
+  }, [showInstallBanner]);
 
   const handleInstallClick = async () => {
     if (!installPrompt) return;
@@ -52,8 +91,13 @@ export default function PWARegistration() {
 
   if (!showInstallBanner) return null;
 
+  const dismiss = () => {
+    localStorage.setItem(DISMISSED_KEY, String(Date.now()));
+    setShowInstallBanner(false);
+  };
+
   return (
-    <div className="fixed bottom-20 right-4 z-50 flex max-w-sm flex-col gap-2 lg:bottom-4">
+    <div className="fixed right-3 bottom-20 z-50 flex max-w-[calc(100vw-1.5rem)] flex-col gap-2 sm:right-4 sm:max-w-sm lg:bottom-4">
       {showInstallBanner && (
         <div className="flex items-center gap-3 rounded-xl border border-line bg-surface-2 p-4 shadow-[0_12px_32px_rgba(0,0,0,0.45)]">
           <LogoTile size={40} />
@@ -70,7 +114,7 @@ export default function PWARegistration() {
           </button>
           <button
             type="button"
-            onClick={() => setShowInstallBanner(false)}
+            onClick={dismiss}
             className="shrink-0 rounded p-1 text-fg-3 hover:text-fg"
             aria-label="Закрыть"
           >
