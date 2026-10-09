@@ -15,6 +15,8 @@ from app.models import User
 from app.services import runtime_settings, yandex_ynison
 from app.services.user_preferences import get_preferences
 
+from app.services.source_health import record_health
+
 logger = logging.getLogger(__name__)
 
 # A queue track counts as playing until its length plus this margin (one poll
@@ -66,6 +68,10 @@ async def sync_spotify_status(user: User, db: Session, process_func):
                     headers = {"Authorization": f"Bearer {token}"}
                     resp = await client.get("https://api.spotify.com/v1/me/player/currently-playing", headers=headers)
 
+            if resp.status_code in (401, 403):
+                record_health(db, int(user.id), "spotify", "token_expired")
+            elif resp.status_code not in (200, 204):
+                record_health(db, int(user.id), "spotify", "provider_error")
             if resp.status_code == 200:
                 data = resp.json()
                 if data and data.get("is_playing"):
@@ -86,6 +92,7 @@ async def sync_spotify_status(user: User, db: Session, process_func):
 
                     await process_func(db, user, title, artist, cover, track_url, "spotify", progress, True, duration, album)
         except Exception as e:
+            record_health(db, int(user.id), "spotify", "network_error")
             logger.warning(f"Spotify sync error: {e}")
 
 
@@ -277,8 +284,10 @@ async def sync_soundcloud_status(user: User, db: Session, process_func) -> None:
     try:
         response = await _soundcloud_recent_response(user, db)
         if response is None:
+            record_health(db, int(user.id), "soundcloud", "token_expired")
             return
         if response.status_code != 200:
+            record_health(db, int(user.id), "soundcloud", "token_expired" if response.status_code in (401, 403) else "provider_error")
             logger.warning(
                 "SoundCloud recent tracks answered %s for user %s",
                 response.status_code,
@@ -534,6 +543,7 @@ async def _sync_yandex_queue(user: User, db: Session, process_func, headers: dic
         try:
             resp = await client.get("https://api.music.yandex.net/queues", headers=headers, timeout=5.0)
             if resp.status_code in (401, 403):
+                record_health(db, int(user.id), "yandex", "token_expired")
                 logger.warning(f"Yandex OAuth token invalid or expired for user {user.username}")
                 return
             if resp.status_code != 200:
@@ -546,6 +556,7 @@ async def _sync_yandex_queue(user: User, db: Session, process_func, headers: dic
                 queues.sort(key=lambda x: x.get("modified", ""), reverse=True)
                 await _handle_active_yandex_queue(client, queues[0], headers, process_func, db, user)
         except Exception as e:
+            record_health(db, int(user.id), "yandex", "network_error")
             logger.warning(f"Yandex sync error for user {user.username}: {e}")
 
 

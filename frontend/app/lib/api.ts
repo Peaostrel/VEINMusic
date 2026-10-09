@@ -113,7 +113,9 @@ export function openSocket(
     ws = new WebSocket(url);
     setup(ws);
   };
-  connect();
+  connect().catch(() => {
+    console.error("Не удалось открыть соединение WebSocket");
+  });
 
   return () => {
     cancelled = true;

@@ -171,7 +171,7 @@ export function useAdminPanel() {
   };
 
   useEffect(() => {
-    loadAllData();
+    void loadAllData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -185,7 +185,7 @@ export function useAdminPanel() {
         body: JSON.stringify({ is_banned: !currentBanned }),
       });
       if (res.ok) {
-        loadAllData();
+        await loadAllData();
       } else {
         alert(await res.text());
       }
@@ -209,7 +209,7 @@ export function useAdminPanel() {
         },
       );
       if (res.ok) {
-        loadAllData();
+        await loadAllData();
       }
     } catch (e) {
       console.error(e);
@@ -230,7 +230,7 @@ export function useAdminPanel() {
         body: JSON.stringify({ role: newRole }),
       });
       if (res.ok) {
-        loadAllData();
+        await loadAllData();
       }
     } catch (e) {
       console.error(e);
@@ -252,7 +252,7 @@ export function useAdminPanel() {
       );
       if (res.ok) {
         alert("Профиль очищен");
-        loadAllData();
+        await loadAllData();
       }
     } catch (e) {
       console.error(e);
@@ -272,7 +272,7 @@ export function useAdminPanel() {
         credentials: "include",
       });
       if (res.ok) {
-        loadAllData();
+        await loadAllData();
       } else {
         alert(await res.text());
       }
@@ -299,7 +299,7 @@ export function useAdminPanel() {
       );
       if (res.ok) {
         alert("Опыт пользователя сброшен, аккаунт помечен");
-        loadAllData();
+        await loadAllData();
       }
     } catch (e) {
       console.error(e);
@@ -316,7 +316,7 @@ export function useAdminPanel() {
         },
       );
       if (res.ok) {
-        loadAllData();
+        await loadAllData();
       }
     } catch (e) {
       console.error(e);
@@ -342,7 +342,7 @@ export function useAdminPanel() {
         alert(data.message || "Треки успешно объединены!");
         setSourceTrackId("");
         setTargetTrackId("");
-        loadAllData();
+        await loadAllData();
       } else {
         alert(data.detail || "Ошибка объединения треков");
       }
@@ -369,7 +369,7 @@ export function useAdminPanel() {
         alert(data.message || "Исполнители успешно объединены!");
         setSourceArtist("");
         setTargetArtist("");
-        loadAllData();
+        await loadAllData();
       } else {
         alert(data.detail || "Ошибка объединения артистов");
       }
@@ -414,7 +414,7 @@ export function useAdminPanel() {
           rarity: "common",
           required_level: 1,
         });
-        loadAllData();
+        await loadAllData();
       } else {
         alert(await res.text());
       }
@@ -431,7 +431,7 @@ export function useAdminPanel() {
         credentials: "include",
       });
       if (res.ok) {
-        loadAllData();
+        await loadAllData();
       }
     } catch (e) {
       console.error(e);
@@ -451,7 +451,7 @@ export function useAdminPanel() {
       });
       if (res.ok) {
         setNewAnn({ title: "", message: "", type: "info" });
-        loadAllData();
+        await loadAllData();
       }
     } catch (e) {
       console.error(e);
@@ -470,7 +470,7 @@ export function useAdminPanel() {
         body: JSON.stringify({ is_active: !currentActive }),
       });
       if (res.ok) {
-        loadAllData();
+        await loadAllData();
       }
     } catch (e) {
       console.error(e);
@@ -485,7 +485,7 @@ export function useAdminPanel() {
         credentials: "include",
       });
       if (res.ok) {
-        loadAllData();
+        await loadAllData();
       }
     } catch (e) {
       console.error(e);
@@ -502,7 +502,7 @@ export function useAdminPanel() {
         body: JSON.stringify({ is_enabled: !currentEnabled }),
       });
       if (res.ok) {
-        loadAllData();
+        await loadAllData();
       }
     } catch (e) {
       console.error(e);
@@ -521,7 +521,7 @@ export function useAdminPanel() {
       });
       if (res.ok) {
         setNewFlag({ key: "", description: "", is_enabled: true });
-        loadAllData();
+        await loadAllData();
       }
     } catch (e) {
       console.error(e);

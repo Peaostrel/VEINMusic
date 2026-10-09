@@ -4,6 +4,7 @@ import { Cloud, Import, Puzzle, RefreshCw } from "lucide-react";
 import { useFeature } from "@/app/lib/featureFlags";
 import { LogoGlyph } from "@/components/brand";
 import { btn, inputOnCard } from "@/components/ui";
+import ConnectionCheck from "../components/ConnectionCheck";
 import LastfmImportStatus from "../components/LastfmImportStatus";
 import type { SettingsData, UpdateData, UpdatePreference } from "../types";
 import { ToggleRow, settingsCard } from "../components/PreferenceControls";
@@ -38,6 +39,9 @@ interface IntegrationStatus {
     mode: "cloud" | "extension" | "import";
     user_enabled: boolean;
     admin_enabled: boolean;
+    diagnostic: string;
+    last_event_at: string | null;
+    error: boolean;
   }[];
 }
 
@@ -121,6 +125,14 @@ function IntegrationHealth({ API_URL }: Readonly<{ API_URL: string }>) {
         {(status?.services ?? []).map((service) => {
           let label = service.linked ? "подключено" : "не подключено";
           let color = service.linked ? "text-ok" : "text-fg-3";
+          if (service.mode === "extension")
+            label = service.last_event_at
+              ? "события получены"
+              : "ожидает расширение";
+          if (service.error) {
+            label = "требует внимания";
+            color = "text-danger";
+          }
           if (!service.admin_enabled) {
             label = "отключено администратором";
             color = "text-danger";
@@ -140,6 +152,12 @@ function IntegrationHealth({ API_URL }: Readonly<{ API_URL: string }>) {
               <span className={`mt-1 block font-mono text-[10px] ${color}`}>
                 {label}
               </span>
+              <p className="mt-2 text-xs text-fg-3">{service.diagnostic}</p>
+              {service.last_event_at && (
+                <p className="mt-1 text-xs text-fg-3">
+                  {new Date(service.last_event_at).toLocaleString("ru-RU")}
+                </p>
+              )}
             </div>
           );
         })}
@@ -234,6 +252,7 @@ export default function IntegrationsTab({
         </p>
       </div>
 
+      <ConnectionCheck />
       <IntegrationHealth API_URL={API_URL} />
 
       <section className={settingsCard}>

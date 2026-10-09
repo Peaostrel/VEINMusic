@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import ImportBatches from "./ImportBatches";
 import { Merge, Search, Trash2 } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
 import { EmptyState, Loading, PageHeader, btn, input } from "@/components/ui";
@@ -19,6 +20,8 @@ interface ManagedScrobble {
   played_at: string;
   source: string;
   listened_sec: number;
+  excluded_from_stats: boolean;
+  is_imported: boolean;
   track: Track;
 }
 
@@ -46,7 +49,12 @@ export default function CleanupPage() {
     setLoading(false);
   }, [query]);
   useEffect(() => {
-    const timer = setTimeout(load, 250);
+    const timer = setTimeout(() => {
+      void load().catch(() => {
+        setStatus("Не удалось загрузить историю. Повторите поиск.");
+        setLoading(false);
+      });
+    }, 250);
     return () => clearTimeout(timer);
   }, [load]);
 
@@ -87,6 +95,61 @@ export default function CleanupPage() {
     if (response.ok)
       setHistory((current) => current.filter((entry) => entry.id !== item.id));
   };
+  const edit = async (item: ManagedScrobble) => {
+    const title = prompt("Название трека", item.track.title);
+    if (title === null) return;
+    const artist = prompt("Исполнитель", item.track.artist);
+    if (artist === null) return;
+    try {
+      const response = await fetch(
+        `${API_URL}/api/me/scrobbles/${item.id}/metadata`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title,
+            artist,
+            album: item.track.album ?? null,
+          }),
+        },
+      );
+      if (!response.ok)
+        throw new Error(
+          "Не удалось исправить запись. Проверьте название и исполнителя.",
+        );
+      await load();
+      setStatus("Запись исправлена только в вашей истории.");
+    } catch (cause) {
+      setStatus(
+        cause instanceof Error ? cause.message : "Не удалось исправить запись",
+      );
+    }
+  };
+  const exclude = async (item: ManagedScrobble) => {
+    try {
+      const response = await fetch(
+        `${API_URL}/api/me/scrobbles/${item.id}/exclude`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ excluded: !item.excluded_from_stats }),
+        },
+      );
+      if (!response.ok) throw new Error("Не удалось изменить запись");
+      await load();
+      setStatus(
+        item.excluded_from_stats
+          ? "Прослушивание вернулось в статистику."
+          : "Прослушивание исключено. Его можно вернуть.",
+      );
+    } catch (cause) {
+      setStatus(
+        cause instanceof Error ? cause.message : "Не удалось изменить запись",
+      );
+    }
+  };
   if (loading) return <Loading label="Ищем дубли…" />;
   return (
     <main className="mx-auto flex w-full max-w-[980px] flex-col gap-9 px-4 py-8 sm:px-8 lg:py-10">
@@ -102,6 +165,7 @@ export default function CleanupPage() {
           {status}
         </output>
       )}
+      <ImportBatches onChanged={load} />
       <section className="flex flex-col gap-4">
         <div>
           <h2 className="text-base font-semibold">Возможные дубли</h2>
@@ -148,7 +212,7 @@ export default function CleanupPage() {
           {history.map((item) => (
             <div
               key={item.id}
-              className="grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3 border-b border-line-soft px-4 py-3 last:border-0"
+              className="grid grid-cols-[44px_minmax(0,1fr)] sm:grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3 border-b border-line-soft px-4 py-3 last:border-0"
             >
               {item.track.cover_url ? (
                 <img
@@ -166,16 +230,44 @@ export default function CleanupPage() {
                 <span className="block truncate text-xs text-fg-3">
                   {item.track.artist} · {sourceLabel(item.source)} ·{" "}
                   {new Date(item.played_at).toLocaleString("ru-RU")}
+                  {item.is_imported && " · Импорт"}
+                  {item.excluded_from_stats && " · Исключено"}
                 </span>
               </span>
-              <button
-                type="button"
-                onClick={() => remove(item)}
-                aria-label={`Удалить ${item.track.title}`}
-                className="rounded-lg p-2 text-fg-3 hover:bg-danger/10 hover:text-danger"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-1">
+                <button
+                  type="button"
+                  className={`${btn.secondary} ${btn.sm}`}
+                  onClick={() => {
+                    void edit(item);
+                  }}
+                >
+                  Исправить
+                </button>
+                <button
+                  type="button"
+                  className={`${btn.secondary} ${btn.sm}`}
+                  onClick={() => {
+                    void exclude(item);
+                  }}
+                >
+                  {item.excluded_from_stats
+                    ? "Вернуть в статистику"
+                    : "Исключить"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void remove(item).catch(() =>
+                      setStatus("Не удалось удалить запись"),
+                    );
+                  }}
+                  aria-label={`Удалить ${item.track.title}`}
+                  className="rounded-lg p-2 text-fg-3 hover:bg-danger/10 hover:text-danger"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           ))}
           {history.length === 0 && (

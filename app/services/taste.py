@@ -21,11 +21,11 @@ def get_taste_match_internal(viewer, profile, db):
     sql = text("""
         SELECT DISTINCT t.artist
         FROM scrobbles s JOIN tracks t ON s.track_id = t.id
-        WHERE s.user_id = :u1 AND s.listened_sec * 100 >= t.duration * 85
+        WHERE s.excluded_from_stats = false AND s.user_id = :u1 AND s.excluded_from_stats = false AND s.listened_sec * 100 >= t.duration * 85
         INTERSECT
         SELECT DISTINCT t.artist
         FROM scrobbles s JOIN tracks t ON s.track_id = t.id
-        WHERE s.user_id = :u2 AND s.listened_sec * 100 >= t.duration * 85
+        WHERE s.excluded_from_stats = false AND s.user_id = :u2 AND s.excluded_from_stats = false AND s.listened_sec * 100 >= t.duration * 85
     """)
     common_rows = db.execute(
         sql, {"u1": viewer_user.id, "u2": profile_user.id}).fetchall()
@@ -34,7 +34,7 @@ def get_taste_match_internal(viewer, profile, db):
     sql_total = text("""
         SELECT COUNT(DISTINCT t.artist)
         FROM scrobbles s JOIN tracks t ON s.track_id = t.id
-        WHERE (s.user_id = :u1 OR s.user_id = :u2) AND s.listened_sec * 100 >= t.duration * 85
+        WHERE s.excluded_from_stats = false AND (s.user_id = :u1 OR s.user_id = :u2) AND s.excluded_from_stats = false AND s.listened_sec * 100 >= t.duration * 85
     """)
     total_unique = db.execute(
         sql_total, {
@@ -60,12 +60,12 @@ def get_taste_twins(username: str, db: Session):
         WHERE u.id != :my_id
           AND (p.is_private IS NULL OR p.is_private = :not_private)
           AND (u.is_banned IS NULL OR u.is_banned = :not_private)
-          AND s.listened_sec * 100 >= t.duration * 85
+          AND s.excluded_from_stats = false AND s.listened_sec * 100 >= t.duration * 85
           AND t.artist IN (
               SELECT DISTINCT t2.artist
               FROM scrobbles s2
               JOIN tracks t2 ON s2.track_id = t2.id
-              WHERE s2.user_id = :my_id AND s2.listened_sec * 100 >= t2.duration * 85
+              WHERE s2.excluded_from_stats = false AND s2.user_id = :my_id AND s2.listened_sec * 100 >= t2.duration * 85
           )
         GROUP BY u.id, u.username, p.display_name, p.avatar_url
         HAVING COUNT(DISTINCT t.artist) > 0
@@ -93,11 +93,11 @@ def get_taste_twins(username: str, db: Session):
         common_sql = text("""
             SELECT DISTINCT t.artist FROM tracks t
             JOIN scrobbles s ON t.id = s.track_id
-            WHERE s.user_id = :u1 AND s.listened_sec * 100 >= t.duration * 85
+            WHERE s.excluded_from_stats = false AND s.user_id = :u1 AND s.excluded_from_stats = false AND s.listened_sec * 100 >= t.duration * 85
             INTERSECT
             SELECT DISTINCT t.artist FROM tracks t
             JOIN scrobbles s ON t.id = s.track_id
-            WHERE s.user_id = :u2 AND s.listened_sec * 100 >= t.duration * 85
+            WHERE s.excluded_from_stats = false AND s.user_id = :u2 AND s.excluded_from_stats = false AND s.listened_sec * 100 >= t.duration * 85
             LIMIT 3
         """)
         common_names = [

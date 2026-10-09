@@ -550,7 +550,7 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
     username = str(user.username)
     user_id = int(user.id)
     now = datetime.now(UTC)
-    last_scrobble = db.query(Scrobble).filter(
+    last_scrobble = db.query(Scrobble).execution_options(include_excluded=True).filter(
         Scrobble.user_id == user_id).order_by(
         Scrobble.id.desc()).first()
 
@@ -599,7 +599,7 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
     return result
 
 
-async def process_scrobble(
+async def _process_scrobble(
         db: Session,
         user: User,
         title: str,
@@ -676,3 +676,18 @@ async def process_scrobble(
     if result["counted"] is not None:
         await _dispatch_counted_scrobble(result["user_id"], result["counted"])
     return result["status"]
+
+
+async def process_scrobble(db, user, title, artist, cover_url, track_url, source,
+                           progress_sec, is_playing, duration, album="",
+                           credit_sec=None, pending_sec=0):
+    """Record diagnostic outcomes without recording filtered track metadata."""
+    from time import monotonic
+    from app.services.source_health import record_health
+    started = monotonic()
+    status = await _process_scrobble(db, user, title, artist, cover_url, track_url,
+                                     source, progress_sec, is_playing, duration,
+                                     album, credit_sec, pending_sec)
+    await _run_db(record_health, db, int(user.id), source, status,
+                  int((monotonic() - started) * 1000))
+    return status

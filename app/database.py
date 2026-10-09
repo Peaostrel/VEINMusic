@@ -1,9 +1,10 @@
 import os
+from typing import Any
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import Session, declarative_base, sessionmaker, with_loader_criteria
 
 load_dotenv()
 
@@ -29,7 +30,7 @@ else:
     engine = create_engine(SQLALCHEMY_DATABASE_URL)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+Base: Any = declarative_base()
 
 
 def get_db():
@@ -38,3 +39,17 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+@event.listens_for(Session, "do_orm_execute")
+def exclude_hidden_listens(execute_state):
+    """Exclude accidental plays consistently from ORM history/statistics.
+
+    Owner maintenance opts in with include_excluded=True. Raw SQL aggregations
+    must explicitly apply the same predicate (see services/taste.py).
+    """
+    if execute_state.is_select and not execute_state.execution_options.get("include_excluded", False):
+        from app.models import Scrobble
+        execute_state.statement = execute_state.statement.options(
+            with_loader_criteria(Scrobble, Scrobble.excluded_from_stats.is_(False), include_aliases=True)
+        )

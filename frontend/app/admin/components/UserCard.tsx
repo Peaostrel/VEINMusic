@@ -334,9 +334,9 @@ export default function UserCard({
           </div>
           <form
             className="flex items-end gap-2 pt-2"
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
-              act(
+              await act(
                 post("/level", { new_level: Number(level) }),
                 `Уровень ${level} установлен`,
               );
@@ -466,9 +466,9 @@ export default function UserCard({
           </div>
           <form
             className="flex items-end gap-2"
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
-              act(
+              await act(
                 post("/achievements", { achievement_id: Number(grantId) }),
                 "Достижение выдано",
               );

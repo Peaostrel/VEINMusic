@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 from app.database import SessionLocal
 from app.models import Notification, User
+from app.services.music_story import weekly_story
 from app.services.notifications import KIND_RECAP, send_social_push
 from app.services.user_preferences import get_preferences
 from app.services.user_stats import get_user_timezone_offset
@@ -45,7 +46,7 @@ def create_due_recap_notifications(now: datetime | None = None) -> list[int]:
                 exists = db.query(Notification.id).filter(
                     Notification.user_id == user.id,
                     Notification.kind == KIND_RECAP,
-                    Notification.message == message,
+                    Notification.message.startswith(message),
                 ).first()
                 if exists:
                     continue
@@ -53,7 +54,8 @@ def create_due_recap_notifications(now: datetime | None = None) -> list[int]:
                     user_id=user.id,
                     actor_id=user.id,
                     kind=KIND_RECAP,
-                    message=message,
+                    message=(message + ". " + weekly_story(user, db, current)["story"]
+                             if message.startswith("Недельные") else message),
                     created_at=current,
                 )
                 db.add(notification)

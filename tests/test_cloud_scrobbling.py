@@ -21,7 +21,11 @@ def _mock_http(handler):
 
 
 @pytest.fixture(autouse=True)
-def _clear_track_cache():
+def _clear_track_cache(monkeypatch):
+    # These provider unit tests use detached SimpleNamespace users and a mock
+    # session. Persistence of source diagnostics is covered with real users
+    # in test_service_quality.py.
+    monkeypatch.setattr(cs, "record_health", MagicMock())
     cs._TRACK_INFO_CACHE.clear()
     yield
     cs._TRACK_INFO_CACHE.clear()
@@ -40,7 +44,7 @@ def _user(**integration):
         "soundcloud_track_started_at": None,
     }
     fields.update(integration)
-    return SimpleNamespace(username="u", integration=SimpleNamespace(**fields))
+    return SimpleNamespace(id=1, username="u", integration=SimpleNamespace(**fields))
 
 
 SPOTIFY_PLAYING = {

@@ -256,10 +256,10 @@ export default function ExportTab({
         >
           <form
             className="flex flex-col sm:flex-row gap-3"
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
               if (!listenbrainzToken.trim()) return;
-              saveConfig(
+              await saveConfig(
                 {
                   listenbrainz_token: listenbrainzToken.trim(),
                   is_listenbrainz_enabled: true,
@@ -309,10 +309,10 @@ export default function ExportTab({
         >
           <form
             className="flex flex-col sm:flex-row gap-3"
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
               if (!librefmKey.trim()) return;
-              saveConfig(
+              await saveConfig(
                 {
                   librefm_session_key: librefmKey.trim(),
                   is_librefm_enabled: true,

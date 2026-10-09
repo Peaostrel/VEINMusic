@@ -828,7 +828,7 @@ def _full_ranking(db: Session) -> list[dict[str, Any]]:
             SELECT s.user_id, s.xp_earned
             FROM scrobbles s
             JOIN tracks t ON s.track_id = t.id
-            WHERE s.listened_sec * 100 >= COALESCE(NULLIF(t.duration, 0), 180) * 85
+            WHERE s.excluded_from_stats = false AND s.listened_sec * 100 >= COALESCE(NULLIF(t.duration, 0), 180) * 85
         ) s ON u.id = s.user_id
         WHERE (u.is_banned IS NULL OR u.is_banned = :not_banned)
           AND (p.is_private IS NULL OR p.is_private = :not_private)

@@ -6,7 +6,8 @@ from typing import Any
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models import Scrobble, Track, User
+from app.models import RecommendationFeedback, Scrobble, Track, User, UserProfile
+from app.services.user_preferences import preferences_dict
 
 
 def _get_user_top_artists_and_genres(user_id: int, db: Session) -> tuple[dict[str, int], list[str]]:
@@ -47,7 +48,7 @@ def _collect_genre_recommendations(
     genre_query = (
         db.query(Track, func.count(Scrobble.id).label("global_plays"))
         .join(Scrobble, Scrobble.track_id == Track.id)
-        .filter(Track.genre.in_(user_genres))
+        .filter(Scrobble.user_id.in_(_public_listener_ids(db)), Track.genre.in_(user_genres))
     )
     if user_scrobbled_track_ids:
         genre_query = genre_query.filter(Track.id.notin_(user_scrobbled_track_ids))
@@ -91,6 +92,7 @@ def _collect_trending_recommendations(
     trending_query = (
         db.query(Track, func.count(Scrobble.id).label("recent_plays"))
         .join(Scrobble, Scrobble.track_id == Track.id)
+        .filter(Scrobble.user_id.in_(_public_listener_ids(db)))
     )
     if user_scrobbled_track_ids:
         trending_query = trending_query.filter(Track.id.notin_(user_scrobbled_track_ids))
@@ -152,9 +154,13 @@ def _extract_recommended_artists(
     return results
 
 
-def generate_smart_recommendations(user: User, db: Session, limit: int = 15) -> dict[str, Any]:
+def generate_smart_recommendations(user: User, db: Session, limit: int = 15, use_feedback: bool = True) -> dict[str, Any]:
     """Generate personalized recommendations for a user."""
     user_artists, user_genres = _get_user_top_artists_and_genres(int(user.id), db)
+    signals = db.query(RecommendationFeedback, Track).join(Track, Track.id == RecommendationFeedback.track_id).filter(
+        RecommendationFeedback.user_id == user.id).all() if use_feedback else []
+    liked_genres = {track.genre for signal, track in signals if signal.value == "like" and track.genre}
+    user_genres = list(dict.fromkeys(sorted(liked_genres) + user_genres))
     user_artist_names = {a.lower() for a in user_artists}
 
     user_scrobbled_track_ids = {
@@ -163,6 +169,7 @@ def generate_smart_recommendations(user: User, db: Session, limit: int = 15) -> 
         if t_id[0] is not None
     }
 
+    user_scrobbled_track_ids.update(int(signal.track_id) for signal, _ in signals if signal.value in ("known", "dislike"))
     seen_keys: set[tuple[str, str]] = set()
 
     genre_tracks = _collect_genre_recommendations(
@@ -172,7 +179,13 @@ def generate_smart_recommendations(user: User, db: Session, limit: int = 15) -> 
         user_artist_names, user_scrobbled_track_ids, seen_keys, len(genre_tracks), limit, db
     )
 
-    all_recommended_tracks = (genre_tracks + trending_tracks)[:limit]
+    candidates = genre_tracks + trending_tracks
+    for candidate in candidates:
+        if candidate["genre"] in liked_genres:
+            candidate["reason"] = f"Больше музыки в жанре {candidate['genre']}, который вы отметили"
+            candidate["reason_type"] = "feedback_similarity"
+            candidate["confidence_score"] = 0.95
+    all_recommended_tracks = sorted(candidates, key=lambda item: -item["confidence_score"])[:limit]
     recommended_artists = _extract_recommended_artists(all_recommended_tracks, user_artist_names)
 
     return {
@@ -184,3 +197,10 @@ def generate_smart_recommendations(user: User, db: Session, limit: int = 15) -> 
             "total_evaluated_artists": len(user_artists),
         },
     }
+
+
+def _public_listener_ids(db):
+    users = db.query(User).join(UserProfile).filter(UserProfile.is_private.isnot(True), User.is_banned.isnot(True)).all()
+    return [int(user.id) for user in users if all(
+        preferences_dict(user.profile).get("privacy", {}).get(section, "all") == "all"
+        for section in ("history", "statistics"))]

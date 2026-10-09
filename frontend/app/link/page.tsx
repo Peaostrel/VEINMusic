@@ -122,7 +122,7 @@ function LinkDevice() {
 
   useEffect(() => {
     const initial = normalizeCode(params.get("code") || "");
-    if (initial.length === 9) lookup(initial);
+    if (initial.length === 9) void lookup(initial);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -171,7 +171,7 @@ function LinkDevice() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            lookup(normalizeCode(code));
+            void lookup(normalizeCode(code));
           }}
           className="flex w-full max-w-[420px] flex-col gap-5 text-center"
         >

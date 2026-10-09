@@ -134,7 +134,7 @@ def _store_page(job_id: int, tracks: list[dict], page: int, total_pages: int, to
     db = SessionLocal()
     try:
         job = db.query(LastfmImportJob).filter(LastfmImportJob.id == job_id).first()
-        if job is None:
+        if job is None or job.status not in ACTIVE_STATUSES:
             return 0
         imported = 0
         for t in tracks:
@@ -146,8 +146,8 @@ def _store_page(job_id: int, tracks: list[dict], page: int, total_pages: int, to
             if not title or not artist or not uts:
                 continue
             played_at = datetime.fromtimestamp(uts, tz=UTC)
-            if db.query(Scrobble.id).filter(Scrobble.user_id == job.user_id,
-                                            Scrobble.played_at == played_at).first():
+            if db.query(Scrobble.id).execution_options(include_excluded=True).filter(
+                    Scrobble.user_id == job.user_id, Scrobble.played_at == played_at).first():
                 continue
             album = (t.get("album") or {}).get(TEXT_KEY) or None
             images = t.get("image") or []
@@ -156,7 +156,7 @@ def _store_page(job_id: int, tracks: list[dict], page: int, total_pages: int, to
             duration = track.duration or 180
             db.add(Scrobble(user_id=job.user_id, track_id=track.id, source="lastfm",
                             played_at=played_at, listened_sec=duration, is_playing=False,
-                            updated_at=played_at, xp_earned=1, is_imported=True))
+                            updated_at=played_at, xp_earned=1, is_imported=True, import_job_id=job.id))
             imported += 1
         job.current_page = page  # type: ignore[assignment]
         job.total_pages = total_pages  # type: ignore[assignment]

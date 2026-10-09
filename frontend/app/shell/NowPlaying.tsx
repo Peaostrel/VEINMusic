@@ -46,7 +46,7 @@ export default function NowPlaying({
             try {
               const msg = JSON.parse(event.data);
               if (msg.type === "NEW_SCROBBLE" || msg.type === "PLAYBACK_STATE")
-                load();
+                void load();
             } catch {
               // not JSON
             }

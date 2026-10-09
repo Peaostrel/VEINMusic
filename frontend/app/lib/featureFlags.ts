@@ -36,7 +36,7 @@ export function useFeature(feature: Feature): boolean {
   const [enabled, setEnabled] = useState(true);
   useEffect(() => {
     let active = true;
-    loadFlags().then((flags) => {
+    void loadFlags().then((flags) => {
       if (active) setEnabled(flags[feature] ?? true);
     });
     return () => {
