@@ -11,7 +11,7 @@ def _check_hourly_velocity(user_id: int, db: Session, one_hour_ago: datetime) ->
     reasons = []
     risk = 0
     hourly_count = (
-        db.query(func.count(Scrobble.id))
+        db.query(func.count(Scrobble.id)).execution_options(include_excluded=True)
         .filter(Scrobble.user_id == user_id, Scrobble.played_at >= one_hour_ago)
         .scalar()
         or 0
@@ -28,7 +28,7 @@ def _check_daily_velocity(user_id: int, db: Session, one_day_ago: datetime) -> t
     reasons = []
     risk = 0
     daily_count = (
-        db.query(func.count(Scrobble.id))
+        db.query(func.count(Scrobble.id)).execution_options(include_excluded=True)
         .filter(Scrobble.user_id == user_id, Scrobble.played_at >= one_day_ago)
         .scalar()
         or 0
@@ -43,7 +43,7 @@ def _check_micro_tracks(user_id: int, db: Session) -> tuple[int, list[str]]:
     reasons = []
     risk = 0
     recent = (
-        db.query(Scrobble)
+        db.query(Scrobble).execution_options(include_excluded=True)
         .filter(Scrobble.user_id == user_id)
         .order_by(Scrobble.id.desc())
         .limit(40)
@@ -75,9 +75,9 @@ def scan_user_antifraud(user: User, db: Session) -> tuple[bool, int, list[str]]:
 
 
 def _build_suspicious_record(u: User, score: int, reasons: list[str], db: Session) -> dict[str, Any]:
-    scrobbles_total = db.query(func.count(Scrobble.id)).filter(Scrobble.user_id == u.id).scalar() or 0
+    scrobbles_total = db.query(func.count(Scrobble.id)).execution_options(include_excluded=True).filter(Scrobble.user_id == u.id).scalar() or 0
     xp_total = (
-        db.query(func.sum(Scrobble.xp_earned)).filter(Scrobble.user_id == u.id).scalar() or 0
+        db.query(func.sum(Scrobble.xp_earned)).execution_options(include_excluded=True).filter(Scrobble.user_id == u.id).scalar() or 0
     ) + (u.integration.bonus_xp or 0 if u.integration else 0)
 
     return {

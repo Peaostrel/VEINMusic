@@ -196,7 +196,7 @@ def user_details(username: str, db: DB, admin: AdminUser):
     user = _get_user(db, username)
     uid = int(user.id)
     export = db.query(ExternalSyncConfig).filter(ExternalSyncConfig.user_id == uid).first()
-    recent = (db.query(Scrobble, Track).join(Track).filter(Scrobble.user_id == uid)
+    recent = (db.query(Scrobble, Track).execution_options(include_excluded=True).join(Track).filter(Scrobble.user_id == uid)
               .order_by(Scrobble.id.desc()).limit(15).all())
     achievements = (db.query(UserAchievement).filter(UserAchievement.user_id == uid)
                     .order_by(UserAchievement.earned_at.desc()).all())

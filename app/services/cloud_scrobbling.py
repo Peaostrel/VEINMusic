@@ -357,6 +357,7 @@ async def sync_soundcloud_status(user: User, db: Session, process_func) -> None:
             integration.soundcloud_track_started_at = None
             db.commit()
     except Exception as exc:
+        record_health(db, int(user.id), "soundcloud", "network_error")
         logger.warning("SoundCloud sync error for user %s: %s", user.username, exc)
 
 
@@ -547,6 +548,7 @@ async def _sync_yandex_queue(user: User, db: Session, process_func, headers: dic
                 logger.warning(f"Yandex OAuth token invalid or expired for user {user.username}")
                 return
             if resp.status_code != 200:
+                record_health(db, int(user.id), "yandex", "provider_error")
                 logger.warning(f"Yandex /queues answered {resp.status_code} for user {user.username}")
                 return
             queues = resp.json().get("result", {}).get("queues", [])

@@ -14,7 +14,7 @@ from app.routers.common import _get_visible_user
 from app.routers.library import _track_dict
 from app.services.cache import clear_all
 from app.services.lastfm_import import job_to_dict
-from app.services.source_health import MESSAGES
+from app.services.source_health import MESSAGES, SOURCES
 from app.services.music_story import weekly_story as build_weekly_story
 
 router = APIRouter(tags=["quality"])
@@ -125,7 +125,9 @@ def connection_check(db: DB, user: Owner, source: Annotated[Literal["spotify", "
     if source != "extension":
         recent = recent.filter(Scrobble.source.ilike(f"%{source}%"))
     else:
-        recent = recent.filter(~Scrobble.source.in_(["spotify", "yandex", "soundcloud", "lastfm"]))
+        for provider in SOURCES:
+            if provider != "extension":
+                recent = recent.filter(~Scrobble.source.ilike(f"%{provider}%"))
     listen = recent.order_by(Scrobble.id.desc()).first()
     stale = health is None or _aware(health.received_at) < datetime.now(UTC) - timedelta(minutes=3)
     status = str(health.status) if health and not stale else "waiting"

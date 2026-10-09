@@ -40,6 +40,7 @@ def _collect_genre_recommendations(
     user_scrobbled_track_ids: set[int],
     seen_keys: set[tuple[str, str]],
     db: Session,
+    public_listener_ids: list[int],
 ) -> list[dict[str, Any]]:
     """Find candidate tracks in DB matching user favorite genres."""
     if not user_genres:
@@ -48,7 +49,7 @@ def _collect_genre_recommendations(
     genre_query = (
         db.query(Track, func.count(Scrobble.id).label("global_plays"))
         .join(Scrobble, Scrobble.track_id == Track.id)
-        .filter(Scrobble.user_id.in_(_public_listener_ids(db)), Track.genre.in_(user_genres))
+        .filter(Scrobble.user_id.in_(public_listener_ids), Track.genre.in_(user_genres))
     )
     if user_scrobbled_track_ids:
         genre_query = genre_query.filter(Track.id.notin_(user_scrobbled_track_ids))
@@ -87,12 +88,13 @@ def _collect_trending_recommendations(
     current_count: int,
     limit: int,
     db: Session,
+    public_listener_ids: list[int],
 ) -> list[dict[str, Any]]:
     """Find trending global tracks not yet explored by the user."""
     trending_query = (
         db.query(Track, func.count(Scrobble.id).label("recent_plays"))
         .join(Scrobble, Scrobble.track_id == Track.id)
-        .filter(Scrobble.user_id.in_(_public_listener_ids(db)))
+        .filter(Scrobble.user_id.in_(public_listener_ids))
     )
     if user_scrobbled_track_ids:
         trending_query = trending_query.filter(Track.id.notin_(user_scrobbled_track_ids))
@@ -172,11 +174,12 @@ def generate_smart_recommendations(user: User, db: Session, limit: int = 15, use
     user_scrobbled_track_ids.update(int(signal.track_id) for signal, _ in signals if signal.value in ("known", "dislike"))
     seen_keys: set[tuple[str, str]] = set()
 
+    public_listener_ids = _public_listener_ids(db)
     genre_tracks = _collect_genre_recommendations(
-        user_genres, user_scrobbled_track_ids, seen_keys, db
+        user_genres, user_scrobbled_track_ids, seen_keys, db, public_listener_ids
     )
     trending_tracks = _collect_trending_recommendations(
-        user_artist_names, user_scrobbled_track_ids, seen_keys, len(genre_tracks), limit, db
+        user_artist_names, user_scrobbled_track_ids, seen_keys, len(genre_tracks), limit, db, public_listener_ids
     )
 
     candidates = genre_tracks + trending_tracks

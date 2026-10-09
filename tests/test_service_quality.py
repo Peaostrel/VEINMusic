@@ -186,3 +186,65 @@ def test_exclusion_filters_raw_sql_taste_and_leaderboard(client, db, people):
     client.patch(f"/api/me/scrobbles/{first.id}/exclude", json={"excluded": True})
     assert get_taste_match_internal("alice", "bob", db)["match"] == 0
     assert client.get("/api/taste-match/alice/bob").json()["match"] == 0
+
+
+def test_excluded_listens_cannot_bypass_abuse_limits(client, db, people):
+    from app.routers.scrobbling import _anti_abuse_check
+    from app.services.antifraud import _check_hourly_velocity, _check_micro_tracks
+    track = Track(title="Excluded", artist="Artist", duration=180)
+    db.add(track); db.flush()
+    now = datetime.now(UTC)
+    db.add_all([Scrobble(user_id=people[0].id, track_id=track.id, source="desktop",
+                        played_at=now - timedelta(minutes=1), updated_at=now - timedelta(minutes=1),
+                        listened_sec=0, xp_earned=1, excluded_from_stats=True) for _ in range(71)])
+    db.commit()
+    assert db.query(Scrobble).count() == 0
+    assert _anti_abuse_check(db, people[0].id)["status"] == "flagged"
+    assert _check_hourly_velocity(people[0].id, db, now - timedelta(hours=1))[0] == 45
+    assert _check_micro_tracks(people[0].id, db)[0] == 40
+
+
+@pytest.mark.parametrize("source", ["yandex_music", "youtube_music", "Spotify-Web", "soundcloud"])
+def test_extension_check_does_not_accept_another_provider(client, db, people, source):
+    row = play(db, people[0])
+    row.source = source
+    db.commit()
+    assert not client.get("/api/me/connection-check?source=extension").json()["received"]
+
+
+def test_long_weekly_story_fits_notification_and_deduplicates(db, people):
+    from app.models import Notification
+    from app.services.recap_notifications import create_due_recap_notifications
+    from app.services.user_preferences import get_preferences, save_preferences
+    user = people[0]
+    preferences = get_preferences(user.profile)
+    preferences.wrapped.auto_weekly = True
+    preferences.wrapped.auto_monthly = False
+    preferences.notifications.in_app.weekly_digest = True
+    save_preferences(user.profile, preferences)
+    row = play(db, user, artist="Очень длинное имя исполнителя " * 9)
+    now = datetime(2026, 10, 5, 6, tzinfo=UTC)
+    row.played_at = now - timedelta(days=1)
+    db.commit()
+    ids = create_due_recap_notifications(now)
+    assert len(ids) == 1
+    message = db.get(Notification, ids[0]).message
+    assert len(message) <= 200
+    assert message.startswith("Недельные итоги")
+    assert create_due_recap_notifications(now) == []
+
+
+def test_yandex_provider_error_is_persisted(db, people, monkeypatch):
+    import asyncio
+    from unittest.mock import AsyncMock
+    import httpx
+    from app.models import SourceHealth
+    from app.services import cloud_scrobbling
+    user = people[0]
+    real_client = httpx.AsyncClient
+    transport = httpx.MockTransport(lambda request: httpx.Response(429))
+    monkeypatch.setattr(cloud_scrobbling.httpx, "AsyncClient", lambda **kwargs: real_client(transport=transport))
+    asyncio.run(cloud_scrobbling._sync_yandex_queue(user, db, AsyncMock(), {}))
+    row = db.query(SourceHealth).one()
+    assert row.status == "provider_error"
+    assert row.error_count == 1

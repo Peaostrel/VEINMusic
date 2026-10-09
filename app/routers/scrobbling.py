@@ -86,7 +86,7 @@ def _anti_abuse_check(db: Session, user_id: int) -> dict | None:
     # Anti-Cheat: Max 40 scrobbles per hour
     now = datetime.now(UTC)
     hour_ago = now - timedelta(hours=1)
-    scrobbles_h = db.query(Scrobble).filter(
+    scrobbles_h = db.query(Scrobble).execution_options(include_excluded=True).filter(
         Scrobble.user_id == user_id,
         Scrobble.played_at >= hour_ago).count()
     if scrobbles_h > 40:
@@ -96,7 +96,7 @@ def _anti_abuse_check(db: Session, user_id: int) -> dict | None:
 
     # Anti-Spam: Max 1 ping per 2 seconds. `process_scrobble` handles
     # debouncing and fast skipping logic. We just prevent endpoint abuse here.
-    last_s = db.query(Scrobble).filter(
+    last_s = db.query(Scrobble).execution_options(include_excluded=True).filter(
         Scrobble.user_id == user_id).order_by(
         Scrobble.id.desc()).first()
     if last_s:

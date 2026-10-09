@@ -50,12 +50,18 @@ def create_due_recap_notifications(now: datetime | None = None) -> list[int]:
                 ).first()
                 if exists:
                     continue
+                notification_message = message
+                if message.startswith("Недельные"):
+                    narrative = weekly_story(user, db, current)["story"]
+                    notification_message = f"{message}. {narrative}"
+                # Notification.message is VARCHAR(200) in production PostgreSQL.
+                if len(notification_message) > 200:
+                    notification_message = notification_message[:197] + "..."
                 notification = Notification(
                     user_id=user.id,
                     actor_id=user.id,
                     kind=KIND_RECAP,
-                    message=(message + ". " + weekly_story(user, db, current)["story"]
-                             if message.startswith("Недельные") else message),
+                    message=notification_message,
                     created_at=current,
                 )
                 db.add(notification)
