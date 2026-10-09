@@ -2,7 +2,7 @@
 
 from collections import Counter
 from datetime import UTC, date, datetime, timedelta, timezone
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import (
     APIRouter,
@@ -14,13 +14,14 @@ from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from app.core.constants import ACTIVE_PLAYBACK_WINDOW_SEC, ORDER_PLAYS_DESC
-from app.database import get_db
 from app.core.security import get_current_user
+from app.database import get_db
 from app.models import (
     Follow,
     Scrobble,
     Track,
     User,
+    UserIntegration,
     UserProfile,
 )
 from app.routers.common import (
@@ -146,9 +147,9 @@ def _period_totals(db: Session, filters) -> dict[str, int]:
     }
 
 
-def _change_percent(current: int, previous: int) -> int:
+def _change_percent(current: int, previous: int) -> int | None:
     if previous == 0:
-        return 100 if current > 0 else 0
+        return None if current > 0 else 0
     return round((current - previous) / previous * 100)
 
 
@@ -853,31 +854,91 @@ def _full_ranking(db: Session) -> list[dict[str, Any]]:
     return ranking
 
 
+def _period_ranking(db: Session, period: str) -> list[dict[str, Any]]:
+    if period == "all":
+        return _full_ranking(db)
+    lifetime_levels = {
+        entry["username"]: entry["level"] for entry in _full_ranking(db)
+    }
+    days = 7 if period == "7d" else 30
+    start = datetime.now(UTC) - timedelta(days=days)
+    xp = (
+        db.query(
+            Scrobble.user_id.label("user_id"),
+            func.coalesce(func.sum(Scrobble.xp_earned), 0).label("total_xp"),
+        )
+        .join(Track, Track.id == Scrobble.track_id)
+        .filter(
+            Scrobble.played_at >= start,
+            Scrobble.listened_sec * 100
+            >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,
+        )
+        .group_by(Scrobble.user_id)
+        .subquery()
+    )
+    rows = (
+        db.query(
+            User,
+            UserProfile,
+            UserIntegration,
+            func.coalesce(xp.c.total_xp, 0).label("period_xp"),
+        )
+        .join(UserProfile, UserProfile.user_id == User.id)
+        .join(UserIntegration, UserIntegration.user_id == User.id)
+        .outerjoin(xp, xp.c.user_id == User.id)
+        .filter(
+            User.is_banned.isnot(True),
+            UserProfile.is_private.isnot(True),
+            xp.c.total_xp.isnot(None),
+        )
+        .order_by(func.coalesce(xp.c.total_xp, 0).desc(), User.username)
+        .all()
+    )
+    return [
+        {
+            "rank": rank,
+            "username": user.username,
+            "display_name": profile.display_name or user.username,
+            "avatar_url": profile.avatar_url,
+            "total_xp": int(total_xp),
+            "level": lifetime_levels.get(user.username, 1),
+            "is_verified": integration.is_verified,
+            "role": user.role or "user",
+            "theme": profile.theme,
+        }
+        for rank, (user, profile, integration, total_xp) in enumerate(rows, 1)
+    ]
+
+
 @router.get("/api/leaderboard")
-def get_leaderboard(db: Annotated[Session, Depends(get_db)]):
-    return _full_ranking(db)[:LEADERBOARD_SIZE]
+def get_leaderboard(
+        db: Annotated[Session, Depends(get_db)],
+        period: Literal["7d", "30d", "all"] = "all"):
+    return _period_ranking(db, period)[:LEADERBOARD_SIZE]
 
 
 @router.get("/api/leaderboard/following",
             responses={401: {"description": "Not authenticated"}})
 def get_leaderboard_following(
         db: Annotated[Session, Depends(get_db)],
-        current_user: Annotated[User, Depends(get_current_user)]):
+        current_user: Annotated[User, Depends(get_current_user)],
+        period: Literal["7d", "30d", "all"] = "all"):
     """The signed-in user and everyone they follow, with global ranks."""
     ids = [current_user.id] + [
         f[0] for f in db.query(Follow.following_id).filter(
             Follow.follower_id == current_user.id).all()]
     names = {u[0] for u in db.query(User.username).filter(User.id.in_(ids)).all()}
-    return [e for e in _full_ranking(db) if e["username"] in names][:LEADERBOARD_SIZE]
+    return [e for e in _period_ranking(db, period) if e["username"] in names][:LEADERBOARD_SIZE]
 
 
 @router.get("/api/leaderboard/me",
             responses={401: {"description": "Not authenticated"}})
 def get_my_rank(
         db: Annotated[Session, Depends(get_db)],
-        current_user: Annotated[User, Depends(get_current_user)]):
+        current_user: Annotated[User, Depends(get_current_user)],
+        period: Literal["7d", "30d", "all"] = "all"):
     """Global place of the signed-in user and the gap to the place above."""
-    ranking = _full_ranking(db)
+    ranking = _period_ranking(db, period)
     mine = next((e for e in ranking if e["username"] == current_user.username), None)
     if mine is None:  # banned users are not ranked
         return {"rank": None, "total": len(ranking), "total_xp": 0, "ahead": None}

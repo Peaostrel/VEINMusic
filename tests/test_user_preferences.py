@@ -40,6 +40,7 @@ def test_preferences_defaults_persist_and_clean_lists(client, db):
     data = _preferences(client, token)
     assert data["version"] == 1
     assert data["appearance"]["color_mode"] == "dark"
+    assert data["integrations"]["youtube_music_enabled"] is True
 
     data["appearance"]["color_mode"] = "system"
     data["privacy"]["history"] = "followers"
@@ -54,6 +55,32 @@ def test_preferences_defaults_persist_and_clean_lists(client, db):
     db.expire_all()
     profile = db.query(User).filter_by(username="settings_owner").one().profile
     assert get_preferences(profile).appearance.color_mode == "system"
+
+
+def test_youtube_music_can_be_paused_per_user(client, db):
+    token = _register(client, "youtube_listener")
+    data = _preferences(client, token)
+    data["integrations"]["youtube_music_enabled"] = False
+    response = _save_preferences(client, token, data)
+    assert response.status_code == 200, response.text
+
+    user = db.query(User).filter_by(username="youtube_listener").one()
+    status = asyncio.run(
+        scrobble_processor.process_scrobble(
+            db,
+            user,
+            "YouTube song",
+            "YouTube artist",
+            "",
+            "https://music.youtube.com/watch?v=test",
+            "youtube_music",
+            10,
+            True,
+            180,
+        )
+    )
+    assert status == "integration_paused"
+    assert db.query(Scrobble).count() == 0
 
 
 def test_preferences_reject_unknown_or_duplicate_sections(client):

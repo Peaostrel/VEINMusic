@@ -78,6 +78,7 @@ def test_public_feature_flags_endpoint(client, db):
     data = resp.json()
     assert "flags" in data
     assert data["flags"].get("beta_dark_mode") is True
+    assert data["flags"].get("integration_youtube_music") is True
 
 
 def test_public_avatar_frames_endpoint(client, db):

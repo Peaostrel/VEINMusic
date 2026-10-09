@@ -11,6 +11,8 @@ export type Feature =
   | "webhooks"
   | "integration_yandex"
   | "integration_spotify"
+  | "integration_youtube_music"
+  | "integration_soundcloud"
   | "integration_lastfm";
 
 type Flags = Record<string, boolean>;

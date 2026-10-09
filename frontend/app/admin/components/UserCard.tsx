@@ -368,6 +368,7 @@ export default function UserCard({
             <div className="flex flex-wrap gap-1.5">
               <Flag on={integration.spotify_linked} label="Spotify" />
               <Flag on={integration.yandex_linked} label="Яндекс" />
+              <Flag on={integration.soundcloud_linked} label="SoundCloud" />
               <Flag on={data.export.lastfm} label="→ Last.fm" />
               <Flag on={data.export.listenbrainz} label="→ ListenBrainz" />
               <Flag on={data.export.librefm} label="→ Libre.fm" />

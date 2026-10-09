@@ -91,6 +91,7 @@ def build_account_export(user: User, db: Session) -> dict[str, Any]:
             "lastfm_username": integration.lastfm_username if integration else None,
             "spotify_linked": bool(integration and integration.spotify_refresh_token),
             "yandex_linked": bool(integration and integration.yandex_token),
+            "soundcloud_linked": bool(integration and integration.soundcloud_refresh_token),
             "bonus_xp": integration.bonus_xp if integration else 0,
             "current_streak": integration.current_streak if integration else 0,
             "external_export": {

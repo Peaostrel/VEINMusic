@@ -11,7 +11,7 @@ from datetime import UTC, timedelta
 from typing import Final, NotRequired, TypeAlias, TypedDict, cast
 
 import httpx
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -121,19 +121,26 @@ def _check_night_scrobbles(user, ach, db: Session) -> bool:
     return night_count >= ach.rule_value
 
 
-def _scrobble_count_for_parts(db, user_id, parts):
-    if len(parts) >= 2:
-        return db.query(Scrobble).join(Track).filter(
-            Scrobble.user_id == user_id,
-            Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,
-            (Track.artist.ilike(f"%{parts[0]}%") & Track.title.ilike(f"%{parts[-1]}%"))
-            | (Track.title.ilike(f"%{parts[0]}%") & Track.title.ilike(f"%{parts[-1]}%"))
-        ).count()
-    return db.query(Scrobble).join(Track).filter(
+def _count_by_track_text(db: Session, user_id: int, value: str) -> int:
+    parts = [part.strip() for part in value.replace('—', '-').split('-') if part.strip()]
+    if len(parts) < 2:
+        parts = [part for part in value.split() if part]
+    query = db.query(Scrobble).join(Track).filter(
         Scrobble.user_id == user_id,
         Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,
-        (Track.title.ilike(f"%{parts[0]}%")) | (
-            Track.artist.ilike(f"%{parts[0]}%"))).count()
+    )
+    if len(parts) >= 2:
+        word_filters = [
+            or_(Track.title.ilike(f"%{part}%"), Track.artist.ilike(f"%{part}%"))
+            for part in parts
+        ]
+        return query.filter(and_(*word_filters)).count()
+    needle = parts[0] if parts else value.strip()
+    if not needle:
+        return 0
+    return query.filter(
+        or_(Track.title.ilike(f"%{needle}%"), Track.artist.ilike(f"%{needle}%"))
+    ).count()
 
 
 def _count_by_url(db, user_id, target_str):
@@ -155,26 +162,12 @@ def _check_specific_track(user, ach, db: Session) -> bool:
     if not ach.rule_target:
         return False
     if ach.rule_target.startswith("http"):
+        count = _count_by_url(db, user.id, ach.rule_target.split('?')[0])
         if hasattr(ach, 'rule_meta') and ach.rule_meta:
-            parts = [
-                p.strip() for p in ach.rule_meta.replace(
-                    '—', '-').split('-')]
-            count = _scrobble_count_for_parts(db, user.id, parts)
-        else:
-            count = _count_by_url(db, user.id, ach.rule_target.split('?')[0])
+            count = max(count, _count_by_track_text(db, user.id, ach.rule_meta))
     else:
-        parts = [p.strip()
-                 for p in ach.rule_target.replace('—', '-').split('-')]
-        target0 = ach.rule_target.split(
-            "||")[0] if "||" in ach.rule_target else ach.rule_target
-        if len(parts) >= 2:
-            count = _scrobble_count_for_parts(db, user.id, parts)
-        else:
-            count = db.query(Scrobble).join(Track).filter(
-                Scrobble.user_id == user.id,
-                Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,
-                (Track.title.ilike(f"%{ach.rule_target}%")) | (
-                    Track.artist.ilike(f'%{target0}%'))).count()
+        target = ach.rule_target.split("||")[0]
+        count = _count_by_track_text(db, user.id, target)
     return count >= ach.rule_value
 
 
@@ -248,6 +241,16 @@ def check_auto_achievements(user, db: Session) -> list[Achievement]:
             user.integration.bonus_xp = (
                 user.integration.bonus_xp or 0) + (ach.reward_xp or 0)
             try:
+                from app.services import notifications
+                notifications.create(
+                    db,
+                    recipient_id=int(user.id),
+                    actor_id=int(user.id),
+                    kind=notifications.KIND_ACHIEVEMENT,
+                    message=(
+                        f"{ach.icon or '🏆'} {ach.name} (+{ach.reward_xp or 0} XP)"
+                    )[:200],
+                )
                 db.commit()
                 awarded.append(ach)
             except IntegrityError:
@@ -309,25 +312,16 @@ def run_check_achievements_bg(user_id: int):
 
 def _calc_specific_track(db: Session, user: User, a: Achievement) -> int:
     if a.rule_target.startswith("http"):
+        url_count = _count_by_url(db, user.id, a.rule_target.split('?')[0])
         if hasattr(a, 'rule_meta') and a.rule_meta:
-            parts = [p.strip() for p in a.rule_meta.replace('—', '-').split('-')]
-            if len(parts) < 2:
-                parts = a.rule_meta.split()
-            if len(parts) >= 2:
-                from sqlalchemy import and_, or_
-                word_filters = [or_(Track.title.ilike(f"%{w.strip()}%"), Track.artist.ilike(
-                    f"%{w.strip()}%")) for w in parts if w.strip()]
-                return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85, and_(*word_filters)).count()
-            return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85, (Track.title.ilike(f"%{a.rule_meta}%")) | (Track.artist.ilike(f"%{a.rule_meta}%"))).count()
-        target_str = a.rule_target.split('?')[0]
-        if "yandex.ru" in target_str and TRACK_PATH in target_str:
-            track_id = target_str.split(TRACK_PATH)[1].strip("/")
-            return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85, Track.track_url.like(f"%/track/{track_id}%")).count()
-        return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85, Track.track_url.like(f"%/track/{target_str}%")).count()
-    parts = [p.strip() for p in a.rule_target.replace('—', '-').split('-')]
-    if len(parts) >= 2:
-        return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85, (Track.artist.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%")) | (Track.title.ilike(f"%{parts[0].strip()}%") & Track.title.ilike(f"%{parts[-1].strip()}%"))).count()
-    return db.query(Scrobble).join(Track).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85, (Track.title.ilike(f"%{a.rule_target}%")) | (Track.artist.ilike(f'%{a.rule_target.split("||")[0] if "||" in a.rule_target else a.rule_target}%'))).count()
+            return max(
+                url_count,
+                _count_by_track_text(db, int(user.id), str(a.rule_meta)),
+            )
+        return url_count
+    return _count_by_track_text(
+        db, int(user.id), str(a.rule_target).split("||")[0]
+    )
 
 
 def _calc_specific_album(db: Session, user: User, a: Achievement) -> int:
