@@ -35,7 +35,8 @@ function syncPreferences(publicPart: NavUser["preferences"]) {
         storePreferences(
           mergePreferences({ ...storedPreferences(), ...publicPart }),
         );
-    });
+    })
+    .catch(() => {});
 }
 
 /**

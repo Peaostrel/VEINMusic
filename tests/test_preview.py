@@ -1,11 +1,16 @@
 """Link previews and the sitemap expose only what an anonymous visitor may see."""
 
+import asyncio
 import json
+import threading
+import urllib.parse
 from datetime import UTC, datetime
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
 from app.models import Scrobble, Track, User, UserIntegration, UserProfile
+from app.core import safe_http
 from app.routers import preview
 from app.services.cache import clear_all
 
@@ -212,3 +217,73 @@ def test_profile_edit_refreshes_the_preview(client, db):
     )
     assert update.status_code == 200, update.text
     assert client.get("/api/preview/user/preview_editor").json()["display_name"] == "Новое имя"
+
+
+def test_sitemap_fills_up_past_profiles_that_opted_out(client, db, monkeypatch):
+    monkeypatch.setattr(preview, "SITEMAP_USERS", 2)
+    monkeypatch.setattr(preview, "SITEMAP_BATCH", 2)
+    track = _track(db, "Порядок", "Sitemap Order")
+    # The most recent listeners opted out; older ones must still fill the list
+    for name in ("sm_old_a", "sm_old_b", "sm_new_a", "sm_new_b", "sm_new_c"):
+        indexing = not name.startswith("sm_new")
+        user = _user(db, name, privacy={"search_indexing": indexing})
+        db.add(Scrobble(
+            user_id=user.id,
+            track_id=track.id,
+            played_at=datetime(2030, 1, 1 if indexing else 2, tzinfo=UTC),
+            listened_sec=track.duration,
+            source="yandex",
+        ))
+    db.commit()
+
+    usernames = [u["username"] for u in client.get("/api/preview/sitemap").json()["users"]]
+    assert sorted(usernames) == ["sm_old_a", "sm_old_b"]
+
+
+class _Body(BaseHTTPRequestHandler):
+    """Serves a PNG of the size asked in the path; /endless never stops."""
+
+    def do_GET(self):  # noqa: N802 - http.server API
+        self.send_response(200)
+        self.send_header("Content-Type", "image/png")
+        if self.path == "/endless":
+            self.end_headers()
+            try:
+                while True:
+                    self.wfile.write(b"\x00" * 65536)
+            except (BrokenPipeError, ConnectionResetError):
+                return
+        size = int(self.path.strip("/"))
+        body = PNG_BYTES + b"\x00" * max(0, size - len(PNG_BYTES))
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args):
+        pass
+
+
+@pytest.fixture
+def image_server(monkeypatch):
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _Body)
+    server.daemon_threads = True
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    host = f"images.example.com:{server.server_address[1]}"
+
+    # Pretend the name resolves to a public address that is in fact the test server
+    def resolve(url):
+        return urllib.parse.urlsplit(url), "127.0.0.1"
+
+    monkeypatch.setattr(safe_http, "resolve_public_address", resolve)
+    yield f"http://{host}"
+    server.shutdown()
+
+
+def test_download_is_capped_while_streaming(image_server):
+    small = asyncio.run(safe_http.pinned_download(f"{image_server}/100", max_bytes=1000))
+    assert small is not None and small.startswith(PNG_BYTES) and len(small) == 100
+    # Too big by Content-Length, and too big with no end at all
+    assert asyncio.run(safe_http.pinned_download(f"{image_server}/5000", max_bytes=1000)) is None
+    assert asyncio.run(
+        safe_http.pinned_download(f"{image_server}/endless", max_bytes=1000, deadline=5)
+    ) is None

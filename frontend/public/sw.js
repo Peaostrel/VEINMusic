@@ -1,7 +1,8 @@
 // VEINMusic PWA Service Worker
 const CACHE_NAME = "veinmusic-cache-v7";
 // Answers of the API, so the feed, profiles and statistics opened before
-// still show without a connection. Cleared on logout (see clearApiCache).
+// still show without a connection. The pages delete it on login and logout
+// (clearOfflineCache in app/lib/offline.ts).
 const API_CACHE = "veinmusic-api-v1";
 const OFFLINE_URL = "/offline";
 const PRECACHE_URLS = ["/manifest.json", "/icon-512.png", OFFLINE_URL];
@@ -53,17 +54,6 @@ self.addEventListener("activate", (event) => {
       )
       .then(() => self.clients.claim()),
   );
-});
-
-function clearApiCache() {
-  return caches.delete(API_CACHE);
-}
-
-self.addEventListener("message", (event) => {
-  // Sent on logout and login: another account must not see these answers
-  if (event.data?.type === "VEIN_CLEAR_API_CACHE") {
-    event.waitUntil(clearApiCache());
-  }
 });
 
 async function networkFirst(request) {

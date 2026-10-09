@@ -9,8 +9,8 @@ import { join } from "node:path";
 import { ImageResponse } from "next/og";
 import { SITE_URL } from "@/app/lib/preview";
 
-export const OG_SIZE = { width: 1200, height: 630 };
-export const OG_TYPE = "image/png";
+/** Must match `size` in the opengraph-image routes. */
+const OG_SIZE = { width: 1200, height: 630 };
 
 const C = {
   bg: "#0e0f10",
@@ -147,6 +147,13 @@ function Bars() {
   );
 }
 
+/** Long names get a smaller font so they fit in two lines. */
+function titleFontSize(title: string): number {
+  if (title.length > 26) return 52;
+  if (title.length > 16) return 62;
+  return 72;
+}
+
 export async function renderCard({
   kicker,
   title,
@@ -158,7 +165,7 @@ export async function renderCard({
 }: CardProps): Promise<ImageResponse> {
   const [regular, semibold, mono] = await fonts;
   const initial = (title.trim()[0] || "V").toUpperCase();
-  const titleSize = title.length > 26 ? 52 : title.length > 16 ? 62 : 72;
+  const titleSize = titleFontSize(title);
   return new ImageResponse(
     <div
       style={{

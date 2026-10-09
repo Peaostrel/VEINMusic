@@ -19,8 +19,10 @@ export function userDescription(p: UserPreview): string {
   const facts: string[] = [];
   if (p.scrobbles !== null) facts.push(plays(p.scrobbles));
   if (p.top_artist) facts.push(`любимый исполнитель — ${p.top_artist}`);
-  if (p.level !== null)
-    facts.push(`уровень ${p.level}${p.rank ? ` (${p.rank})` : ""}`);
+  if (p.level !== null) {
+    const rank = p.rank ? ` (${p.rank})` : "";
+    facts.push(`уровень ${p.level}${rank}`);
+  }
   const name = p.display_name || p.username;
   const head = facts.length
     ? `${name} на VEINMusic: ${facts.join(", ")}.`

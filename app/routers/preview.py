@@ -11,13 +11,14 @@ from __future__ import annotations
 import logging
 import os
 import urllib.parse
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app.core.safe_http import UnsafeURLError, pinned_request
+from app.core.safe_http import UnsafeURLError, pinned_download
 from app.database import get_db
 from app.models import Scrobble, Track, User, UserProfile
 from app.routers.media import API_BASE_URL, UPLOADS_DIR
@@ -32,6 +33,8 @@ router = APIRouter(prefix="/api/preview", tags=["preview"])
 PREVIEW_TTL = 600  # seconds; previews may lag the profile by a few minutes
 SITEMAP_TTL = 3600
 SITEMAP_USERS = 5000
+SITEMAP_BATCH = 1000
+SITEMAP_SCAN_LIMIT = 50_000  # public profiles looked at, at most
 SITEMAP_ARTISTS = 2000
 SITEMAP_TRACKS = 5000
 MAX_IMAGE_BYTES = 3 * 1024 * 1024
@@ -233,16 +236,14 @@ def _read_upload(url: str) -> bytes | None:
 
 async def _download(url: str) -> bytes:
     try:
-        resp = await pinned_request("GET", url, timeout=5.0)
+        content = await pinned_download(url, max_bytes=MAX_IMAGE_BYTES)
     except UnsafeURLError as exc:
         logger.info("Preview image %s refused: %s", url, exc)
         return b""
     except Exception as exc:  # NOSONAR - any network failure means "no picture"
         logger.info("Preview image %s not fetched: %s", url, exc)
         return b""
-    if resp.status_code != 200 or len(resp.content) > MAX_IMAGE_BYTES:
-        return b""
-    return resp.content
+    return content or b""
 
 
 @router.get(
@@ -273,6 +274,13 @@ async def preview_image(kind: str, key: str, db: Annotated[Session, Depends(get_
     )
 
 
+def _iso(value: object) -> str | None:
+    """A timestamp from an aggregate (a string on some SQLite setups)."""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value) if value else None
+
+
 @router.get("/sitemap")
 def sitemap(db: Annotated[Session, Depends(get_db)]):
     """Public profiles, artists and tracks for the site's sitemap.xml."""
@@ -284,15 +292,23 @@ def sitemap(db: Annotated[Session, Depends(get_db)]):
         .group_by(Scrobble.user_id)
         .subquery()
     )
-    users = (
+    recent = (
         db.query(User, last_play.c.last)
         .join(UserProfile, UserProfile.user_id == User.id)
         .join(last_play, last_play.c.user_id == User.id)
         .filter(UserProfile.is_private.isnot(True), User.is_banned.isnot(True))
-        .order_by(last_play.c.last.desc())
-        .limit(SITEMAP_USERS)
-        .all()
+        .order_by(last_play.c.last.desc(), User.id)
     )
+    # The search-engine opt-out lives in the preferences JSON, so it is
+    # checked here: scan in batches until the sitemap is full, so profiles
+    # that opted out don't take the places of those that didn't
+    users: list[tuple[User, object]] = []
+    for offset in range(0, SITEMAP_SCAN_LIMIT, SITEMAP_BATCH):
+        batch = recent.offset(offset).limit(SITEMAP_BATCH).all()
+        users.extend((user, last) for user, last in batch if _indexable(user))
+        if len(users) >= SITEMAP_USERS or len(batch) < SITEMAP_BATCH:
+            break
+    users = users[:SITEMAP_USERS]
     public = _public_scrobbles(db).join(Track, Track.id == Scrobble.track_id)
     artists = (
         public.with_entities(Track.artist, func.count(Scrobble.id))
@@ -311,13 +327,12 @@ def sitemap(db: Annotated[Session, Depends(get_db)]):
     )
     data = {
         "users": [
-            {"username": user.username, "updated": last.isoformat() if last else None}
+            {"username": user.username, "updated": _iso(last)}
             for user, last in users
-            if _indexable(user)
         ],
         "artists": [row[0] for row in artists],
         "tracks": [
-            {"id": int(row[0]), "updated": row[1].isoformat() if row[1] else None}
+            {"id": int(row[0]), "updated": _iso(row[1])}
             for row in tracks
         ],
     }

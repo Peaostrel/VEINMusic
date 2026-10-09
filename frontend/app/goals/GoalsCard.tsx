@@ -13,6 +13,11 @@ import { Meter } from "@/components/ui";
 
 const SHOWN = 4;
 
+function linkText(active: number): string {
+  if (active === 0) return "Поставить цель →";
+  return active > SHOWN ? `Все цели (${active}) →` : "Все цели →";
+}
+
 /** Active goals with progress, for the home page sidebar. */
 export default function GoalsCard({
   username,
@@ -85,11 +90,7 @@ export default function GoalsCard({
         </ul>
       )}
       <Link href="/goals" className="text-[13px] text-accent">
-        {active.length === 0
-          ? "Поставить цель →"
-          : active.length > SHOWN
-            ? `Все цели (${active.length}) →`
-            : "Все цели →"}
+        {linkText(active.length)}
       </Link>
     </section>
   );

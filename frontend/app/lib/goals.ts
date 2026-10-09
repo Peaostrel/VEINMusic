@@ -101,14 +101,16 @@ export function useGoalSources(
     Promise.all([
       needMonth ? json(`${API_URL}/api/detailed-stats/${q}?period=30d`) : null,
       needStreak ? json(`${API_URL}/api/user/${q}`) : null,
-    ]).then(([month, user]) => {
-      if (cancelled) return;
-      setSources({
-        monthMinutes: month?.total_time_min ?? null,
-        monthNewArtists: month?.new_artists ?? null,
-        streak: user?.streak ?? null,
-      });
-    });
+    ])
+      .then(([month, user]) => {
+        if (cancelled) return;
+        setSources({
+          monthMinutes: month?.total_time_min ?? null,
+          monthNewArtists: month?.new_artists ?? null,
+          streak: user?.streak ?? null,
+        });
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };

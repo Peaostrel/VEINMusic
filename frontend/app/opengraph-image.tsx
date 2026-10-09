@@ -1,8 +1,8 @@
-import { OG_SIZE, OG_TYPE, renderCard } from "@/app/_og/card";
+import { renderCard } from "@/app/_og/card";
 
 export const alt = "VEINMusic";
-export const size = OG_SIZE;
-export const contentType = OG_TYPE;
+export const size = { width: 1200, height: 630 };
+export const contentType = "image/png";
 
 export default function Image() {
   return renderCard({
