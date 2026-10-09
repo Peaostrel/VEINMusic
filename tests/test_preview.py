@@ -281,9 +281,9 @@ def image_server(monkeypatch):
 
 def test_download_is_capped_while_streaming(image_server):
     small = asyncio.run(safe_http.pinned_download(f"{image_server}/100", max_bytes=1000))
-    assert small is not None and small.startswith(PNG_BYTES) and len(small) == 100
+    assert small is not None
+    assert small.startswith(PNG_BYTES)
+    assert len(small) == 100
     # Too big by Content-Length, and too big with no end at all
     assert asyncio.run(safe_http.pinned_download(f"{image_server}/5000", max_bytes=1000)) is None
-    assert asyncio.run(
-        safe_http.pinned_download(f"{image_server}/endless", max_bytes=1000, deadline=5)
-    ) is None
+    assert asyncio.run(safe_http.pinned_download(f"{image_server}/endless", max_bytes=1000)) is None

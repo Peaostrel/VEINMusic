@@ -19,6 +19,10 @@ import httpx
 from app.utils import _is_public_ip
 
 
+# Longest pause between chunks of a download (see pinned_download)
+_DOWNLOAD_READ_TIMEOUT = 5.0
+
+
 class UnsafeURLError(ValueError):
     pass
 
@@ -69,35 +73,27 @@ async def pinned_request(method: str, url: str, *, timeout: float = 5.0, **kwarg
         return await client.send(request)
 
 
-async def pinned_download(url: str, *, max_bytes: int, timeout: float = 5.0,
-                          deadline: float = 10.0) -> bytes | None:
-    """GET a body of at most `max_bytes` within `deadline` seconds.
+async def pinned_download(url: str, *, max_bytes: int) -> bytes | None:
+    """GET a body of at most `max_bytes`.
 
     The body is streamed and dropped as soon as it grows past the limit, so a
-    huge or endless response can't fill memory or hold a worker (`timeout`
-    alone only limits pauses between chunks). None for anything but a 200
-    that fits.
+    huge or endless response can't fill memory. The client timeout only
+    limits pauses between chunks: callers bound the whole download with
+    `asyncio.timeout`. None for anything but a 200 that fits.
     """
     pinned_url, headers, extensions = await asyncio.to_thread(_pinned_target, url, None)
-
-    async def fetch() -> bytes | None:
-        async with _client(timeout) as client:
-            request = client.build_request("GET", pinned_url, headers=headers, extensions=extensions)
-            response = await client.send(request, stream=True)
-            try:
-                declared = response.headers.get("content-length", "")
-                if response.status_code != 200 or (declared.isdigit() and int(declared) > max_bytes):
+    async with _client(_DOWNLOAD_READ_TIMEOUT) as client:
+        request = client.build_request("GET", pinned_url, headers=headers, extensions=extensions)
+        response = await client.send(request, stream=True)
+        try:
+            declared = response.headers.get("content-length", "")
+            if response.status_code != 200 or (declared.isdigit() and int(declared) > max_bytes):
+                return None
+            body = bytearray()
+            async for chunk in response.aiter_bytes():
+                body.extend(chunk)
+                if len(body) > max_bytes:
                     return None
-                body = bytearray()
-                async for chunk in response.aiter_bytes():
-                    body.extend(chunk)
-                    if len(body) > max_bytes:
-                        return None
-                return bytes(body)
-            finally:
-                await response.aclose()
-
-    try:
-        return await asyncio.wait_for(fetch(), deadline)
-    except TimeoutError:
-        return None
+            return bytes(body)
+        finally:
+            await response.aclose()

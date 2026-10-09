@@ -8,6 +8,7 @@ nothing beyond a name, and statistics follow the profile's privacy settings.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import urllib.parse
@@ -38,6 +39,7 @@ SITEMAP_SCAN_LIMIT = 50_000  # public profiles looked at, at most
 SITEMAP_ARTISTS = 2000
 SITEMAP_TRACKS = 5000
 MAX_IMAGE_BYTES = 3 * 1024 * 1024
+DOWNLOAD_DEADLINE = 10  # seconds for the whole picture, however it trickles in
 NOT_FOUND = "Не найдено"
 IMAGE_NOT_FOUND = "Нет картинки"
 
@@ -236,7 +238,8 @@ def _read_upload(url: str) -> bytes | None:
 
 async def _download(url: str) -> bytes:
     try:
-        content = await pinned_download(url, max_bytes=MAX_IMAGE_BYTES)
+        async with asyncio.timeout(DOWNLOAD_DEADLINE):
+            content = await pinned_download(url, max_bytes=MAX_IMAGE_BYTES)
     except UnsafeURLError as exc:
         logger.info("Preview image %s refused: %s", url, exc)
         return b""
