@@ -87,6 +87,7 @@ export default function GoalsPage() {
         if (monthRes.ok) setMonth(await monthRes.json());
         if (profileRes.ok) setProfile(await profileRes.json());
       })
+      .catch(() => setStatus("Не удалось загрузить цели"))
       .finally(() => setLoading(false));
   }, [router]);
 
@@ -102,18 +103,22 @@ export default function GoalsPage() {
 
   const save = async (next: UserPreferences) => {
     setPreferences(next);
-    const response = await fetch(`${API_URL}/api/profile/preferences`, {
-      method: "PUT",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(next),
-    });
-    if (response.ok) {
-      const saved = await response.json();
-      setPreferences(saved);
-      storePreferences(saved);
-      setStatus("Цели сохранены");
-    } else setStatus("Не удалось сохранить цели");
+    try {
+      const response = await fetch(`${API_URL}/api/profile/preferences`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next),
+      });
+      if (response.ok) {
+        const saved = await response.json();
+        setPreferences(saved);
+        storePreferences(saved);
+        setStatus("Цели сохранены");
+      } else setStatus("Не удалось сохранить цели");
+    } catch {
+      setStatus("Не удалось сохранить цели");
+    }
   };
   const add = () => {
     if (!preferences || preferences.goals.items.length >= 10) return;
@@ -125,14 +130,14 @@ export default function GoalsPage() {
       target: Math.max(1, newTarget),
       active: true,
     };
-    save({
+    void save({
       ...preferences,
       goals: { items: [...preferences.goals.items, goal] },
     });
   };
   const remove = (id: string) =>
     preferences &&
-    save({
+    void save({
       ...preferences,
       goals: {
         items: preferences.goals.items.filter((goal) => goal.id !== id),
@@ -140,7 +145,7 @@ export default function GoalsPage() {
     });
   const update = (id: string, patch: Partial<Goal>) =>
     preferences &&
-    save({
+    void save({
       ...preferences,
       goals: {
         items: preferences.goals.items.map((goal) =>
@@ -157,9 +162,9 @@ export default function GoalsPage() {
         subtitle="Личные ориентиры без соревнования с другими"
       />
       {status && (
-        <p role="status" className="text-sm text-ok">
+        <output aria-live="polite" className="text-sm text-ok">
           {status}
-        </p>
+        </output>
       )}
       <section className="grid gap-3">
         {preferences.goals.items.length === 0 ? (
@@ -212,7 +217,7 @@ export default function GoalsPage() {
                     </p>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <label className="flex items-center gap-2 text-xs text-fg-2">
-                        Цель
+                        <span>Цель</span>
                         <input
                           type="number"
                           min={1}

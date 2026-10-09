@@ -19,6 +19,7 @@ from app.services.cache import clear_all
 from app.services.user_preferences import get_preferences
 
 router = APIRouter(tags=["library"])
+TRACK_NOT_FOUND = "Трек не найден"
 
 
 def _track_dict(track: Track, plays: int = 0) -> dict:
@@ -50,7 +51,10 @@ def _public_play_counts(db: Session):
     )
 
 
-@router.get("/api/search")
+@router.get(
+    "/api/search",
+    responses={422: {"description": "Search query is shorter than two characters"}},
+)
 def unified_search(
     q: Annotated[str, Query(min_length=2, max_length=100)],
     db: Annotated[Session, Depends(get_db)],
@@ -126,7 +130,10 @@ def _public_scrobble_query(db: Session):
     )
 
 
-@router.get("/api/music/artist/{artist}")
+@router.get(
+    "/api/music/artist/{artist}",
+    responses={404: {"description": "Artist not found in the public catalog"}},
+)
 def artist_details(artist: str, db: Annotated[Session, Depends(get_db)]):
     public_plays = _public_play_counts(db)
     tracks = (
@@ -156,15 +163,18 @@ def artist_details(artist: str, db: Annotated[Session, Depends(get_db)]):
     }
 
 
-@router.get("/api/music/track/{track_id}")
+@router.get(
+    "/api/music/track/{track_id}",
+    responses={404: {"description": "Track not found in the public catalog"}},
+)
 def track_details(track_id: int, db: Annotated[Session, Depends(get_db)]):
     track = db.query(Track).filter(Track.id == track_id).first()
     if not track:
-        raise HTTPException(404, "Трек не найден")
+        raise HTTPException(404, TRACK_NOT_FOUND)
     public = _public_scrobble_query(db).filter(Scrobble.track_id == track_id)
     public_count = public.count()
     if not public_count:
-        raise HTTPException(404, "Трек не найден")
+        raise HTTPException(404, TRACK_NOT_FOUND)
     source_rows = (
         public.with_entities(Scrobble.source, func.count(Scrobble.id))
         .group_by(Scrobble.source)
@@ -238,7 +248,10 @@ def manageable_scrobbles(
     ]
 
 
-@router.delete("/api/me/scrobbles/{scrobble_id}")
+@router.delete(
+    "/api/me/scrobbles/{scrobble_id}",
+    responses={404: {"description": "Scrobble not found in the user's history"}},
+)
 def delete_own_scrobble(
     scrobble_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -255,7 +268,14 @@ def delete_own_scrobble(
     return {"status": "ok"}
 
 
-@router.post("/api/me/scrobbles/merge")
+@router.post(
+    "/api/me/scrobbles/merge",
+    responses={
+        400: {"description": "Source and target tracks must be different"},
+        403: {"description": "Tracks do not both belong to the user's history"},
+        404: {"description": "Source or target track not found"},
+    },
+)
 def merge_own_tracks(
     data: ScrobbleMergeRequest,
     db: Annotated[Session, Depends(get_db)],
@@ -270,7 +290,7 @@ def merge_own_tracks(
     source = by_id.get(data.source_track_id)
     target = by_id.get(data.target_track_id)
     if not source or not target:
-        raise HTTPException(404, "Трек не найден")
+        raise HTTPException(404, TRACK_NOT_FOUND)
     owned_ids = {
         int(row[0])
         for row in db.query(Scrobble.track_id).filter(

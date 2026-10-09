@@ -36,7 +36,10 @@ from app.services.user_preferences import get_preferences
 router = APIRouter(tags=["integrations"])
 
 
-@router.post("/api/integrations/sync")
+@router.post(
+    "/api/integrations/sync",
+    responses={409: {"description": "Cloud synchronization is unavailable"}},
+)
 async def sync_integrations_now(
         data: IntegrationSyncRequest,
         db: Annotated[Session, Depends(get_db)],

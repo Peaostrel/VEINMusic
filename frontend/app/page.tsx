@@ -300,6 +300,14 @@ function DashboardStatus({
   const weeklyGoal = goals.find(
     (goal) => goal.active && goal.type === "weekly_scrobbles",
   );
+  let integrationMessage = "Проверяем подключения…";
+  if (integrations) {
+    if (connected.length === 0)
+      integrationMessage = "Облачные сервисы пока не подключены";
+    else if (problems)
+      integrationMessage = `${problems} подключений требуют внимания`;
+    else integrationMessage = `${connected.length} подключений работают`;
+  }
   return (
     <section className="rounded-xl border border-line bg-surface p-5">
       <div className="flex items-center justify-between">
@@ -312,13 +320,7 @@ function DashboardStatus({
         </Link>
       </div>
       <p className={`mt-3 text-sm ${problems ? "text-fg-2" : "text-ok"}`}>
-        {!integrations
-          ? "Проверяем подключения…"
-          : connected.length === 0
-            ? "Облачные сервисы пока не подключены"
-            : problems
-              ? `${problems} подключений требуют внимания`
-              : `${connected.length} подключений работают`}
+        {integrationMessage}
       </p>
       {weeklyGoal ? (
         <Link

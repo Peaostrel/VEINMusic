@@ -35,6 +35,7 @@ export default function TrackPage({
     fetch(`${API_URL}/api/music/track/${encodeURIComponent(id)}`)
       .then((response) => (response.ok ? response.json() : null))
       .then(setData)
+      .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, [id]);
   if (loading) return <Loading label="Загружаем трек…" />;

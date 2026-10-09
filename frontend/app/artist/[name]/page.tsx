@@ -31,6 +31,7 @@ export default function ArtistPage({
     fetch(`${API_URL}/api/music/artist/${encodeURIComponent(name)}`)
       .then((response) => (response.ok ? response.json() : null))
       .then(setData)
+      .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, [name]);
   if (loading) return <Loading label="Загружаем артиста…" />;

@@ -95,12 +95,12 @@ export default function CleanupPage() {
         subtitle="Изменения затрагивают только вашу статистику"
       />
       {status && (
-        <p
-          role="status"
+        <output
+          aria-live="polite"
           className="rounded-lg border border-line bg-surface px-4 py-3 text-sm text-fg-2"
         >
           {status}
-        </p>
+        </output>
       )}
       <section className="flex flex-col gap-4">
         <div>

@@ -40,6 +40,15 @@ function timeAgo(iso: string | null): string {
   return new Date(iso).toLocaleDateString("ru-RU");
 }
 
+function notificationHref(notification: SocialNotification): string {
+  if (notification.kind === "system") return "/";
+  if (notification.kind === "achievement")
+    return `/user/${notification.actor.username}/achievements`;
+  if (notification.kind === "recap")
+    return `/user/${notification.actor.username}/stats`;
+  return `/user/${notification.actor.username}`;
+}
+
 /** Bell with the unread count and a dropdown of likes, comments and new followers. */
 export default function NotificationsBell({
   align = "right",
@@ -149,15 +158,7 @@ export default function NotificationsBell({
                 return (
                   <li key={n.id} className="relative">
                     <Link
-                      href={
-                        n.kind === "system"
-                          ? "/"
-                          : n.kind === "achievement"
-                            ? `/user/${n.actor.username}/achievements`
-                            : n.kind === "recap"
-                              ? `/user/${n.actor.username}/stats`
-                              : `/user/${n.actor.username}`
-                      }
+                      href={notificationHref(n)}
                       onClick={() => setOpen(false)}
                       className={`flex gap-3 px-4 py-3 transition-colors hover:bg-line ${n.comment_id ? "pr-11" : ""} ${n.is_read ? "" : "bg-white/[0.03]"}`}
                     >

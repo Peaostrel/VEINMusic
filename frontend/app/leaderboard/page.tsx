@@ -18,6 +18,12 @@ import type { LeaderboardEntry, MyRank } from "@/app/lib/types";
 type Scope = "all" | "following";
 type Period = "7d" | "30d" | "all";
 
+const PERIOD_SUBTITLE: Record<Period, string> = {
+  "7d": "По опыту за неделю",
+  "30d": "По опыту за месяц",
+  all: "По опыту за всё время",
+};
+
 function useBoard(scope: Scope, period: Period, signedIn: boolean) {
   const [users, setUsers] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -258,7 +264,7 @@ export default function Leaderboard() {
       <section className="flex min-w-0 flex-1 flex-col gap-6">
         <PageHeader
           title="Топ слушателей"
-          subtitle={`${period === "7d" ? "По опыту за неделю" : period === "30d" ? "По опыту за месяц" : "По опыту за всё время"} · обновляется раз в минуту`}
+          subtitle={`${PERIOD_SUBTITLE[period]} · обновляется раз в минуту`}
           actions={
             <div className="flex flex-wrap justify-end gap-2">
               <Segmented

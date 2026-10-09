@@ -51,6 +51,7 @@ function IntegrationHealth({ API_URL }: Readonly<{ API_URL: string }>) {
     fetch(`${API_URL}/api/integrations/status`, { credentials: "include" })
       .then((response) => (response.ok ? response.json() : null))
       .then(setStatus)
+      .catch(() => setStatus(null))
       .finally(() => setLoading(false));
   }, [API_URL]);
   useEffect(load, [load]);
@@ -144,9 +145,9 @@ function IntegrationHealth({ API_URL }: Readonly<{ API_URL: string }>) {
         })}
       </div>
       {message && (
-        <p role="status" className="mt-3 text-xs text-fg-2">
+        <output aria-live="polite" className="mt-3 block text-xs text-fg-2">
           {message}
-        </p>
+        </output>
       )}
     </section>
   );

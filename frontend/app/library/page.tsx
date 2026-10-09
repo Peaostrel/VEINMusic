@@ -33,6 +33,7 @@ export default function LibraryPage() {
     fetch(`${API_URL}/api/me/memories`, { credentials: "include" })
       .then((response) => (response.ok ? response.json() : null))
       .then(setData)
+      .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, []);
   if (loading) return <Loading label="Собираем библиотеку…" />;
