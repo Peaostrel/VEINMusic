@@ -44,7 +44,7 @@ class ExcludeRequest(BaseModel):
     excluded: bool
 
 
-@router.post("/api/me/recommendations/{track_id}/feedback")
+@router.post("/api/me/recommendations/{track_id}/feedback", responses={404: {"description": "Track not found"}})
 def feedback(track_id: int, data: FeedbackRequest, db: DB, user: Owner):
     if db.get(Track, track_id) is None:
         raise HTTPException(404, "Трек не найден")
@@ -67,7 +67,7 @@ def own_scrobble(db, user, scrobble_id):
     return row
 
 
-@router.patch("/api/me/scrobbles/{scrobble_id}/metadata")
+@router.patch("/api/me/scrobbles/{scrobble_id}/metadata", responses={404: {"description": "Listen not found in own history"}})
 def edit_history(scrobble_id: int, data: HistoryEdit, db: DB, user: Owner):
     row = own_scrobble(db, user, scrobble_id)
     original = row.track
@@ -85,7 +85,7 @@ def edit_history(scrobble_id: int, data: HistoryEdit, db: DB, user: Owner):
     return {"status": "ok", "track": _track_dict(track)}
 
 
-@router.patch("/api/me/scrobbles/{scrobble_id}/exclude")
+@router.patch("/api/me/scrobbles/{scrobble_id}/exclude", responses={404: {"description": "Listen not found in own history"}})
 def exclude_history(scrobble_id: int, data: ExcludeRequest, db: DB, user: Owner):
     row = own_scrobble(db, user, scrobble_id)
     row.excluded_from_stats = data.excluded
@@ -102,7 +102,7 @@ def import_batches(db: DB, user: Owner):
             for job in jobs]
 
 
-@router.delete("/api/me/imports/{job_id}")
+@router.delete("/api/me/imports/{job_id}", responses={404: {"description": "Import not found"}, 409: {"description": "Import is still active"}})
 def undo_import(job_id: int, db: DB, user: Owner):
     job = db.query(LastfmImportJob).filter_by(id=job_id, user_id=user.id).with_for_update().first()
     if not job:
@@ -141,7 +141,7 @@ def _aware(value):
 
 
 def artist_counts(db, user_id, start=None, end=None):
-    query = db.query(Track.artist, func.count(Scrobble.id)).join(Scrobble, Scrobble.track_id == Track.id).filter(Scrobble.user_id == user_id)
+    query = db.query(Track.artist, func.count(Scrobble.id)).join(Scrobble, Scrobble.track_id == Track.id).filter(Scrobble.user_id == user_id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85)
     if start:
         query = query.filter(Scrobble.played_at >= start)
     if end:
@@ -169,7 +169,7 @@ def taste_evolution(db: DB, user: Owner):
             "genres": [{"genre": genre, "plays": int(count), "previous_plays": int(previous_genres.pop(genre, 0))} for genre, count, _ in genre_rows] + [{"genre": genre, "plays": 0, "previous_plays": int(count)} for genre, count in previous_genres.items()]}
 
 
-@router.get("/api/me/shared-mix/{username}")
+@router.get("/api/me/shared-mix/{username}", responses={404: {"description": "User not found"}, 403: {"description": "History or statistics are private"}})
 def shared_mix(username: str, request: Request, db: DB, user: Owner):
     other = _get_visible_user(username, request, db, "statistics")
     if other.is_banned:

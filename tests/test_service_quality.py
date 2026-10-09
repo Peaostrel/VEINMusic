@@ -42,7 +42,8 @@ def test_exclusion_and_restore_affect_aggregates_not_maintenance(client, db, peo
     assert client.patch(f"/api/me/scrobbles/{row.id}/exclude", json={"excluded": True}).status_code == 200
     assert db.query(Scrobble).count() == 0
     history = client.get("/api/me/scrobbles/manage").json()
-    assert len(history) == 1 and history[0]["excluded_from_stats"]
+    assert len(history) == 1
+    assert history[0]["excluded_from_stats"]
     assert client.get("/api/me/weekly-story").json()["plays"] == 0
     assert client.patch(f"/api/me/scrobbles/{row.id}/exclude", json={"excluded": False}).status_code == 200
     assert db.query(Scrobble).count() == 1
@@ -139,7 +140,8 @@ def test_connection_verification_ignores_import_and_old_event(client, db, people
     assert not client.get("/api/me/connection-check?source=spotify").json()["received"]
     play(db, people[0], title="Live")
     result = client.get("/api/me/connection-check?source=spotify").json()
-    assert result["received"] and result["counted"]
+    assert result["received"]
+    assert result["counted"]
     future = (datetime.now(UTC) + timedelta(seconds=10)).isoformat()
     assert not client.get("/api/me/connection-check", params={"source": "spotify", "since": future}).json()["received"]
 
@@ -153,7 +155,8 @@ def test_diagnostics_and_admin_activation(client, db, people):
     record_health(db, people[0].id, "spotify", "ok", 15)
     people[0].role = "admin"; db.commit()
     result = client.get("/api/admin/quality").json()
-    assert result["registered"] == 2 and result["activated"] == 1
+    assert result["registered"] == 2
+    assert result["activated"] == 1
     assert result["sources"][0]["errors"] == 1
     assert result["sources"][0]["verified_accounts"] == 1
 

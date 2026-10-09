@@ -12,7 +12,7 @@ def weekly_story(user, db, now=None):
     start = now - timedelta(days=7)
     query = db.query(Track.artist, func.count(Scrobble.id)).join(Scrobble, Scrobble.track_id == Track.id).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85)
     artists = {name: int(count) for name, count in query.filter(Scrobble.played_at >= start, Scrobble.played_at <= now).group_by(Track.artist).all() if name}
-    before = {name for name, in db.query(Track.artist).join(Scrobble, Scrobble.track_id == Track.id).filter(Scrobble.user_id == user.id, Scrobble.played_at < start).distinct() if name}
+    before = {name for name, in db.query(Track.artist).join(Scrobble, Scrobble.track_id == Track.id).filter(Scrobble.user_id == user.id, Scrobble.played_at < start, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85).distinct() if name}
     new = sorted(artists.keys() - before, key=lambda name: (-artists[name], name))
     plays, seconds = db.query(func.count(Scrobble.id), func.coalesce(func.sum(Scrobble.listened_sec), 0)).join(Track, Track.id == Scrobble.track_id).filter(
         Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,

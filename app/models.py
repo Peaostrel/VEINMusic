@@ -18,6 +18,7 @@ from app.database import Base
 
 CASCADE_ALL_DELETE = "all, delete"
 FK_USERS_ID = "users.id"
+FK_TRACKS_ID = "tracks.id"
 FK_SCROBBLES_ID = "scrobbles.id"
 ON_DELETE_SET_NULL = "SET NULL"
 
@@ -185,7 +186,7 @@ class Scrobble(Base):
     track_id = Column(
         Integer,
         ForeignKey(
-            "tracks.id",
+            FK_TRACKS_ID,
             ondelete="CASCADE"),
         index=True)
     played_at = Column(
@@ -426,7 +427,7 @@ class TrackAlias(Base):
     canonical_track_id = Column(
         Integer,
         ForeignKey(
-            "tracks.id",
+            FK_TRACKS_ID,
             ondelete="CASCADE"),
         index=True)
     created_at = Column(
@@ -607,7 +608,7 @@ class RecommendationFeedback(Base):
     __table_args__ = (Index("uq_recommendation_feedback_user_track", "user_id", "track_id", unique=True),)
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=False)
-    track_id = Column(Integer, ForeignKey("tracks.id", ondelete="CASCADE"), nullable=False)
+    track_id = Column(Integer, ForeignKey(FK_TRACKS_ID, ondelete="CASCADE"), nullable=False)
     value = Column(String(16), nullable=False)
 
 

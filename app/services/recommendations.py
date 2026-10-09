@@ -200,7 +200,11 @@ def generate_smart_recommendations(user: User, db: Session, limit: int = 15, use
 
 
 def _public_listener_ids(db):
-    users = db.query(User).join(UserProfile).filter(UserProfile.is_private.isnot(True), User.is_banned.isnot(True)).all()
-    return [int(user.id) for user in users if all(
-        preferences_dict(user.profile).get("privacy", {}).get(section, "all") == "all"
-        for section in ("history", "statistics"))]
+    rows = db.query(User.id, UserProfile).join(UserProfile, UserProfile.user_id == User.id).filter(
+        UserProfile.is_private.isnot(True), User.is_banned.isnot(True)).all()
+    ids = []
+    for user_id, profile in rows:
+        privacy = preferences_dict(profile)["privacy"]
+        if all(privacy.get(section, "all") == "all" for section in ("history", "statistics")):
+            ids.append(int(user_id))
+    return ids

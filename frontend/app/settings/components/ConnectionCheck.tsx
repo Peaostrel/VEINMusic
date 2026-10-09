@@ -59,6 +59,11 @@ export default function ConnectionCheck() {
       clearInterval(timer);
     };
   }, [source, started]);
+  let progressMessage = "Проверка ещё не запущена.";
+  if (started) progressMessage = check?.message || "Ожидаем музыку…";
+  if (check?.received)
+    progressMessage = `Событие получено: ${check.track?.artist} — ${check.track?.title}`;
+  if (check?.counted) progressMessage = "Готово! Прослушивание засчитано.";
   return (
     <section className="space-y-4 rounded-xl border border-line bg-surface p-5">
       <h3 className="text-base font-semibold">Проверим первое прослушивание</h3>
@@ -107,14 +112,7 @@ export default function ConnectionCheck() {
         )}
       </div>
       <output aria-live="polite" className="block text-sm">
-        {error ||
-          (check?.counted
-            ? "Готово! Прослушивание засчитано."
-            : check?.received
-              ? `Событие получено: ${check.track?.artist} — ${check.track?.title}`
-              : started
-                ? check?.message || "Ожидаем музыку…"
-                : "Проверка ещё не запущена.")}
+        {error || progressMessage}
       </output>
       {check && !check.counted && (
         <p className="text-xs text-fg-3">{check.message}</p>

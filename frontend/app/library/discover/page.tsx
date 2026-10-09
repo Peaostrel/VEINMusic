@@ -174,6 +174,7 @@ export default function DiscoverPage() {
         <h2 className="text-lg font-semibold">Что послушать дальше</h2>
         {lastFeedback !== null && (
           <button
+            type="button"
             disabled={busy}
             className={`${btn.secondary} ${btn.sm}`}
             onClick={() => {
@@ -205,6 +206,7 @@ export default function DiscoverPage() {
                   ["like", "Больше такого"],
                 ].map(([value, label]) => (
                   <button
+                    type="button"
                     key={value}
                     disabled={busy}
                     className={`${btn.secondary} ${btn.sm}`}
@@ -274,6 +276,7 @@ export default function DiscoverPage() {
           <p className="leading-relaxed text-fg-2">{story.story}</p>
           <div className="flex flex-wrap gap-2">
             <button
+              type="button"
               className={`${btn.primary} ${btn.sm}`}
               onClick={() => {
                 try {
@@ -290,6 +293,7 @@ export default function DiscoverPage() {
               Скачать карточку PNG
             </button>
             <button
+              type="button"
               className={`${btn.secondary} ${btn.sm}`}
               onClick={async () => {
                 try {
@@ -332,7 +336,11 @@ export default function DiscoverPage() {
             placeholder="@имя пользователя"
             className={input}
           />
-          <button disabled={busy} className={`${btn.primary} ${btn.sm}`}>
+          <button
+            type="submit"
+            disabled={busy}
+            className={`${btn.primary} ${btn.sm}`}
+          >
             Собрать подборку
           </button>
         </form>
