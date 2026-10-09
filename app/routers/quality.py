@@ -122,12 +122,7 @@ def connection_check(db: DB, user: Owner, source: Annotated[Literal["spotify", "
     health = db.query(SourceHealth).filter_by(user_id=user.id, source=source).first()
     recent = db.query(Scrobble).filter(
         Scrobble.user_id == user.id, Scrobble.is_imported.isnot(True), Scrobble.played_at >= cutoff)
-    if source != "extension":
-        recent = recent.filter(Scrobble.source.ilike(f"%{source}%"))
-    else:
-        for provider in SOURCES:
-            if provider != "extension":
-                recent = recent.filter(~Scrobble.source.ilike(f"%{provider}%"))
+    recent = _source_listens(recent, source)
     listen = recent.order_by(Scrobble.id.desc()).first()
     stale = health is None or _aware(health.received_at) < datetime.now(UTC) - timedelta(minutes=3)
     status = str(health.status) if health and not stale else "waiting"
@@ -136,6 +131,15 @@ def connection_check(db: DB, user: Owner, source: Annotated[Literal["spotify", "
             "status": status, "message": MESSAGES.get(status, "Включите музыку. Если событие не появится, проверьте подключение и разрешения расширения."),
             "last_event_at": health.received_at if health else None,
             "track": _track_dict(listen.track) if listen else None}
+
+
+def _source_listens(query, source):
+    if source != "extension":
+        return query.filter(Scrobble.source.ilike(f"%{source}%"))
+    providers = [provider for provider in SOURCES if provider != "extension"]
+    for provider in providers:
+        query = query.filter(~Scrobble.source.ilike(f"%{provider}%"))
+    return query
 
 
 def _aware(value):
