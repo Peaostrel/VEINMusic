@@ -49,8 +49,15 @@ const securityHeaders = [
       ]),
 ];
 
+// Crawlers and link-preview bots that read only the initial HTML: they get
+// the page's metadata in <head> instead of streamed later. Next's default
+// list plus the bots of Telegram, Viber, Mail.ru and Odnoklassniki.
+const htmlLimitedBots =
+  /[\w-]+-Google|Google-[\w-]+|Chrome-Lighthouse|Slurp|DuckDuckBot|baiduspider|yandex|sogou|bitlybot|tumblr|vkShare|quora link preview|redditbot|ia_archiver|Bingbot|BingPreview|applebot|facebookexternalhit|facebookcatalog|Twitterbot|LinkedInBot|Slackbot|Discordbot|WhatsApp|SkypeUriPreview|Yeti|googleweblight|TelegramBot|Viber|Mail\.RU_Bot|OdklBot/i;
+
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  htmlLimitedBots,
   // The Docker image runs the self-contained server from .next/standalone
   // (a fraction of the full node_modules); local `next start` is unchanged.
   output: process.env.NEXT_OUTPUT === "standalone" ? "standalone" : undefined,

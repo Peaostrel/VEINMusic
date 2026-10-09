@@ -226,6 +226,8 @@ class PrivacyPreferences(BaseModel):
     location_precision: Literal["city", "country"] = "city"
     social_links: Visibility = "all"
     show_listening_source: bool = True
+    # Profile in the sitemap and open to search engines (no "noindex")
+    search_indexing: bool = True
 
 
 class ListeningPreferences(BaseModel):

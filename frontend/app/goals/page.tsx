@@ -5,6 +5,13 @@ import { Pause, Play, Plus, Target, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { API_URL } from "@/app/lib/api";
 import { mergePreferences, storePreferences } from "@/app/lib/preferences";
+import {
+  GOAL_TYPES,
+  goalProgress,
+  goalUnit,
+  type Goal,
+  type GoalType,
+} from "@/app/lib/goals";
 import type { DetailedStats, UserInfo, UserPreferences } from "@/app/lib/types";
 import {
   EmptyState,
@@ -14,41 +21,6 @@ import {
   btn,
   input,
 } from "@/components/ui";
-
-type Goal = UserPreferences["goals"]["items"][number];
-type GoalType = Goal["type"];
-
-const GOAL_TYPES: {
-  value: GoalType;
-  label: string;
-  title: string;
-  defaultTarget: number;
-}[] = [
-  {
-    value: "weekly_scrobbles",
-    label: "Прослушивания за неделю",
-    title: "Музыкальная неделя",
-    defaultTarget: 50,
-  },
-  {
-    value: "monthly_minutes",
-    label: "Минуты за месяц",
-    title: "Месяц в музыке",
-    defaultTarget: 1000,
-  },
-  {
-    value: "new_artists",
-    label: "Новые артисты за месяц",
-    title: "Открыть новых артистов",
-    defaultTarget: 10,
-  },
-  {
-    value: "streak",
-    label: "Серия дней",
-    title: "Не прерывать серию",
-    defaultTarget: 7,
-  },
-];
 
 export default function GoalsPage() {
   const router = useRouter();
@@ -91,13 +63,14 @@ export default function GoalsPage() {
       .finally(() => setLoading(false));
   }, [router]);
 
-  const progress = useMemo<Record<GoalType, number>>(
-    () => ({
-      weekly_scrobbles: week?.total_scrobbles ?? 0,
-      monthly_minutes: month?.total_time_min ?? 0,
-      new_artists: month?.new_artists ?? 0,
-      streak: profile?.streak ?? 0,
-    }),
+  const progress = useMemo(
+    () =>
+      goalProgress({
+        weekScrobbles: week?.total_scrobbles,
+        monthMinutes: month?.total_time_min,
+        monthNewArtists: month?.new_artists,
+        streak: profile?.streak,
+      }),
     [week, month, profile],
   );
 
@@ -277,7 +250,10 @@ export default function GoalsPage() {
                         className="flex-1"
                       />
                       <span className="font-mono text-xs">
-                        {value} / {goal.target}
+                        {value} / {goal.target}{" "}
+                        <span className="font-sans text-fg-3">
+                          {goalUnit(goal.type, goal.target)}
+                        </span>
                       </span>
                     </div>
                     {done && (

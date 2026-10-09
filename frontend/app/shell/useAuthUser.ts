@@ -9,6 +9,7 @@ import {
   storePreferences,
   storedPreferences,
 } from "@/app/lib/preferences";
+import { clearOfflineCache } from "@/app/lib/offline";
 import type { NavUser } from "./types";
 
 /** Mirrors the signed-in state onto <html data-auth> for the shell CSS. */
@@ -16,6 +17,25 @@ export function syncAuthFlag(signedIn: boolean) {
   if (typeof document === "undefined") return;
   if (signedIn) document.documentElement.dataset.auth = "1";
   else delete document.documentElement.dataset.auth;
+}
+
+/**
+ * Keep the stored preferences in step with the server. The public profile
+ * carries only their public part, so the owner's full set (feed, goals,
+ * listening…) comes from its own endpoint; if that fails, the public part is
+ * laid over what is stored instead of wiping the private sections.
+ */
+function syncPreferences(publicPart: NavUser["preferences"]) {
+  fetch(`${API_URL}/api/profile/preferences`, { credentials: "include" })
+    .then((res) => (res.ok ? res.json() : null))
+    .catch(() => null)
+    .then((full) => {
+      if (full) storePreferences(mergePreferences(full));
+      else if (publicPart)
+        storePreferences(
+          mergePreferences({ ...storedPreferences(), ...publicPart }),
+        );
+    });
 }
 
 /**
@@ -48,9 +68,7 @@ export function useAuthUser(pathname: string | null) {
         .then((data: NavUser | null) => {
           if (!data) return;
           setProfile(data);
-          if (data.preferences) {
-            storePreferences(mergePreferences(data.preferences));
-          }
+          syncPreferences(data.preferences);
           // Apply the saved theme on first load only; don't override a theme
           // picked during this session.
           if (data.theme && !localStorage.getItem("site_theme")) {
@@ -93,6 +111,7 @@ export function useAuthUser(pathname: string | null) {
     );
     localStorage.setItem("site_theme", "classic");
     localStorage.removeItem("vein_preferences");
+    clearOfflineCache();
     applyAppearance(mergePreferences().appearance);
     syncAuthFlag(false);
     setUsername(null);
