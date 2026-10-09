@@ -24,13 +24,15 @@ KIND_FOLLOW = "follow"
 # Announcements sent from the admin panel; the actor is the sending admin
 KIND_SYSTEM = "system"
 KIND_RECAP = "recap"
-KINDS = {KIND_LIKE, KIND_COMMENT, KIND_FOLLOW, KIND_SYSTEM, KIND_RECAP}
+KIND_ACHIEVEMENT = "achievement"
+KINDS = {KIND_LIKE, KIND_COMMENT, KIND_FOLLOW, KIND_SYSTEM, KIND_RECAP, KIND_ACHIEVEMENT}
 PREFERENCE_KEYS = {
     KIND_LIKE: "likes",
     KIND_COMMENT: "comments",
     KIND_FOLLOW: "follows",
     KIND_SYSTEM: "system",
     KIND_RECAP: "weekly_digest",
+    KIND_ACHIEVEMENT: "achievements",
 }
 
 MAX_LIST = 50
@@ -42,7 +44,10 @@ def create(db: Session, *, recipient_id: int, actor_id: int, kind: str,
            scrobble_id: Optional[int] = None, message: Optional[str] = None) -> Optional[Notification]:
     """Add a notification (the caller commits). Returns None when there is
     nothing to notify: own actions, or a repeated like/follow."""
-    if kind not in KINDS or recipient_id == actor_id:
+    if kind not in KINDS or (
+        recipient_id == actor_id
+        and kind not in (KIND_SYSTEM, KIND_RECAP, KIND_ACHIEVEMENT)
+    ):
         return None
     recipient = db.query(User).filter(User.id == recipient_id).first()
     if recipient and recipient.profile:
@@ -92,7 +97,7 @@ def delete_for_user(db: Session, user_id: int) -> None:
 
 
 def _describe(kind: str, actor: str, track_title: Optional[str], message: Optional[str] = None) -> str:
-    if kind in (KIND_SYSTEM, KIND_RECAP):
+    if kind in (KIND_SYSTEM, KIND_RECAP, KIND_ACHIEVEMENT):
         return message or ""
     target = f"«{track_title}»" if track_title else "ваше прослушивание"
     if kind == KIND_LIKE:
@@ -200,6 +205,8 @@ def _push_payload(notification_id: int) -> Optional[tuple[int, str, str, str]]:
             url = f"/user/{actor.username}"
         elif n.kind == KIND_RECAP:
             url = f"/user/{actor.username}/stats"
+        elif n.kind == KIND_ACHIEVEMENT:
+            url = f"/user/{actor.username}/achievements"
         else:
             url = "/"
         return int(n.user_id), "VEIN Music", body, url

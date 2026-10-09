@@ -15,7 +15,8 @@ function prettyDate(value: string) {
   });
 }
 
-function Change({ value }: Readonly<{ value: number }>) {
+function Change({ value }: Readonly<{ value: number | null }>) {
+  if (value === null) return <span className="text-ok">новая активность</span>;
   if (value === 0) return <span className="text-fg-3">без изменений</span>;
   const positive = value > 0;
   const Icon = positive ? ArrowUpRight : ArrowDownRight;
@@ -180,7 +181,7 @@ export function PeriodRecap({
               ? ["треков", stats.unique_tracks, comparison?.tracks]
               : null,
           ]
-            .filter((item): item is (string | number | undefined)[] =>
+            .filter((item): item is (string | number | null | undefined)[] =>
               Boolean(item),
             )
             .map(([label, value, change]) => (
@@ -189,10 +190,12 @@ export function PeriodRecap({
                 <p className="mt-1 font-mono text-2xl">
                   {formatNumber(Number(value))}
                 </p>
-                {typeof change === "number" && (
+                {(typeof change === "number" || change === null) && (
                   <p className="mt-1 text-[11px]">
-                    <Change value={change} />
-                    <span className="ml-1 text-fg-3">к прошлому периоду</span>
+                    <Change value={change as number | null} />
+                    {change !== null && (
+                      <span className="ml-1 text-fg-3">к прошлому периоду</span>
+                    )}
                   </p>
                 )}
               </div>
