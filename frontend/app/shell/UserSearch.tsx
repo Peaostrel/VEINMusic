@@ -121,9 +121,8 @@ export default function UserSearch({
       </label>
 
       {showPanel && (
-        <div
+        <section
           id={listId}
-          role="region"
           aria-label="Результаты поиска"
           className="absolute left-0 top-full z-50 mt-1.5 max-h-[70vh] w-full min-w-[320px] overflow-y-auto rounded-lg border border-line bg-surface-2 p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.45)]"
         >
@@ -196,7 +195,7 @@ export default function UserSearch({
               ))}
             </SearchSection>
           )}
-        </div>
+        </section>
       )}
     </div>
   );
