@@ -24,7 +24,10 @@ export default function PrivacyTab({
 }>) {
   const privacy = data.preferences.privacy;
   const updateVisibility = (
-    key: keyof Omit<typeof privacy, "show_listening_source">,
+    key: keyof Omit<
+      typeof privacy,
+      "show_listening_source" | "location_precision" | "search_indexing"
+    >,
     value: Visibility,
   ) => updatePreference("privacy", { ...privacy, [key]: value });
   return (
@@ -97,6 +100,18 @@ export default function PrivacyTab({
           onChange={(value) => updateVisibility("location", value)}
         />
         <SelectRow
+          title="Точность местоположения"
+          description="Можно оставить публичной только страну, не показывая город. Владелец профиля всегда видит полное значение."
+          value={privacy.location_precision}
+          options={[
+            { value: "city", label: "Страна и город" },
+            { value: "country", label: "Только страна" },
+          ]}
+          onChange={(location_precision) =>
+            updatePreference("privacy", { ...privacy, location_precision })
+          }
+        />
+        <SelectRow
           title="Социальные ссылки"
           description="Добавленные ссылки на соцсети, видеоплатформы и музыкальные сервисы."
           value={privacy.social_links}
@@ -109,6 +124,14 @@ export default function PrivacyTab({
           checked={privacy.show_listening_source}
           onChange={(show_listening_source) =>
             updatePreference("privacy", { ...privacy, show_listening_source })
+          }
+        />
+        <ToggleRow
+          title="Показывать профиль в поисковиках"
+          description="Яндекс и Google смогут найти страницу профиля. Если выключить, профиль останется доступен по ссылке, но поисковикам будет запрещено его показывать."
+          checked={privacy.search_indexing}
+          onChange={(search_indexing) =>
+            updatePreference("privacy", { ...privacy, search_indexing })
           }
         />
       </section>

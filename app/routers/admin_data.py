@@ -182,10 +182,11 @@ def bulk_delete_scrobbles(data: BulkDelete, db: DB, admin: AdminUser):
 
 # ─── INTEGRATIONS ─────────────────────────────────────────────────────────────
 
-PROVIDERS = ("yandex", "spotify", "lastfm")
+PROVIDERS = ("yandex", "spotify", "soundcloud", "lastfm")
 PROVIDER_FEATURES = {
     "yandex": "integration_yandex",
     "spotify": "integration_spotify",
+    "soundcloud": "integration_soundcloud",
     "lastfm": "integration_lastfm",
 }
 
@@ -220,6 +221,7 @@ def _integration_rows(db: Session, q: str | None, provider: str | None):
     conditions = {
         "yandex": UserIntegration.yandex_token.isnot(None),
         "spotify": UserIntegration.spotify_refresh_token.isnot(None),
+        "soundcloud": UserIntegration.soundcloud_refresh_token.isnot(None),
         # The settings form saves an empty nick as ""
         "lastfm": and_(UserIntegration.lastfm_username.isnot(None), UserIntegration.lastfm_username != ""),
     }
@@ -233,7 +235,7 @@ def _integration_rows(db: Session, q: str | None, provider: str | None):
 async def list_integrations(
     db: DB, admin: AdminUser,
     q: Annotated[str | None, Query(max_length=64)] = None,
-    provider: Annotated[str | None, Query(pattern="^(yandex|spotify|lastfm)$")] = None,
+    provider: Annotated[str | None, Query(pattern="^(yandex|spotify|soundcloud|lastfm)$")] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ):
@@ -272,6 +274,7 @@ async def list_integrations(
             "yandex": bool(i.yandex_token),
             "yandex_live": live.get(int(u.id)),
             "spotify": bool(i.spotify_refresh_token),
+            "soundcloud": bool(i.soundcloud_refresh_token),
             "lastfm_username": i.lastfm_username,
             "last_sync": i.last_sync.isoformat() if i.last_sync else None,
             "last_scrobble": last_played[int(u.id)].isoformat() if last_played.get(int(u.id)) else None,
@@ -281,7 +284,7 @@ async def list_integrations(
 
 @router.put("/integrations/providers/{provider}")
 def set_provider_state(
-    provider: Annotated[str, Path(pattern="^(yandex|spotify|lastfm)$")],
+    provider: Annotated[str, Path(pattern="^(yandex|spotify|soundcloud|lastfm)$")],
     data: ProviderState,
     db: DB,
     admin: AdminUser,
@@ -337,7 +340,7 @@ async def reconnect_yandex(username: str, db: DB, admin: AdminUser):
 @router.delete("/integrations/{username}/{provider}", responses={404: {"description": USER_NOT_FOUND}})
 def unlink_integration(
     username: str, db: DB, admin: AdminUser,
-    provider: Annotated[str, Path(pattern="^(yandex|spotify|lastfm)$")],
+    provider: Annotated[str, Path(pattern="^(yandex|spotify|soundcloud|lastfm)$")],
 ):
     """Unlink a service (a broken or abused token). The user can link it
     again in their settings."""
@@ -347,6 +350,13 @@ def unlink_integration(
     elif provider == "spotify":
         integration.spotify_access_token = None
         integration.spotify_refresh_token = None
+    elif provider == "soundcloud":
+        integration.soundcloud_access_token = None
+        integration.soundcloud_refresh_token = None
+        integration.soundcloud_token_expires_at = None
+        integration.soundcloud_recent_tracks = None
+        integration.soundcloud_current_track = None
+        integration.soundcloud_track_started_at = None
     else:
         integration.lastfm_username = None
     audit.record(db, admin, "integration.unlink", username, provider=provider)

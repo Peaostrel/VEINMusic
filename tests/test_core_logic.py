@@ -106,6 +106,17 @@ def test_track_duration_and_genre_lookups():
         assert asyncio.run(sp.get_track_duration("https://music.yandex.ru/track/2")) == 180
         assert asyncio.run(sp.get_track_genre("https://music.yandex.ru/track/2")) is None
 
+    def deezer(request):
+        if request.url.path == "/search":
+            return httpx.Response(200, json={"data": [{"album": {"id": 77}}]})
+        return httpx.Response(
+            200,
+            json={"genres": {"data": [{"id": 1, "name": "Alternative"}]}},
+        )
+
+    with _mock_http(sp, deezer):
+        assert asyncio.run(sp.get_fallback_genre("A Song", "An Artist")) == "Alternative"
+
 
 @pytest.mark.parametrize("age,expected", [
     (timedelta(seconds=10), "только что"), (timedelta(minutes=5), "5м назад"),
@@ -428,18 +439,26 @@ def test_multi_artist_progress_is_grouped(db):
 def test_track_rules_by_url(db):
     user = _user(db)
     _listen(db, user, _track(db, title="T", artist="A", track_url="https://music.yandex.ru/album/9/track/77"))
+    _listen(db, user, _track(db, title="Wave", artist="Ocean",
+                             track_url="https://soundcloud.com/artist/walking-on-water"), times=2)
     by_yandex_url = _achievement(db, name="yandex-url", rule_type="specific_track",
                                  rule_target="https://music.yandex.ru/album/9/track/77?utm=x", rule_value=1)
     by_meta = _achievement(db, name="meta", rule_type="specific_track",
                            rule_target="https://open.spotify.com/track/xyz", rule_meta="A — T", rule_value=1)
     by_other_url = _achievement(db, name="other-url", rule_type="specific_track",
                                 rule_target="https://music.yandex.ru/album/9", rule_value=1)
-    assert {"yandex-url", "meta", "other-url"} <= _awarded_names(db, user)
+    by_soundcloud_url = _achievement(
+        db, name="soundcloud-url", rule_type="specific_track",
+        rule_target="https://soundcloud.com/artist/walking-on-water?utm_source=share",
+        rule_meta="Stream Walking on Water by Artist",
+        rule_value=2)
+    assert {"yandex-url", "meta", "other-url", "soundcloud-url"} <= _awarded_names(db, user)
     assert ach._calculate_achievement_progress(db, user, by_yandex_url) == 1
     assert ach._calculate_achievement_progress(db, user, by_meta) == 1
     single_meta = Achievement(rule_type="specific_track", rule_target="https://x/track/1", rule_meta="T")
     assert ach._calculate_achievement_progress(db, user, single_meta) == 1
-    assert ach._calculate_achievement_progress(db, user, by_other_url) == 0  # looks for /track/<url>
+    assert ach._calculate_achievement_progress(db, user, by_other_url) == 1
+    assert ach._calculate_achievement_progress(db, user, by_soundcloud_url) == 2
 
 
 def test_album_rules(db):

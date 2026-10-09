@@ -135,6 +135,15 @@ class UserIntegration(Base):
     lastfm_username = Column(String, nullable=True)
     spotify_access_token = Column(EncryptedString, nullable=True)
     spotify_refresh_token = Column(EncryptedString, nullable=True)
+    soundcloud_access_token = Column(EncryptedString, nullable=True)
+    soundcloud_refresh_token = Column(EncryptedString, nullable=True)
+    soundcloud_token_expires_at = Column(DateTime(timezone=True), nullable=True)
+    # SoundCloud's official recently-played endpoint has no timestamps or
+    # playback position. Persist the observed queue and our current session
+    # so polling remains duplicate-safe across worker restarts.
+    soundcloud_recent_tracks = Column(String, nullable=True)
+    soundcloud_current_track = Column(String, nullable=True)
+    soundcloud_track_started_at = Column(DateTime(timezone=True), nullable=True)
     has_imported_lastfm = Column(Boolean, default=False)
     last_sync = Column(DateTime(timezone=True), nullable=True)
 
@@ -402,6 +411,14 @@ class SystemSetting(Base):
 class TrackAlias(Base):
     __tablename__ = "track_aliases"
     id = Column(Integer, primary_key=True, index=True)
+    # NULL aliases are global and created by an administrator. A user-scoped
+    # alias only normalizes that user's future scrobbles.
+    user_id = Column(
+        Integer,
+        ForeignKey(FK_USERS_ID, ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     original_title = Column(String, index=True)
     original_artist = Column(String, index=True)
     canonical_track_id = Column(

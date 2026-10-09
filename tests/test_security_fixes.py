@@ -247,6 +247,59 @@ def test_spotify_callback_rejects_forged_state(client):
     assert resp.status_code == 400
 
 
+def test_soundcloud_oauth_uses_pkce_and_links_account(client, db):
+    key = _register(client, "sound")
+    with patch("app.routers.auth.SOUNDCLOUD_CLIENT_ID", "client"), \
+            patch("app.routers.auth.SOUNDCLOUD_CLIENT_SECRET", "secret"):
+        response = client.get(
+            "/auth/soundcloud/login", headers=_auth(key), follow_redirects=False
+        )
+        assert response.status_code in (302, 307)
+        location = httpx.URL(response.headers["location"])
+        assert location.params["code_challenge_method"] == "S256"
+        state = location.params["state"]
+        nonce = client.cookies.get("soundcloud_auth_state")
+        verifier = client.cookies.get("soundcloud_pkce_verifier")
+        assert nonce
+        assert verifier
+
+        client.cookies.clear()
+        client.cookies.set("soundcloud_auth_state", nonce)
+        client.cookies.set("soundcloud_pkce_verifier", verifier)
+        token_response = MagicMock(status_code=200)
+        token_response.json.return_value = {
+            "access_token": "sc-at",
+            "refresh_token": "sc-rt",
+            "expires_in": 3600,
+        }
+        with patch.object(
+            httpx.AsyncClient, "post", new=AsyncMock(return_value=token_response)
+        ):
+            response = client.get(
+                f"/auth/soundcloud/callback?code=abc&state={state}",
+                follow_redirects=False,
+            )
+    assert response.status_code in (302, 307)
+    assert response.headers["location"].endswith(
+        "settings?tab=integrations&soundcloud=success"
+    )
+    user = db.query(User).filter_by(username="sound").first()
+    db.refresh(user.integration)
+    assert user.integration.soundcloud_refresh_token == "sc-rt"
+
+
+def test_soundcloud_callback_rejects_forged_state(client):
+    _register(client, "cloud")
+    client.cookies.clear()
+    client.cookies.set("soundcloud_auth_state", "abc")
+    client.cookies.set("soundcloud_pkce_verifier", "verifier")
+    response = client.get(
+        "/auth/soundcloud/callback?code=x&state=1.abc.forged",
+        follow_redirects=False,
+    )
+    assert response.status_code == 400
+
+
 # --- Cloud polling only picks linked accounts ---
 
 def test_pollable_users_only_include_linked_accounts(client, db):

@@ -17,6 +17,9 @@ x-backend-env: &backend-env
   SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
   SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
   SPOTIFY_REDIRECT_URI: ${SPOTIFY_REDIRECT_URI:-http://localhost:8000/auth/spotify/callback}
+  SOUNDCLOUD_CLIENT_ID: ${SOUNDCLOUD_CLIENT_ID:-}
+  SOUNDCLOUD_CLIENT_SECRET: ${SOUNDCLOUD_CLIENT_SECRET:-}
+  SOUNDCLOUD_REDIRECT_URI: ${SOUNDCLOUD_REDIRECT_URI:-http://localhost:8000/auth/soundcloud/callback}
 
 services:
   db:
@@ -95,7 +98,7 @@ services:
       <<: *backend-env
       # The API applies Alembic migrations on start (see docker-entrypoint.sh)
       RUN_MIGRATIONS: "1"
-      # Spotify/Yandex polling runs in the worker (arq cron job)
+      # Spotify/Yandex/SoundCloud polling runs in the worker (arq cron job)
       RUN_CLOUD_POLLING: "0"
       # IPs of the reverse proxy allowed to set X-Forwarded-For (for correct
       # client IPs in rate limiting). Use the proxy's address, not "*".
@@ -139,6 +142,9 @@ services:
         NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-localhost:8000}
     container_name: veinmusic-frontend
     restart: always
+    environment:
+      SITE_URL: ${FRONTEND_URL:-http://localhost:3000}
+      API_INTERNAL_URL: http://backend:8000
     ports:
       - "3000:3000"
     depends_on:
