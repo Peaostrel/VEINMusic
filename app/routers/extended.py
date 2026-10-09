@@ -11,6 +11,7 @@ from app.routers import (
     achievements,
     discovery,
     integrations,
+    library,
     media,
     platform,
     stats,
@@ -34,5 +35,5 @@ from app.services.user_stats import (  # noqa: F401
 )
 
 router = APIRouter()
-for _module in (users, stats, discovery, achievements, integrations, media, platform):
+for _module in (users, stats, discovery, achievements, integrations, library, media, platform):
     router.include_router(_module.router)
