@@ -20,8 +20,12 @@ export default function PWARegistration() {
 
   useEffect(() => {
     let reloadingForUpdate = false;
+    // The first install also fires controllerchange. Reloading at that point
+    // interrupts forms and dialogs; only reload pages that were already
+    // controlled by an older worker and are genuinely receiving an update.
+    const wasControlled = Boolean(navigator.serviceWorker?.controller);
     const handleControllerChange = () => {
-      if (reloadingForUpdate) return;
+      if (!wasControlled || reloadingForUpdate) return;
       reloadingForUpdate = true;
       window.location.reload();
     };

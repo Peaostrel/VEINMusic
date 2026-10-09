@@ -325,7 +325,7 @@ async def _get_or_create_track(
         fields["duration"] = await get_track_duration(url)
     if need_genre and url:
         fields["genre"] = await get_track_genre(url)
-    if need_genre and not fields.get("genre"):
+    if need_genre and url and not fields.get("genre"):
         fields["genre"] = await get_fallback_genre(str(track.title), str(track.artist))
     fields = {name: value for name, value in fields.items() if value}
     if fields:
