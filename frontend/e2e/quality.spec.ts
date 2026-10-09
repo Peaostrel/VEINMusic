@@ -17,7 +17,9 @@ test("history exclusion can be restored without deleting the play", async ({
   await expect(
     page.getByText("Прослушивание исключено. Его можно вернуть."),
   ).toBeVisible();
-  await expect(page.getByText("Quality track", { exact: true })).toBeVisible();
+  await expect(
+    page.locator("main").getByText("Quality track", { exact: true }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Вернуть в статистику" }).click();
   await expect(
     page.getByText("Прослушивание вернулось в статистику."),
@@ -59,7 +61,7 @@ test("discovery feedback and a downloadable weekly card", async ({ page }) => {
   await page.getByRole("button", { name: "Не нравится", exact: true }).click();
   await expect(page.getByText("Учли ваш выбор в подборке.")).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Пока нет новых рекомендаций" }),
+    page.getByText("Пока нет новых рекомендаций", { exact: true }),
   ).toBeVisible();
   hidden = false;
   await page.getByRole("button", { name: "Отменить последний выбор" }).click();
@@ -78,11 +80,11 @@ test("connection check waits for a new live event", async ({ page }) => {
   await page.getByLabel("Источник для проверки").selectOption("extension");
   await page.getByRole("button", { name: "Начать проверку" }).click();
   await scrobble(page.request, {
-    title: "Live connection",
-    artist: "Live artist",
+    title: "Connection track",
+    artist: "Connection artist",
   });
   await expect(
-    page.getByText("Событие получено: Live artist — Live connection", {
+    page.getByText("Событие получено: Connection artist — Connection track", {
       exact: true,
     }),
   ).toBeVisible({ timeout: 15000 });
