@@ -113,13 +113,17 @@ def get_user_info(username: str, request: Request,
     can_showcase = _can_view_section(user, request, db, "showcase")
     can_location = _can_view_section(user, request, db, "location")
     can_social = _can_view_section(user, request, db, "social_links")
+    location = user.profile.location if can_location else None
+    privacy = preferences_dict(user.profile).get("privacy", {})
+    if location and not is_owner and privacy.get("location_precision") == "country":
+        location = location.rsplit(",", 1)[-1].strip()
     return {
         "username": user.username,
         "display_name": user.profile.display_name or user.username,
         "bio": user.profile.bio or "Этот пользователь пока ничего о себе не рассказал.",
         "avatar_url": user.profile.avatar_url,
         "cover_url": user.profile.cover_url,
-        "location": user.profile.location if can_location else None,
+        "location": location,
         "favorite_genre": user.profile.favorite_genre,
         "equipment": user.profile.equipment,
         "social_links": (user.profile.social_links or "[]") if can_social else "[]",
@@ -148,6 +152,8 @@ def get_user_info(username: str, request: Request,
             user.integration.spotify_refresh_token),
         "yandex_linked": bool(
             user.integration.yandex_token),
+        "soundcloud_linked": bool(
+            user.integration.soundcloud_refresh_token),
         "lastfm_username": user.integration.lastfm_username,
         "has_imported_lastfm": user.integration.has_imported_lastfm,
         "last_sync": user.integration.last_sync,

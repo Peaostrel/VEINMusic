@@ -148,13 +148,15 @@ def _integration_block(user: User) -> dict[str, Any]:
     integration = user.integration
     if integration is None:
         return {"is_verified": False, "bonus_xp": 0, "current_streak": 0, "spotify_linked": False,
-                "yandex_linked": False, "lastfm_username": None, "last_sync": None}
+                "yandex_linked": False, "soundcloud_linked": False,
+                "lastfm_username": None, "last_sync": None}
     return {
         "is_verified": bool(integration.is_verified),
         "bonus_xp": int(integration.bonus_xp or 0),
         "current_streak": int(integration.current_streak or 0),
         "spotify_linked": bool(integration.spotify_refresh_token),
         "yandex_linked": bool(integration.yandex_token),
+        "soundcloud_linked": bool(integration.soundcloud_refresh_token),
         "lastfm_username": integration.lastfm_username,
         "last_sync": _iso(integration.last_sync),
     }

@@ -132,6 +132,14 @@ export function useSettingsPage() {
       setStatus("✅ Spotify успешно привязан!");
       setActiveTab("integrations");
     }
+    const soundcloudResult = searchParams.get("soundcloud");
+    if (soundcloudResult === "success") {
+      setStatus("✅ SoundCloud подключён! Включите следующий трек.");
+      setActiveTab("integrations");
+    } else if (soundcloudResult === "error") {
+      setStatus("❌ Не удалось подключить SoundCloud");
+      setActiveTab("integrations");
+    }
     const tabParam = searchParams.get("tab");
     const linkedTab = SETTINGS_TABS.find((t) => t.id === tabParam);
     if (linkedTab) setActiveTab(linkedTab.id);
@@ -433,6 +441,10 @@ export function useSettingsPage() {
         setStatus(`✅ ${service} отключен`);
         if (service === "spotify")
           setUserProfile((prev) => prev && { ...prev, spotify_linked: false });
+        if (service === "soundcloud")
+          setUserProfile(
+            (prev) => prev && { ...prev, soundcloud_linked: false },
+          );
         if (service === "yandex") {
           setUserProfile((prev) => prev && { ...prev, yandex_linked: false });
           updateData("yandexToken", "");

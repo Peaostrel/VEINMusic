@@ -23,7 +23,9 @@ test.describe("Update in progress", () => {
     // An open tab's next request (here: the people search) meets the
     // update; retried until the page has hydrated
     const dialog = page.getByRole("alertdialog", { name: "Идёт обновление" });
-    const search = page.getByRole("combobox", { name: "Поиск профилей" });
+    const search = page.getByRole("combobox", {
+      name: "Поиск людей, артистов и треков",
+    });
     let attempt = 0;
     await expect(async () => {
       await search.fill(`user${attempt++}`);

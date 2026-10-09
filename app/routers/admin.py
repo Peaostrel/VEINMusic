@@ -443,16 +443,18 @@ def set_xp_multiplier(
 
 @router.get("/system/health")
 async def get_system_health(db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
-    def _counts() -> tuple[int, int, int, int, int]:
+    def _counts() -> tuple[int, int, int, int, int, int]:
         return (
             db.query(User).count(),
             db.query(Scrobble).count(),
             db.query(Track).count(),
             db.query(UserIntegration).filter(UserIntegration.yandex_token.isnot(None)).count(),
             db.query(UserIntegration).filter(UserIntegration.spotify_access_token.isnot(None)).count(),
+            db.query(UserIntegration).filter(UserIntegration.soundcloud_refresh_token.isnot(None)).count(),
         )
 
-    users_cnt, scrobbles_cnt, tracks_cnt, yandex_sync_users, spotify_sync_users = await asyncio.to_thread(_counts)
+    (users_cnt, scrobbles_cnt, tracks_cnt, yandex_sync_users,
+     spotify_sync_users, soundcloud_sync_users) = await asyncio.to_thread(_counts)
     # WebSockets are held per API process; this is the count for this process
     ws_connections = sum(len(c) for c in manager.active_connections.values())
     rooms = await manager.get_active_rooms_info()
@@ -473,6 +475,7 @@ async def get_system_health(db: Annotated[Session, Depends(get_db)], admin: Anno
         "cloud_scrobblers": {
             "yandex_users": yandex_sync_users,
             "spotify_users": spotify_sync_users,
+            "soundcloud_users": soundcloud_sync_users,
         },
     }
 

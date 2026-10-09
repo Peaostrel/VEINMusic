@@ -25,6 +25,7 @@ export interface ProfileHeaderSectionProps {
   nextRank: ReturnType<typeof getNextRankInfo>;
   totalScrobbles: number;
   actions: React.ReactNode;
+  hasBanner?: boolean;
 }
 
 export function ProfileHeaderSection({
@@ -42,6 +43,7 @@ export function ProfileHeaderSection({
   nextRank,
   totalScrobbles,
   actions,
+  hasBanner = false,
 }: Readonly<ProfileHeaderSectionProps>) {
   const frame = u.avatar_frame
     ? `avatar-frame-wrapper avatar-frame-${u.avatar_frame}`
@@ -82,7 +84,7 @@ export function ProfileHeaderSection({
         {/* With a cover, the avatar overlaps its lower edge */}
         <div
           className={
-            u.cover_url
+            hasBanner
               ? "relative z-10 -mt-[76px] self-start rounded-full bg-bg p-1"
               : "self-start"
           }
@@ -113,7 +115,7 @@ export function ProfileHeaderSection({
                 className="rounded border border-line px-1.5 py-px text-[11px] text-fg-2"
                 title="Настроение по последним прослушиваниям"
               >
-                {mood.mood}
+                настроение: {mood.mood}
               </span>
             )}
           </div>

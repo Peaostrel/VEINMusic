@@ -150,6 +150,15 @@ class LikeRequest(BaseModel):
     api_key: str | None = None
 
 
+class ScrobbleMergeRequest(BaseModel):
+    source_track_id: int = Field(..., gt=0)
+    target_track_id: int = Field(..., gt=0)
+
+
+class IntegrationSyncRequest(BaseModel):
+    service: Literal["all", "spotify", "yandex", "soundcloud"] = "all"
+
+
 class CommentRequest(BaseModel):
     api_key: str | None = None
     content: str = Field(..., max_length=1000)
@@ -214,8 +223,11 @@ class PrivacyPreferences(BaseModel):
     showcase: Visibility = "all"
     followers: Visibility = "all"
     location: Visibility = "all"
+    location_precision: Literal["city", "country"] = "city"
     social_links: Visibility = "all"
     show_listening_source: bool = True
+    # Profile in the sitemap and open to search engines (no "noindex")
+    search_indexing: bool = True
 
 
 class ListeningPreferences(BaseModel):
@@ -297,6 +309,8 @@ class IntegrationPreferences(BaseModel):
 
     spotify_enabled: bool = True
     yandex_enabled: bool = True
+    youtube_music_enabled: bool = True
+    soundcloud_enabled: bool = True
     lastfm_enabled: bool = True
     auto_sync: bool = True
 
@@ -308,6 +322,22 @@ class ExperimentPreferences(BaseModel):
     taste_passport: bool = False
     new_profile_layout: bool = False
     diagnostics: bool = False
+
+
+class MusicGoal(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(..., min_length=1, max_length=64)
+    type: Literal["weekly_scrobbles", "monthly_minutes", "new_artists", "streak"]
+    title: str = Field(..., min_length=1, max_length=100)
+    target: int = Field(..., ge=1, le=100000)
+    active: bool = True
+
+
+class GoalsPreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[MusicGoal] = Field(default_factory=list, max_length=10)
 
 
 def _default_listening_preferences() -> ListeningPreferences:
@@ -337,6 +367,7 @@ class UserPreferences(BaseModel):
     wrapped: WrappedPreferences = Field(default_factory=WrappedPreferences)
     integrations: IntegrationPreferences = Field(default_factory=IntegrationPreferences)
     experiments: ExperimentPreferences = Field(default_factory=ExperimentPreferences)
+    goals: GoalsPreferences = Field(default_factory=GoalsPreferences)
 
 
 class UserBanRequest(BaseModel):

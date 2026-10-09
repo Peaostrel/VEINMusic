@@ -138,7 +138,9 @@ def test_calendar_and_custom_wrapped_use_local_days(auth_client, db, auth_user):
     assert stats["new_artists"] == 2
     assert stats["peak_day"] == {
         "date": f"{year}-01-02", "scrobbles": 2}
-    assert stats["comparison"]["change"]["scrobbles"] == 100
+    # Growth from an empty previous period is new activity, not a meaningful
+    # percentage increase.
+    assert stats["comparison"]["change"]["scrobbles"] is None
 
     wrapped = auth_client.get(
         f"/api/stats/wrapped?username={auth_user.username}&{query}")
