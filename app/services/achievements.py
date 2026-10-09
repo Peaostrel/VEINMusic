@@ -241,6 +241,16 @@ def check_auto_achievements(user, db: Session) -> list[Achievement]:
             user.integration.bonus_xp = (
                 user.integration.bonus_xp or 0) + (ach.reward_xp or 0)
             try:
+                from app.services import notifications
+                notifications.create(
+                    db,
+                    recipient_id=int(user.id),
+                    actor_id=int(user.id),
+                    kind=notifications.KIND_ACHIEVEMENT,
+                    message=(
+                        f"{ach.icon or '🏆'} {ach.name} (+{ach.reward_xp or 0} XP)"
+                    )[:200],
+                )
                 db.commit()
                 awarded.append(ach)
             except IntegrityError:

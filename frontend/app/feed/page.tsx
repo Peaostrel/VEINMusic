@@ -60,6 +60,10 @@ const SOURCES = [
   { id: "all", label: "Все" },
   { id: "yandex", label: "Яндекс" },
   { id: "spotify", label: "Spotify" },
+  { id: "soundcloud", label: "SoundCloud" },
+  { id: "youtube", label: "YouTube Music" },
+  { id: "vk", label: "VK" },
+  { id: "lastfm", label: "Last.fm" },
   { id: "desktop", label: "Приложение" },
   { id: "extension", label: "Браузер" },
 ];

@@ -1,5 +1,6 @@
 """Third-party integrations: Last.fm import, Yandex, Spotify."""
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 import anyio
@@ -17,11 +18,11 @@ from app.models import (
     User,
 )
 from app.schemas import (
+    IntegrationSyncRequest,
     LikeRequest,
     YandexTokenUpdate,
 )
-from app.services.runtime_settings import require_feature
-from app.services.user_preferences import get_preferences
+from app.services import runtime_settings
 from app.services.lastfm_import import (
     LASTFM_API_KEY,
     enqueue_import,
@@ -29,8 +30,50 @@ from app.services.lastfm_import import (
     latest_job,
     prepare_import_job,
 )
+from app.services.runtime_settings import require_feature
+from app.services.user_preferences import get_preferences
 
 router = APIRouter(tags=["integrations"])
+
+
+@router.post(
+    "/api/integrations/sync",
+    responses={409: {"description": "Cloud synchronization is unavailable"}},
+)
+async def sync_integrations_now(
+        data: IntegrationSyncRequest,
+        db: Annotated[Session, Depends(get_db)],
+        current_user: Annotated[User, Depends(get_current_user)]):
+    """Run one immediate cloud poll for the signed-in user."""
+    from app.services.cloud_scrobbling import (
+        sync_soundcloud_status,
+        sync_spotify_status,
+        sync_yandex_status,
+    )
+    from app.services.scrobble_processor import process_scrobble
+
+    preferences = get_preferences(current_user.profile).integrations
+    if not preferences.auto_sync:
+        raise HTTPException(409, "Автоматическая синхронизация приостановлена")
+    jobs = {
+        "spotify": (bool(current_user.integration.spotify_access_token), preferences.spotify_enabled, sync_spotify_status),
+        "yandex": (bool(current_user.integration.yandex_token), preferences.yandex_enabled, sync_yandex_status),
+        "soundcloud": (bool(current_user.integration.soundcloud_access_token), preferences.soundcloud_enabled, sync_soundcloud_status),
+    }
+    selected = jobs.items() if data.service == "all" else [(data.service, jobs[data.service])]
+    completed = []
+    async with redis_lock(f"manual-sync:{current_user.id}", expire_sec=20):
+        for name, (linked, enabled, sync_func) in selected:
+            if linked and enabled and runtime_settings.is_feature_enabled(
+                f"integration_{name}", db
+            ):
+                await sync_func(current_user, db, process_scrobble)
+                completed.append(name)
+        if not completed:
+            raise HTTPException(409, "Нет активных облачных интеграций для синхронизации")
+        current_user.integration.last_sync = datetime.now(UTC)
+        db.commit()
+    return {"status": "ok", "services": completed, "last_sync": current_user.integration.last_sync}
 
 
 # --- /api/import/lastfm ---

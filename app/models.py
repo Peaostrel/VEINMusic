@@ -411,6 +411,14 @@ class SystemSetting(Base):
 class TrackAlias(Base):
     __tablename__ = "track_aliases"
     id = Column(Integer, primary_key=True, index=True)
+    # NULL aliases are global and created by an administrator. A user-scoped
+    # alias only normalizes that user's future scrobbles.
+    user_id = Column(
+        Integer,
+        ForeignKey(FK_USERS_ID, ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     original_title = Column(String, index=True)
     original_artist = Column(String, index=True)
     canonical_track_id = Column(

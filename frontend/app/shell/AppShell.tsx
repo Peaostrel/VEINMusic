@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { useSiteTheme } from "@/app/lib/theme";
 import GlobalAnnouncementBanner from "@/components/GlobalAnnouncementBanner";
+import OfflineBanner from "@/components/OfflineBanner";
 import Footer from "./Footer";
 import GuestHeader from "./GuestHeader";
 import { MobileTabBar, MobileTopBar } from "./MobileNav";
@@ -60,6 +61,7 @@ export default function AppShell({
       </div>
 
       <div className="shell-main flex flex-1 flex-col">
+        <OfflineBanner />
         <GlobalAnnouncementBanner />
         <main id="main" className="flex-1">
           {children}

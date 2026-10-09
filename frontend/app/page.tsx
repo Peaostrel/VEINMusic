@@ -4,11 +4,12 @@ import Link from "next/link";
 import { Heart, MessageCircle, Users } from "lucide-react";
 
 import About from "./about/page";
+import GoalsCard from "./goals/GoalsCard";
 import { API_URL } from "@/app/lib/api";
 import { formatNumber, plural } from "@/app/lib/plural";
 import { storedPreferences } from "@/app/lib/preferences";
 import { isValidUser } from "@/app/lib/theme";
-import type { TasteTwin } from "@/app/lib/types";
+import type { TasteTwin, UserPreferences } from "@/app/lib/types";
 import { useVisiblePolling } from "@/app/lib/usePolling";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { sourceLabel } from "@/utils/formatters";
@@ -50,6 +51,16 @@ interface WeekStats {
 }
 
 type FeedTab = "global" | "friends";
+
+interface IntegrationSummary {
+  services: {
+    id: string;
+    linked: boolean;
+    user_enabled: boolean;
+    admin_enabled: boolean;
+  }[];
+  auto_sync: boolean;
+}
 
 function sourceIsHidden(source: string, hiddenSources: string[]): boolean {
   const normalized = source.toLowerCase();
@@ -273,6 +284,42 @@ function Twins({ twins }: Readonly<{ twins: TasteTwin[] }>) {
   );
 }
 
+function DashboardStatus({
+  integrations,
+}: Readonly<{
+  integrations: IntegrationSummary | null;
+}>) {
+  const connected =
+    integrations?.services.filter((service) => service.linked) ?? [];
+  const problems = connected.filter(
+    (service) => !service.admin_enabled || !service.user_enabled,
+  ).length;
+  let integrationMessage = "Проверяем подключения…";
+  if (integrations) {
+    if (connected.length === 0)
+      integrationMessage = "Облачные сервисы пока не подключены";
+    else if (problems)
+      integrationMessage = `${problems} подключений требуют внимания`;
+    else integrationMessage = `${connected.length} подключений работают`;
+  }
+  return (
+    <section className="rounded-xl border border-line bg-surface p-5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold">Состояние VEIN</h2>
+        <Link
+          href="/settings?tab=integrations"
+          className="text-xs text-fg-3 hover:text-accent"
+        >
+          Интеграции →
+        </Link>
+      </div>
+      <p className={`mt-3 text-sm ${problems ? "text-fg-2" : "text-ok"}`}>
+        {integrationMessage}
+      </p>
+    </section>
+  );
+}
+
 function SkeletonRows() {
   return (
     <ul aria-hidden="true" className="border-t border-line-soft">
@@ -303,6 +350,9 @@ export default function Home() {
   const [checked, setChecked] = useState(false);
   const [liked, setLiked] = useState<Set<number>>(new Set());
   const [hiddenSources, setHiddenSources] = useState<string[]>([]);
+  const [goals, setGoals] = useState<UserPreferences["goals"]["items"]>([]);
+  const [integrationSummary, setIntegrationSummary] =
+    useState<IntegrationSummary | null>(null);
 
   useEffect(() => {
     const u = localStorage.getItem("username");
@@ -310,12 +360,16 @@ export default function Home() {
     setUsername(isValidUser(u) ? u : null);
     setActiveFeed(feed.default_scope === "following" ? "friends" : "global");
     setHiddenSources(feed.hidden_sources);
+    setGoals(storedPreferences().goals.items);
     setChecked(true);
 
     const updatePreferences = () => {
-      const next = storedPreferences().feed;
-      setActiveFeed(next.default_scope === "following" ? "friends" : "global");
-      setHiddenSources(next.hidden_sources);
+      const next = storedPreferences();
+      setActiveFeed(
+        next.feed.default_scope === "following" ? "friends" : "global",
+      );
+      setHiddenSources(next.feed.hidden_sources);
+      setGoals(next.goals.items);
     };
     globalThis.addEventListener("preferences_update", updatePreferences);
     return () =>
@@ -364,6 +418,10 @@ export default function Home() {
     })
       .then((res) => (res.ok ? res.json() : null))
       .then(setWeek)
+      .catch(() => {});
+    fetch(`${API_URL}/api/integrations/status`, { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then(setIntegrationSummary)
       .catch(() => {});
   }, [username]);
 
@@ -478,7 +536,13 @@ export default function Home() {
       </section>
 
       <aside className="flex w-full shrink-0 flex-col gap-6 lg:w-[320px] lg:pt-1.5">
+        <GoalsCard
+          username={username}
+          goals={goals}
+          weekScrobbles={week?.total_scrobbles ?? null}
+        />
         <YourWeek username={username} stats={week} />
+        <DashboardStatus integrations={integrationSummary} />
         {twins.length > 0 && <Twins twins={twins} />}
       </aside>
     </div>

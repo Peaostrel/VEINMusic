@@ -1,9 +1,10 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
+import Link from "next/link";
 import { sourceLabel } from "@/utils/formatters";
 import { PlayingBars } from "@/components/ui";
-import { getSafeUrl, getArtistUrl, getTrackUrl } from "./profileUtils";
+import { getSafeUrl } from "./profileUtils";
 import type { HistoryEntry } from "@/app/lib/types";
 
 const mmss = (sec: number) =>
@@ -14,7 +15,6 @@ const mmss = (sec: number) =>
 /** Comma-separated artists, each linking to its search page. */
 export function ArtistLinks({
   artist,
-  source,
   className = "",
 }: Readonly<{ artist: string; source: string; className?: string }>) {
   const names = artist
@@ -26,14 +26,12 @@ export function ArtistLinks({
       {names.map((a, i) => (
         <Fragment key={a}>
           {i > 0 && ", "}
-          <a
-            href={getArtistUrl(a, source)}
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            href={`/artist/${encodeURIComponent(a)}`}
             className="hover:text-fg hover:underline"
           >
             {a}
-          </a>
+          </Link>
         </Fragment>
       ))}
     </span>
@@ -118,14 +116,12 @@ export function HistoryItem({
         <span className="h-10 w-10 rounded bg-surface-2" />
       )}
       <span className="flex min-w-0 flex-col gap-0.5">
-        <a
-          href={getSafeUrl(getTrackUrl(item))}
-          target="_blank"
-          rel="noopener noreferrer"
+        <Link
+          href={`/track/${item.track_id}`}
           className="truncate text-sm hover:underline"
         >
           {item.title}
-        </a>
+        </Link>
         <ArtistLinks
           artist={item.artist}
           source={item.source}

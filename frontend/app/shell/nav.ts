@@ -1,9 +1,11 @@
 import {
   ChartColumn,
   Headphones,
+  LibraryBig,
   Rss,
   Shield,
   SlidersHorizontal,
+  Target,
   Trophy,
   User,
 } from "lucide-react";
@@ -34,6 +36,13 @@ export function navItems(username: string): NavItem[] {
       href: `/user/${me}/stats`,
       icon: ChartColumn,
     },
+    {
+      id: "library",
+      label: "Моя библиотека",
+      href: "/library",
+      icon: LibraryBig,
+    },
+    { id: "goals", label: "Цели", href: "/goals", icon: Target },
     { id: "profile", label: "Профиль", href: `/user/${me}`, icon: User },
     {
       id: "settings",
@@ -61,6 +70,8 @@ export function activeSection(
   if (pathname.startsWith("/leaderboard")) return "top";
   if (pathname.startsWith("/together")) return "together";
   if (pathname.startsWith("/settings")) return "settings";
+  if (pathname.startsWith("/library")) return "library";
+  if (pathname.startsWith("/goals")) return "goals";
   if (pathname.startsWith("/admin")) return "admin";
   if (username) {
     const mine = `/user/${encodeURIComponent(username)}`.toLowerCase();
