@@ -192,6 +192,29 @@ def test_create_rejects_unknown_kind(db):
     assert notifications.create(db, recipient_id=1, actor_id=2, kind="poke") is None
 
 
+def test_achievement_notification_is_visible_and_links_to_achievements(client):
+    _register(client, "winner")
+    user_id = _user_id("winner")
+    db = SessionLocal()
+    try:
+        note = notifications.create(
+            db,
+            recipient_id=user_id,
+            actor_id=user_id,
+            kind=notifications.KIND_ACHIEVEMENT,
+            message="🏆 Новое достижение (+10 XP)",
+        )
+        db.commit()
+        note_id = note.id
+    finally:
+        db.close()
+
+    item = client.get("/api/me/notifications").json()["items"][0]
+    assert item["kind"] == "achievement"
+    assert item["text"] == "🏆 Новое достижение (+10 XP)"
+    assert notifications._push_payload(note_id)[3] == "/user/winner/achievements"
+
+
 def test_push_payload_and_send(social):
     client, scrobble_id = social
     client.post(f"/api/scrobble/{scrobble_id}/comment", json={"content": "nice"})

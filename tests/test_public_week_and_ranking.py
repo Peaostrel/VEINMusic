@@ -94,6 +94,20 @@ def test_leaderboard_entries_carry_global_rank(client):
     assert [e["rank"] for e in board] == [1, 2, 3]
 
 
+def test_period_leaderboard_uses_period_xp_and_lifetime_level(client):
+    _register(client, "period_active")
+    _listen("period_active", "Current", 2)
+    _listen("period_active", "Archive", 20, days_ago=40)
+    _register(client, "period_inactive")
+    _listen("period_inactive", "Archive", 30, days_ago=40)
+
+    board = client.get("/api/leaderboard?period=7d").json()
+    assert [(entry["username"], entry["total_xp"]) for entry in board] == [
+        ("period_active", 20)
+    ]
+    assert board[0]["level"] == 3
+
+
 def test_following_board_and_my_place(client):
     for name, count in (("me_user", 2), ("friend", 5), ("stranger", 9), ("other", 1)):
         _register(client, name)

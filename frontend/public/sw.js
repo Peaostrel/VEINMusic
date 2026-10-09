@@ -1,13 +1,6 @@
 // VEINMusic PWA Service Worker
-const CACHE_NAME = "veinmusic-cache-v5";
-const PRECACHE_URLS = [
-  "/",
-  "/manifest.json",
-  "/icon-512.png",
-  "/feed",
-  "/leaderboard",
-  "/about",
-];
+const CACHE_NAME = "veinmusic-cache-v6";
+const PRECACHE_URLS = ["/manifest.json", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -35,6 +28,19 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+async function networkFirst(request) {
+  const cache = await caches.open(CACHE_NAME);
+  try {
+    const response = await fetch(request);
+    if (response?.status === 200 && response?.type === "basic") {
+      await cache.put(request, response.clone());
+    }
+    return response;
+  } catch {
+    return (await cache.match(request)) || Response.error();
+  }
+}
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -47,26 +53,25 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Stale-while-revalidate for pages and static assets
-  event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      const fetchPromise = fetch(request)
-        .then((networkResponse) => {
-          if (
-            networkResponse?.status === 200 &&
-            networkResponse?.type === "basic"
-          ) {
-            const responseToCache = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, responseToCache);
-            });
-          }
-          return networkResponse;
-        })
-        // Offline and nothing cached: a network error, never `undefined`
-        .catch(() => cachedResponse || Response.error());
+  // Pages and RSC payloads must not stay pinned to an old deployment.
+  if (
+    request.mode === "navigate" ||
+    !url.pathname.startsWith("/_next/static/")
+  ) {
+    event.respondWith(networkFirst(request));
+    return;
+  }
 
-      return cachedResponse || fetchPromise;
+  // Next.js static bundle names contain a content hash and are immutable.
+  event.respondWith(
+    caches.match(request).then(async (cachedResponse) => {
+      if (cachedResponse) return cachedResponse;
+      const response = await fetch(request);
+      if (response?.status === 200 && response?.type === "basic") {
+        const cache = await caches.open(CACHE_NAME);
+        await cache.put(request, response.clone());
+      }
+      return response;
     }),
   );
 });
