@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import hmac
 import os
@@ -29,12 +30,19 @@ from app.services import runtime_settings
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 MIN_PASSWORD_LENGTH = 8
+INVALID_STATE_PARAMETER = "Invalid state parameter"
 
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 SPOTIFY_REDIRECT_URI = os.getenv(
     "SPOTIFY_REDIRECT_URI",
     "http://127.0.0.1:8000/auth/spotify/callback")
+SOUNDCLOUD_CLIENT_ID = os.getenv("SOUNDCLOUD_CLIENT_ID")
+SOUNDCLOUD_CLIENT_SECRET = os.getenv("SOUNDCLOUD_CLIENT_SECRET")
+SOUNDCLOUD_REDIRECT_URI = os.getenv(
+    "SOUNDCLOUD_REDIRECT_URI",
+    "http://127.0.0.1:8000/auth/soundcloud/callback",
+)
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 # Sign-ups per IP; the end-to-end test run raises it because every test
 # registers a fresh account from the same address.
@@ -209,7 +217,7 @@ def spotify_login(current_user: Annotated[User, Depends(get_current_user)]):
 
 @router.get("/spotify/callback",
             dependencies=[Depends(runtime_settings.require_feature("integration_spotify"))],
-            responses={400: {"description": "Invalid state parameter"}})
+            responses={400: {"description": INVALID_STATE_PARAMETER}})
 async def spotify_callback(code: str,
                            state: str,
                            request: Request,
@@ -219,11 +227,11 @@ async def spotify_callback(code: str,
     # through the signed OAuth state bound to the Lax state cookie instead.
     user_id = _parse_spotify_state(state, request.cookies.get(SPOTIFY_STATE_COOKIE))
     if user_id is None:
-        raise HTTPException(status_code=400, detail="Invalid state parameter")
+        raise HTTPException(status_code=400, detail=INVALID_STATE_PARAMETER)
 
     user = db.query(User).filter(User.id == user_id).first()
     if not user or user.is_banned:
-        raise HTTPException(status_code=400, detail="Invalid state parameter")
+        raise HTTPException(status_code=400, detail=INVALID_STATE_PARAMETER)
 
     result = "error"
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -249,4 +257,143 @@ async def spotify_callback(code: str,
 
     redirect = RedirectResponse(f"{FRONTEND_URL}/settings?spotify={result}")
     redirect.delete_cookie(SPOTIFY_STATE_COOKIE)
+    return redirect
+
+
+SOUNDCLOUD_STATE_COOKIE = "soundcloud_auth_state"
+SOUNDCLOUD_PKCE_COOKIE = "soundcloud_pkce_verifier"
+
+
+def _sign_soundcloud_state(user_id: str, nonce: str) -> str:
+    return hmac.new(
+        SECRET_KEY.encode("utf-8"),
+        f"soundcloud:{user_id}:{nonce}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _parse_soundcloud_state(state: str, cookie_nonce: str | None) -> int | None:
+    try:
+        user_id, nonce, signature = state.split(".", 2)
+    except ValueError:
+        return None
+    if not cookie_nonce or not secrets.compare_digest(nonce, cookie_nonce):
+        return None
+    if not hmac.compare_digest(signature, _sign_soundcloud_state(user_id, nonce)):
+        return None
+    try:
+        return int(user_id)
+    except ValueError:
+        return None
+
+
+def _soundcloud_code_challenge(verifier: str) -> str:
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+
+
+@router.get(
+    "/soundcloud/login",
+    dependencies=[Depends(runtime_settings.require_feature("integration_soundcloud"))],
+    responses={503: {"description": "SoundCloud OAuth is not configured"}},
+)
+def soundcloud_login(current_user: Annotated[User, Depends(get_current_user)]):
+    if not SOUNDCLOUD_CLIENT_ID or not SOUNDCLOUD_CLIENT_SECRET:
+        raise HTTPException(503, "SoundCloud OAuth не настроен на сервере")
+
+    nonce = secrets.token_hex(16)
+    verifier = secrets.token_urlsafe(64)
+    user_id = str(current_user.id)
+    state = f"{user_id}.{nonce}.{_sign_soundcloud_state(user_id, nonce)}"
+    query = urllib.parse.urlencode({
+        "client_id": SOUNDCLOUD_CLIENT_ID,
+        "redirect_uri": SOUNDCLOUD_REDIRECT_URI,
+        "response_type": "code",
+        "code_challenge": _soundcloud_code_challenge(verifier),
+        "code_challenge_method": "S256",
+        "state": state,
+    })
+    redirect = RedirectResponse(f"https://secure.soundcloud.com/authorize?{query}")
+    secure_cookie = os.getenv("ENVIRONMENT") == "production"
+    redirect.set_cookie(
+        SOUNDCLOUD_STATE_COOKIE,
+        nonce,
+        httponly=True,
+        secure=secure_cookie,
+        samesite="lax",
+        max_age=600,
+    )
+    redirect.set_cookie(
+        SOUNDCLOUD_PKCE_COOKIE,
+        verifier,
+        httponly=True,
+        secure=secure_cookie,
+        samesite="lax",
+        max_age=600,
+    )
+    return redirect
+
+
+@router.get(
+    "/soundcloud/callback",
+    dependencies=[Depends(runtime_settings.require_feature("integration_soundcloud"))],
+    responses={400: {"description": INVALID_STATE_PARAMETER}},
+)
+async def soundcloud_callback(
+    code: str,
+    state: str,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+):
+    user_id = _parse_soundcloud_state(
+        state, request.cookies.get(SOUNDCLOUD_STATE_COOKIE)
+    )
+    verifier = request.cookies.get(SOUNDCLOUD_PKCE_COOKIE)
+    if user_id is None or not verifier:
+        raise HTTPException(status_code=400, detail=INVALID_STATE_PARAMETER)
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user or user.is_banned:
+        raise HTTPException(status_code=400, detail=INVALID_STATE_PARAMETER)
+
+    result = "error"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(
+            "https://secure.soundcloud.com/oauth/token",
+            data={
+                "grant_type": "authorization_code",
+                "client_id": SOUNDCLOUD_CLIENT_ID,
+                "client_secret": SOUNDCLOUD_CLIENT_SECRET,
+                "redirect_uri": SOUNDCLOUD_REDIRECT_URI,
+                "code_verifier": verifier,
+                "code": code,
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+    if response.status_code == 200:
+        data = response.json()
+        if data.get("access_token") and data.get("refresh_token"):
+            if not user.integration:
+                db.add(UserIntegration(user_id=user.id))
+                db.commit()
+                db.refresh(user)
+            from app.services.cloud_scrobbling import _soundcloud_expiry
+
+            user.integration.soundcloud_access_token = data["access_token"]
+            user.integration.soundcloud_refresh_token = data["refresh_token"]
+            user.integration.soundcloud_token_expires_at = _soundcloud_expiry(
+                data.get("expires_in")
+            )
+            # The first poll snapshots recent history and never imports it.
+            user.integration.soundcloud_recent_tracks = None
+            user.integration.soundcloud_current_track = None
+            user.integration.soundcloud_track_started_at = None
+            db.commit()
+            result = "success"
+
+    redirect = RedirectResponse(
+        f"{FRONTEND_URL}/settings?tab=integrations&soundcloud={result}"
+    )
+    redirect.delete_cookie(SOUNDCLOUD_STATE_COOKIE)
+    redirect.delete_cookie(SOUNDCLOUD_PKCE_COOKIE)
     return redirect

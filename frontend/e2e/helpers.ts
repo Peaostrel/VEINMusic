@@ -28,6 +28,21 @@ export async function signUp(page: Page, prefix = "e2e"): Promise<string> {
   return username;
 }
 
+/** Report a play of a track as the page's signed-in user (one scrobble). */
+export async function scrobble(
+  request: APIRequestContext,
+  track: { title: string; artist: string; album?: string },
+) {
+  const res = await apiPost(request, "/api/scrobble", {
+    ...track,
+    source: "desktop",
+    progress_sec: 30,
+    is_playing: true,
+    duration: 200,
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+}
+
 /** POST to the API as the page's signed-in user. */
 export function apiPost(
   request: APIRequestContext,

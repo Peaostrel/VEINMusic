@@ -28,7 +28,17 @@ def _clear_track_cache():
 
 
 def _user(**integration):
-    fields = {"spotify_access_token": "old", "spotify_refresh_token": "refresh", "yandex_token": "ya"}
+    fields = {
+        "spotify_access_token": "old",
+        "spotify_refresh_token": "refresh",
+        "yandex_token": "ya",
+        "soundcloud_access_token": "sc-old",
+        "soundcloud_refresh_token": "sc-refresh",
+        "soundcloud_token_expires_at": None,
+        "soundcloud_recent_tracks": None,
+        "soundcloud_current_track": None,
+        "soundcloud_track_started_at": None,
+    }
     fields.update(integration)
     return SimpleNamespace(username="u", integration=SimpleNamespace(**fields))
 
@@ -88,6 +98,75 @@ def test_spotify_refresh_failures():
         assert asyncio.run(cs.refresh_spotify_token(_user(), MagicMock())) is None
         # sync swallows the error as well
         asyncio.run(cs.sync_spotify_status(_user(), MagicMock(), AsyncMock()))
+
+
+def _soundcloud_track(track_id="soundcloud:tracks:2", title="New Song"):
+    return {
+        "urn": track_id,
+        "title": title,
+        "duration": 192000,
+        "permalink_url": f"https://soundcloud.com/test/{track_id.rsplit(':', 1)[-1]}",
+        "artwork_url": "https://i1.sndcdn.com/artworks-test-large.jpg",
+        "user": {"username": "Test Artist"},
+        "publisher_metadata": {"album_title": "Test Album"},
+    }
+
+
+def test_soundcloud_history_detects_same_track_replay():
+    assert cs._new_soundcloud_items(["A", "B", "C"], ["A", "A", "B"]) == ["A"]
+    assert cs._new_soundcloud_items(["A", "B"], ["A", "B"]) == []
+    assert cs._new_soundcloud_items([], ["A"]) == []
+    assert cs._new_soundcloud_items(["A"], ["X", "Y"]) == []
+
+
+def test_soundcloud_sync_baselines_then_reports_new_track():
+    old = _soundcloud_track("soundcloud:tracks:1", "Old Song")
+    new = _soundcloud_track()
+    user, db, process = _user(), MagicMock(), AsyncMock()
+
+    with _mock_http(lambda request: httpx.Response(200, json={"collection": [old]})):
+        asyncio.run(cs.sync_soundcloud_status(user, db, process))
+    process.assert_not_awaited()
+    assert cs._soundcloud_history(user.integration.soundcloud_recent_tracks) == [
+        "soundcloud:tracks:1"
+    ]
+
+    with _mock_http(lambda request: httpx.Response(
+            200, json={"collection": [new, old]})):
+        asyncio.run(cs.sync_soundcloud_status(user, db, process))
+    process.assert_awaited_once_with(
+        db,
+        user,
+        "New Song",
+        "Test Artist",
+        "https://i1.sndcdn.com/artworks-test-t500x500.jpg",
+        "https://soundcloud.com/test/2",
+        "soundcloud",
+        0,
+        True,
+        192,
+        "Test Album",
+    )
+
+
+def test_soundcloud_refresh_rotates_tokens():
+    user, db = _user(), MagicMock()
+
+    def handler(request):
+        assert request.url.host == "secure.soundcloud.com"
+        return httpx.Response(200, json={
+            "access_token": "sc-new",
+            "refresh_token": "sc-refresh-new",
+            "expires_in": 3600,
+        })
+
+    with patch.object(cs, "SOUNDCLOUD_CLIENT_ID", "client"), \
+            patch.object(cs, "SOUNDCLOUD_CLIENT_SECRET", "secret"), \
+            _mock_http(handler):
+        assert asyncio.run(cs.refresh_soundcloud_token(user, db)) == "sc-new"
+    assert user.integration.soundcloud_refresh_token == "sc-refresh-new"
+    assert user.integration.soundcloud_token_expires_at > datetime.now(UTC)
+    db.commit.assert_called_once()
 
 
 def test_parse_yandex_now_playing():
@@ -215,17 +294,20 @@ def _linked_user(db, name, banned=False, **integration):
 def test_pollable_users_and_poll_user(db):
     spotify = _linked_user(db, "sp", spotify_refresh_token="r")
     yandex = _linked_user(db, "ya", yandex_token="t")
+    soundcloud = _linked_user(db, "sc", soundcloud_refresh_token="r")
     _linked_user(db, "none")
     _linked_user(db, "banned", banned=True, yandex_token="t")
-    assert sorted(cs.get_pollable_user_ids(db)) == sorted([spotify, yandex])
+    assert sorted(cs.get_pollable_user_ids(db)) == sorted([spotify, yandex, soundcloud])
 
     with patch.object(cs.asyncio, "sleep", new=AsyncMock()), \
             patch.object(cs, "sync_spotify_status", new=AsyncMock()) as sp, \
-            patch.object(cs, "sync_yandex_status", new=AsyncMock()) as ya:
+            patch.object(cs, "sync_yandex_status", new=AsyncMock()) as ya, \
+            patch.object(cs, "sync_soundcloud_status", new=AsyncMock()) as sc:
         asyncio.run(cs.poll_once(AsyncMock()))
         asyncio.run(cs.poll_user(999999, AsyncMock()))  # unknown user: no-op
     assert sp.await_count == 1
     assert ya.await_count == 1
+    assert sc.await_count == 1
 
     check = SessionLocal()
     try:

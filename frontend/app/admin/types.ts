@@ -96,6 +96,7 @@ export interface SystemHealth {
   cloud_scrobblers: {
     yandex_users: number;
     spotify_users: number;
+    soundcloud_users: number;
   };
 }
 
@@ -177,6 +178,7 @@ export interface UserDetails {
     current_streak: number;
     spotify_linked: boolean;
     yandex_linked: boolean;
+    soundcloud_linked: boolean;
     lastfm_username: string | null;
     last_sync: string | null;
   };
@@ -354,6 +356,7 @@ export interface IntegrationRow {
   yandex: boolean;
   yandex_live: YandexLiveStatus | null;
   spotify: boolean;
+  soundcloud: boolean;
   lastfm_username: string | null;
   last_sync: string | null;
   last_scrobble: string | null;
@@ -361,7 +364,7 @@ export interface IntegrationRow {
 
 export interface IntegrationPage extends Paged<IntegrationRow> {
   providers: Record<
-    "yandex" | "spotify" | "lastfm",
+    "yandex" | "spotify" | "soundcloud" | "lastfm",
     { enabled: boolean; linked: number }
   >;
   redis: boolean;
