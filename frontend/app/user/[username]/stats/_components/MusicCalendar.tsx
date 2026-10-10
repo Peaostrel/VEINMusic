@@ -60,7 +60,7 @@ function Month({
   return (
     <section className="rounded-lg border border-line-soft p-3">
       <h3 className="mb-3 text-sm font-medium">{MONTHS[month]}</h3>
-      <div className="mb-1 grid grid-cols-7 gap-1 text-center font-mono text-[9px] text-fg-3">
+      <div className="mb-1 grid grid-cols-7 gap-1 text-center font-mono text-[10px] text-fg-3">
         {WEEKDAYS.map((weekday) => (
           <span key={weekday}>{weekday}</span>
         ))}
@@ -74,6 +74,7 @@ function Month({
           const strength = day
             ? Math.max(24, Math.round((day.scrobbles / max) * 100))
             : 0;
+          const activeTextColor = strength >= 60 ? "text-on-accent" : "text-fg";
           return (
             <button
               key={key}
@@ -90,15 +91,13 @@ function Month({
                   ? `${day.scrobbles} · ${day.top_artist}`
                   : "Нет прослушиваний"
               }
-              className={`aspect-square rounded-sm border text-[9px] transition-transform enabled:hover:scale-110 enabled:focus-visible:outline enabled:focus-visible:outline-2 enabled:focus-visible:outline-accent ${
-                selected === key
-                  ? "border-fg text-on-accent"
-                  : "border-transparent text-fg-2"
-              }`}
+              className={`h-8 min-w-0 rounded-sm border font-mono text-[11px] transition-transform enabled:hover:scale-110 enabled:focus-visible:outline enabled:focus-visible:outline-2 enabled:focus-visible:outline-accent ${
+                selected === key ? "border-fg" : "border-transparent"
+              } ${day ? activeTextColor : "text-fg-3"}`}
               style={{
                 background: day
-                  ? `color-mix(in srgb, var(--accent) ${strength}%, var(--surface-2))`
-                  : "var(--surface-2)",
+                  ? `color-mix(in srgb, var(--accent) ${strength}%, var(--color-surface-2))`
+                  : "var(--color-surface-2)",
               }}
             >
               {number}
@@ -216,7 +215,7 @@ export function MusicCalendar({ username }: Readonly<{ username: string }>) {
             ))}
           </dl>
 
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {MONTHS.map((_, month) => (
               <Month
                 key={month}
