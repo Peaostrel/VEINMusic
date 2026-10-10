@@ -11,12 +11,16 @@ const ALARM_NAME = 'FLUSH_OFFLINE_SCROBBLES';
 // Setup periodic alarm to flush offline queue (and finish device pairing
 // if the popup was closed before the user approved the code)
 if (chrome.alarms) {
-    chrome.alarms.create(ALARM_NAME, { periodInMinutes: 1 });
+    Promise.resolve(chrome.alarms.create(ALARM_NAME, { periodInMinutes: 1 })).catch((error) => {
+        console.warn('[VEIN] Не удалось включить фоновую синхронизацию:', error);
+    });
     chrome.alarms.onAlarm.addListener((alarm) => {
         if (alarm.name === ALARM_NAME) {
-            flushOfflineQueue();
+            void flushOfflineQueue();
             veinPollPairing().then((status) => {
-                if (status === 'approved') flushOfflineQueue();
+                if (status === 'approved') return flushOfflineQueue();
+            }).catch((error) => {
+                console.warn('[VEIN] Не удалось проверить подключение устройства:', error);
             });
         }
     });
@@ -52,6 +56,12 @@ function addToOfflineQueue(scrobbleData) {
     return mutateOfflineQueue((queue) => {
         if (queue.length >= 500) return queue;
         return [...queue, { payload: scrobbleData, queuedAt: Date.now() }];
+    });
+}
+
+function bufferScrobble(scrobbleData) {
+    addToOfflineQueue(scrobbleData).catch((error) => {
+        console.warn('[VEIN] Прослушивание не удалось сохранить для повторной отправки:', error);
     });
 }
 
@@ -124,19 +134,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     // 1. Принимаем ключи с сайта
     if (request.type === 'SYNC_KEYS' && isTrusted) {
-        chrome.storage.local.set({
+        storageSet({
             username: request.data.username,
             apiKey: request.data.apiKey
+        }).then(() => {
+            console.log('[VEIN] Ключи синхронизированы с сайтом.');
+            // Flush only after the new credentials have actually been saved.
+            return flushOfflineQueue();
+        }).catch((error) => {
+            console.warn('[VEIN] Не удалось синхронизировать ключи с сайтом:', error);
         });
-        console.log('[VEIN] Ключи синхронизированы с сайтом.');
-        // Trigger queue flush on successful login/sync
-        flushOfflineQueue();
     }
 
     // 2. Стираем ключи, если вышли
     if (request.type === 'LOGOUT' && isTrusted) {
-        chrome.storage.local.remove(['username', 'apiKey']);
-        console.log('[VEIN] Ключи стерты по запросу с сайта.');
+        chrome.storage.local.remove(['username', 'apiKey'], () => {
+            const error = chrome.runtime.lastError;
+            if (error) console.warn('[VEIN] Не удалось удалить ключи:', error.message);
+            else console.log('[VEIN] Ключи стерты по запросу с сайта.');
+        });
     }
 
     // 3. Отправляем трек на сервер или сохраняем в оффлайн-очередь.
@@ -151,7 +167,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             
             if (!apiKey) {
                 console.log('[VEIN] Отмена: нет ключа в storage. Сохраняем в оффлайн-буфер.');
-                addToOfflineQueue(payload);
+                bufferScrobble(payload);
                 return;
             }
             
@@ -168,16 +184,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     return res.json().then(out => {
                         console.log('[VEIN] Трек успешно отправлен на сервер:', out);
                         // Also try to flush any previously stored offline scrobbles
-                        flushOfflineQueue();
+                        return flushOfflineQueue();
                     });
                 } else {
                     console.warn(`[VEIN] Сервер ответил ${res.status}, сохраняем в оффлайн-очередь.`);
-                    addToOfflineQueue(payload);
+                    bufferScrobble(payload);
                 }
             })
             .catch(err => {
                 console.warn('[VEIN] Сеть недоступна, сохраняем в оффлайн-очередь:', err);
-                addToOfflineQueue(payload);
+                bufferScrobble(payload);
             });
         });
     }

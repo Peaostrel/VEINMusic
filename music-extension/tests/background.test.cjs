@@ -73,3 +73,35 @@ test('live 429 response stores the scrobble for retry', async () => {
     await vm.runInContext('queueMutation', context);
     assert.deepEqual(state.offline_scrobbles.map((x) => x.payload.id), ['live']);
 });
+
+test('key synchronization waits for storage before flushing with the new key', async () => {
+    const sent = [];
+    const { context, onMessage } = harness(['A'], async (_url, options) => {
+        sent.push(options.headers.Authorization);
+        return { ok: true };
+    });
+    const originalSet = context.chrome.storage.local.set;
+    let save;
+    context.chrome.storage.local.set = (values, callback) => {
+        save = () => originalSet(values, callback);
+    };
+    onMessage({ type: 'SYNC_KEYS', data: { username: 'alice', apiKey: 'new-key' } },
+        { tab: { url: 'https://music.vein.guru/' } });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(sent, []);
+    save();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(sent, ['Bearer new-key']);
+});
+
+test('failed offline storage is handled without losing the existing queue', async () => {
+    const { context, state } = harness(['A'], async () => ({ ok: true }));
+    context.chrome.storage.local.set = (_values, callback) => {
+        context.chrome.runtime.lastError = { message: 'Storage quota exceeded' };
+        callback();
+        delete context.chrome.runtime.lastError;
+    };
+    vm.runInContext('bufferScrobble({ id: "B" })', context);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(state.offline_scrobbles.map((item) => item.payload.id), ['A']);
+});
