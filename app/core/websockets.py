@@ -204,7 +204,7 @@ class ConnectionManager:
     def __init__(self) -> None:
         # WebSockets held by *this* process
         self.active_connections: dict[str, list[WebSocket]] = {}
-        self.room_sockets: dict[str, dict[str, WebSocket]] = {}
+        self.room_sockets: dict[str, dict[str, list[WebSocket]]] = {}
 
         self._memory_store = _MemoryRoomStore()
         self._redis: Any = None
@@ -301,7 +301,7 @@ class ConnectionManager:
         if event.get("kind") == "session_revoke":
             username, session_id = event.get("key", ""), event.get("session_id")
             sockets = list(self.active_connections.get(username, []))
-            sockets += [ws for room in self.room_sockets.values() for user, ws in room.items() if user == username]
+            sockets += [ws for room in self.room_sockets.values() for user, connections in room.items() if user == username for ws in connections]
             for ws in sockets:
                 if getattr(getattr(ws, "state", None), "session_id", None) == session_id:
                     try:
@@ -314,8 +314,8 @@ class ConnectionManager:
             sockets = list(self.active_connections.get(event.get("key", ""), []))
         else:
             exclude = event.get("exclude")
-            sockets = [ws for user, ws in self.room_sockets.get(event.get("key", ""), {}).items()
-                       if user != exclude]
+            sockets = [ws for user, connections in self.room_sockets.get(event.get("key", ""), {}).items()
+                       if user != exclude for ws in connections]
         for ws in sockets:
             try:
                 await ws.send_json(payload)
@@ -353,15 +353,17 @@ class ConnectionManager:
         if await store.listener_count(room_id) >= MAX_ROOM_LISTENERS:
             return None
         await store.add_listener(room_id, username)
-        self.room_sockets.setdefault(room_id, {})[username] = websocket
+        self.room_sockets.setdefault(room_id, {}).setdefault(username, []).append(websocket)
         return await self.room_state(room_id)
 
     async def leave_room(self, room_id: str, username: str, websocket: WebSocket) -> list[str]:
         """Unregister a listener; deletes the room when it becomes empty.
         Returns the remaining listeners."""
         local = self.room_sockets.get(room_id, {})
-        # The same user may have reconnected (e.g. a second tab) meanwhile
-        if local.get(username) is websocket:
+        connections = local.get(username, [])
+        if websocket in connections:
+            connections.remove(websocket)
+        if not connections:
             local.pop(username, None)
         if not local:
             self.room_sockets.pop(room_id, None)

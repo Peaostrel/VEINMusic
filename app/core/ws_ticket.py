@@ -11,6 +11,9 @@ from __future__ import annotations
 import hmac
 import time
 
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.hmac import HMAC
+
 from app.core.security import SECRET_KEY
 
 TICKET_TTL_SEC = 60
@@ -23,7 +26,9 @@ def _sign(username: str, expires: int, session_version: int, session_id: str | N
     message = payload.encode()
     # HMAC authenticates the public ticket with a server key. User passwords
     # are bcrypt hashes in security.py; the key here is not a user password.
-    return hmac.digest(SECRET_KEY.encode(), message, "sha256").hex()  # codeql[py/weak-cryptographic-algorithm]
+    authenticator = HMAC(SECRET_KEY.encode(), hashes.SHA256())
+    authenticator.update(message)
+    return authenticator.finalize().hex()
 
 
 def issue_ticket(username: str, now: float | None = None, *, session_version: int = 0, session_id: str | None = None) -> str:

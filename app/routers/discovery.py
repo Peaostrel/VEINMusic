@@ -48,12 +48,12 @@ def get_taste_match(viewer: str, profile: str, request: Request,
         SELECT DISTINCT t.artist
         FROM scrobbles s
         JOIN tracks t ON s.track_id = t.id
-        WHERE s.excluded_from_stats = false AND s.user_id = :u1 AND s.listened_sec * 100 >= t.duration * 85
+        WHERE s.excluded_from_stats = false AND s.deleted_at IS NULL AND s.user_id = :u1 AND s.listened_sec * 100 >= t.duration * 85
         INTERSECT
         SELECT DISTINCT t.artist
         FROM scrobbles s
         JOIN tracks t ON s.track_id = t.id
-        WHERE s.excluded_from_stats = false AND s.user_id = :u2 AND s.listened_sec * 100 >= t.duration * 85
+        WHERE s.excluded_from_stats = false AND s.deleted_at IS NULL AND s.user_id = :u2 AND s.listened_sec * 100 >= t.duration * 85
     """)
 
     common_rows = db.execute(
@@ -70,7 +70,7 @@ def get_taste_match(viewer: str, profile: str, request: Request,
         SELECT COUNT(DISTINCT t.artist)
         FROM scrobbles s
         JOIN tracks t ON s.track_id = t.id
-        WHERE s.excluded_from_stats = false AND (s.user_id = :u1 OR s.user_id = :u2) AND s.listened_sec * 100 >= t.duration * 85
+        WHERE s.excluded_from_stats = false AND s.deleted_at IS NULL AND (s.user_id = :u1 OR s.user_id = :u2) AND s.listened_sec * 100 >= t.duration * 85
     """)
     total_unique = db.execute(
         sql_total, {
@@ -99,9 +99,9 @@ def get_recommendations(
         FROM scrobbles s
         JOIN tracks t ON s.track_id = t.id
         JOIN users u ON s.user_id = u.id
-        WHERE s.excluded_from_stats = false AND u.username IN :twins
+        WHERE s.excluded_from_stats = false AND s.deleted_at IS NULL AND u.username IN :twins
           AND t.artist NOT IN (
-              SELECT DISTINCT t2.artist FROM scrobbles s2 JOIN tracks t2 ON s2.track_id = t2.id WHERE s2.excluded_from_stats = false AND s2.user_id = :my_id
+              SELECT DISTINCT t2.artist FROM scrobbles s2 JOIN tracks t2 ON s2.track_id = t2.id WHERE s2.excluded_from_stats = false AND s2.deleted_at IS NULL AND s2.user_id = :my_id
           )
         GROUP BY t.artist
         ORDER BY plays DESC

@@ -201,3 +201,76 @@ def test_revocation_closes_only_matching_sockets():
     asyncio.run(manager._deliver({"kind": "session_revoke", "key": "alice", "session_id": "first"}))
     first.close.assert_awaited_once_with(code=1008)
     second.close.assert_not_awaited()
+
+
+@pytest.mark.parametrize("duration", [0, None])
+def test_unknown_duration_filters_and_saved_heard_use_same_threshold(client, db, people, duration):
+    row = listen(db, people[0], seconds=0)
+    row.track.duration = duration
+    db.commit()
+    assert client.get("/api/me/history?status=counted").json()["items"] == []
+    incomplete = client.get("/api/me/history?status=incomplete").json()["items"]
+    assert [item["id"] for item in incomplete] == [row.id]
+    assert client.put(f"/api/me/listen-later/{row.track_id}", json={}).status_code == 200
+    row.played_at = datetime.now(UTC) + timedelta(seconds=1)
+    db.commit()
+    assert not client.get("/api/me/listen-later").json()["items"][0]["heard"]
+    row.listened_sec = 153
+    db.commit()
+    assert client.get("/api/me/listen-later").json()["items"][0]["heard"]
+    assert len(client.get("/api/me/history?status=counted").json()["items"]) == 1
+
+
+def test_raw_taste_queries_hide_deleted_rows_even_without_exclusion(client, db, people):
+    from app.services.taste import get_taste_match_internal
+    row = listen(db, people[0])
+    listen(db, people[1])
+    assert get_taste_match_internal("alice", "bob", db)["common_artists"] == ["Band"]
+    row.deleted_at = datetime.now(UTC)
+    row.excluded_from_stats = False
+    db.commit()
+    assert get_taste_match_internal("alice", "bob", db)["common_artists"] == []
+    assert client.get("/api/taste-match/alice/bob").json()["common_artists"] == []
+
+
+def test_repeated_impression_moves_to_front_and_timestamp_cursor_pages(client, db, people):
+    from app.models import RecommendationImpression
+    tracks = [listen(db, people[0], title=f"Impression {i}").track_id for i in range(55)]
+    stamp = datetime.now(UTC) - timedelta(days=1)
+    db.add_all([RecommendationImpression(user_id=people[0].id, track_id=track_id, shown_at=stamp) for track_id in tracks])
+    db.commit()
+    client.post("/api/me/recommendations/impressions", json={"ids": [tracks[0]]})
+    first = client.get("/api/me/recommendations/history").json()
+    assert first["items"][0]["track"]["id"] == tracks[0]
+    second = client.get("/api/me/recommendations/history", params={"before": first["next_cursor"]}).json()
+    ids = [item["id"] for item in first["items"] + second["items"]]
+    assert len(ids) == len(set(ids)) == 55
+    assert second["next_cursor"] is None
+    assert client.get("/api/me/recommendations/history?before=bad").status_code == 422
+
+
+def test_every_room_tab_receives_events_and_is_revoked_without_removing_other_tab():
+    import asyncio
+    from app.core.websockets import ConnectionManager
+
+    async def scenario():
+        manager = ConnectionManager()
+        manager._redis_down_until = float("inf")
+        sockets = [SimpleNamespace(state=SimpleNamespace(session_id=session), close=AsyncMock(), send_json=AsyncMock())
+                   for session in ("first", "first", "second")]
+        for socket in sockets:
+            await manager.join_room("room", "alice", socket)
+        await manager.broadcast_to_room("room", {"type": "example"})
+        for socket in sockets:
+            socket.send_json.assert_awaited_once()
+        await manager._deliver({"kind": "session_revoke", "key": "alice", "session_id": "first"})
+        sockets[0].close.assert_awaited_once_with(code=1008)
+        sockets[1].close.assert_awaited_once_with(code=1008)
+        sockets[2].close.assert_not_awaited()
+        await manager.leave_room("room", "alice", sockets[0])
+        await manager.leave_room("room", "alice", sockets[1])
+        assert (await manager.room_state("room"))["listeners"] == ["alice"]
+        await manager.leave_room("room", "alice", sockets[2])
+        assert await manager.room_state("room") is None
+
+    asyncio.run(scenario())

@@ -475,7 +475,7 @@ async def together_websocket_route(websocket: WebSocket, room_id: str):
         # shield the async cleanup so the listener is always unregistered.
         with anyio.CancelScope(shield=True):
             remaining = await manager.leave_room(room_id, username, websocket)
-            if remaining:
+            if remaining and username not in remaining:
                 await manager.broadcast_to_room(room_id, {
                     "type": "USER_LEFT",
                     "username": username,

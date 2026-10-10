@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, exists, or_, select
+from sqlalchemy import and_, exists, func, literal, or_, select, tuple_
 from sqlalchemy.orm import Session, joinedload
 from app.core.security import get_current_user
 from app.database import get_db
@@ -53,7 +53,7 @@ def save_track(track_id: int, data: SaveTrack, db: DB, user: Owner):
 def saved_tracks(db: DB, user: Owner, before: int | None = None, limit: Annotated[int, Query(ge=1, le=100)] = 50):
     played = exists(select(Scrobble.id).join(Track, Track.id == Scrobble.track_id).where(
         Scrobble.user_id == user.id, Scrobble.track_id == ListenLater.track_id,
-        Scrobble.played_at >= ListenLater.created_at, Scrobble.listened_sec * 100 >= Track.duration * 85))
+        Scrobble.played_at >= ListenLater.created_at, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85))
     query = db.query(ListenLater, played.label("heard"), RecommendationFeedback.value).options(joinedload(ListenLater.track)).outerjoin(
         RecommendationFeedback, (RecommendationFeedback.user_id == user.id) & (RecommendationFeedback.track_id == ListenLater.track_id)).filter(ListenLater.user_id == user.id)
     if before:
@@ -89,10 +89,15 @@ def record_impressions(data: Impressions, db: DB, user: Owner):
 
 
 @router.get("/api/me/recommendations/history")
-def recommendation_history(db: DB, user: Owner, before: int | None = None):
+def recommendation_history(db: DB, user: Owner, before: Annotated[str | None, Query(max_length=120)] = None):
     query = db.query(RecommendationImpression).options(joinedload(RecommendationImpression.track)).filter_by(user_id=user.id)
     if before:
-        query = query.filter(RecommendationImpression.id < before)
-    rows = query.order_by(RecommendationImpression.id.desc()).limit(51).all()
+        try:
+            stamp, row_id = before.rsplit("|", 1)
+            when, last_id = datetime.fromisoformat(stamp), int(row_id)
+        except ValueError as exc:
+            raise HTTPException(422, "Некорректный курсор") from exc
+        query = query.filter(tuple_(RecommendationImpression.shown_at, RecommendationImpression.id) < tuple_(literal(when), literal(last_id)))
+    rows = query.order_by(RecommendationImpression.shown_at.desc(), RecommendationImpression.id.desc()).limit(51).all()
     return {"items": [{"id": row.id, "shown_at": row.shown_at, "track": _track_dict(row.track)} for row in rows[:50]],
-            "next_cursor": rows[49].id if len(rows) > 50 else None}
+            "next_cursor": f"{rows[49].shown_at.isoformat()}|{rows[49].id}" if len(rows) > 50 else None}

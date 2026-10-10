@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import literal, or_, tuple_
+from sqlalchemy import func, literal, or_, tuple_
 from sqlalchemy.orm import Session
 
 from app.core.rate_limit import credential_key, limiter
@@ -85,9 +85,9 @@ def history_page(db: DB, user: Owner, q: Annotated[str, Query(max_length=100)] =
     if status == "excluded":
         query = query.filter(Scrobble.excluded_from_stats.is_(True))
     elif status == "counted":
-        query = query.filter(Scrobble.excluded_from_stats.is_(False), Scrobble.listened_sec * 100 >= Track.duration * 85)
+        query = query.filter(Scrobble.excluded_from_stats.is_(False), Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85)
     elif status == "incomplete":
-        query = query.filter(Scrobble.excluded_from_stats.is_(False), Scrobble.is_imported.isnot(True), Scrobble.listened_sec * 100 < Track.duration * 85)
+        query = query.filter(Scrobble.excluded_from_stats.is_(False), Scrobble.is_imported.isnot(True), Scrobble.listened_sec * 100 < func.coalesce(func.nullif(Track.duration, 0), 180) * 85)
     elif status == "metadata":
         query = query.filter(or_(Track.album.is_(None), Track.album == "", Track.artist == "", Track.title == ""))
     if cursor:
