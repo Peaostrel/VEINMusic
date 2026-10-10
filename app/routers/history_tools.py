@@ -33,7 +33,7 @@ class BatchChange(BaseModel):
 def _owned_rows(db, user, data):
     ids = set(data.ids)
     rows = db.query(Scrobble).execution_options(include_excluded=True).filter(
-        Scrobble.user_id == user.id, Scrobble.id.in_(ids)).order_by(Scrobble.id).with_for_update().all()
+        Scrobble.user_id == user.id, Scrobble.id.in_(ids)).order_by(Scrobble.id).with_for_update(of=Scrobble).all()
     if len(rows) != len(ids):
         raise HTTPException(404, "Часть записей не найдена в вашей истории")
     if data.action == "edit" and not any(value and value.strip() for value in (data.title, data.artist, data.album)):
@@ -139,7 +139,7 @@ def undo_change(change_id: str, db: DB, user: Owner):
         raise HTTPException(409, "Изменение уже отменено или срок отмены истёк")
     payload = cast(list[dict[str, Any]], change.payload)
     rows = db.query(Scrobble).execution_options(include_excluded=True, include_deleted=True).filter(
-        Scrobble.user_id == user.id, Scrobble.id.in_([item["id"] for item in payload])).with_for_update().all()
+        Scrobble.user_id == user.id, Scrobble.id.in_([item["id"] for item in payload])).with_for_update(of=Scrobble).all()
     by_id = {row.id: row for row in rows}
     for item in payload:
         row = by_id.get(item["id"])

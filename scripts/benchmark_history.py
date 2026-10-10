@@ -6,6 +6,7 @@ The temporary fixture is deleted when the benchmark exits.
 import argparse
 import json
 import resource
+import secrets
 import statistics
 import sys
 import tempfile
@@ -36,7 +37,7 @@ def run(size, path):
     Base.metadata.create_all(engine)
     end = datetime.now(UTC)
     with Session(engine) as db:
-        user = User(username="benchmark", hashed_password="fixture", profile=UserProfile())
+        user = User(username="benchmark", hashed_password=secrets.token_hex(32), profile=UserProfile())
         db.add(user); db.flush()
         db.execute(Track.__table__.insert(), [{"id": i, "title": f"Track {i}", "artist": f"Artist {i % 100}", "genre": "Rock", "duration": 180} for i in range(1, 501)])
         for offset in range(0, size, 10000):
