@@ -90,6 +90,15 @@ def _public_scrobbles(db: Session):
     )
 
 
+def _redact_cached_user_preview(cached, user):
+    data = dict(cached)
+    data["indexable"] = _indexable(user)
+    if not _anonymous_can_see(user.profile, "statistics"):
+        for field in ("scrobbles", "top_artist", "level", "rank"):
+            data[field] = None
+    return data
+
+
 @router.get("/user/{username}", responses={404: {"description": "No such public user"}})
 def user_preview(username: str, db: Annotated[Session, Depends(get_db)]):
     user = _public_user(db, username)
@@ -97,12 +106,7 @@ def user_preview(username: str, db: Annotated[Session, Depends(get_db)]):
     cache_key = f"preview:user:{username}"
     cached = get_from_cache(cache_key, PREVIEW_TTL)
     if cached is not None and not profile.is_private:
-        cached = dict(cached)
-        cached["indexable"] = _indexable(user)
-        if not _anonymous_can_see(profile, "statistics"):
-            for field in ("scrobbles", "top_artist", "level", "rank"):
-                cached[field] = None
-        return cached
+        return _redact_cached_user_preview(cached, user)
     data: dict = {
         "username": user.username,
         "display_name": profile.display_name or user.username,

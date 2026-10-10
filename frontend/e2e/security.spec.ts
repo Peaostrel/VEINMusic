@@ -9,14 +9,12 @@ test("two-factor enrollment downloads recovery codes and login requires the fact
   const username = await signUp(page, "mfasecurity");
   await page.goto("/settings");
   await page.getByRole("button", { name: "Безопасность", exact: true }).click();
-  const card = page
-    .locator("section")
-    .filter({
-      has: page.getByRole("heading", {
-        name: "Двухфакторная защита",
-        exact: true,
-      }),
-    });
+  const card = page.locator("section").filter({
+    has: page.getByRole("heading", {
+      name: "Двухфакторная защита",
+      exact: true,
+    }),
+  });
   await card.getByLabel("Пароль для двухфакторной защиты").fill(PASSWORD);
   await card.getByRole("button", { name: "Настроить защиту" }).click();
   await expect(card.locator("code")).toBeVisible();

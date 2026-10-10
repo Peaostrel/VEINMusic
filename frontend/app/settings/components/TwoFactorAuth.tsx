@@ -90,7 +90,11 @@ export default function TwoFactorAuth() {
   const button =
     "self-start rounded-lg bg-accent px-4 py-2 text-sm text-on-accent disabled:opacity-50";
   const action = chooseAction(Boolean(secret), Boolean(status?.enabled));
-  const labels = { setup: "Настроить защиту", enable: "Подтвердить и включить", disable: "Отключить защиту" };
+  const labels = {
+    setup: "Настроить защиту",
+    enable: "Подтвердить и включить",
+    disable: "Отключить защиту",
+  };
   return (
     <section className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-6">
       <div>
@@ -101,9 +105,7 @@ export default function TwoFactorAuth() {
         </p>
       </div>
       {message && (
-        <p role="status" className="text-sm text-fg-2">
-          {message}
-        </p>
+        <output className="block text-sm text-fg-2">{message}</output>
       )}
       {status && (
         <p className="text-sm text-fg">

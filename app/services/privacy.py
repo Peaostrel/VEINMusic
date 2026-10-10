@@ -26,10 +26,10 @@ def filter_public_feed(items: list[dict], db: Session) -> list[dict]:
     rows = db.query(User.username, UserProfile).join(
         UserProfile, UserProfile.user_id == User.id).filter(
         User.username.in_(names), User.is_banned.isnot(True)).all()
-    profiles = {name: profile for name, profile in rows}
+    profiles: dict[str, UserProfile] = dict(rows)  # type: ignore[arg-type]  # SQLAlchemy rows are key/value pairs
     visible = []
     for item in items:
-        profile = profiles.get(item.get("username"))
+        profile = profiles.get(str(item.get("username") or ""))
         if not is_public_section(profile, "history"):
             continue
         preferences = preferences_dict(profile)

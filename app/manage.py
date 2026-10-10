@@ -3,7 +3,6 @@ import argparse
 import json
 
 from app.database import SessionLocal
-from app.models import User
 from app.services.incident_response import revoke_service_sessions
 
 
@@ -17,7 +16,7 @@ def main():
     args = parser.parse_args()
     with SessionLocal() as db:
         if not args.apply:
-            print(json.dumps({"dry_run": True, "users": db.query(User.id).count(), "revoke_api_keys": args.revoke_api_keys}))
+            print(json.dumps({"dry_run": True, "action": "revoke-all-sessions", "revoke_api_keys": bool(args.revoke_api_keys)}))
             return
         print(json.dumps(revoke_service_sessions(db, revoke_api_keys=args.revoke_api_keys, reason=args.reason)))
 
