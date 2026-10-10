@@ -245,6 +245,11 @@ export interface Timeseries {
 }
 
 export interface SystemStatus {
+  operations?: {
+    alerts: { code: string; message: string }[];
+    disk_used_percent: number | null;
+    offsite: { configured: boolean; age_hours: number | null; note: string };
+  };
   worker: {
     redis: boolean;
     queued_jobs: number | null;

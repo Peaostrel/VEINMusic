@@ -69,7 +69,7 @@ def test_login_success_and_logout(client, db):
     assert "api_key" in resp.cookies
 
     # Log out
-    resp = client.post("/auth/logout")
+    resp = client.post("/auth/logout", headers={"Origin": "http://localhost:3000"})
     assert resp.status_code == 200
     assert resp.cookies.get(
         "api_key") is None or resp.cookies.get("api_key") == ""

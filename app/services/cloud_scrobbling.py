@@ -4,7 +4,7 @@ import logging
 import os
 import re
 from datetime import UTC, datetime, timedelta
-from typing import cast
+from typing import Any, cast
 
 import httpx
 from sqlalchemy import or_
@@ -90,7 +90,7 @@ async def sync_spotify_status(user: User, db: Session, process_func):
                     progress = int(data.get("progress_ms", 0) / 1000)
                     album = item.get("album", {}).get("name")
 
-                    await process_func(db, user, title, artist, cover, track_url, "spotify", progress, True, duration, album)
+                    await process_func(db, user, title, artist, cover, track_url, "spotify", progress, True, duration, album, collector="cloud")
         except Exception as e:
             record_health(db, int(user.id), "spotify", "network_error")
             logger.warning(f"Spotify sync error: {e}")
@@ -351,6 +351,7 @@ async def sync_soundcloud_status(user: User, db: Session, process_func) -> None:
             is_playing,
             metadata["duration"],
             metadata["album"],
+            collector="cloud",
         )
         if not is_playing:
             integration.soundcloud_current_track = None
@@ -451,7 +452,7 @@ async def _fetch_yandex_track_info(client, track_id, headers, process_func, db, 
         return None
     track_url = f"https://music.yandex.ru/track/{track_id}"
     progress, is_playing = position or _estimate_queue_position(changed_at, info["duration"])
-    extra = {} if credit_sec is None else {"credit_sec": credit_sec, "pending_sec": pending_sec}
+    extra: dict[str, Any] = {"collector": "cloud"} if credit_sec is None else {"credit_sec": credit_sec, "pending_sec": pending_sec, "collector": "live"}
     return await process_func(
         db, user, info["title"], info["artist"], info["cover"],
         track_url, "yandex", progress, is_playing,

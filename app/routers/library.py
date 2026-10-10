@@ -16,6 +16,7 @@ from app.models import Scrobble, SourceHealth, Track, TrackAlias, User, UserProf
 from app.schemas import ScrobbleMergeRequest
 from app.services import runtime_settings
 from app.services.cache import invalidate_all
+from app.services.privacy import public_statistics_users, public_feed_user_ids
 from app.services.user_preferences import get_preferences
 from app.services.source_health import MESSAGES, source_key
 
@@ -46,7 +47,8 @@ def _public_play_counts(db: Session):
         )
         .join(User, User.id == Scrobble.user_id)
         .join(UserProfile, UserProfile.user_id == User.id)
-        .filter(UserProfile.is_private.isnot(True), User.is_banned.isnot(True))
+        .filter(UserProfile.is_private.isnot(True), User.is_banned.isnot(True),
+                Scrobble.user_id.in_(set(public_statistics_users(db).values()) & set(public_feed_user_ids(db))))
         .group_by(Scrobble.track_id)
         .subquery()
     )
@@ -127,7 +129,8 @@ def _public_scrobble_query(db: Session):
         db.query(Scrobble)
         .join(User, User.id == Scrobble.user_id)
         .join(UserProfile, UserProfile.user_id == User.id)
-        .filter(UserProfile.is_private.isnot(True), User.is_banned.isnot(True))
+        .filter(UserProfile.is_private.isnot(True), User.is_banned.isnot(True),
+                Scrobble.user_id.in_(set(public_statistics_users(db).values()) & set(public_feed_user_ids(db))))
     )
 
 

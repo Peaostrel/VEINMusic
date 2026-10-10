@@ -63,6 +63,12 @@ export default function LibraryPage() {
         title="Открытия и ваш вкус"
         text="Рекомендации с обратной связью, музыка для двоих и итоги недели"
       />
+      <ActionCard
+        href="/library/later"
+        icon={<ListRestart className="h-5 w-5" />}
+        title="Послушать позже"
+        text="Личный список музыки, заметки и впечатления после прослушивания"
+      />
       <MemorySection
         title="В этот день"
         subtitle="Что играло в эту дату в прошлые годы"

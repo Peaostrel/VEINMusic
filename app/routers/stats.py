@@ -839,7 +839,7 @@ def _full_ranking(db: Session, viewer_id: int | None = None) -> list[dict[str, A
             SELECT s.user_id, s.xp_earned
             FROM scrobbles s
             JOIN tracks t ON s.track_id = t.id
-            WHERE s.excluded_from_stats = false AND s.listened_sec * 100 >= COALESCE(NULLIF(t.duration, 0), 180) * 85
+            WHERE s.excluded_from_stats = false AND s.deleted_at IS NULL AND s.listened_sec * 100 >= COALESCE(NULLIF(t.duration, 0), 180) * 85
         ) s ON u.id = s.user_id
         WHERE (u.is_banned IS NULL OR u.is_banned = :not_banned)
         GROUP BY u.id, u.username, p.display_name, p.avatar_url, i.is_verified,

@@ -16,7 +16,7 @@ backup_once() {
     # Never auto-init: a network/auth error must not create a new repository.
     restic snapshots --latest 1 >/dev/null || return 1
     restic backup --host veinmusic-server --tag veinmusic-postgres "$latest" || return 1
-    touch /tmp/offsite-last-success
+    touch "${OFFSITE_STATUS_FILE:-/tmp/offsite-last-success}"
     echo '[offsite] Encrypted external backup completed'
 }
 

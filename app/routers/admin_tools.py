@@ -434,7 +434,8 @@ def _local_status(db: Session) -> dict[str, Any]:
 @router.get("/system/status")
 async def get_system_status(db: DB, admin: AdminUser):
     local = await asyncio.to_thread(_local_status, db)
-    return {"worker": await system_status.worker_status(), **local}
+    from app.services.operational_monitor import snapshot
+    return {"operations": await snapshot(), "worker": await system_status.worker_status(), **local}
 
 
 # ─── ERROR LOG ────────────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    JSON,
     String,
     func,
     text,
@@ -180,6 +181,8 @@ class Scrobble(Base):
         Index("ix_scrobbles_user_played_at", "user_id", "played_at"),
         # "online now" and activity queries
         Index("ix_scrobbles_updated_at", "updated_at"),
+        Index("ix_scrobbles_user_time_id", "user_id", "played_at", "id"),
+        Index("ix_scrobbles_user_track", "user_id", "excluded_from_stats", "deleted_at", "track_id"),
     )
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(
@@ -213,6 +216,9 @@ class Scrobble(Base):
     is_imported = Column(Boolean, default=False)
     excluded_from_stats = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     import_job_id = Column(Integer, ForeignKey("lastfm_import_jobs.id", ondelete="SET NULL"), nullable=True, index=True)
+    confirmed_sources = Column(JSON, nullable=True)
+    credit_source = Column(String, nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
 
     user = relationship("User", back_populates="scrobbles", lazy="joined")
     track = relationship("Track")
@@ -631,3 +637,45 @@ class SourceHealth(Base):
     received_count = Column(Integer, nullable=False, default=0, server_default="0")
     error_count = Column(Integer, nullable=False, default=0, server_default="0")
     processing_ms = Column(Integer, nullable=False, default=0, server_default="0")
+
+
+class HistoryChange(Base):
+    __tablename__ = "history_changes"
+    id = Column(String(32), primary_key=True)
+    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=False, index=True)
+    payload = Column(JSON, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    undone = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+
+
+class ListenLater(Base):
+    __tablename__ = "listen_later"
+    __table_args__ = (Index("uq_listen_later_user_track", "user_id", "track_id", unique=True),)
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=False, index=True)
+    track_id = Column(Integer, ForeignKey(FK_TRACKS_ID, ondelete="CASCADE"), nullable=False)
+    note = Column(String(1000), nullable=False, default="", server_default="")
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    track = relationship("Track")
+
+
+class RecommendationImpression(Base):
+    __tablename__ = "recommendation_impressions"
+    __table_args__ = (Index("uq_recommendation_impressions_user_track", "user_id", "track_id", unique=True),)
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=False, index=True)
+    track_id = Column(Integer, ForeignKey(FK_TRACKS_ID, ondelete="CASCADE"), nullable=False)
+    shown_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    track = relationship("Track")
+
+
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+    id = Column(String(32), primary_key=True)
+    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=False, index=True)
+    device = Column(String(100), nullable=False)
+    session_version = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    last_seen_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    revoked = Column(Boolean, nullable=False, default=False, server_default=text("false"))

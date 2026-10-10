@@ -23,14 +23,16 @@ KIND_COMMENT = "comment"
 KIND_FOLLOW = "follow"
 # Announcements sent from the admin panel; the actor is the sending admin
 KIND_SYSTEM = "system"
+KIND_SECURITY = "security"
 KIND_RECAP = "recap"
 KIND_ACHIEVEMENT = "achievement"
-KINDS = {KIND_LIKE, KIND_COMMENT, KIND_FOLLOW, KIND_SYSTEM, KIND_RECAP, KIND_ACHIEVEMENT}
+KINDS = {KIND_LIKE, KIND_COMMENT, KIND_FOLLOW, KIND_SYSTEM, KIND_RECAP, KIND_ACHIEVEMENT, KIND_SECURITY}
 PREFERENCE_KEYS = {
     KIND_LIKE: "likes",
     KIND_COMMENT: "comments",
     KIND_FOLLOW: "follows",
     KIND_SYSTEM: "system",
+    KIND_SECURITY: "system",
     KIND_RECAP: "weekly_digest",
     KIND_ACHIEVEMENT: "achievements",
 }
@@ -46,7 +48,7 @@ def create(db: Session, *, recipient_id: int, actor_id: int, kind: str,
     nothing to notify: own actions, or a repeated like/follow."""
     if kind not in KINDS or (
         recipient_id == actor_id
-        and kind not in (KIND_SYSTEM, KIND_RECAP, KIND_ACHIEVEMENT)
+        and kind not in (KIND_SYSTEM, KIND_RECAP, KIND_ACHIEVEMENT, KIND_SECURITY)
     ):
         return None
     recipient = db.query(User).filter(User.id == recipient_id).first()
@@ -97,7 +99,7 @@ def delete_for_user(db: Session, user_id: int) -> None:
 
 
 def _describe(kind: str, actor: str, track_title: Optional[str], message: Optional[str] = None) -> str:
-    if kind in (KIND_SYSTEM, KIND_RECAP, KIND_ACHIEVEMENT):
+    if kind in (KIND_SYSTEM, KIND_RECAP, KIND_ACHIEVEMENT, KIND_SECURITY):
         return message or ""
     target = f"«{track_title}»" if track_title else "ваше прослушивание"
     if kind == KIND_LIKE:
@@ -132,7 +134,7 @@ def list_for_user(db: Session, user_id: int, limit: int = MAX_LIST) -> dict[str,
     user = db.query(User).filter(User.id == user_id).first()
     in_app = preferences_dict(user.profile)["notifications"]["in_app"] if user else {}
     enabled_kinds = [
-        kind for kind, key in PREFERENCE_KEYS.items() if in_app.get(key, True)
+        kind for kind, key in PREFERENCE_KEYS.items() if kind == KIND_SECURITY or in_app.get(key, True)
     ]
     if not enabled_kinds:
         return {"items": [], "unread": 0}

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import SaveForLater from "@/components/SaveForLater";
 import { useCallback, useEffect, useState } from "react";
 import { jsonRequest, qualityRequest } from "@/app/lib/qualityApi";
 import { btn, EmptyState, input, Loading, PageHeader } from "@/components/ui";
@@ -75,6 +76,10 @@ function downloadStory(story: Story) {
 }
 
 export default function DiscoverPage() {
+  const [novelty, setNovelty] = useState(50);
+  const [recommendationHistory, setRecommendationHistory] = useState<Track[]>(
+    [],
+  );
   const [tracks, setTracks] = useState<Track[]>([]);
   const [evolution, setEvolution] = useState<Evolution | null>(null);
   const [story, setStory] = useState<Story | null>(null);
@@ -84,12 +89,22 @@ export default function DiscoverPage() {
   const [mix, setMix] = useState<Mix | null>(null);
   const [busy, setBusy] = useState(false);
   const [lastFeedback, setLastFeedback] = useState<number | null>(null);
-  const loadRecommendations = useCallback(async () => {
-    const result = await qualityRequest<{ recommendations: Track[] }>(
-      "/api/recommendations/me",
-    );
-    setTracks(result.recommendations);
-  }, []);
+  const loadRecommendations = useCallback(
+    async (avoidRecent = false) => {
+      const result = await qualityRequest<{ recommendations: Track[] }>(
+        `/api/recommendations/me?novelty=${novelty}&avoid_recent=${avoidRecent}`,
+      );
+      setTracks(result.recommendations);
+      if (result.recommendations.length)
+        await qualityRequest(
+          "/api/me/recommendations/impressions",
+          jsonRequest("POST", {
+            ids: result.recommendations.map((track) => track.id),
+          }),
+        );
+    },
+    [novelty],
+  );
   useEffect(() => {
     let active = true;
     Promise.all([
@@ -100,6 +115,13 @@ export default function DiscoverPage() {
       .then(([recs, tastes, recap]) => {
         if (active) {
           setTracks(recs.recommendations);
+          if (recs.recommendations.length)
+            void qualityRequest(
+              "/api/me/recommendations/impressions",
+              jsonRequest("POST", {
+                ids: recs.recommendations.map((track) => track.id),
+              }),
+            ).catch(() => undefined);
           setEvolution(tastes);
           setStory(recap);
         }
@@ -172,6 +194,89 @@ export default function DiscoverPage() {
       </output>
       <section className="space-y-4">
         <h2 className="text-lg font-semibold">Что послушать дальше</h2>
+        <Link href="/library/later" className="text-sm text-accent">
+          Мой список «Послушать позже» →
+        </Link>
+        <label className="block text-sm">
+          Разнообразие: {novelty}%
+          <input
+            aria-label="Разнообразие рекомендаций"
+            type="range"
+            min="0"
+            max="100"
+            step="10"
+            value={novelty}
+            onChange={(event) => setNovelty(Number(event.target.value))}
+            className="block w-full"
+          />
+          <span className="text-xs text-fg-3">
+            0 — ближе к любимым исполнителям; 100 — больше новых. Не больше двух
+            треков одного артиста.
+          </span>
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <button
+            className={btn.secondary}
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              void loadRecommendations()
+                .catch((cause: unknown) =>
+                  setMessage(
+                    cause instanceof Error ? cause.message : "Ошибка подборки",
+                  ),
+                )
+                .finally(() => setBusy(false));
+            }}
+          >
+            Применить разнообразие
+          </button>
+          <button
+            className={btn.secondary}
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              void loadRecommendations(true)
+                .catch((cause: unknown) =>
+                  setMessage(
+                    cause instanceof Error ? cause.message : "Ошибка подборки",
+                  ),
+                )
+                .finally(() => setBusy(false));
+            }}
+          >
+            Новая подборка
+          </button>
+          <button
+            className={btn.secondary}
+            onClick={() => {
+              void qualityRequest<{ items: { track: Track }[] }>(
+                "/api/me/recommendations/history",
+              )
+                .then((data) =>
+                  setRecommendationHistory(
+                    data.items.map((item) => item.track),
+                  ),
+                )
+                .catch((cause: unknown) =>
+                  setMessage(
+                    cause instanceof Error ? cause.message : "Ошибка истории",
+                  ),
+                );
+            }}
+          >
+            История рекомендаций
+          </button>
+        </div>
+        {!!recommendationHistory.length && (
+          <ul className="text-sm">
+            {recommendationHistory.map((track) => (
+              <li key={track.id}>
+                {track.artist} — {track.title}
+              </li>
+            ))}
+          </ul>
+        )}
         {lastFeedback !== null && (
           <button
             type="button"
@@ -199,6 +304,7 @@ export default function DiscoverPage() {
                 {track.artist} — {track.title}
               </Link>
               <p className="text-xs text-fg-3">{track.reason}</p>
+              <SaveForLater trackId={track.id} />
               <div className="flex flex-wrap gap-2">
                 {[
                   ["known", "Уже знаю"],

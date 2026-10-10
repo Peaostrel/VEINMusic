@@ -2,42 +2,34 @@
 from __future__ import annotations
 
 from typing import Any
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
-from app.models import RecommendationFeedback, Scrobble, Track, User, UserProfile
+from app.models import RecommendationFeedback, RecommendationImpression, Scrobble, Track, User, UserProfile
 from app.services.user_preferences import preferences_dict
 
 
 def _get_user_top_artists_and_genres(user_id: int, db: Session) -> tuple[dict[str, int], list[str]]:
     """Return top artists with play counts and distinct genres for a user."""
-    artist_rows = (
-        db.query(Track.artist, func.count(Scrobble.id).label("plays"))
-        .join(Scrobble, Scrobble.track_id == Track.id)
-        .filter(Scrobble.user_id == user_id, Track.artist.isnot(None))
-        .group_by(Track.artist)
-        .order_by(func.count(Scrobble.id).desc())
-        .limit(20)
-        .all()
-    )
+    # Aggregate listen counts before joining the catalog: a 500k-listen
+    # account should join hundreds of distinct tracks, not every listen.
+    own_tracks = db.query(Scrobble.track_id.label("track_id"), func.count(Scrobble.id).label("plays")).filter(
+        Scrobble.user_id == user_id).group_by(Scrobble.track_id).subquery()
+    artist_rows = db.query(Track.artist, func.sum(own_tracks.c.plays).label("plays")).join(
+        own_tracks, own_tracks.c.track_id == Track.id).filter(Track.artist.isnot(None)).group_by(
+        Track.artist).order_by(func.sum(own_tracks.c.plays).desc()).limit(20).all()
     artist_map = {str(row.artist): int(row[1]) for row in artist_rows if row.artist}
-
-    genre_rows = (
-        db.query(Track.genre)
-        .join(Scrobble, Scrobble.track_id == Track.id)
-        .filter(Scrobble.user_id == user_id, Track.genre.isnot(None))
-        .distinct()
-        .limit(10)
-        .all()
-    )
+    genre_rows = db.query(Track.genre).join(own_tracks, own_tracks.c.track_id == Track.id).filter(
+        Track.genre.isnot(None)).distinct().limit(10).all()
     genres = [str(r[0]) for r in genre_rows if r[0]]
     return artist_map, genres
 
 
 def _collect_genre_recommendations(
     user_genres: list[str],
-    user_scrobbled_track_ids: set[int],
+    user_scrobbled_track_ids: Any,
     seen_keys: set[tuple[str, str]],
     db: Session,
     public_listener_ids: list[int],
@@ -53,13 +45,12 @@ def _collect_genre_recommendations(
         .filter(Scrobble.user_id.in_(public_listener_ids),
                 or_(Track.genre.in_(user_genres), Track.artist.in_(liked_artists)))
     )
-    if user_scrobbled_track_ids:
-        genre_query = genre_query.filter(Track.id.notin_(user_scrobbled_track_ids))
+    genre_query = genre_query.filter(Track.id.notin_(user_scrobbled_track_ids))
 
     genre_candidates = (
         genre_query.group_by(Track.id)
         .order_by(case((Track.artist.in_(liked_artists), 1), else_=0).desc(), func.count(Scrobble.id).desc())
-        .limit(10)
+        .limit(100)
         .all()
     )
 
@@ -85,7 +76,7 @@ def _collect_genre_recommendations(
 
 def _collect_trending_recommendations(
     user_artist_names: set[str],
-    user_scrobbled_track_ids: set[int],
+    user_scrobbled_track_ids: Any,
     seen_keys: set[tuple[str, str]],
     current_count: int,
     limit: int,
@@ -98,20 +89,17 @@ def _collect_trending_recommendations(
         .join(Scrobble, Scrobble.track_id == Track.id)
         .filter(Scrobble.user_id.in_(public_listener_ids))
     )
-    if user_scrobbled_track_ids:
-        trending_query = trending_query.filter(Track.id.notin_(user_scrobbled_track_ids))
+    trending_query = trending_query.filter(Track.id.notin_(user_scrobbled_track_ids))
 
     candidates = (
         trending_query.group_by(Track.id)
         .order_by(func.count(Scrobble.id).desc())
-        .limit(15)
+        .limit(100)
         .all()
     )
 
     results: list[dict[str, Any]] = []
     for track, _ in candidates:
-        if current_count + len(results) >= limit:
-            break
         key = (str(track.artist).lower(), str(track.title).lower())
         if key not in seen_keys:
             seen_keys.add(key)
@@ -158,7 +146,7 @@ def _extract_recommended_artists(
     return results
 
 
-def generate_smart_recommendations(user: User, db: Session, limit: int = 15, use_feedback: bool = True) -> dict[str, Any]:
+def generate_smart_recommendations(user: User, db: Session, limit: int = 15, use_feedback: bool = True, novelty: int = 50, avoid_recent: bool = False) -> dict[str, Any]:
     """Generate personalized recommendations for a user."""
     user_artists, user_genres = _get_user_top_artists_and_genres(int(user.id), db)
     signals = db.query(RecommendationFeedback, Track).join(Track, Track.id == RecommendationFeedback.track_id).filter(
@@ -168,16 +156,18 @@ def generate_smart_recommendations(user: User, db: Session, limit: int = 15, use
     user_genres = list(dict.fromkeys(sorted(liked_genres) + user_genres))
     user_artist_names = {a.lower() for a in user_artists}
 
-    user_scrobbled_track_ids = {
-        int(t_id[0])
-        for t_id in db.query(Scrobble.track_id).filter(Scrobble.user_id == user.id).distinct().all()
-        if t_id[0] is not None
-    }
-
-    user_scrobbled_track_ids.update(int(signal.track_id) for signal, _ in signals if signal.value in ("known", "dislike"))
+    # Keep large histories inside the database, rather than constructing a
+    # potentially enormous Python set / SQL IN parameter list.
+    user_scrobbled_track_ids = db.query(Scrobble.track_id).filter(Scrobble.user_id == user.id).distinct()
+    if use_feedback:
+        user_scrobbled_track_ids = user_scrobbled_track_ids.union(db.query(RecommendationFeedback.track_id).filter(
+            RecommendationFeedback.user_id == user.id, RecommendationFeedback.value.in_(["known", "dislike"])))
+    if use_feedback and avoid_recent:
+        user_scrobbled_track_ids = user_scrobbled_track_ids.union(db.query(RecommendationImpression.track_id).filter(
+            RecommendationImpression.user_id == user.id, RecommendationImpression.shown_at >= datetime.now(UTC) - timedelta(days=7)))
     seen_keys: set[tuple[str, str]] = set()
 
-    public_listener_ids = _public_listener_ids(db)
+    public_listener_ids = [user_id for user_id in _public_listener_ids(db) if user_id != int(user.id)]
     genre_tracks = _collect_genre_recommendations(
         user_genres, user_scrobbled_track_ids, seen_keys, db, public_listener_ids, liked_artists
     )
@@ -187,11 +177,29 @@ def generate_smart_recommendations(user: User, db: Session, limit: int = 15, use
 
     candidates = genre_tracks + trending_tracks
     _apply_feedback_weights(candidates, liked_genres, liked_artists)
-    all_recommended_tracks = sorted(candidates, key=lambda item: -item["confidence_score"])[:limit]
+
+    def score(item):
+        familiar = str(item["artist"]).lower() in user_artist_names
+        preference = (50 - novelty) / 100 if familiar else (novelty - 50) / 100
+        return -float(item["confidence_score"]) - preference
+
+    all_recommended_tracks = []
+    artist_counts: dict[str, int] = {}
+    for item in sorted(candidates, key=lambda item: (score(item), int(item["id"]))):
+        artist = str(item["artist"]).casefold()
+        if artist_counts.get(artist, 0) >= 2:
+            continue
+        artist_counts[artist] = artist_counts.get(artist, 0) + 1
+        all_recommended_tracks.append(item)
+        if len(all_recommended_tracks) >= limit:
+            break
     recommended_artists = _extract_recommended_artists(all_recommended_tracks, user_artist_names)
 
     return {
         "user": user.username,
+        "novelty": novelty,
+        "avoid_recent": avoid_recent,
+        "artist_limit": 2,
         "recommendations": all_recommended_tracks,
         "recommended_artists": recommended_artists,
         "taste_profile": {
