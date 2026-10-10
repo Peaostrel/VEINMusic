@@ -49,7 +49,8 @@ def test_stale_primary_can_hand_over(db, client, people):
     row = listen(db, people[0], seconds=80)
     row.updated_at = datetime.now(UTC) - timedelta(seconds=45); row.credit_source = "yandex:live"; db.commit()
     result = _record_scrobble(db, people[0], row.track, "yandex", 90, True, collector="client")
-    assert result["status"] == "ok" and db.query(Scrobble).count() == 1
+    assert result["status"] == "ok"
+    assert db.query(Scrobble).count() == 1
     assert row.credit_source == "yandex:client"
 
 
@@ -58,7 +59,8 @@ def test_bulk_ownership_atomic_undo(client, db, people, action):
     a = listen(db, people[0]); b = listen(db, people[1], title="Other")
     data = {"ids": [a.id, b.id], "action": action, "artist": "Changed"}
     assert client.post("/api/me/history/apply", json=data).status_code == 404
-    assert a.track.artist == "Band" and not a.excluded_from_stats
+    assert a.track.artist == "Band"
+    assert not a.excluded_from_stats
     data["ids"] = [a.id]
     assert client.post("/api/me/history/preview", json=data).json()["count"] == 1
     result = client.post("/api/me/history/apply", json=data)
@@ -69,7 +71,9 @@ def test_bulk_ownership_atomic_undo(client, db, people, action):
         assert db.query(Scrobble).execution_options(include_excluded=True).filter_by(id=a.id).first() is None
     assert client.post(f"/api/me/history/undo/{undo_id}").status_code == 200
     db.expire_all()
-    assert a.track.artist == "Band" and not a.excluded_from_stats and a.deleted_at is None
+    assert a.track.artist == "Band"
+    assert not a.excluded_from_stats
+    assert a.deleted_at is None
     assert client.post(f"/api/me/history/undo/{undo_id}").status_code == 409
 
 
@@ -110,7 +114,8 @@ def test_saved_music_private_notes_and_played_signal(client, db, people):
     row = listen(db, people[1])
     assert client.put(f"/api/me/listen-later/{row.track_id}", json={"note": "Personal"}).status_code == 200
     saved = client.get("/api/me/listen-later").json()["items"]
-    assert saved[0]["note"] == "Personal" and not saved[0]["heard"]
+    assert saved[0]["note"] == "Personal"
+    assert not saved[0]["heard"]
     listen(db, people[0])
     assert client.get("/api/me/listen-later").json()["items"][0]["heard"]
     export = client.get("/api/account/export").json()
@@ -128,7 +133,8 @@ def test_recommendation_diversity_and_recent_history(client, db, people):
         for i in range(4):
             listen(db, people[1], title=f"{artist} {i}", artist=artist)
     recs = client.get("/api/recommendations/me?novelty=100").json()["recommendations"]
-    assert recs and max(Counter(item["artist"] for item in recs).values()) <= 2
+    assert recs
+    assert max(Counter(item["artist"] for item in recs).values()) <= 2
     assert recs[0]["artist"] != "Familiar"
     ids = [item["id"] for item in recs]
     client.post("/api/me/recommendations/impressions", json={"ids": ids})
@@ -146,7 +152,8 @@ def test_individual_session_revoke_does_not_logout_other_device(client, db, peop
     assert client.post("/auth/login", json=payload).status_code == 200
     second = client.cookies.get("api_key")
     sessions = client.get("/api/account/sessions").json()["items"]
-    assert len(sessions) == 2 and sum(item["current"] for item in sessions) == 1
+    assert len(sessions) == 2
+    assert sum(item["current"] for item in sessions) == 1
     assert first != second
     assert client.delete(f"/api/account/sessions/{first_id}").status_code == 200
     assert client.get("/api/account/sessions").status_code == 200

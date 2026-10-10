@@ -42,7 +42,7 @@ from app.services.user_stats import (
     get_user_timezone_offset,
 )
 
-router = APIRouter(tags=["stats"])
+router = APIRouter(tags=["stats"], responses={422: {"description": "Invalid period, date range or calendar year"}})
 
 LEADERBOARD_CACHE_KEY = "leaderboard:raw:v3"
 LEADERBOARD_CACHE_TTL = 60
@@ -676,34 +676,9 @@ def _longest_day_streak(day_keys: list[str]) -> int:
 
 
 # --- /api/stats/calendar/{username} ---
-@router.get("/api/stats/calendar/{username}",
-            responses={404: {"description": "User not found"}})
-def get_listening_calendar(
-        username: str,
-        request: Request,
-        db: Annotated[Session, Depends(get_db)],
-        year: int | None = None):
-    """One calendar year of listening, grouped in the user's local timezone."""
-    user = _get_visible_user(username, request, db, "statistics")
-    user_tz = _user_timezone(user)
-    current_year = datetime.now(UTC).astimezone(user_tz).year
-    selected_year = year or current_year
-    if selected_year < 2000 or selected_year > current_year:
-        raise HTTPException(422, "Недоступный год")
 
-    local_start = datetime(selected_year, 1, 1, tzinfo=user_tz)
-    local_end = datetime(selected_year + 1, 1, 1, tzinfo=user_tz)
-    rows = db.query(
-        Scrobble.played_at,
-        Scrobble.listened_sec,
-        Track.artist,
-        Track.title,
-        Track.cover_url,
-    ).join(Track).filter(
-        *_counted_filter(
-            int(user.id), local_start.astimezone(UTC), local_end.astimezone(UTC))
-    ).all()
 
+def _aggregate_calendar_days(rows, user_tz):
     days: dict[str, dict[str, Any]] = {}
     artist_counts: dict[str, Counter] = {}
     track_counts: dict[str, Counter] = {}
@@ -742,6 +717,39 @@ def get_listening_calendar(
                           "title": top_track[1],
                           "cover_url": track_covers.get(top_track)},
         })
+
+    return days, calendar_days
+
+
+@router.get("/api/stats/calendar/{username}",
+            responses={404: {"description": "User not found"}})
+def get_listening_calendar(
+        username: str,
+        request: Request,
+        db: Annotated[Session, Depends(get_db)],
+        year: int | None = None):
+    """One calendar year of listening, grouped in the user's local timezone."""
+    user = _get_visible_user(username, request, db, "statistics")
+    user_tz = _user_timezone(user)
+    current_year = datetime.now(UTC).astimezone(user_tz).year
+    selected_year = year or current_year
+    if selected_year < 2000 or selected_year > current_year:
+        raise HTTPException(422, "Недоступный год")
+
+    local_start = datetime(selected_year, 1, 1, tzinfo=user_tz)
+    local_end = datetime(selected_year + 1, 1, 1, tzinfo=user_tz)
+    rows = db.query(
+        Scrobble.played_at,
+        Scrobble.listened_sec,
+        Track.artist,
+        Track.title,
+        Track.cover_url,
+    ).join(Track).filter(
+        *_counted_filter(
+            int(user.id), local_start.astimezone(UTC), local_end.astimezone(UTC))
+    ).all()
+
+    days, calendar_days = _aggregate_calendar_days(rows, user_tz)
 
     first_play, last_play = db.query(
         func.min(Scrobble.played_at), func.max(Scrobble.played_at)

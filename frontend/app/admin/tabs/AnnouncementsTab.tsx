@@ -16,7 +16,7 @@ export default function AnnouncementsTab({
   handleDeleteAnnouncement,
   handleToggleFlag,
   handleCreateFlag,
-}: AdminPanelState) {
+}: Readonly<AdminPanelState>) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
       {/* Announcements Manager */}

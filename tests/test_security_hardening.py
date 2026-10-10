@@ -111,7 +111,8 @@ def test_third_party_tokens_are_encrypted_at_rest(client, db):
     user = db.query(User).filter_by(username="tokenuser").first()
     raw = db.execute(text("SELECT yandex_token FROM user_integrations WHERE user_id = :u"),
                      {"u": user.id}).scalar()
-    assert raw.startswith("enc:v1:") and "y-secret-token" not in raw
+    assert raw.startswith("enc:v1:")
+    assert "y-secret-token" not in raw
     db.refresh(user.integration)
     assert user.integration.yandex_token == "y-secret-token"
 
@@ -125,4 +126,5 @@ def test_webhook_secret_encrypted_and_signing_uses_plaintext(client, db):
     assert resp.status_code == 200
     secret = resp.json()["secret"]
     raw = db.execute(text("SELECT secret FROM webhooks")).scalar()
-    assert raw.startswith("enc:v1:") and secret not in raw
+    assert raw.startswith("enc:v1:")
+    assert secret not in raw

@@ -25,6 +25,7 @@ def _register(client, username: str) -> str:
 
 # --- Device pairing -----------------------------------------------------------
 
+
 def test_device_pairing_flow_issues_scoped_key(client, db):
     key = _register(client, "pairme")
     client.cookies.clear()
@@ -35,12 +36,14 @@ def test_device_pairing_flow_issues_scoped_key(client, db):
 
     auth = {"X-API-Key": key}
     info = client.get(f"/api/devices/code/{start['user_code'].lower().replace('-', '')}", headers=auth)
-    assert info.status_code == 200 and info.json()["client_name"] == "Chrome"
+    assert info.status_code == 200
+    assert info.json()["client_name"] == "Chrome"
     assert client.post("/api/devices/approve", json={"user_code": start["user_code"]}, headers=auth).json() == {
         "status": "approved"}
 
     token = client.post("/api/devices/token", json={"device_code": start["device_code"]}).json()
-    assert token["status"] == "approved" and token["username"] == "pairme"
+    assert token["status"] == "approved"
+    assert token["username"] == "pairme"
     device_key = token["api_key"]
     # the key can scrobble but can't manage the account
     assert client.post("/api/profile/update", json={"bio": "x"}, headers={"X-API-Key": device_key}).status_code == 403
@@ -59,6 +62,7 @@ def test_device_code_can_be_denied(client):
 
 
 # --- Account export / deletion ----------------------------------------------
+
 
 def test_account_export_contains_data_but_no_secrets(client, db):
     key = _register(client, "exporter")
@@ -111,6 +115,7 @@ def test_account_deletion_requires_password_and_removes_everything(client, db):
 
 # --- Last.fm import ---------------------------------------------------------
 
+
 def _lastfm_page(page: int, total_pages: int, start_uts: int, count: int = 2) -> dict:
     tracks = [{"name": f"Track {page}-{i}", "artist": {"#text": "Artist"}, "album": {"#text": "Album"},
                "image": [{"#text": ""}], "date": {"uts": str(start_uts - page * 100 - i)}}
@@ -161,12 +166,14 @@ def test_lastfm_import_is_paged_resumable_and_incremental(client, db):
 
     # First run fails on page 2 of 3...
     job, needs_enqueue = lastfm_import.prepare_import_job(db, user)
-    assert needs_enqueue and job.window_from is None
+    assert needs_enqueue
+    assert job.window_from is None
     fake = _FakeLastfm(total_pages=3, fail_on_page=2)
     _run_import(fake, job.id)
     db.expire_all()
     job = db.get(LastfmImportJob, job.id)
-    assert job.status == "failed" and job.current_page == 1
+    assert job.status == "failed"
+    assert job.current_page == 1
     assert db.query(Scrobble).filter_by(user_id=user.id).count() == 2
 
     # ...and resumes from page 2 instead of starting over
@@ -177,7 +184,8 @@ def test_lastfm_import_is_paged_resumable_and_incremental(client, db):
     assert [int(r["page"]) for r in fake.requests] == [2, 3]
     db.expire_all()
     job = db.get(LastfmImportJob, job.id)
-    assert job.status == "completed" and job.imported_tracks == 6
+    assert job.status == "completed"
+    assert job.imported_tracks == 6
     assert db.query(Scrobble).filter_by(user_id=user.id, is_imported=True).count() == 6
     db.refresh(user.integration)
     assert user.integration.has_imported_lastfm is True
@@ -190,7 +198,8 @@ def test_lastfm_import_is_paged_resumable_and_incremental(client, db):
     assert int(fake.requests[0]["from"]) == job.window_to + 1
 
     status = client.get("/api/import/lastfm/status", headers={"X-API-Key": key}).json()
-    assert status["status"] == "completed" and status["incremental"] is True
+    assert status["status"] == "completed"
+    assert status["incremental"] is True
 
 
 def test_start_import_endpoint_enqueues_once(client, db):

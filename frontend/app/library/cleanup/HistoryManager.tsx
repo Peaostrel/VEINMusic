@@ -131,7 +131,7 @@ export default function HistoryManager() {
       <h2 className="text-lg font-semibold">История и зачёт прослушиваний</h2>
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="text-sm">
-          Поиск
+          <span>Поиск</span>
           <input
             aria-label="Поиск в истории"
             className={input}
@@ -143,7 +143,7 @@ export default function HistoryManager() {
           />
         </label>
         <label className="text-sm">
-          Источник
+          <span>Источник</span>
           <input
             aria-label="Источник истории"
             placeholder="Точное название из записи"
@@ -156,7 +156,7 @@ export default function HistoryManager() {
           />
         </label>
         <label className="text-sm">
-          Состояние
+          <span>Состояние</span>
           <select
             className={input}
             value={status}
@@ -173,7 +173,7 @@ export default function HistoryManager() {
           </select>
         </label>
         <label className="text-sm">
-          С даты
+          <span>С даты</span>
           <input
             type="date"
             className={input}
@@ -185,7 +185,7 @@ export default function HistoryManager() {
           />
         </label>
         <label className="text-sm">
-          По дату
+          <span>По дату</span>
           <input
             type="date"
             className={input}
@@ -223,7 +223,7 @@ export default function HistoryManager() {
             );
             setPreview(null);
           }}
-        />
+        />{" "}
         Выбрать записи этой страницы
       </label>
       <div className="divide-y divide-line rounded-xl border border-line">
@@ -291,7 +291,7 @@ export default function HistoryManager() {
       <div className="space-y-3 rounded-xl border border-line bg-surface p-4">
         <p>Выбрано: {selected.length}</p>
         <label>
-          Действие
+          <span>Действие</span>
           <select
             className={input}
             value={action}
@@ -309,7 +309,7 @@ export default function HistoryManager() {
         {action === "edit" && (
           <div className="grid gap-3 sm:grid-cols-2">
             <label>
-              Новое название
+              <span>Новое название</span>
               <input
                 className={input}
                 value={title}
@@ -320,7 +320,7 @@ export default function HistoryManager() {
               />
             </label>
             <label>
-              Новый исполнитель
+              <span>Новый исполнитель</span>
               <input
                 className={input}
                 value={artist}

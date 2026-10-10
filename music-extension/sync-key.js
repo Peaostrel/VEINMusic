@@ -5,6 +5,16 @@ function isVeinSite(loc) {
     if (loc.hostname === 'music.vein.guru') return loc.protocol === 'https:';
     return (loc.hostname === 'localhost' || loc.hostname === '127.0.0.1') && loc.port === '3000';
 }
+async function sendToBackground(message) {
+    try {
+        await chrome.runtime.sendMessage(message);
+    } catch {
+        // Extension updates can invalidate a content-script context. Reloading
+        // the page reconnects it; never log a message containing an API key.
+        console.warn('[VEIN] Расширение недоступно. Обновите страницу для синхронизации.');
+    }
+}
+
 if (isVeinSite(window.location)) {
     console.log("🔥 [VEIN] Скрипт синхронизации расширения внедрен на: " + window.location.href);
 
@@ -22,12 +32,12 @@ if (isVeinSite(window.location)) {
         if (msg.type === 'VEIN_EXTENSION_SYNC_KEYS'
             && typeof msg.apiKey === 'string' && msg.apiKey
             && typeof msg.username === 'string') {
-            chrome.runtime.sendMessage({
+            void sendToBackground({
                 type: "SYNC_KEYS",
                 data: { username: msg.username, apiKey: msg.apiKey }
-            }).catch(() => {});
+            });
         } else if (msg.type === 'VEIN_EXTENSION_LOGOUT') {
-            chrome.runtime.sendMessage({ type: "LOGOUT" }).catch(() => {});
+            void sendToBackground({ type: "LOGOUT" });
         }
     });
 
@@ -38,10 +48,10 @@ if (isVeinSite(window.location)) {
         const legacyUser = window.localStorage.getItem('username');
         if (legacyKey) {
             if (legacyUser) {
-                chrome.runtime.sendMessage({
+                void sendToBackground({ // NOSONAR S7785: content scripts cannot use top-level await.
                     type: "SYNC_KEYS",
                     data: { username: legacyUser, apiKey: legacyKey }
-                }).catch(() => {});
+                });
             }
             window.localStorage.removeItem('apiKey');
         }

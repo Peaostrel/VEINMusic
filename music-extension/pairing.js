@@ -2,10 +2,10 @@
 // The extension asks the server for a short code, the user approves it on
 // the website (/link) and the extension receives its own revocable API key.
 
-var VEIN_DEFAULT_API = 'https://api.music.vein.guru';
+const VEIN_DEFAULT_API = 'https://api.music.vein.guru';
 
 function veinApiBase(settings) {
-    return (settings && settings.apiUrl) || VEIN_DEFAULT_API;
+    return settings?.apiUrl || VEIN_DEFAULT_API;
 }
 
 function veinStorageGet(keys) {
@@ -22,11 +22,11 @@ function veinStorageRemove(keys) {
 
 function veinClientName() {
     const ua = navigator.userAgent;
-    const browser = ua.includes('Firefox') ? 'Firefox'
-        : ua.includes('Edg/') ? 'Edge'
-        : ua.includes('OPR/') ? 'Opera'
-        : ua.includes('YaBrowser') ? 'Яндекс Браузер'
-        : 'Chrome';
+    const browsers = [
+        ['Firefox', 'Firefox'], ['Edg/', 'Edge'], ['OPR/', 'Opera'],
+        ['YaBrowser', 'Яндекс Браузер']
+    ];
+    const browser = browsers.find(([marker]) => ua.includes(marker))?.[1] || 'Chrome';
     return `Расширение VEIN (${browser})`;
 }
 
@@ -77,6 +77,7 @@ async function veinPollPairing() {
         await veinStorageRemove(['pairing']);
         return data.status === 'denied' ? 'denied' : 'expired';
     } catch (e) {
+        // Network failures are reported to the popup as a retryable pairing state.
         return 'error';
     }
 }

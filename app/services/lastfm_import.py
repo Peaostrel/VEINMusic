@@ -50,13 +50,16 @@ def job_to_dict(job: Optional[LastfmImportJob]) -> dict[str, Any]:
         return {"status": "none"}
     total_pages = int(job.total_pages or 0)
     current_page = int(job.current_page or 0)
+    progress = 100 if job.status == "completed" else 0
+    if total_pages:
+        progress = int(current_page * 100 / total_pages)
     return {
         "id": job.id,
         "status": job.status,
         "lastfm_username": job.lastfm_username,
         "current_page": current_page,
         "total_pages": total_pages,
-        "progress": int(current_page * 100 / total_pages) if total_pages else (100 if job.status == "completed" else 0),
+        "progress": progress,
         "imported_tracks": job.imported_tracks or 0,
         "total_tracks": job.total_tracks or 0,
         "error": job.error_log,
@@ -129,6 +132,29 @@ def _get_or_create_import_track(db, title: str, artist: str, cover: Optional[str
     return track
 
 
+def _import_track(db, job, t) -> int:
+    if (t.get("@attr") or {}).get("nowplaying") == "true":
+        return 0
+    title = t.get("name")
+    artist = (t.get("artist") or {}).get(TEXT_KEY)
+    uts = int((t.get("date") or {}).get("uts", 0) or 0)
+    if not title or not artist or not uts:
+        return 0
+    played_at = datetime.fromtimestamp(uts, tz=UTC)
+    if db.query(Scrobble.id).execution_options(include_excluded=True).filter(
+            Scrobble.user_id == job.user_id, Scrobble.played_at == played_at).first():
+        return 0
+    album = (t.get("album") or {}).get(TEXT_KEY) or None
+    images = t.get("image") or []
+    cover = (images[-1] or {}).get(TEXT_KEY) or None if images else None
+    track = _get_or_create_import_track(db, title, artist, cover, album)
+    duration = track.duration or 180
+    db.add(Scrobble(user_id=job.user_id, track_id=track.id, source="lastfm",
+                    played_at=played_at, listened_sec=duration, is_playing=False,
+                    updated_at=played_at, xp_earned=1, is_imported=True, import_job_id=job.id))
+    return 1
+
+
 def _store_page(job_id: int, tracks: list[dict], page: int, total_pages: int, total_tracks: int) -> int:
     """Insert one page of Last.fm scrobbles and record progress (blocking)."""
     db = SessionLocal()
@@ -136,28 +162,7 @@ def _store_page(job_id: int, tracks: list[dict], page: int, total_pages: int, to
         job = db.query(LastfmImportJob).filter(LastfmImportJob.id == job_id).first()
         if job is None or job.status not in ACTIVE_STATUSES:
             return 0
-        imported = 0
-        for t in tracks:
-            if (t.get("@attr") or {}).get("nowplaying") == "true":
-                continue
-            title = t.get("name")
-            artist = (t.get("artist") or {}).get(TEXT_KEY)
-            uts = int((t.get("date") or {}).get("uts", 0) or 0)
-            if not title or not artist or not uts:
-                continue
-            played_at = datetime.fromtimestamp(uts, tz=UTC)
-            if db.query(Scrobble.id).execution_options(include_excluded=True).filter(
-                    Scrobble.user_id == job.user_id, Scrobble.played_at == played_at).first():
-                continue
-            album = (t.get("album") or {}).get(TEXT_KEY) or None
-            images = t.get("image") or []
-            cover = (images[-1] or {}).get(TEXT_KEY) or None if images else None
-            track = _get_or_create_import_track(db, title, artist, cover, album)
-            duration = track.duration or 180
-            db.add(Scrobble(user_id=job.user_id, track_id=track.id, source="lastfm",
-                            played_at=played_at, listened_sec=duration, is_playing=False,
-                            updated_at=played_at, xp_earned=1, is_imported=True, import_job_id=job.id))
-            imported += 1
+        imported = sum(_import_track(db, job, track) for track in tracks)
         job.current_page = page  # type: ignore[assignment]
         job.total_pages = total_pages  # type: ignore[assignment]
         job.total_tracks = total_tracks  # type: ignore[assignment]
@@ -245,7 +250,7 @@ async def run_import_job(job_id: int) -> None:
                     tracks = [tracks]
                 current = page
                 await anyio.to_thread.run_sync(
-                    lambda: _store_page(job_id, tracks, current, total_pages, total_tracks))
+                    _store_page, job_id, tracks, current, total_pages, total_tracks)
                 logger.info(f"Last.fm import job {job_id}: page {page}/{total_pages}")
                 page += 1
                 await asyncio.sleep(PAGE_DELAY_SEC)

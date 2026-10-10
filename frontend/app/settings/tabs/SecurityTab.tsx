@@ -253,7 +253,7 @@ export default function SecurityTab() {
             <a href="/link" className="text-accent underline">
               /link
             </a>
-            . У каждого свой ключ, его можно отозвать.
+            <span>. У каждого свой ключ, его можно отозвать.</span>
           </p>
         </div>
         {devices.length === 0 ? (

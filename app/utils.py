@@ -67,7 +67,7 @@ def is_safe_url(url: str, allowed_domains: list[str] | None = None) -> bool:
 
         try:
             infos = socket.getaddrinfo(hostname, parsed.port or None, proto=socket.IPPROTO_TCP)
-        except (socket.gaierror, UnicodeError, ValueError):
+        except (socket.gaierror, ValueError):
             return False  # DNS resolution failed or invalid host
         addresses = {str(info[4][0]) for info in infos}
         return bool(addresses) and all(_is_public_ip(a) for a in addresses)

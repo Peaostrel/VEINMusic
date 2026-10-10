@@ -8,12 +8,19 @@ if (typeof veinPollPairing === 'undefined' && typeof importScripts === 'function
 
 const ALARM_NAME = 'FLUSH_OFFLINE_SCROBBLES';
 
+// These are classic Chrome/Firefox scripts, so await belongs inside functions.
+async function createFlushAlarm() {
+    try {
+        await chrome.alarms.create(ALARM_NAME, { periodInMinutes: 1 });
+    } catch (error) {
+        console.warn('[VEIN] Не удалось включить фоновую синхронизацию:', error);
+    }
+}
+
 // Setup periodic alarm to flush offline queue (and finish device pairing
 // if the popup was closed before the user approved the code)
 if (chrome.alarms) {
-    Promise.resolve(chrome.alarms.create(ALARM_NAME, { periodInMinutes: 1 })).catch((error) => {
-        console.warn('[VEIN] Не удалось включить фоновую синхронизацию:', error);
-    });
+    void createFlushAlarm(); // NOSONAR S7785: manifest loads a classic script, not an ES module.
     chrome.alarms.onAlarm.addListener((alarm) => {
         if (alarm.name === ALARM_NAME) {
             void flushOfflineQueue();
@@ -124,6 +131,34 @@ function shouldSendScrobble(payload) {
     return true;
 }
 
+async function sendScrobble(payload) {
+    try {
+        const settings = await storageGet(['apiUrl', 'apiKey']);
+        if (!settings.apiKey) {
+            bufferScrobble(payload);
+            return;
+        }
+        const response = await fetch(`${veinApiBase(settings)}/api/scrobble`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${settings.apiKey}`
+            },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            console.warn(`[VEIN] Сервер ответил ${response.status}, сохраняем в оффлайн-очередь.`);
+            bufferScrobble(payload);
+            return;
+        }
+        console.log('[VEIN] Трек успешно отправлен на сервер:', await response.json());
+        await flushOfflineQueue();
+    } catch (error) {
+        console.warn('[VEIN] Не удалось отправить прослушивание, сохраняем в оффлайн-очередь:', error);
+        bufferScrobble(payload);
+    }
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // Security: only the VEIN site may change the stored key (see sync-key.js)
     const senderUrl = sender.tab?.url ? new URL(sender.tab.url) : null;
@@ -160,41 +195,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // раз в несколько секунд (он учитывает паузы между сигналами до 35 с),
     // поэтому одинаковые сигналы чаще раза в 5 секунд не отправляем.
     if (request.type === 'SCROBBLE' && shouldSendScrobble(request.data)) {
-        chrome.storage.local.get(['apiUrl', 'apiKey'], (settings) => {
-            const API_BASE = veinApiBase(settings);
-            const apiKey = settings.apiKey;
-            const payload = request.data;
-            
-            if (!apiKey) {
-                console.log('[VEIN] Отмена: нет ключа в storage. Сохраняем в оффлайн-буфер.');
-                bufferScrobble(payload);
-                return;
-            }
-            
-            fetch(`${API_BASE}/api/scrobble`, {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                },
-                body: JSON.stringify(payload)
-            })
-            .then(res => {
-                if (res.ok) {
-                    return res.json().then(out => {
-                        console.log('[VEIN] Трек успешно отправлен на сервер:', out);
-                        // Also try to flush any previously stored offline scrobbles
-                        return flushOfflineQueue();
-                    });
-                } else {
-                    console.warn(`[VEIN] Сервер ответил ${res.status}, сохраняем в оффлайн-очередь.`);
-                    bufferScrobble(payload);
-                }
-            })
-            .catch(err => {
-                console.warn('[VEIN] Сеть недоступна, сохраняем в оффлайн-очередь:', err);
-                bufferScrobble(payload);
-            });
-        });
+        void sendScrobble(request.data);
     }
 });

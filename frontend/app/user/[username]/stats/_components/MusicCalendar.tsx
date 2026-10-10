@@ -53,8 +53,8 @@ function Month({
 }>) {
   const total = new Date(year, month + 1, 0).getDate();
   const leading = (new Date(year, month, 1).getDay() + 6) % 7;
-  const cells: (number | null)[] = [
-    ...Array.from({ length: leading }, () => null),
+  const cells: number[] = [
+    ...Array.from({ length: leading }, (_, offset) => -offset),
     ...Array.from({ length: total }, (_, index) => index + 1),
   ];
   return (
@@ -66,9 +66,14 @@ function Month({
         ))}
       </div>
       <div className="grid grid-cols-7 gap-1">
-        {cells.map((number, index) => {
-          if (number === null)
-            return <span key={`blank-${index}`} aria-hidden="true" />;
+        {cells.map((number) => {
+          if (number <= 0)
+            return (
+              <span
+                key={`blank-${year}-${month}-${number}`}
+                aria-hidden="true"
+              />
+            );
           const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(number).padStart(2, "0")}`;
           const day = days.get(key);
           const strength = day
@@ -173,7 +178,7 @@ export function MusicCalendar({ username }: Readonly<{ username: string }>) {
           </p>
         </div>
         <label className="flex items-center gap-2 text-xs text-fg-2">
-          Год
+          <span>Год</span>
           <select
             value={year}
             onChange={(event) => setYear(Number(event.target.value))}
@@ -192,11 +197,13 @@ export function MusicCalendar({ username }: Readonly<{ username: string }>) {
         <p className="py-12 text-center text-sm text-fg-3">
           Собираем календарь…
         </p>
-      ) : error ? (
+      ) : null}
+      {!loading && error ? (
         <p className="rounded-lg border border-dashed border-line py-8 text-center text-sm text-fg-3">
           Не удалось загрузить календарь. Обновите страницу и попробуйте снова.
         </p>
-      ) : (
+      ) : null}
+      {!loading && !error && (
         <>
           <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line-soft bg-line-soft sm:grid-cols-4">
             {[

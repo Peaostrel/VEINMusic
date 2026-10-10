@@ -78,8 +78,6 @@ def _collect_trending_recommendations(
     user_artist_names: set[str],
     user_scrobbled_track_ids: Any,
     seen_keys: set[tuple[str, str]],
-    current_count: int,
-    limit: int,
     db: Session,
     public_listener_ids: list[int],
 ) -> list[dict[str, Any]]:
@@ -172,7 +170,7 @@ def generate_smart_recommendations(user: User, db: Session, limit: int = 15, use
         user_genres, user_scrobbled_track_ids, seen_keys, db, public_listener_ids, liked_artists
     )
     trending_tracks = _collect_trending_recommendations(
-        user_artist_names, user_scrobbled_track_ids, seen_keys, len(genre_tracks), limit, db, public_listener_ids
+        user_artist_names, user_scrobbled_track_ids, seen_keys, db, public_listener_ids
     )
 
     candidates = genre_tracks + trending_tracks

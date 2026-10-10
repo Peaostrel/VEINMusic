@@ -306,6 +306,22 @@ async def _handle_sync_request(target: str, sender_username: str):
         })
 
 
+async def _receive_sync_requests(websocket, authenticated_username):
+    last_sync_request = 0.0
+    while True:
+        data = await websocket.receive_json()
+        if not isinstance(data, dict):
+            continue
+        if data.get("type") == "SYNC_REQUEST":
+            now = time.time()
+            if now - last_sync_request < 10.0:
+                continue  # Rate limit: 1 request per 10 seconds
+            last_sync_request = now
+            target = data.get("target")
+            if isinstance(target, str) and target:
+                await _handle_sync_request(target, authenticated_username)
+
+
 @app.websocket("/ws/{username}")
 async def websocket_route(websocket: WebSocket, username: str):
     if not _is_ws_origin_allowed(websocket):
@@ -320,22 +336,9 @@ async def websocket_route(websocket: WebSocket, username: str):
         await websocket.close(code=4003)
         return
 
-    last_sync_request = 0.0
-
     await manager.connect(websocket, username)
     try:
-        while True:
-            data = await websocket.receive_json()
-            if not isinstance(data, dict):
-                continue
-            if data.get("type") == "SYNC_REQUEST":
-                now = time.time()
-                if now - last_sync_request < 10.0:
-                    continue  # Rate limit: 1 request per 10 seconds
-                last_sync_request = now
-                target = data.get("target")
-                if isinstance(target, str) and target:
-                    await _handle_sync_request(target, authenticated_username)
+        await _receive_sync_requests(websocket, authenticated_username)
     except Exception:
         pass
     finally:

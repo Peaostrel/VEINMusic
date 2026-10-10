@@ -13,7 +13,7 @@ def auth_client(client):
         "password": "password123"
     })
     client.headers["Origin"] = "http://localhost:3000"
-    yield client
+    return client
 
 
 @pytest.fixture

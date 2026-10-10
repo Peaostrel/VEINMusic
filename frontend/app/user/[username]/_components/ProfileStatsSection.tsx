@@ -90,15 +90,10 @@ function ShowcaseCard({
   );
 }
 
-/** Taste match, links, facts (location, genre, gear) and the showcase. */
-export function ProfileStatsSection({
-  u,
-  taste,
-  socialLinks,
-  countries,
-  favoriteAlbumRedirectUrl,
-  showShowcase = true,
-}: Readonly<ProfileStatsSectionProps>) {
+function locationFact(
+  u: ProfileStatsSectionProps["u"],
+  countries: ProfileStatsSectionProps["countries"],
+) {
   let location: React.ReactNode = null;
   if (u.location) {
     const [countryName = "", cityName = ""] = u.location
@@ -128,6 +123,20 @@ export function ProfileStatsSection({
       </Fact>
     );
   }
+
+  return location;
+}
+
+/** Taste match, links, facts (location, genre, gear) and the showcase. */
+export function ProfileStatsSection({
+  u,
+  taste,
+  socialLinks,
+  countries,
+  favoriteAlbumRedirectUrl,
+  showShowcase = true,
+}: Readonly<ProfileStatsSectionProps>) {
+  const location = locationFact(u, countries);
 
   const links = socialLinks
     .map((link) => ({ link, href: getSocialUrl(link.network, link.username) }))

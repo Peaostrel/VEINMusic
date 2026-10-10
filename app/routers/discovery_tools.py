@@ -88,7 +88,7 @@ def record_impressions(data: Impressions, db: DB, user: Owner):
     return {"recorded": len(ids)}
 
 
-@router.get("/api/me/recommendations/history")
+@router.get("/api/me/recommendations/history", responses={422: {"description": "Invalid history cursor"}})
 def recommendation_history(db: DB, user: Owner, before: Annotated[str | None, Query(max_length=120)] = None):
     query = db.query(RecommendationImpression).options(joinedload(RecommendationImpression.track)).filter_by(user_id=user.id)
     if before:

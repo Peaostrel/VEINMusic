@@ -13,7 +13,7 @@ export default function OverviewTab({
   analytics,
   xpMultiplier,
   handleSetMultiplier,
-}: AdminPanelState) {
+}: Readonly<AdminPanelState>) {
   return (
     <div className="space-y-6">
       <AnalyticsCharts />

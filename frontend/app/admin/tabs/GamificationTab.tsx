@@ -12,7 +12,7 @@ export default function GamificationTab({
   handleCreateFrame,
   handleDeleteFrame,
   loadAllData,
-}: AdminPanelState) {
+}: Readonly<AdminPanelState>) {
   return (
     <div className="space-y-8">
       {/* Avatar Frames Management */}
