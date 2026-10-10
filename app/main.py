@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 import asyncio
 import logging
 import os
@@ -235,6 +236,8 @@ def _get_ws_authenticated_username(websocket: WebSocket) -> str | None:
     db = SessionLocal()
     try:
         if ticket:
+            from app.core.ws_ticket import ticket_session_id
+            websocket.state.session_id = ticket_session_id(ticket)
             return _get_ticket_username(ticket, db)
         if not token:
             return None
@@ -242,6 +245,8 @@ def _get_ws_authenticated_username(websocket: WebSocket) -> str | None:
         if scopes is not None and not {"profile:read", "*"}.intersection(scopes.split(",")):
             return None
         if auth_user and not auth_user.is_banned:
+            parts = token.split(":")
+            websocket.state.session_id = parts[2] if len(parts) == 4 else None
             return str(auth_user.username)
         return None
     finally:
@@ -249,10 +254,17 @@ def _get_ws_authenticated_username(websocket: WebSocket) -> str | None:
 
 
 def _get_ticket_username(ticket: str, db) -> str | None:
-    from app.core.ws_ticket import verify_ticket
+    from app.core.ws_ticket import ticket_session_id, verify_ticket
     username = verify_ticket(ticket)
     user = db.query(User).filter(User.username == username).first() if username else None
     if user and not user.is_banned and verify_ticket(ticket, session_version=int(user.session_version or 0)):
+        session_id = ticket_session_id(ticket)
+        if session_id:
+            from app.models import UserSession
+            from app.core.security import _as_aware
+            session = db.get(UserSession, session_id)
+            if not session or session.user_id != user.id or session.revoked or session.session_version != user.session_version or _as_aware(session.expires_at) <= datetime.now(UTC):
+                return None
         return str(user.username)
     return None
 

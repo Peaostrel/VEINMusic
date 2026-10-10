@@ -48,6 +48,11 @@ def exclude_hidden_listens(execute_state):
     Owner maintenance opts in with include_excluded=True. Raw SQL aggregations
     must explicitly apply the same predicate (see services/taste.py).
     """
+    if execute_state.is_select and not execute_state.execution_options.get("include_deleted", False):
+        from app.models import Scrobble
+        execute_state.statement = execute_state.statement.options(
+            with_loader_criteria(Scrobble, Scrobble.deleted_at.is_(None), include_aliases=True)
+        )
     if execute_state.is_select and not execute_state.execution_options.get("include_excluded", False):
         from app.models import Scrobble
         execute_state.statement = execute_state.statement.options(

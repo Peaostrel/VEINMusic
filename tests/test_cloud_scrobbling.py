@@ -80,7 +80,7 @@ def test_spotify_sync_refreshes_expired_token():
     db.commit.assert_called_once()
     process.assert_awaited_once_with(
         db, user, "Song", "A, B", "https://img", "https://open.spotify.com/track/1",
-        "spotify", 30, True, 200, "Alb")
+        "spotify", 30, True, 200, "Alb", collector="cloud")
 
 
 @pytest.mark.parametrize("payload", [{"is_playing": False}, {"is_playing": True, "item": None}])
@@ -150,6 +150,7 @@ def test_soundcloud_sync_baselines_then_reports_new_track():
         True,
         192,
         "Test Album",
+        collector="cloud",
     )
 
 
@@ -243,7 +244,7 @@ def test_yandex_sync_uses_ynison_playback():
         asyncio.run(cs.sync_yandex_status(user, db, process))
     process.assert_awaited_once_with(
         db, user, "YT", "YA", "https://y/400x400", "https://music.yandex.ru/track/2",
-        "yandex", 95, True, 120, "YAlb")
+        "yandex", 95, True, 120, "YAlb", collector="cloud")
 
 
 def test_yandex_sync_ynison_nothing_playing_skips_queue():
@@ -261,7 +262,7 @@ def test_yandex_sync_processes_current_track():
         asyncio.run(cs.sync_yandex_status(user, db, process))
     process.assert_awaited_once_with(
         db, user, "YT", "YA", "https://y/400x400", "https://music.yandex.ru/track/2",
-        "yandex", ANY, True, 120, "YAlb")
+        "yandex", ANY, True, 120, "YAlb", collector="cloud")
     assert process.await_args.args[7] < 5  # the queue changed just now
 
 

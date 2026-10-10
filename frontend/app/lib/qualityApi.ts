@@ -8,6 +8,8 @@ export async function qualityRequest<T>(
     credentials: "include",
     ...init,
   });
+  if (response.status === 401)
+    throw new Error("Войдите в аккаунт, чтобы продолжить.");
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
     throw new Error(

@@ -14,6 +14,8 @@ x-backend-env: &backend-env
   SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY}
   TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
   ENVIRONMENT: production
+  OFFSITE_BACKUP_ENABLED: ${OFFSITE_BACKUP_ENABLED:-0}
+  OFFSITE_STATUS_FILE: /backup-status/offsite-last-success
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   SENTRY_DSN: ${SENTRY_DSN:-}
   VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
@@ -146,6 +148,7 @@ services:
     volumes:
       - uploads:/app/uploads
       - db_backups:/backups:ro
+      - backup_status:/backup-status:ro
     depends_on:
       db:
         condition: service_healthy
@@ -171,6 +174,29 @@ services:
     mem_limit: 320m
     logging: *logging
 
+  monitor:
+    image: ${BACKEND_IMAGE:-ghcr.io/peaostrel/veinmusic-backend}:${IMAGE_TAG:-latest}
+    restart: always
+    command: ["python", "-m", "app.monitor"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-veinmusic}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      OFFSITE_BACKUP_ENABLED: ${OFFSITE_BACKUP_ENABLED:-0}
+      OFFSITE_STATUS_FILE: /backup-status/offsite-last-success
+      MONITOR_WEBHOOK_URL: ${MONITOR_WEBHOOK_URL:-}
+      MONITOR_API_URL: http://backend:8000/health
+      BACKUP_DIR: /backups
+    volumes:
+      - db_backups:/backups:ro
+      - backup_status:/backup-status:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    mem_limit: 96m
+    logging: *logging
+
   frontend:
     image: ${FRONTEND_IMAGE:-ghcr.io/peaostrel/veinmusic-frontend}:${IMAGE_TAG:-latest}
     restart: always
@@ -191,6 +217,7 @@ networks:
         - subnet: 172.30.0.0/24
 
 volumes:
+  backup_status:
   caddy_data:
   caddy_config:
   postgres_data:

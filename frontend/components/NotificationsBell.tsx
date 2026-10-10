@@ -23,6 +23,7 @@ const KIND_ICON: Record<SocialNotification["kind"], typeof Bell> = {
   comment: MessageCircle,
   follow: UserPlus,
   system: Megaphone,
+  security: Bell,
   recap: CalendarRange,
   achievement: Trophy,
 };
@@ -41,6 +42,7 @@ function timeAgo(iso: string | null): string {
 }
 
 function notificationHref(notification: SocialNotification): string {
+  if (notification.kind === "security") return "/settings";
   if (notification.kind === "system") return "/";
   if (notification.kind === "achievement")
     return `/user/${notification.actor.username}/achievements`;
@@ -172,6 +174,7 @@ export default function NotificationsBell({
                         </span>
                         {n.message &&
                           n.kind !== "system" &&
+                          n.kind !== "security" &&
                           n.kind !== "recap" &&
                           n.kind !== "achievement" && (
                             <span className="mt-0.5 block truncate text-xs text-fg-2">

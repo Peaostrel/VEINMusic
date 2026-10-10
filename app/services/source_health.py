@@ -19,6 +19,7 @@ MESSAGES = {
     "integration_paused": "Синхронизация приостановлена. Проверьте настройки интеграций.",
     "blacklisted": "Трек исключён правилами сервиса.",
     "ignored_spam_protection": "Повторное событие слишком близко к предыдущему.",
+    "confirmed_duplicate": "Источник подтвердил уже записанное прослушивание. Время не засчитывается дважды.",
     "ok": "Событие получено. Для зачёта прослушайте не менее 85% трека.",
 }
 
@@ -46,7 +47,7 @@ def record_health(db, user_id, source, status, processing_ms=0):
     row.received_count = SourceHealth.received_count + 1
     row.error_count = SourceHealth.error_count + int(status in ERRORS)
     row.processing_ms = max(0, min(int(processing_ms), 600000))
-    if status == "ok":
+    if status in ("ok", "confirmed_duplicate"):
         row.last_success_at = now
         if row.first_success_at is None:
             row.first_success_at = now

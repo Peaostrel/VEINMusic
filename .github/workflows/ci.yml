@@ -85,6 +85,17 @@ jobs:
           # Fails if the models and the migrations have drifted apart
           alembic check
 
+      - name: Verify isolated backup restoration
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          RESTORE_POSTGRES_IMAGE: public.ecr.aws/docker/library/postgres:16-alpine
+        run: |
+          # Synthetic data in the throwaway migration DB; no production access.
+          docker exec "$POSTGRES_CONTAINER" psql -U postgres -d veinmusic_migrations -v ON_ERROR_STOP=1 -c "INSERT INTO users (username, hashed_password) VALUES ('restore_fixture', 'fixture'); INSERT INTO tracks (title, artist, duration) VALUES ('Restore track', 'Fixture', 180); INSERT INTO scrobbles (user_id, track_id, source, listened_sec, played_at) VALUES (1, 1, 'fixture', 180, CURRENT_TIMESTAMP);"
+          docker exec "$POSTGRES_CONTAINER" pg_dump -U postgres -d veinmusic_migrations -Fc > /tmp/vein-restore.dump
+          sh scripts/verify-backup.sh /tmp/vein-restore.dump /tmp/vein-restore-success
+          test -f /tmp/vein-restore-success
+
       - name: Run Bandit (Security Check)
         run: bandit -r app/ -ll -ii
 

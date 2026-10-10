@@ -38,10 +38,12 @@ def _session_signing_key(hashed_password: str, session_version: int) -> bytes:
     return (SECRET_KEY + hashed_password + suffix).encode('utf-8')
 
 
-def create_session_token(user_id: str, hashed_password: str, session_version: int = 0) -> str:
+def create_session_token(user_id: str, hashed_password: str, session_version: int = 0, session_id: str | None = None) -> str:
     # Set session lifespan to 30 days
     expires_at = int(time.time()) + 30 * 24 * 3600
     msg = f"{user_id}:{expires_at}"
+    if session_id:
+        msg += f":{session_id}"
     signature = hmac.new(
         _session_signing_key(hashed_password, session_version),
         msg.encode('utf-8'),
@@ -53,15 +55,17 @@ def create_session_token(user_id: str, hashed_password: str, session_version: in
 def verify_session_token(token: str, db_user: User) -> bool:
     try:
         parts = token.split(":")
-        if len(parts) != 3:
+        if len(parts) not in (3, 4):
             return False
-        user_id_str, expires_at_str, signature = parts
+        user_id_str, expires_at_str, signature = parts[0], parts[1], parts[-1]
+        if user_id_str != str(db_user.id):
+            return False
         expires_at = int(expires_at_str)
 
         if time.time() > expires_at:
             return False
 
-        msg = f"{user_id_str}:{expires_at_str}"
+        msg = ":".join(parts[:-1])
         expected_signature = hmac.new(
             _session_signing_key(str(db_user.hashed_password), int(db_user.session_version or 0)),
             msg.encode('utf-8'),
@@ -194,6 +198,15 @@ def _authenticate_session_token(token: str, db: Session) -> User | None:
         user_id_str = token.split(":")[0]
         user = db.query(User).filter(User.id == int(user_id_str)).first()
         if user and verify_session_token(token, user):
+            if len(token.split(":")) == 4:
+                from app.models import UserSession
+                row = db.get(UserSession, token.split(":")[2])
+                now = datetime.now(UTC)
+                if not row or row.user_id != user.id or row.revoked or row.session_version != user.session_version or _as_aware(row.expires_at) <= now:
+                    return None
+                if (now - _as_aware(row.last_seen_at)).total_seconds() >= 300:
+                    row.last_seen_at = now  # type: ignore[assignment]
+                    db.commit()
             return user
     except Exception:  # NOSONAR
         pass

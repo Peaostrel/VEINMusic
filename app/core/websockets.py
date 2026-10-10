@@ -298,6 +298,17 @@ class ConnectionManager:
         await self._deliver(event)
 
     async def _deliver(self, event: dict[str, Any]) -> None:
+        if event.get("kind") == "session_revoke":
+            username, session_id = event.get("key", ""), event.get("session_id")
+            sockets = list(self.active_connections.get(username, []))
+            sockets += [ws for room in self.room_sockets.values() for user, ws in room.items() if user == username]
+            for ws in sockets:
+                if getattr(getattr(ws, "state", None), "session_id", None) == session_id:
+                    try:
+                        await ws.close(code=1008)
+                    except Exception:
+                        logger.debug("Revoked socket already closed")
+            return
         payload = event.get("payload", {})
         if event.get("kind") == "user":
             sockets = list(self.active_connections.get(event.get("key", ""), []))
@@ -324,6 +335,9 @@ class ConnectionManager:
                 conns.remove(websocket)
             if not conns:
                 del self.active_connections[username]
+
+    async def revoke_session(self, username: str, session_id: str) -> None:
+        await self._publish({"kind": "session_revoke", "key": username, "session_id": session_id})
 
     async def broadcast_to_user(self, username: str, message: dict):
         await self._publish({"kind": "user", "key": username, "payload": message})

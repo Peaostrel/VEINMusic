@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import SaveForLater from "@/components/SaveForLater";
 import { ExternalLink, Music2 } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
 import { EmptyState, Loading, btn } from "@/components/ui";
@@ -90,6 +91,7 @@ export default function TrackPage({
               <dd className="font-mono">{data.plays}</dd>
             </div>
           </dl>
+          <SaveForLater trackId={data.id} />
           {data.track_url && (
             <a
               href={data.track_url}

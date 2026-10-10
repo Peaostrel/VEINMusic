@@ -125,6 +125,19 @@ async def recap_notifications(ctx: dict[str, Any]) -> None:
     await _mark_cron_run(ctx, "recap_notifications")
 
 
+async def cleanup_history(ctx: dict[str, Any]) -> None:
+    from app.services.operational_monitor import purge_expired
+
+    def clean():
+        db = SessionLocal()
+        try:
+            purge_expired(db)
+        finally:
+            db.close()
+    await asyncio.to_thread(clean)
+    await _mark_cron_run(ctx, "cleanup_history")
+
+
 async def startup(ctx: dict[str, Any]) -> None:
     setup_observability("worker")
     if os.getenv("YANDEX_LIVE", "1") != "0":
@@ -161,6 +174,7 @@ class WorkerSettings:
         # Hourly: the service delivers at 09:00 in each user's local timezone.
         cron(recap_notifications, minute={7}, unique=True, timeout=300),
         # Daily, at a quiet hour
+        cron(cleanup_history, minute={23}, unique=True, timeout=120),
         cron(cleanup_uploads, hour={4}, minute={17}, unique=True, timeout=600),
     ]
     redis_settings = RedisSettings.from_dsn(REDIS_URL)

@@ -542,7 +542,7 @@ async def _dispatch_counted_scrobble(user_id: int, counted: dict[str, Any]) -> N
 
 def _record_scrobble(db: Session, user: User, track: Track, source: str,
                      progress_sec: int, is_playing: bool, credit_sec: int | None = None,
-                     pending_sec: int = 0) -> dict[str, Any]:
+                     pending_sec: int = 0, collector: str = "client") -> dict[str, Any]:
     """Create or advance the user's current scrobble (blocking DB work).
 
     Returns plain data only, so nothing touches expired ORM objects (and the
@@ -550,6 +550,12 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
     username = str(user.username)
     user_id = int(user.id)
     now = datetime.now(UTC)
+    source_id = f"{source}:{collector}"
+    collector_labels = {'client': 'клиент', 'cloud': 'облако', 'live': 'живое подключение'}
+    source_label = f"{source} · {collector_labels.get(collector, 'клиент')}"
+    # Serialize writes from independent clients on PostgreSQL. Never sum two
+    # clocks for the same play: secondary sources only confirm provenance.
+    db.query(User.id).filter(User.id == user_id).with_for_update().first()
     last_scrobble = db.query(Scrobble).execution_options(include_excluded=True).filter(
         Scrobble.user_id == user_id).order_by(
         Scrobble.id.desc()).first()
@@ -563,6 +569,17 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
     result: dict[str, Any] = {"status": "ok", "username": username, "user_id": user_id,
                               "new_item": None, "counted": None, "state_change": None}
     was_playing = bool(last_scrobble.is_playing) if last_scrobble else None
+    if last_scrobble and last_scrobble.track_id == track.id:
+        sources = list(last_scrobble.confirmed_sources or [last_scrobble.source])
+        if source_label not in sources:
+            sources.append(source_label)
+        last_scrobble.confirmed_sources = sources[:20]  # type: ignore[assignment]
+        primary = last_scrobble.credit_source or f"{last_scrobble.source}:client"
+        if primary != source_id and l_updated_at is not None and (now - l_updated_at).total_seconds() < 40:
+            db.commit()
+            result["status"] = "confirmed_duplicate"
+            return result
+        last_scrobble.credit_source = source_id  # type: ignore[assignment]
     is_new, early_return = _determine_is_new(
         db, track, last_scrobble, now, l_updated_at, progress_sec)
     if early_return:
@@ -574,6 +591,8 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
             user_id=user_id,
             track_id=track.id,
             source=source,
+            confirmed_sources=[source_label],
+            credit_source=source_id,
             played_at=now,
             listened_sec=0,
             is_playing=is_playing,
@@ -612,7 +631,7 @@ async def _process_scrobble(
         duration: int,
         album: str = "",
         credit_sec: int | None = None,
-        pending_sec: int = 0):
+        pending_sec: int = 0, collector: str = "client"):
     preferences = get_preferences(user.profile)
     listening = preferences.listening
     integrations = preferences.integrations
@@ -663,7 +682,7 @@ async def _process_scrobble(
         db, title, artist, cover_url, track_url, duration, album,
         enrich=listening.auto_metadata, user_id=int(user.id))
     result = await _run_db(_record_scrobble, db, user, track, source, progress_sec, is_playing,
-                           credit_sec, pending_sec)
+                           credit_sec, pending_sec, collector)
 
     if result["new_item"] is not None:
         await manager.broadcast_to_user(result["username"], {
@@ -680,14 +699,14 @@ async def _process_scrobble(
 
 async def process_scrobble(db, user, title, artist, cover_url, track_url, source,
                            progress_sec, is_playing, duration, album="",
-                           credit_sec=None, pending_sec=0):
+                           credit_sec=None, pending_sec=0, collector="client"):
     """Record diagnostic outcomes without recording filtered track metadata."""
     from time import monotonic
     from app.services.source_health import record_health
     started = monotonic()
     status = await _process_scrobble(db, user, title, artist, cover_url, track_url,
                                      source, progress_sec, is_playing, duration,
-                                     album, credit_sec, pending_sec)
+                                     album, credit_sec, pending_sec, collector)
     await _run_db(record_health, db, int(user.id), source, status,
                   int((monotonic() - started) * 1000))
     return status

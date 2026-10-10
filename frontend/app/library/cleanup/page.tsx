@@ -1,12 +1,10 @@
 "use client";
-
 import { useCallback, useEffect, useState } from "react";
+import { Merge } from "lucide-react";
+import { btn, EmptyState, Loading, PageHeader } from "@/components/ui";
+import { jsonRequest, qualityRequest } from "@/app/lib/qualityApi";
 import ImportBatches from "./ImportBatches";
-import { Merge, Search, Trash2 } from "lucide-react";
-import { API_URL } from "@/app/lib/api";
-import { EmptyState, Loading, PageHeader, btn, input } from "@/components/ui";
-import { sourceLabel } from "@/utils/formatters";
-
+import HistoryManager from "./HistoryManager";
 interface Track {
   id: number;
   title: string;
@@ -15,267 +13,66 @@ interface Track {
   cover_url?: string | null;
   plays: number;
 }
-interface ManagedScrobble {
-  id: number;
-  played_at: string;
-  source: string;
-  listened_sec: number;
-  excluded_from_stats: boolean;
-  is_imported: boolean;
-  track: Track;
-}
-
 export default function CleanupPage() {
   const [duplicates, setDuplicates] = useState<Track[][]>([]);
-  const [history, setHistory] = useState<ManagedScrobble[]>([]);
-  const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
   const load = useCallback(async () => {
-    const [duplicateRes, historyRes] = await Promise.all([
-      fetch(`${API_URL}/api/me/scrobbles/duplicates`, {
-        credentials: "include",
-      }),
-      fetch(
-        `${API_URL}/api/me/scrobbles/manage?q=${encodeURIComponent(query)}`,
-        { credentials: "include" },
-      ),
-    ]);
-    if (duplicateRes.ok)
-      setDuplicates(
-        ((await duplicateRes.json()) as { groups?: Track[][] }).groups ?? [],
-      );
-    if (historyRes.ok) setHistory(await historyRes.json());
+    const data = await qualityRequest<{ groups: Track[][] }>(
+      "/api/me/scrobbles/duplicates",
+    );
+    setDuplicates(data.groups);
     setLoading(false);
-  }, [query]);
+  }, []);
   useEffect(() => {
-    const timer = setTimeout(() => {
-      void load().catch(() => {
-        setStatus("Не удалось загрузить историю. Повторите поиск.");
-        setLoading(false);
-      });
-    }, 250);
-    return () => clearTimeout(timer);
+    void load().catch(() => {
+      setLoading(false);
+      setStatus("Не удалось загрузить дубли");
+    });
   }, [load]);
-
   const merge = async (source: Track, target: Track) => {
     if (
       !confirm(
-        `Объединить «${source.title}» с «${target.title}» в вашей истории?`,
+        `Объединить «${source.title}» с «${target.title}»? Это изменение нельзя отменить.`,
       )
     )
       return;
-    const response = await fetch(`${API_URL}/api/me/scrobbles/merge`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        source_track_id: source.id,
-        target_track_id: target.id,
-      }),
-    });
-    setStatus(
-      response.ok
-        ? "Треки объединены. Будущие прослушивания тоже будут нормализованы."
-        : "Не удалось объединить треки.",
-    );
-    if (response.ok) await load();
-  };
-  const remove = async (item: ManagedScrobble) => {
-    if (
-      !confirm(
-        `Удалить прослушивание «${item.track.title}»? Вернуть его будет нельзя.`,
-      )
-    )
-      return;
-    const response = await fetch(`${API_URL}/api/me/scrobbles/${item.id}`, {
-      method: "DELETE",
-      credentials: "include",
-    });
-    if (response.ok)
-      setHistory((current) => current.filter((entry) => entry.id !== item.id));
-  };
-  const edit = async (item: ManagedScrobble) => {
-    const title = prompt("Название трека", item.track.title);
-    if (title === null) return;
-    const artist = prompt("Исполнитель", item.track.artist);
-    if (artist === null) return;
     try {
-      const response = await fetch(
-        `${API_URL}/api/me/scrobbles/${item.id}/metadata`,
-        {
-          method: "PATCH",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title,
-            artist,
-            album: item.track.album ?? null,
-          }),
-        },
+      await qualityRequest(
+        "/api/me/scrobbles/merge",
+        jsonRequest("POST", {
+          source_track_id: source.id,
+          target_track_id: target.id,
+        }),
       );
-      if (!response.ok)
-        throw new Error(
-          "Не удалось исправить запись. Проверьте название и исполнителя.",
-        );
+      setStatus("Треки объединены.");
       await load();
-      setStatus("Запись исправлена только в вашей истории.");
     } catch (cause) {
       setStatus(
-        cause instanceof Error ? cause.message : "Не удалось исправить запись",
-      );
-    }
-  };
-  const exclude = async (item: ManagedScrobble) => {
-    try {
-      const response = await fetch(
-        `${API_URL}/api/me/scrobbles/${item.id}/exclude`,
-        {
-          method: "PATCH",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ excluded: !item.excluded_from_stats }),
-        },
-      );
-      if (!response.ok) throw new Error("Не удалось изменить запись");
-      await load();
-      setStatus(
-        item.excluded_from_stats
-          ? "Прослушивание вернулось в статистику."
-          : "Прослушивание исключено. Его можно вернуть.",
-      );
-    } catch (cause) {
-      setStatus(
-        cause instanceof Error ? cause.message : "Не удалось изменить запись",
+        cause instanceof Error ? cause.message : "Не удалось объединить",
       );
     }
   };
   if (loading) return <Loading label="Ищем дубли…" />;
   return (
-    <main className="mx-auto flex w-full max-w-[980px] flex-col gap-9 px-4 py-8 sm:px-8 lg:py-10">
+    <main className="mx-auto max-w-[980px] space-y-8 px-4 py-8 sm:px-8">
       <PageHeader
         title="Порядок в истории"
-        subtitle="Изменения затрагивают только вашу статистику"
+        subtitle="Изменения затрагивают только вашу историю"
       />
-      {status && (
-        <output
-          aria-live="polite"
-          className="rounded-lg border border-line bg-surface px-4 py-3 text-sm text-fg-2"
-        >
-          {status}
-        </output>
-      )}
+      <output aria-live="polite">{status}</output>
       <ImportBatches onChanged={load} />
-      <section className="flex flex-col gap-4">
-        <div>
-          <h2 className="text-base font-semibold">Возможные дубли</h2>
-          <p className="mt-1 text-xs text-fg-3">
-            VEIN сравнивает написание и версии треков. Канонический вариант
-            выбираете вы.
-          </p>
-        </div>
-        {duplicates.length === 0 ? (
-          <EmptyState title="Дублей не найдено">
-            Ваша библиотека уже выглядит аккуратно.
-          </EmptyState>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {duplicates.map((group) => (
-              <DuplicateGroup
-                key={group.map((track) => track.id).join("-")}
-                tracks={group}
-                onMerge={merge}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-      <section className="flex flex-col gap-4">
-        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-          <div>
-            <h2 className="text-base font-semibold">Последние прослушивания</h2>
-            <p className="mt-1 text-xs text-fg-3">
-              Здесь можно убрать случайно записанный трек.
-            </p>
-          </div>
-          <label className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-fg-3" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Трек или артист"
-              className={`${input} h-10 pl-9`}
-            />
-          </label>
-        </div>
-        <div className="overflow-hidden rounded-xl border border-line bg-surface">
-          {history.map((item) => (
-            <div
-              key={item.id}
-              className="grid grid-cols-[44px_minmax(0,1fr)] sm:grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3 border-b border-line-soft px-4 py-3 last:border-0"
-            >
-              {item.track.cover_url ? (
-                <img
-                  src={item.track.cover_url}
-                  alt=""
-                  className="h-11 w-11 rounded object-cover"
-                />
-              ) : (
-                <span className="h-11 w-11 rounded bg-surface-2" />
-              )}
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-medium">
-                  {item.track.title}
-                </span>
-                <span className="block truncate text-xs text-fg-3">
-                  {item.track.artist} · {sourceLabel(item.source)} ·{" "}
-                  {new Date(item.played_at).toLocaleString("ru-RU")}
-                  {item.is_imported && " · Импорт"}
-                  {item.excluded_from_stats && " · Исключено"}
-                </span>
-              </span>
-              <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-1">
-                <button
-                  type="button"
-                  className={`${btn.secondary} ${btn.sm}`}
-                  onClick={() => {
-                    void edit(item);
-                  }}
-                >
-                  Исправить
-                </button>
-                <button
-                  type="button"
-                  className={`${btn.secondary} ${btn.sm}`}
-                  onClick={() => {
-                    void exclude(item);
-                  }}
-                >
-                  {item.excluded_from_stats
-                    ? "Вернуть в статистику"
-                    : "Исключить"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void remove(item).catch(() =>
-                      setStatus("Не удалось удалить запись"),
-                    );
-                  }}
-                  aria-label={`Удалить ${item.track.title}`}
-                  className="rounded-lg p-2 text-fg-3 hover:bg-danger/10 hover:text-danger"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          ))}
-          {history.length === 0 && (
-            <EmptyState title="Ничего не найдено">
-              Попробуйте другой запрос.
-            </EmptyState>
-          )}
-        </div>
+      <HistoryManager />
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">Возможные дубли в каталоге</h2>
+        {!duplicates.length && <EmptyState title="Дублей не найдено" />}
+        {duplicates.map((group) => (
+          <DuplicateGroup
+            key={group.map((track) => track.id).join("-")}
+            tracks={group}
+            onMerge={merge}
+          />
+        ))}
       </section>
     </main>
   );

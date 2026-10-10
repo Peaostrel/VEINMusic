@@ -9,10 +9,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.rate_limit import credential_key, limiter
-from app.core.security import create_session_token, get_current_user, revoke_all_sessions, verify_password
+from app.core.security import get_current_user, revoke_all_sessions, verify_password
 from app.database import get_db
 from app.models import User
 from app.services import audit
+from app.services.sessions import issue_session
 from app.services.mfa import admin_mfa_required, consume_code, new_recovery_codes
 
 router = APIRouter(prefix="/auth/2fa", tags=["auth"])
@@ -42,9 +43,9 @@ def _check_password(data: PasswordConfirmation, user: User) -> None:
         raise HTTPException(400, "Неверный пароль")
 
 
-def _refresh_session(response: Response, user: User) -> None:
+def _refresh_session(response: Response, user: User, db: Session, request: Request) -> None:
     response.headers["Cache-Control"] = "no-store"
-    token = create_session_token(str(user.id), str(user.hashed_password), int(user.session_version))
+    token = issue_session(db, user, request, notify=False)
     response.set_cookie("api_key", token,
                         httponly=True, secure=os.getenv("ENVIRONMENT") == "production",
                         samesite="strict", max_age=30 * 24 * 3600)
@@ -89,7 +90,7 @@ def enable(request: Request, response: Response, data: CodeConfirmation, db: DB,
     revoke_all_sessions(user)
     audit.record(db, user, "security.2fa_enabled", user.username)
     db.commit()
-    _refresh_session(response, user)
+    _refresh_session(response, user, db, request)
     return {"enabled": True, "recovery_codes": codes}
 
 
@@ -108,5 +109,5 @@ def disable(request: Request, response: Response, data: DisableConfirmation, db:
     revoke_all_sessions(user)
     audit.record(db, user, "security.2fa_disabled", user.username)
     db.commit()
-    _refresh_session(response, user)
+    _refresh_session(response, user, db, request)
     return {"enabled": False}

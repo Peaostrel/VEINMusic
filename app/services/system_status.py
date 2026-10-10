@@ -3,6 +3,7 @@ backups, uploads and database size."""
 from __future__ import annotations
 
 import os
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -59,7 +60,14 @@ async def worker_status() -> dict[str, Any]:
         last_runs = {job: await client.get(CRON_KEY_PREFIX + job) for job in CRON_JOBS}
     except Exception:
         return {"redis": False, "queued_jobs": None, "cron": dict.fromkeys(CRON_JOBS)}
-    return {"redis": True, "queued_jobs": int(queued or 0), "cron": last_runs}
+    oldest_age = None
+    try:
+        ready = await client.zrangebyscore(ARQ_QUEUE_KEY, 0, time.time() * 1000, start=0, num=1, withscores=True)
+        if ready:
+            oldest_age = round(max(0, (time.time() * 1000 - float(ready[0][1])) / 60000), 1)
+    except Exception:
+        pass  # Optional age must not turn a reachable Redis into an outage.
+    return {"redis": True, "queued_jobs": int(queued or 0), "oldest_ready_age_minutes": oldest_age, "cron": last_runs}
 
 
 async def mark_cron_run(redis: Any, job: str) -> None:

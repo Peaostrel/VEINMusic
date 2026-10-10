@@ -70,6 +70,25 @@ function StatusPanel() {
       {error && <p className="text-danger text-xs font-medium">{error}</p>}
       {data && (
         <>
+          {data.operations && (
+            <div className="space-y-2 rounded-xl border border-line p-3 text-sm">
+              <p>Диск: {data.operations.disk_used_percent ?? "—"}%</p>
+              <p>
+                Внешний бэкап:{" "}
+                {data.operations.offsite.configured
+                  ? `последнее подтверждение ${data.operations.offsite.age_hours ?? "—"} ч назад`
+                  : "не подключён"}
+              </p>
+              <p className="text-xs text-fg-3">
+                {data.operations.offsite.note}
+              </p>
+              {data.operations.alerts.map((alert) => (
+                <p key={alert.code} className="text-danger">
+                  {alert.message}
+                </p>
+              ))}
+            </div>
+          )}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Stat
               label="Redis / воркер"

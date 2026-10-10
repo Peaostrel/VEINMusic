@@ -16,7 +16,6 @@ from app.core import login_guard
 from app.core.rate_limit import limiter
 from app.core.security import (
     SECRET_KEY,
-    create_session_token,
     get_current_user,
     get_password_hash,
     revoke_all_sessions,
@@ -26,6 +25,7 @@ from app.database import get_db
 from app.models import User, UserIntegration, UserProfile
 from app.schemas import UserCreate, UserLogin
 from app.services import runtime_settings
+from app.services.sessions import current_session_id, issue_session
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -82,8 +82,7 @@ def register(request: Request, data: UserCreate, response: Response,
     db.commit()
 
     # Set signed session token in cookie
-    session_token = create_session_token(
-        str(new_user.id), str(new_user.hashed_password), int(new_user.session_version or 0))
+    session_token = issue_session(db, new_user, request, notify=False)
     safe_token = session_token.replace('\r', '').replace('\n', '')
     response.set_cookie(
         key="api_key",
@@ -126,8 +125,7 @@ def login(request: Request, data: UserLogin, response: Response,
     login_guard.reset(data.username, client_ip)
 
     # Set signed session token in cookie
-    session_token = create_session_token(
-        str(user.id), str(user.hashed_password), int(user.session_version or 0))
+    session_token = issue_session(db, user, request)
     safe_token = session_token.replace('\r', '').replace('\n', '')
     response.set_cookie(
         key="api_key",
@@ -142,7 +140,19 @@ def login(request: Request, data: UserLogin, response: Response,
 
 
 @router.post("/logout")
-def logout(response: Response):
+async def logout(request: Request, response: Response, db: Annotated[Session, Depends(get_db)]):
+    from app.models import UserSession
+    from app.core.security import _check_csrf, _authenticate_session_token
+    token = request.cookies.get("api_key", "")
+    if token:
+        _check_csrf(request, True)
+        user = _authenticate_session_token(token, db)
+        row = db.get(UserSession, current_session_id(request)) if current_session_id(request) else None
+        if user and row and row.user_id == user.id:
+            row.revoked = True  # type: ignore[assignment]
+            db.commit()
+            from app.core.websockets import manager
+            await manager.revoke_session(str(user.username), str(row.id))
     response.delete_cookie("api_key")
     return {"message": "Успешный выход"}
 
@@ -161,11 +171,11 @@ def logout_all(response: Response,
 
 
 @router.post("/ws-ticket")
-def ws_ticket(current_user: Annotated[User, Depends(get_current_user)]):
+def ws_ticket(request: Request, current_user: Annotated[User, Depends(get_current_user)]):
     """One-minute ticket for opening a WebSocket as the signed-in user
     (passed as ?ticket=…; see app/core/ws_ticket.py)."""
     from app.core.ws_ticket import TICKET_TTL_SEC, issue_ticket
-    return {"ticket": issue_ticket(str(current_user.username), session_version=int(current_user.session_version or 0)), "expires_in": TICKET_TTL_SEC}
+    return {"ticket": issue_ticket(str(current_user.username), session_version=int(current_user.session_version or 0), session_id=current_session_id(request)), "expires_in": TICKET_TTL_SEC}
 
 
 SPOTIFY_STATE_COOKIE = "spotify_auth_state"
