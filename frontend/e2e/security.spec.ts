@@ -8,7 +8,9 @@ test("two-factor enrollment downloads recovery codes and login requires the fact
 }) => {
   const username = await signUp(page, "mfasecurity");
   await page.goto("/settings");
-  await page.getByRole("button", { name: "Безопасность", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Безопасность и данные", exact: true })
+    .click();
   const card = page.locator("section").filter({
     has: page.getByRole("heading", {
       name: "Двухфакторная защита",

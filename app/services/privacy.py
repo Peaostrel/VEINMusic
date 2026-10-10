@@ -3,7 +3,7 @@ import hashlib
 
 from sqlalchemy.orm import Session
 
-from app.models import User, UserProfile
+from app.models import Follow, User, UserProfile
 from app.services.user_preferences import preferences_dict
 
 
@@ -53,3 +53,29 @@ def audience_cache_key(prefix: str, ids) -> str:
     """Aggregate caches cannot reuse contributions of a withdrawn listener."""
     digest = hashlib.sha256(",".join(str(uid) for uid in sorted(ids)).encode()).hexdigest()[:24]
     return f"{prefix}:{digest}"
+
+
+def visible_statistics_users(db: Session, viewer_id: int | None = None) -> dict[str, int]:
+    if viewer_id is None:
+        return public_statistics_users(db)
+    following = {row[0] for row in db.query(Follow.following_id).filter(Follow.follower_id == viewer_id).all()}
+    rows = db.query(User.username, User.id, UserProfile).join(
+        UserProfile, UserProfile.user_id == User.id).filter(User.is_banned.isnot(True)).all()
+    return {name: int(uid) for name, uid, profile in rows
+            if _statistics_visible_to(profile, int(uid), viewer_id, following)}
+
+
+def _statistics_visible_to(profile, user_id, viewer_id, following) -> bool:
+    if user_id == viewer_id:
+        return True
+    if profile.is_private:
+        return False
+    visibility = preferences_dict(profile)["privacy"]["statistics"]
+    return visibility == "all" or (visibility == "followers" and user_id in following)
+
+
+def public_feed_user_ids(db: Session) -> list[int]:
+    rows = db.query(User.id, UserProfile).join(UserProfile, UserProfile.user_id == User.id).filter(
+        User.is_banned.isnot(True), UserProfile.is_private.isnot(True)).all()
+    return [int(uid) for uid, profile in rows if is_public_section(profile, "history")
+            and preferences_dict(profile)["feed"]["share_scrobbles"]]

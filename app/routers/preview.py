@@ -298,7 +298,13 @@ def _iso(value: object) -> str | None:
 @router.get("/sitemap")
 def sitemap(db: Annotated[Session, Depends(get_db)]):
     """Public profiles, artists and tracks for the site's sitemap.xml."""
-    cached = get_from_cache("preview:sitemap", SITEMAP_TTL)
+    profiles = db.query(User.id, UserProfile).join(UserProfile, UserProfile.user_id == User.id).filter(
+        User.is_banned.isnot(True), UserProfile.is_private.isnot(True)).all()
+    indexable_ids = [int(uid) for uid, profile in profiles
+                     if preferences_dict(profile)["privacy"]["search_indexing"]]
+    cache_key = audience_cache_key("preview:sitemap:v2", indexable_ids)
+    cache_key = audience_cache_key(cache_key, public_statistics_users(db).values())
+    cached = get_from_cache(cache_key, SITEMAP_TTL)
     if cached is not None:
         return cached
     last_play = (
@@ -350,5 +356,5 @@ def sitemap(db: Annotated[Session, Depends(get_db)]):
             for row in tracks
         ],
     }
-    set_to_cache("preview:sitemap", data, SITEMAP_TTL)
+    set_to_cache(cache_key, data, SITEMAP_TTL)
     return data

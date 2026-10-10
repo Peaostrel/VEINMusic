@@ -142,3 +142,60 @@ def test_invalidation_throttle_local_and_redis(monkeypatch):
     assert cache.invalidate_all() == 0
     shared.set.assert_called_once_with("cache_invalidation_lease", "1", nx=True, ex=5)
     assert flush.call_count == 2
+
+
+@pytest.mark.parametrize("period", ["all", "7d", "30d"])
+def test_scoped_rankings_preserve_owner_and_follower_access(client, db, listeners, period):
+    privacy(db, listeners[0], "statistics", "followers")
+    public = client.get(f"/api/leaderboard?period={period}").json()
+    assert all(item["username"] != "owner" for item in public)
+    auth(client, listeners[1])
+    followed = client.get(f"/api/leaderboard/following?period={period}").json()
+    assert any(item["username"] == "owner" for item in followed)
+    privacy(db, listeners[0], "statistics", "private")
+    assert all(item["username"] != "owner" for item in client.get(f"/api/leaderboard/following?period={period}").json())
+    auth(client, listeners[0])
+    assert client.get(f"/api/leaderboard/me?period={period}").json()["rank"] is not None
+    listeners[0].profile.is_private = True
+    db.commit()
+    assert client.get(f"/api/leaderboard/me?period={period}").json()["rank"] is not None
+
+
+def test_sitemap_withdraws_cached_profile_without_global_flush(client, db, listeners):
+    first = client.get("/api/preview/sitemap").json()
+    assert any(item["username"] == "owner" for item in first["users"])
+    data = preferences_dict(listeners[0].profile)
+    data["privacy"]["search_indexing"] = False
+    listeners[0].profile.preferences = json.dumps(data)
+    db.commit()
+    assert all(item["username"] != "owner" for item in client.get("/api/preview/sitemap").json()["users"])
+    listeners[1].profile.is_private = True
+    db.commit()
+    assert all(item["username"] != "follower" for item in client.get("/api/preview/sitemap").json()["users"])
+
+
+@pytest.mark.parametrize("endpoint", ["/api/global-history", "/api/feed/global"])
+def test_hidden_rows_do_not_crowd_out_public_feed(client, db, listeners, endpoint):
+    privacy(db, listeners[0], "history", "private")
+    track = db.query(Track).one()
+    for _ in range(25):
+        db.add(Scrobble(user_id=listeners[0].id, track_id=track.id, listened_sec=180, is_playing=False, source="spotify"))
+    db.commit()
+    payload = client.get(endpoint).json()
+    items = payload["feed"] if isinstance(payload, dict) else payload
+    assert {item["username"] for item in items} == {"follower", "stranger"}
+
+
+def test_hidden_candidates_do_not_crowd_out_taste_search(client, db, listeners):
+    track = db.query(Track).one()
+    for index in range(55):
+        db.add(User(username=f"hidden{index}", hashed_password="fixture", profile=UserProfile(
+            preferences=json.dumps({"privacy": {"statistics": "private"}}))))
+    late = User(username="late_public_match", hashed_password="fixture", profile=UserProfile(), integration=UserIntegration())
+    db.add(late)
+    db.flush()
+    db.add(Scrobble(user_id=late.id, track_id=track.id, listened_sec=180, is_playing=False, source="spotify"))
+    db.commit()
+    auth(client, listeners[2])
+    results = client.get("/api/search/taste?my_username=stranger").json()
+    assert any(item["username"] == "late_public_match" for item in results)

@@ -27,7 +27,7 @@ from app.routers.common import _can_view_section, _check_privacy_and_owner
 from app.schemas import CommentRequest, ScrobbleData
 from app.services import notifications
 from app.services.cache import delete_from_cache, get_from_cache, set_to_cache
-from app.services.privacy import filter_public_feed, public_statistics_users
+from app.services.privacy import filter_public_feed, public_feed_user_ids, public_statistics_users
 from app.services.scrobble_processor import format_history_item, process_scrobble
 from app.services.user_preferences import preference_enabled, preferences_dict
 
@@ -193,6 +193,7 @@ def get_global_history(db: Annotated[Session, Depends(get_db)]):
             UserProfile,
             User.id == UserProfile.user_id).filter(
                 UserProfile.is_private.is_(False), User.is_banned.isnot(True),
+                User.id.in_(public_feed_user_ids(db)),
                 (Scrobble.listened_sec >= 15) | (
                     Scrobble.is_playing.is_(True) & (Scrobble.updated_at >= active_threshold)
                 )
@@ -202,7 +203,7 @@ def get_global_history(db: Annotated[Session, Depends(get_db)]):
     scrobbles = [
         row for row in scrobbles
         if preference_enabled(row[0].user.profile, "feed", "share_scrobbles")
-    ][:20]
+    ]
 
     s_ids = [s.id for s, t in scrobbles]
     counters = get_scrobble_counters(db, s_ids)
@@ -227,7 +228,7 @@ def get_global_history(db: Annotated[Session, Depends(get_db)]):
         item["can_comment"] = preference_enabled(
             scrobble.user.profile, "feed", "allow_comments")
         result.append(item)
-    result = filter_public_feed(result, db)
+    result = filter_public_feed(result, db)[:20]
     set_to_cache(GLOBAL_HISTORY_CACHE_KEY, jsonable_encoder(result))
     return result
 

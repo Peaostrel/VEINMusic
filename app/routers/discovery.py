@@ -19,10 +19,7 @@ from app.core.constants import USER_AGENT_MOZILLA, YANDEX_MUSIC_DOMAIN
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.database import get_db
-from app.models import (
-    User,
-    UserProfile,
-)
+from app.models import User
 from app.routers.common import _can_view_section, _get_visible_user
 from app.services.privacy import public_statistics_users
 from app.services.taste import get_taste_match_internal, get_taste_twins
@@ -122,10 +119,9 @@ def get_recommendations(
 def search_by_taste(my_username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
     _get_visible_user(my_username, request, db, "statistics")
     # Find people with highest taste match (private profiles are excluded)
-    all_users = db.query(User).join(UserProfile).filter(
-        User.username != my_username,
-        UserProfile.is_private.isnot(True)).limit(50).all()
     visible_names = public_statistics_users(db)
+    all_users = db.query(User).filter(
+        User.username != my_username, User.id.in_(list(visible_names.values()))).limit(50).all()
     results = []
     for u in all_users:
         if u.username not in visible_names:

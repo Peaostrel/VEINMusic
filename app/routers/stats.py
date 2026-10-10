@@ -31,7 +31,10 @@ from app.routers.common import (
 )
 from app.services.cache import get_from_cache, set_to_cache
 from app.services.scrobble_processor import format_history_item
-from app.services.privacy import audience_cache_key, filter_public_feed, public_statistics_users
+from app.services.privacy import (
+    audience_cache_key, filter_public_feed, public_feed_user_ids,
+    public_statistics_users, visible_statistics_users,
+)
 from app.services.user_preferences import preference_enabled, preferences_dict
 from app.services.user_stats import (
     get_active_streak,
@@ -41,7 +44,7 @@ from app.services.user_stats import (
 
 router = APIRouter(tags=["stats"])
 
-LEADERBOARD_CACHE_KEY = "leaderboard:v2"
+LEADERBOARD_CACHE_KEY = "leaderboard:raw:v3"
 LEADERBOARD_CACHE_TTL = 60
 LEADERBOARD_SIZE = 50
 WEEK_CACHE_KEY = "public-week:v1"
@@ -245,12 +248,13 @@ def get_wrapped_stats(
 def get_global_feed(db: Annotated[Session, Depends(get_db)]):
     # Latest scrobbles from public users
     scrobbles = db.query(Scrobble).join(User).join(UserProfile).filter(
-        UserProfile.is_private.is_(False), User.is_banned.isnot(True)).order_by(
+        UserProfile.is_private.is_(False), User.is_banned.isnot(True),
+        User.id.in_(public_feed_user_ids(db))).order_by(
         Scrobble.id.desc()).limit(100).all()
     visible = [
         scrobble for scrobble in scrobbles
         if preference_enabled(scrobble.user.profile, "feed", "share_scrobbles")
-    ][:20]
+    ]
     feed = []
     for scrobble in visible:
         item = format_history_item(scrobble, scrobble.track)
@@ -271,7 +275,7 @@ def get_global_feed(db: Annotated[Session, Depends(get_db)]):
         item["can_comment"] = preference_enabled(
             scrobble.user.profile, "feed", "allow_comments")
         feed.append(item)
-    return {"feed": filter_public_feed(feed, db)}
+    return {"feed": filter_public_feed(feed, db)[:20]}
 
 
 def _get_activity_stats(
@@ -813,18 +817,18 @@ def get_current_track(username: str, request: Request, db: Annotated[Session, De
 
 
 # --- /api/leaderboard ---
-def _visible_ranking(ranking, db):
-    public_names = public_statistics_users(db)
+def _visible_ranking(ranking, db, viewer_id=None):
+    public_names = visible_statistics_users(db, viewer_id)
     return [{**item, "rank": rank} for rank, item in enumerate(
         (entry for entry in ranking if entry["username"] in public_names), 1)]
 
 
-def _full_ranking(db: Session) -> list[dict[str, Any]]:
+def _full_ranking(db: Session, viewer_id: int | None = None) -> list[dict[str, Any]]:
     """Every non-banned user with total XP, best first, with a global rank.
     Aggregates over all scrobbles: cached briefly (shared through Redis)."""
     cached = get_from_cache(LEADERBOARD_CACHE_KEY, ttl=LEADERBOARD_CACHE_TTL)
     if cached is not None:
-        return _visible_ranking(cached, db)
+        return _visible_ranking(cached, db, viewer_id)
     sql = text("""
         SELECT u.username, p.display_name, p.avatar_url, i.is_verified, p.theme,
                (COALESCE(SUM(s.xp_earned), 0) + COALESCE(i.bonus_xp, 0)) as total_xp, u.role
@@ -838,7 +842,6 @@ def _full_ranking(db: Session) -> list[dict[str, Any]]:
             WHERE s.excluded_from_stats = false AND s.listened_sec * 100 >= COALESCE(NULLIF(t.duration, 0), 180) * 85
         ) s ON u.id = s.user_id
         WHERE (u.is_banned IS NULL OR u.is_banned = :not_banned)
-          AND (p.is_private IS NULL OR p.is_private = :not_private)
         GROUP BY u.id, u.username, p.display_name, p.avatar_url, i.is_verified,
                  p.theme, i.bonus_xp, u.role
         ORDER BY total_xp DESC, u.username
@@ -857,17 +860,17 @@ def _full_ranking(db: Session) -> list[dict[str, Any]]:
             "role": urole or "user",
             "theme": theme
         })
-    ranking = _visible_ranking(ranking, db)
     set_to_cache(LEADERBOARD_CACHE_KEY, ranking)
-    return ranking
+    return _visible_ranking(ranking, db, viewer_id)
 
 
-def _period_ranking(db: Session, period: str) -> list[dict[str, Any]]:
+def _period_ranking(db: Session, period: str, viewer_id: int | None = None) -> list[dict[str, Any]]:
     if period == "all":
-        return _full_ranking(db)
+        return _full_ranking(db, viewer_id)
     lifetime_levels = {
-        entry["username"]: entry["level"] for entry in _full_ranking(db)
+        entry["username"]: entry["level"] for entry in _full_ranking(db, viewer_id)
     }
+    visible_ids = list(visible_statistics_users(db, viewer_id).values())
     days = 7 if period == "7d" else 30
     start = datetime.now(UTC) - timedelta(days=days)
     xp = (
@@ -896,7 +899,7 @@ def _period_ranking(db: Session, period: str) -> list[dict[str, Any]]:
         .outerjoin(xp, xp.c.user_id == User.id)
         .filter(
             User.is_banned.isnot(True),
-            UserProfile.is_private.isnot(True),
+            User.id.in_(visible_ids),
             xp.c.total_xp.isnot(None),
         )
         .order_by(func.coalesce(xp.c.total_xp, 0).desc(), User.username)
@@ -936,7 +939,7 @@ def get_leaderboard_following(
         f[0] for f in db.query(Follow.following_id).filter(
             Follow.follower_id == current_user.id).all()]
     names = {u[0] for u in db.query(User.username).filter(User.id.in_(ids)).all()}
-    return [e for e in _period_ranking(db, period) if e["username"] in names][:LEADERBOARD_SIZE]
+    return [e for e in _period_ranking(db, period, int(current_user.id)) if e["username"] in names][:LEADERBOARD_SIZE]
 
 
 @router.get("/api/leaderboard/me",
@@ -946,7 +949,7 @@ def get_my_rank(
         current_user: Annotated[User, Depends(get_current_user)],
         period: Literal["7d", "30d", "all"] = "all"):
     """Global place of the signed-in user and the gap to the place above."""
-    ranking = _period_ranking(db, period)
+    ranking = _period_ranking(db, period, int(current_user.id))
     mine = next((e for e in ranking if e["username"] == current_user.username), None)
     if mine is None:  # banned users are not ranked
         return {"rank": None, "total": len(ranking), "total_xp": 0, "ahead": None}
