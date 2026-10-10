@@ -37,6 +37,8 @@ def _can_view_section(
         db: Session,
         section: str) -> bool:
     """Return whether the requester may see one granular profile section."""
+    if user.is_banned:
+        return False
     current_user = _get_request_user(request, db)
     if current_user is not None and current_user.id == user.id:
         return True

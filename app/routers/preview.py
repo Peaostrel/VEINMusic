@@ -24,6 +24,7 @@ from app.database import get_db
 from app.models import Scrobble, Track, User, UserProfile
 from app.routers.media import API_BASE_URL, UPLOADS_DIR
 from app.services.cache import get_from_cache, set_to_cache
+from app.services.privacy import audience_cache_key, public_statistics_users
 from app.services.user_preferences import preferences_dict
 from app.services.user_stats import get_user_level_info
 
@@ -84,18 +85,28 @@ def _public_scrobbles(db: Session):
         db.query(Scrobble)
         .join(User, User.id == Scrobble.user_id)
         .join(UserProfile, UserProfile.user_id == User.id)
-        .filter(UserProfile.is_private.isnot(True), User.is_banned.isnot(True))
+        .filter(UserProfile.is_private.isnot(True), User.is_banned.isnot(True),
+                Scrobble.user_id.in_(list(public_statistics_users(db).values())))
     )
+
+
+def _redact_cached_user_preview(cached, user):
+    data = dict(cached)
+    data["indexable"] = _indexable(user)
+    if not _anonymous_can_see(user.profile, "statistics"):
+        for field in ("scrobbles", "top_artist", "level", "rank"):
+            data[field] = None
+    return data
 
 
 @router.get("/user/{username}", responses={404: {"description": "No such public user"}})
 def user_preview(username: str, db: Annotated[Session, Depends(get_db)]):
-    cache_key = f"preview:user:{username}"
-    cached = get_from_cache(cache_key, PREVIEW_TTL)
-    if cached is not None:
-        return cached
     user = _public_user(db, username)
     profile = user.profile
+    cache_key = f"preview:user:{username}"
+    cached = get_from_cache(cache_key, PREVIEW_TTL)
+    if cached is not None and not profile.is_private:
+        return _redact_cached_user_preview(cached, user)
     data: dict = {
         "username": user.username,
         "display_name": profile.display_name or user.username,
@@ -111,8 +122,8 @@ def user_preview(username: str, db: Annotated[Session, Depends(get_db)]):
     if not profile.is_private:
         bio = (profile.bio or "").strip()
         data["bio"] = bio[:200] or None
-        data["level"], data["rank"], _, _ = get_user_level_info(user, db)
         if _anonymous_can_see(profile, "statistics"):
+            data["level"], data["rank"], _, _ = get_user_level_info(user, db)
             base = _counted(db.query(Scrobble).join(Track)).filter(Scrobble.user_id == user.id)
             data["scrobbles"] = base.count()
             top = (
@@ -140,7 +151,7 @@ def _artist_tracks(db: Session, artist: str):
 
 @router.get("/artist/{artist}", responses={404: {"description": "Artist not in the public catalog"}})
 def artist_preview(artist: str, db: Annotated[Session, Depends(get_db)]):
-    cache_key = f"preview:artist:{artist.strip().lower()}"
+    cache_key = audience_cache_key(f"preview:artist:{artist.strip().lower()}", public_statistics_users(db).values())
     cached = get_from_cache(cache_key, PREVIEW_TTL)
     if cached is not None:
         return cached
@@ -172,7 +183,7 @@ def artist_preview(artist: str, db: Annotated[Session, Depends(get_db)]):
 
 @router.get("/track/{track_id}", responses={404: {"description": "Track not in the public catalog"}})
 def track_preview(track_id: int, db: Annotated[Session, Depends(get_db)]):
-    cache_key = f"preview:track:{track_id}"
+    cache_key = audience_cache_key(f"preview:track:{track_id}", public_statistics_users(db).values())
     cached = get_from_cache(cache_key, PREVIEW_TTL)
     if cached is not None:
         return cached
@@ -287,7 +298,13 @@ def _iso(value: object) -> str | None:
 @router.get("/sitemap")
 def sitemap(db: Annotated[Session, Depends(get_db)]):
     """Public profiles, artists and tracks for the site's sitemap.xml."""
-    cached = get_from_cache("preview:sitemap", SITEMAP_TTL)
+    profiles = db.query(User.id, UserProfile).join(UserProfile, UserProfile.user_id == User.id).filter(
+        User.is_banned.isnot(True), UserProfile.is_private.isnot(True)).all()
+    indexable_ids = [int(uid) for uid, profile in profiles
+                     if preferences_dict(profile)["privacy"]["search_indexing"]]
+    cache_key = audience_cache_key("preview:sitemap:v2", indexable_ids)
+    cache_key = audience_cache_key(cache_key, public_statistics_users(db).values())
+    cached = get_from_cache(cache_key, SITEMAP_TTL)
     if cached is not None:
         return cached
     last_play = (
@@ -339,5 +356,5 @@ def sitemap(db: Annotated[Session, Depends(get_db)]):
             for row in tracks
         ],
     }
-    set_to_cache("preview:sitemap", data, SITEMAP_TTL)
+    set_to_cache(cache_key, data, SITEMAP_TTL)
     return data

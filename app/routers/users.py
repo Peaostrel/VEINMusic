@@ -54,7 +54,7 @@ router = APIRouter(tags=["users"])
             responses={403: {"description": "Private profile"},
                        404: {"description": "User not found"}})
 def get_user_mood(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
-    user = _get_visible_user(username, request, db)
+    user = _get_visible_user(username, request, db, "statistics")
 
     # Analyze last 10 tracks
     recent = db.query(

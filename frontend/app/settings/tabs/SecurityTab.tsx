@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import TwoFactorAuth from "../components/TwoFactorAuth";
 import StatusText from "@/components/StatusText";
 import { ApiError, apiFetch, apiJson } from "@/app/lib/api";
 import {
@@ -187,6 +188,8 @@ export default function SecurityTab() {
     <div className="space-y-6">
       <h2 className="text-lg font-semibold text-fg">Безопасность и данные</h2>
       {message && <StatusText text={message} />}
+
+      <TwoFactorAuth />
 
       <section className={card}>
         <div>

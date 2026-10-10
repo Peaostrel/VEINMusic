@@ -19,12 +19,9 @@ from app.core.constants import USER_AGENT_MOZILLA, YANDEX_MUSIC_DOMAIN
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.database import get_db
-from app.models import (
-    User,
-    UserProfile,
-)
-from app.routers.common import _check_privacy_and_owner, _get_visible_user
-from app.services.cache import get_from_cache, set_to_cache
+from app.models import User
+from app.routers.common import _can_view_section, _get_visible_user
+from app.services.privacy import public_statistics_users
 from app.services.taste import get_taste_match_internal, get_taste_twins
 
 logger = logging.getLogger(__name__)
@@ -42,8 +39,8 @@ def get_taste_match(viewer: str, profile: str, request: Request,
     if not viewer_user or not profile_user or viewer == profile:
         return {"match": 0, "common_artists": []}
     # Never reveal listening data of a private profile to other users
-    if (_check_privacy_and_owner(viewer_user, request, db)[0]
-            or _check_privacy_and_owner(profile_user, request, db)[0]):
+    if (not _can_view_section(viewer_user, request, db, "statistics")
+            or not _can_view_section(profile_user, request, db, "statistics")):
         return {"match": 0, "common_artists": []}
 
     # SQL-based artist intersection for performance
@@ -86,15 +83,11 @@ def get_taste_match(viewer: str, profile: str, request: Request,
 
 # --- /api/recommendations ---
 @router.get("/api/recommendations",
-            responses={404: {"description": "User not found"}})
+            responses={403: {"description": "Statistics hidden"}, 404: {"description": "User not found"}})
 def get_recommendations(
         username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
-    user = _get_visible_user(username, request, db)
+    user = _get_visible_user(username, request, db, "statistics")
 
-    cache_key = f"recs_{username}"
-    cached = get_from_cache(cache_key, ttl=1800)  # 30 min cache
-    if cached:
-        return cached
     twins = get_taste_twins(username, db)
     if not twins:
         return []
@@ -117,21 +110,22 @@ def get_recommendations(
     recs = db.execute(sql, {"twins": twin_names, "my_id": user.id}).fetchall()
     data = [{"artist": r[0], "cover_url": r[1],
              "reason": "Слушают ваши вкусовые близнецы"} for r in recs]
-    set_to_cache(cache_key, data)
     return data
 
 
 # --- /api/search/taste ---
-@router.get("/api/search/taste")
+@router.get("/api/search/taste", responses={403: {"description": "Statistics hidden"}, 404: {"description": "User not found"}})
 @limiter.limit("10/minute")
 def search_by_taste(my_username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
-    _get_visible_user(my_username, request, db)
+    _get_visible_user(my_username, request, db, "statistics")
     # Find people with highest taste match (private profiles are excluded)
-    all_users = db.query(User).join(UserProfile).filter(
-        User.username != my_username,
-        UserProfile.is_private.isnot(True)).limit(50).all()
+    visible_names = public_statistics_users(db)
+    all_users = db.query(User).filter(
+        User.username != my_username, User.id.in_(list(visible_names.values()))).limit(50).all()
     results = []
     for u in all_users:
+        if u.username not in visible_names:
+            continue
         match_data = get_taste_match_internal(my_username, u.username, db)
         if match_data and match_data['match'] > 50:
             results.append({
@@ -219,8 +213,8 @@ def get_user_taste_compatibility(
     """Calculate musical taste compatibility between two users."""
     from app.services.compatibility import calculate_compatibility
 
-    u1 = _get_visible_user(username, request, db)
-    u2 = _get_visible_user(target_username, request, db)
+    u1 = _get_visible_user(username, request, db, "statistics")
+    u2 = _get_visible_user(target_username, request, db, "statistics")
 
     result = calculate_compatibility(int(u1.id), int(u2.id), db)
     return {

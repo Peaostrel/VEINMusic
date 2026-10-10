@@ -138,6 +138,7 @@ services:
       <<: *backend-env
       # The API applies Alembic migrations on start (see docker-entrypoint.sh)
       RUN_MIGRATIONS: "1"
+      ADMIN_REQUIRE_2FA: ${ADMIN_REQUIRE_2FA:-1}
       # Spotify/Yandex/SoundCloud polling runs in the worker (arq cron job)
       RUN_CLOUD_POLLING: "0"
       FORWARDED_ALLOW_IPS: 172.30.0.10

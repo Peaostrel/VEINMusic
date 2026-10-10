@@ -229,16 +229,13 @@ def _get_ws_authenticated_username(websocket: WebSocket) -> str | None:
         return None
 
     from app.core.security import _authenticate_user_with_scopes
-    from app.core.ws_ticket import verify_ticket
 
     # Use a short-lived session: a Depends(get_db) session would keep a pooled
     # DB connection checked out for the whole lifetime of the WebSocket.
     db = SessionLocal()
     try:
         if ticket:
-            ticket_user = verify_ticket(ticket)
-            user = db.query(User).filter(User.username == ticket_user).first() if ticket_user else None
-            return str(user.username) if user and not user.is_banned else None
+            return _get_ticket_username(ticket, db)
         if not token:
             return None
         auth_user, scopes = _authenticate_user_with_scopes(token, db)
@@ -249,6 +246,15 @@ def _get_ws_authenticated_username(websocket: WebSocket) -> str | None:
         return None
     finally:
         db.close()
+
+
+def _get_ticket_username(ticket: str, db) -> str | None:
+    from app.core.ws_ticket import verify_ticket
+    username = verify_ticket(ticket)
+    user = db.query(User).filter(User.username == username).first() if username else None
+    if user and not user.is_banned and verify_ticket(ticket, session_version=int(user.session_version or 0)):
+        return str(user.username)
+    return None
 
 
 def _is_sync_allowed(target_user, sender_username: str, db: Session) -> bool:

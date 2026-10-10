@@ -48,6 +48,10 @@ class UserCreate(BaseModel):
     password: str = Field(..., max_length=128)
 
 
+class UserLogin(UserCreate):
+    otp_code: str | None = Field(None, max_length=64)
+
+
 class ScrobbleData(BaseModel):
     # api_key parameter is removed since we use cookies now, but we'll keep it
     # optional for extension compatibility if needed

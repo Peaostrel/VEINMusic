@@ -24,7 +24,7 @@ from app.core.security import (
 )
 from app.database import get_db
 from app.models import User, UserIntegration, UserProfile
-from app.schemas import UserCreate
+from app.schemas import UserCreate, UserLogin
 from app.services import runtime_settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -97,10 +97,10 @@ def register(request: Request, data: UserCreate, response: Response,
     return {"message": "Успешная регистрация", "username": new_user.username, "api_key": raw_api_key}
 
 
-@router.post("/login", responses={400: {"description": "Bad Request"},
+@router.post("/login", responses={403: {"description": "Second factor required or account banned"}, 400: {"description": "Bad Request"},
                                    429: {"description": "Too many failed attempts"}})
 @limiter.limit("5/minute")
-def login(request: Request, data: UserCreate, response: Response,
+def login(request: Request, data: UserLogin, response: Response,
           db: Annotated[Session, Depends(get_db)]):
     data.username = data.username.lower()
     client_ip = get_remote_address(request)
@@ -113,6 +113,16 @@ def login(request: Request, data: UserCreate, response: Response,
     if not user or not verify_password(data.password, str(user.hashed_password)):
         login_guard.register_failure(data.username, client_ip)
         raise HTTPException(400, "Неверный логин/пароль")
+    if user.is_banned:
+        raise HTTPException(403, "Аккаунт заблокирован")
+    if user.totp_enabled:
+        from app.services.mfa import consume_code
+        if not data.otp_code:
+            raise HTTPException(403, {"code": "mfa_required", "message": "Введите код из приложения или резервный код"})
+        if not consume_code(db, user, data.otp_code):
+            login_guard.register_failure(data.username, client_ip)
+            raise HTTPException(400, "Неверный или уже использованный код")
+        db.commit()
     login_guard.reset(data.username, client_ip)
 
     # Set signed session token in cookie
@@ -155,7 +165,7 @@ def ws_ticket(current_user: Annotated[User, Depends(get_current_user)]):
     """One-minute ticket for opening a WebSocket as the signed-in user
     (passed as ?ticket=…; see app/core/ws_ticket.py)."""
     from app.core.ws_ticket import TICKET_TTL_SEC, issue_ticket
-    return {"ticket": issue_ticket(str(current_user.username)), "expires_in": TICKET_TTL_SEC}
+    return {"ticket": issue_ticket(str(current_user.username), session_version=int(current_user.session_version or 0)), "expires_in": TICKET_TTL_SEC}
 
 
 SPOTIFY_STATE_COOKIE = "spotify_auth_state"

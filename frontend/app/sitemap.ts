@@ -2,9 +2,9 @@ import type { MetadataRoute } from "next";
 import { SITE_URL, previewJson, type SitemapData } from "./lib/preview";
 
 // Built on request, not at build time (the API isn't reachable then); the
-// API caches the list for an hour, so crawlers don't add load
+// API caches aggregates under the current public audience, so privacy changes
+// take effect on the next request without caching an outdated list in Next.js.
 export const dynamic = "force-dynamic";
-const CACHE_SECONDS = 3600;
 
 const STATIC_PAGES = [
   "/",
@@ -25,7 +25,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: path === "/" ? 1 : 0.5,
   }));
   // Public profiles, artists and tracks; only the static pages if the API is down
-  const data = await previewJson<SitemapData>("/sitemap", CACHE_SECONDS);
+  const data = await previewJson<SitemapData>("/sitemap");
   if (!data) return pages;
   return [
     ...pages,

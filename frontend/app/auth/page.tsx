@@ -119,6 +119,8 @@ export default function Auth() {
   const registrationOpen = useFeature("registration");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [mfaRequired, setMfaRequired] = useState(false);
   const [error, setError] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [loading, setLoading] = useState(false);
@@ -144,11 +146,24 @@ export default function Auth() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({
+          username,
+          password,
+          ...(isLogin ? { otp_code: otpCode || undefined } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.detail || "Неверный логин или пароль.");
+        if (data.detail?.code === "mfa_required") {
+          setMfaRequired(true);
+          setError(data.detail.message);
+        } else {
+          setError(
+            typeof data.detail === "string"
+              ? data.detail
+              : "Неверный логин или пароль.",
+          );
+        }
         setLoading(false);
         return;
       }
@@ -259,6 +274,22 @@ export default function Auth() {
               required
             />
           </div>
+          {isLogin && mfaRequired && (
+            <div>
+              <label htmlFor="auth-otp" className={label}>
+                Код из приложения или резервный код
+              </label>
+              <input
+                id="auth-otp"
+                value={otpCode}
+                onChange={(event) => setOtpCode(event.target.value)}
+                maxLength={64}
+                autoComplete="one-time-code"
+                className={`${input} h-11`}
+                required
+              />
+            </div>
+          )}
           {error && (
             <p
               role="alert"

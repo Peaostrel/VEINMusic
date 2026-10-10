@@ -21,8 +21,6 @@ const SERVER_API_URL = (process.env.API_INTERNAL_URL || API_URL).replace(
   "",
 );
 
-/** Previews may lag the profile by a few minutes. */
-export const PREVIEW_REVALIDATE = 600;
 const TIMEOUT_MS = 4000;
 
 export interface UserPreview {
@@ -62,13 +60,11 @@ export interface SitemapData {
 }
 
 /** JSON from /api/preview/…; null when the backend is down or says 404. */
-export async function previewJson<T>(
-  path: string,
-  revalidate = PREVIEW_REVALIDATE,
-): Promise<T | null> {
+export async function previewJson<T>(path: string): Promise<T | null> {
   try {
     const res = await fetch(`${SERVER_API_URL}/api/preview${path}`, {
-      next: { revalidate },
+      // The backend rechecks privacy before reading its own aggregate cache.
+      cache: "no-store",
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     return res.ok ? ((await res.json()) as T) : null;
@@ -81,7 +77,7 @@ export async function previewJson<T>(
 export async function previewImage(path: string): Promise<string | null> {
   try {
     const res = await fetch(`${SERVER_API_URL}/api/preview${path}/image`, {
-      next: { revalidate: PREVIEW_REVALIDATE },
+      cache: "no-store",
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     const type = res.headers.get("content-type") || "";

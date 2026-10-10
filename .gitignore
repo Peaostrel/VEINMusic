@@ -53,3 +53,7 @@ check_users.py
 deploy/.state/
 # Set by deploy.sh while it restarts the containers
 deploy/maintenance/on
+
+# External encrypted backup credentials
+/deploy/.env.backup
+/deploy/backup-password.txt
