@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import inspect
 import logging
 import os
 import time
@@ -29,6 +30,8 @@ MAX_ROOM_LISTENERS = 100
 ROOM_TTL_SEC = 3600
 CHAT_HISTORY_LIMIT = 100
 EVENTS_CHANNEL = "ws:events"
+CHAT_SUFFIX = ":chat"
+LISTENERS_SUFFIX = ":listeners"
 _REDIS_RETRY_SEC = 30.0
 
 
@@ -45,13 +48,21 @@ def _default_track(host_username: str) -> dict[str, Any]:
     }
 
 
+async def _invoke_store(store: Any, method: str, *args: Any) -> Any:
+    """Await Redis I/O while keeping memory operations atomic and synchronous."""
+    result = getattr(store, method)(*args)
+    if inspect.isawaitable(result):
+        return await result
+    return result
+
+
 class _MemoryRoomStore:
     """Process-local room state (used when Redis is unavailable)."""
 
     def __init__(self) -> None:
         self.rooms: dict[str, dict[str, Any]] = {}
 
-    async def create_if_absent(self, room_id: str, name: str, host: str) -> bool:
+    def create_if_absent(self, room_id: str, name: str, host: str) -> bool:
         if room_id in self.rooms:
             return True
         if len(self.rooms) >= MAX_TOGETHER_ROOMS:
@@ -60,21 +71,21 @@ class _MemoryRoomStore:
                                "listeners": {}, "chat": []}
         return True
 
-    async def get(self, room_id: str) -> Optional[dict[str, Any]]:
+    def get(self, room_id: str) -> Optional[dict[str, Any]]:
         room = self.rooms.get(room_id)
         if room is None:
             return None
         return {"name": room["name"], "host": room["host"], "track": dict(room["track"])}
 
-    async def listener_count(self, room_id: str) -> int:
+    def listener_count(self, room_id: str) -> int:
         room = self.rooms.get(room_id)
         return len(room["listeners"]) if room else 0
 
-    async def add_listener(self, room_id: str, username: str) -> None:
+    def add_listener(self, room_id: str, username: str) -> None:
         listeners = self.rooms[room_id]["listeners"]
         listeners[username] = listeners.get(username, 0) + 1
 
-    async def remove_listener(self, room_id: str, username: str) -> None:
+    def remove_listener(self, room_id: str, username: str) -> None:
         room = self.rooms.get(room_id)
         if not room:
             return
@@ -84,28 +95,28 @@ class _MemoryRoomStore:
         else:
             room["listeners"].pop(username, None)
 
-    async def listeners(self, room_id: str) -> list[str]:
+    def listeners(self, room_id: str) -> list[str]:
         room = self.rooms.get(room_id)
         return list(room["listeners"].keys()) if room else []
 
-    async def update_track(self, room_id: str, fields: dict[str, Any]) -> dict[str, Any]:
+    def update_track(self, room_id: str, fields: dict[str, Any]) -> dict[str, Any]:
         track = self.rooms[room_id]["track"]
         track.update(fields)
         return dict(track)
 
-    async def add_chat(self, room_id: str, message: dict[str, Any]) -> None:
+    def add_chat(self, room_id: str, message: dict[str, Any]) -> None:
         chat = self.rooms[room_id]["chat"]
         chat.append(message)
         del chat[:-CHAT_HISTORY_LIMIT]
 
-    async def chat(self, room_id: str, limit: int) -> list[dict[str, Any]]:
+    def chat(self, room_id: str, limit: int) -> list[dict[str, Any]]:
         room = self.rooms.get(room_id)
         return list(room["chat"][-limit:]) if room else []
 
-    async def delete(self, room_id: str) -> None:
+    def delete(self, room_id: str) -> None:
         self.rooms.pop(room_id, None)
 
-    async def room_ids(self) -> list[str]:
+    def room_ids(self) -> list[str]:
         return list(self.rooms.keys())
 
 
@@ -123,7 +134,7 @@ class _RedisRoomStore:
 
     async def _touch(self, room_id: str) -> None:
         pipe = self.r.pipeline()
-        for suffix in ("", ":listeners", ":chat"):
+        for suffix in ("", LISTENERS_SUFFIX, CHAT_SUFFIX):
             pipe.expire(self._k(room_id, suffix), ROOM_TTL_SEC)
         await pipe.execute()
 
@@ -153,19 +164,19 @@ class _RedisRoomStore:
         return {"name": data.get("name", ""), "host": data["host"], "track": track}
 
     async def listener_count(self, room_id: str) -> int:
-        return int(await self.r.hlen(self._k(room_id, ":listeners")))
+        return int(await self.r.hlen(self._k(room_id, LISTENERS_SUFFIX)))
 
     async def add_listener(self, room_id: str, username: str) -> None:
-        await self.r.hincrby(self._k(room_id, ":listeners"), username, 1)
+        await self.r.hincrby(self._k(room_id, LISTENERS_SUFFIX), username, 1)
         await self._touch(room_id)
 
     async def remove_listener(self, room_id: str, username: str) -> None:
-        key = self._k(room_id, ":listeners")
+        key = self._k(room_id, LISTENERS_SUFFIX)
         if await self.r.hincrby(key, username, -1) <= 0:
             await self.r.hdel(key, username)
 
     async def listeners(self, room_id: str) -> list[str]:
-        return list(await self.r.hkeys(self._k(room_id, ":listeners")))
+        return list(await self.r.hkeys(self._k(room_id, LISTENERS_SUFFIX)))
 
     async def update_track(self, room_id: str, fields: dict[str, Any]) -> dict[str, Any]:
         room = await self.get(room_id)
@@ -176,7 +187,7 @@ class _RedisRoomStore:
         return track
 
     async def add_chat(self, room_id: str, message: dict[str, Any]) -> None:
-        key = self._k(room_id, ":chat")
+        key = self._k(room_id, CHAT_SUFFIX)
         pipe = self.r.pipeline()
         pipe.rpush(key, json.dumps(message, ensure_ascii=False))
         pipe.ltrim(key, -CHAT_HISTORY_LIMIT, -1)
@@ -184,10 +195,10 @@ class _RedisRoomStore:
         await self._touch(room_id)
 
     async def chat(self, room_id: str, limit: int) -> list[dict[str, Any]]:
-        return [json.loads(m) for m in await self.r.lrange(self._k(room_id, ":chat"), -limit, -1)]
+        return [json.loads(m) for m in await self.r.lrange(self._k(room_id, CHAT_SUFFIX), -limit, -1)]
 
     async def delete(self, room_id: str) -> None:
-        await self.r.delete(self._k(room_id), self._k(room_id, ":listeners"), self._k(room_id, ":chat"))
+        await self.r.delete(self._k(room_id), self._k(room_id, LISTENERS_SUFFIX), self._k(room_id, CHAT_SUFFIX))
         await self.r.srem(self.INDEX, room_id)
 
     async def room_ids(self) -> list[str]:
@@ -348,11 +359,11 @@ class ConnectionManager:
         """Create the room if needed (first joiner becomes host) and register
         the listener. Returns the room state, or None if limits are reached."""
         store = await self._store()
-        if not await store.create_if_absent(room_id, f"Комната {room_id}", username):
+        if not await _invoke_store(store, "create_if_absent", room_id, f"Комната {room_id}", username):
             return None
-        if await store.listener_count(room_id) >= MAX_ROOM_LISTENERS:
+        if await _invoke_store(store, "listener_count", room_id) >= MAX_ROOM_LISTENERS:
             return None
-        await store.add_listener(room_id, username)
+        await _invoke_store(store, "add_listener", room_id, username)
         self.room_sockets.setdefault(room_id, {}).setdefault(username, []).append(websocket)
         return await self.room_state(room_id)
 
@@ -368,15 +379,15 @@ class ConnectionManager:
         if not local:
             self.room_sockets.pop(room_id, None)
         store = await self._store()
-        await store.remove_listener(room_id, username)
-        remaining = await store.listeners(room_id)
+        await _invoke_store(store, "remove_listener", room_id, username)
+        remaining = await _invoke_store(store, "listeners", room_id)
         if not remaining:
-            await store.delete(room_id)
+            await _invoke_store(store, "delete", room_id)
         return remaining
 
     async def room_state(self, room_id: str) -> Optional[dict[str, Any]]:
         store = await self._store()
-        room = await store.get(room_id)
+        room = await _invoke_store(store, "get", room_id)
         if room is None:
             return None
         return {
@@ -384,17 +395,17 @@ class ConnectionManager:
             "name": room["name"],
             "host": room["host"],
             "current_track": room["track"],
-            "listeners": await store.listeners(room_id),
-            "chat_history": await store.chat(room_id, 30),
+            "listeners": await _invoke_store(store, "listeners", room_id),
+            "chat_history": await _invoke_store(store, "chat", room_id, 30),
         }
 
     async def update_room_track(self, room_id: str, fields: dict[str, Any]) -> dict[str, Any]:
         store = await self._store()
-        return await store.update_track(room_id, fields)
+        return await _invoke_store(store, "update_track", room_id, fields)
 
     async def add_room_chat(self, room_id: str, message: dict[str, Any]) -> None:
         store = await self._store()
-        await store.add_chat(room_id, message)
+        await _invoke_store(store, "add_chat", room_id, message)
 
     async def broadcast_to_room(self, room_id: str, message: dict[str, Any],
                                 exclude_user: Optional[str] = None) -> None:
@@ -403,11 +414,11 @@ class ConnectionManager:
     async def get_active_rooms_info(self) -> list[dict[str, Any]]:
         store = await self._store()
         rooms = []
-        for room_id in await store.room_ids():
-            room = await store.get(room_id)
+        for room_id in await _invoke_store(store, "room_ids"):
+            room = await _invoke_store(store, "get", room_id)
             if room is None:
                 continue
-            listeners = await store.listeners(room_id)
+            listeners = await _invoke_store(store, "listeners", room_id)
             rooms.append({
                 "room_id": room_id,
                 "name": room["name"],

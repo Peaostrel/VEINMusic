@@ -287,3 +287,13 @@ def test_download_is_capped_while_streaming(image_server):
     # Too big by Content-Length, and too big with no end at all
     assert asyncio.run(safe_http.pinned_download(f"{image_server}/5000", max_bytes=1000)) is None
     assert asyncio.run(safe_http.pinned_download(f"{image_server}/endless", max_bytes=1000)) is None
+
+
+def test_pinned_request_deadline_includes_dns_resolution(monkeypatch):
+    async def stalled_resolution(*args):
+        await asyncio.sleep(60)
+
+    monkeypatch.setattr(safe_http.asyncio, "to_thread", stalled_resolution)
+    request = safe_http.pinned_request("GET", "https://example.com", timeout=0.01)
+    with pytest.raises(TimeoutError):
+        asyncio.run(request)

@@ -212,36 +212,367 @@ function Row({
   );
 }
 
-export default function IntegrationsTab({
+function synced(userProfile: UserInfo | null, linked?: boolean) {
+  if (!linked) return "не подключено";
+  if (!userProfile?.last_sync) return "подключено";
+  return `подключено · синхр. ${new Date(userProfile.last_sync).toLocaleString("ru-RU")}`;
+}
+
+function IntegrationDiagnostics({
+  data,
+  userProfile,
+}: Readonly<IntegrationsTabProps>) {
+  return (
+    <section className={`${settingsCard} p-5`}>
+      <h3 className="text-sm font-medium">Диагностика интеграций</h3>
+      <p className="mb-4 mt-1 text-xs text-fg-2">
+        Текущее состояние подключений без токенов и других секретных данных.
+      </p>
+      <dl className="grid gap-3 font-mono text-xs sm:grid-cols-2">
+        <div>
+          <dt className="text-fg-3">Spotify</dt>
+          <dd>{userProfile?.spotify_linked ? "linked" : "not linked"}</dd>
+        </div>
+        <div>
+          <dt className="text-fg-3">Яндекс</dt>
+          <dd>{userProfile?.yandex_linked ? "linked" : "not linked"}</dd>
+        </div>
+        <div>
+          <dt className="text-fg-3">SoundCloud</dt>
+          <dd>{userProfile?.soundcloud_linked ? "linked" : "not linked"}</dd>
+        </div>
+        <div>
+          <dt className="text-fg-3">Last.fm</dt>
+          <dd>{data.lastfmUsername || "not linked"}</dd>
+        </div>
+        <div>
+          <dt className="text-fg-3">Последняя синхронизация</dt>
+          <dd>
+            {userProfile?.last_sync
+              ? new Date(userProfile.last_sync).toLocaleString("ru-RU")
+              : "нет данных"}
+          </dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
+function SpotifyConnection({
+  userProfile,
+  handleDisconnect,
+  API_URL,
+}: Readonly<IntegrationsTabProps>) {
+  const spotifyEnabled = useFeature("integration_spotify");
+  return (
+    <Row
+      logo="S"
+      name="Spotify"
+      status={synced(userProfile, userProfile?.spotify_linked)}
+      statusOk={Boolean(userProfile?.spotify_linked)}
+      description={
+        spotifyEnabled
+          ? "Скробблинг напрямую через сервер, без расширения."
+          : "Временно приостановлено администратором."
+      }
+    >
+      <div className="flex gap-2 md:justify-end">
+        {userProfile?.spotify_linked && (
+          <button
+            type="button"
+            onClick={() => handleDisconnect("spotify")}
+            className={smallDanger}
+          >
+            Отключить
+          </button>
+        )}
+        {spotifyEnabled ? (
+          <a
+            href={`${API_URL}/auth/spotify/login`}
+            className={userProfile?.spotify_linked ? small : smallPrimary}
+          >
+            {userProfile?.spotify_linked ? "Обновить" : "Подключить"}
+          </a>
+        ) : (
+          <button
+            type="button"
+            disabled
+            title="Spotify временно отключён"
+            className={userProfile?.spotify_linked ? small : smallPrimary}
+          >
+            {userProfile?.spotify_linked ? "Обновить" : "Подключить"}
+          </button>
+        )}
+      </div>
+    </Row>
+  );
+}
+
+function SoundCloudConnection({
+  userProfile,
+  handleDisconnect,
+  API_URL,
+}: Readonly<IntegrationsTabProps>) {
+  const soundcloudEnabled = useFeature("integration_soundcloud");
+  return (
+    <Row
+      logo="SC"
+      name="SoundCloud"
+      status={synced(userProfile, userProfile?.soundcloud_linked)}
+      statusOk={Boolean(userProfile?.soundcloud_linked)}
+      description={
+        soundcloudEnabled
+          ? "Скробблинг напрямую через сервер, без расширения. После подключения включите следующий трек — старая история не импортируется."
+          : "Временно приостановлено администратором."
+      }
+    >
+      <div className="flex gap-2 md:justify-end">
+        {userProfile?.soundcloud_linked && (
+          <button
+            type="button"
+            onClick={() => handleDisconnect("soundcloud")}
+            className={smallDanger}
+          >
+            Отключить
+          </button>
+        )}
+        {soundcloudEnabled ? (
+          <a
+            href={`${API_URL}/auth/soundcloud/login`}
+            className={userProfile?.soundcloud_linked ? small : smallPrimary}
+          >
+            {userProfile?.soundcloud_linked ? "Обновить" : "Подключить"}
+          </a>
+        ) : (
+          <button
+            type="button"
+            disabled
+            title="SoundCloud временно отключён"
+            className={userProfile?.soundcloud_linked ? small : smallPrimary}
+          >
+            {userProfile?.soundcloud_linked ? "Обновить" : "Подключить"}
+          </button>
+        )}
+      </div>
+    </Row>
+  );
+}
+
+function YouTubeConnection() {
+  const youtubeMusicEnabled = useFeature("integration_youtube_music");
+  return (
+    <Row
+      logo="YT"
+      name="YouTube Music"
+      status={youtubeMusicEnabled ? "через расширение VEIN" : "приостановлено"}
+      statusOk={youtubeMusicEnabled}
+      description={
+        youtubeMusicEnabled
+          ? "Откройте YouTube Music в браузере с подключённым расширением VEIN — текущий трек, пауза и прогресс определяются автоматически."
+          : "Временно приостановлено администратором."
+      }
+    >
+      <a
+        href={youtubeMusicEnabled ? "https://music.youtube.com/" : undefined}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-disabled={!youtubeMusicEnabled}
+        tabIndex={youtubeMusicEnabled ? undefined : -1}
+        title={
+          youtubeMusicEnabled ? undefined : "YouTube Music временно отключён"
+        }
+        className={`${smallPrimary} ${youtubeMusicEnabled ? "" : "cursor-not-allowed opacity-50"}`}
+      >
+        Открыть YouTube Music
+      </a>
+    </Row>
+  );
+}
+
+function YandexConnection({
   data,
   updateData,
-  updatePreference,
   userProfile,
   handleDisconnect,
   saveYandexToken,
+}: Readonly<IntegrationsTabProps>) {
+  const yandexEnabled = useFeature("integration_yandex");
+  return (
+    <Row
+      logo="Я"
+      name="Яндекс Музыка"
+      status={synced(userProfile, userProfile?.yandex_linked)}
+      statusOk={Boolean(userProfile?.yandex_linked)}
+      description={
+        yandexEnabled ? (
+          <>
+            Нужен OAuth-токен.{" "}
+            <a
+              href="https://oauth.yandex.ru/authorize?response_type=token&client_id=23cabbbdc6cd418abb4b39c32c41195d"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent hover:underline"
+            >
+              Получить токен
+            </a>
+          </>
+        ) : (
+          "Временно приостановлено администратором."
+        )
+      }
+    >
+      <input
+        type="password"
+        value={data.yandexToken}
+        onChange={(e) => updateData("yandexToken", e.target.value)}
+        placeholder="y0_AgAAA…"
+        aria-label="OAuth-токен Яндекса"
+        autoComplete="new-password"
+        disabled={!yandexEnabled}
+        readOnly
+        onFocus={(e) => e.target.removeAttribute("readonly")}
+        className={`${inputOnCard} h-9`}
+      />
+      <div className="flex gap-2">
+        {userProfile?.yandex_linked && (
+          <button
+            type="button"
+            onClick={() => handleDisconnect("yandex")}
+            className={`${smallDanger} flex-1`}
+          >
+            Удалить
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={saveYandexToken}
+          disabled={!yandexEnabled}
+          title={yandexEnabled ? undefined : "Яндекс Музыка временно отключена"}
+          className={`${smallPrimary} flex-1`}
+        >
+          Сохранить
+        </button>
+      </div>
+    </Row>
+  );
+}
+
+function LastfmConnection({
+  data,
+  updateData,
+  handleDisconnect,
   startLastfmImport,
   importRefresh,
+}: Readonly<IntegrationsTabProps>) {
+  const lastfmEnabled = useFeature("integration_lastfm");
+  const importEnabled = useFeature("lastfm_import");
+  const preferences = data.preferences.integrations;
+  const pausedTitle = preferences.lastfm_enabled
+    ? "Импорт временно отключён"
+    : "Last.fm приостановлен в настройках аккаунта";
+  return (
+    <Row
+      logo="fm"
+      name="Last.fm"
+      status={
+        data.lastfmUsername ? `аккаунт ${data.lastfmUsername}` : "не подключено"
+      }
+      statusOk={Boolean(data.lastfmUsername)}
+      description={
+        lastfmEnabled
+          ? "Импорт истории. Повторный импорт добавит только новые прослушивания."
+          : "Временно приостановлено администратором."
+      }
+      footer={<LastfmImportStatus refreshKey={importRefresh ?? 0} />}
+    >
+      <input
+        value={data.lastfmUsername}
+        onChange={(e) => updateData("lastfmUsername", e.target.value)}
+        placeholder="Ник на Last.fm"
+        aria-label="Ник на Last.fm"
+        autoComplete="off"
+        disabled={!lastfmEnabled}
+        readOnly
+        onFocus={(e) => e.target.removeAttribute("readonly")}
+        className={`${inputOnCard} h-9`}
+      />
+      <div className="flex gap-2">
+        {data.lastfmUsername && (
+          <button
+            type="button"
+            onClick={() => handleDisconnect("lastfm")}
+            className={`${small} flex-1`}
+          >
+            Очистить
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={startLastfmImport}
+          disabled={
+            !importEnabled || !lastfmEnabled || !preferences.lastfm_enabled
+          }
+          title={
+            importEnabled && lastfmEnabled && preferences.lastfm_enabled
+              ? undefined
+              : pausedTitle
+          }
+          className={`${smallPrimary} flex-1`}
+        >
+          Импорт
+        </button>
+      </div>
+    </Row>
+  );
+}
+
+function ExtensionConnection({
+  userProfile,
   generatedApiKey,
-  handleGenerateApiKey,
   handleCopyKey,
   copied,
-  API_URL,
+  handleGenerateApiKey,
 }: Readonly<IntegrationsTabProps>) {
-  const importEnabled = useFeature("lastfm_import");
-  const spotifyEnabled = useFeature("integration_spotify");
-  const yandexEnabled = useFeature("integration_yandex");
-  const youtubeMusicEnabled = useFeature("integration_youtube_music");
-  const soundcloudEnabled = useFeature("integration_soundcloud");
-  const lastfmEnabled = useFeature("integration_lastfm");
+  return (
+    userProfile?.has_api_key && (
+      <Row
+        logo={<LogoGlyph size={18} />}
+        name="Расширение VEIN"
+        status="ключ выпущен"
+        statusOk
+        description="Ключ для браузерного расширения и своих скриптов."
+        footer={
+          generatedApiKey && (
+            <p className="text-xs text-accent">
+              Ключ показывается один раз — скопируйте его сейчас. После
+              перезагрузки страницы он скроется.
+            </p>
+          )
+        }
+      >
+        <div className="flex items-center gap-2">
+          <code className="h-9 min-w-0 flex-1 truncate rounded-lg border border-line bg-bg px-3 font-mono text-xs leading-9 text-fg-2">
+            {generatedApiKey ?? "••••••••••••••••••••••••"}
+          </code>
+          {generatedApiKey && (
+            <button type="button" onClick={handleCopyKey} className={small}>
+              {copied ? "Готово" : "Копировать"}
+            </button>
+          )}
+        </div>
+        <button type="button" onClick={handleGenerateApiKey} className={small}>
+          {generatedApiKey ? "Выпустить другой" : "Выпустить новый ключ"}
+        </button>
+      </Row>
+    )
+  );
+}
+
+export default function IntegrationsTab(props: Readonly<IntegrationsTabProps>) {
+  const { data, updatePreference, API_URL } = props;
   const preferences = data.preferences.integrations;
   const updateIntegration = (patch: Partial<typeof preferences>) =>
     updatePreference("integrations", { ...preferences, ...patch });
-  const synced = (linked?: boolean) => {
-    if (!linked) return "не подключено";
-    if (!userProfile?.last_sync) return "подключено";
-    const when = new Date(userProfile.last_sync).toLocaleString("ru-RU");
-    return `подключено · синхр. ${when}`;
-  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -299,40 +630,7 @@ export default function IntegrationsTab({
       </section>
 
       {data.preferences.experiments.diagnostics && (
-        <section className={`${settingsCard} p-5`}>
-          <h3 className="text-sm font-medium">Диагностика интеграций</h3>
-          <p className="mb-4 mt-1 text-xs text-fg-2">
-            Текущее состояние подключений без токенов и других секретных данных.
-          </p>
-          <dl className="grid gap-3 font-mono text-xs sm:grid-cols-2">
-            <div>
-              <dt className="text-fg-3">Spotify</dt>
-              <dd>{userProfile?.spotify_linked ? "linked" : "not linked"}</dd>
-            </div>
-            <div>
-              <dt className="text-fg-3">Яндекс</dt>
-              <dd>{userProfile?.yandex_linked ? "linked" : "not linked"}</dd>
-            </div>
-            <div>
-              <dt className="text-fg-3">SoundCloud</dt>
-              <dd>
-                {userProfile?.soundcloud_linked ? "linked" : "not linked"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-fg-3">Last.fm</dt>
-              <dd>{data.lastfmUsername || "not linked"}</dd>
-            </div>
-            <div>
-              <dt className="text-fg-3">Последняя синхронизация</dt>
-              <dd>
-                {userProfile?.last_sync
-                  ? new Date(userProfile.last_sync).toLocaleString("ru-RU")
-                  : "нет данных"}
-              </dd>
-            </div>
-          </dl>
-        </section>
+        <IntegrationDiagnostics {...props} />
       )}
 
       {/* Hidden fields keep browsers from autofilling the token inputs */}
@@ -350,275 +648,17 @@ export default function IntegrationsTab({
       />
 
       <ul className="rounded-xl border border-line bg-surface">
-        <Row
-          logo="S"
-          name="Spotify"
-          status={synced(userProfile?.spotify_linked)}
-          statusOk={Boolean(userProfile?.spotify_linked)}
-          description={
-            spotifyEnabled
-              ? "Скробблинг напрямую через сервер, без расширения."
-              : "Временно приостановлено администратором."
-          }
-        >
-          <div className="flex gap-2 md:justify-end">
-            {userProfile?.spotify_linked && (
-              <button
-                type="button"
-                onClick={() => handleDisconnect("spotify")}
-                className={smallDanger}
-              >
-                Отключить
-              </button>
-            )}
-            {spotifyEnabled ? (
-              <a
-                href={`${API_URL}/auth/spotify/login`}
-                className={userProfile?.spotify_linked ? small : smallPrimary}
-              >
-                {userProfile?.spotify_linked ? "Обновить" : "Подключить"}
-              </a>
-            ) : (
-              <button
-                type="button"
-                disabled
-                title="Spotify временно отключён"
-                className={userProfile?.spotify_linked ? small : smallPrimary}
-              >
-                {userProfile?.spotify_linked ? "Обновить" : "Подключить"}
-              </button>
-            )}
-          </div>
-        </Row>
+        <SpotifyConnection {...props} />
 
-        <Row
-          logo="SC"
-          name="SoundCloud"
-          status={synced(userProfile?.soundcloud_linked)}
-          statusOk={Boolean(userProfile?.soundcloud_linked)}
-          description={
-            soundcloudEnabled
-              ? "Скробблинг напрямую через сервер, без расширения. После подключения включите следующий трек — старая история не импортируется."
-              : "Временно приостановлено администратором."
-          }
-        >
-          <div className="flex gap-2 md:justify-end">
-            {userProfile?.soundcloud_linked && (
-              <button
-                type="button"
-                onClick={() => handleDisconnect("soundcloud")}
-                className={smallDanger}
-              >
-                Отключить
-              </button>
-            )}
-            {soundcloudEnabled ? (
-              <a
-                href={`${API_URL}/auth/soundcloud/login`}
-                className={
-                  userProfile?.soundcloud_linked ? small : smallPrimary
-                }
-              >
-                {userProfile?.soundcloud_linked ? "Обновить" : "Подключить"}
-              </a>
-            ) : (
-              <button
-                type="button"
-                disabled
-                title="SoundCloud временно отключён"
-                className={
-                  userProfile?.soundcloud_linked ? small : smallPrimary
-                }
-              >
-                {userProfile?.soundcloud_linked ? "Обновить" : "Подключить"}
-              </button>
-            )}
-          </div>
-        </Row>
+        <SoundCloudConnection {...props} />
 
-        <Row
-          logo="YT"
-          name="YouTube Music"
-          status={
-            youtubeMusicEnabled ? "через расширение VEIN" : "приостановлено"
-          }
-          statusOk={youtubeMusicEnabled}
-          description={
-            youtubeMusicEnabled
-              ? "Откройте YouTube Music в браузере с подключённым расширением VEIN — текущий трек, пауза и прогресс определяются автоматически."
-              : "Временно приостановлено администратором."
-          }
-        >
-          <a
-            href={
-              youtubeMusicEnabled ? "https://music.youtube.com/" : undefined
-            }
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-disabled={!youtubeMusicEnabled}
-            tabIndex={youtubeMusicEnabled ? undefined : -1}
-            title={
-              youtubeMusicEnabled
-                ? undefined
-                : "YouTube Music временно отключён"
-            }
-            className={`${smallPrimary} ${youtubeMusicEnabled ? "" : "cursor-not-allowed opacity-50"}`}
-          >
-            Открыть YouTube Music
-          </a>
-        </Row>
+        <YouTubeConnection />
 
-        <Row
-          logo="Я"
-          name="Яндекс Музыка"
-          status={synced(userProfile?.yandex_linked)}
-          statusOk={Boolean(userProfile?.yandex_linked)}
-          description={
-            yandexEnabled ? (
-              <>
-                Нужен OAuth-токен.{" "}
-                <a
-                  href="https://oauth.yandex.ru/authorize?response_type=token&client_id=23cabbbdc6cd418abb4b39c32c41195d"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-accent hover:underline"
-                >
-                  Получить токен
-                </a>
-              </>
-            ) : (
-              "Временно приостановлено администратором."
-            )
-          }
-        >
-          <input
-            type="password"
-            value={data.yandexToken}
-            onChange={(e) => updateData("yandexToken", e.target.value)}
-            placeholder="y0_AgAAA…"
-            aria-label="OAuth-токен Яндекса"
-            autoComplete="new-password"
-            disabled={!yandexEnabled}
-            readOnly
-            onFocus={(e) => e.target.removeAttribute("readonly")}
-            className={`${inputOnCard} h-9`}
-          />
-          <div className="flex gap-2">
-            {userProfile?.yandex_linked && (
-              <button
-                type="button"
-                onClick={() => handleDisconnect("yandex")}
-                className={`${smallDanger} flex-1`}
-              >
-                Удалить
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={saveYandexToken}
-              disabled={!yandexEnabled}
-              title={
-                yandexEnabled ? undefined : "Яндекс Музыка временно отключена"
-              }
-              className={`${smallPrimary} flex-1`}
-            >
-              Сохранить
-            </button>
-          </div>
-        </Row>
+        <YandexConnection {...props} />
 
-        <Row
-          logo="fm"
-          name="Last.fm"
-          status={
-            data.lastfmUsername
-              ? `аккаунт ${data.lastfmUsername}`
-              : "не подключено"
-          }
-          statusOk={Boolean(data.lastfmUsername)}
-          description={
-            lastfmEnabled
-              ? "Импорт истории. Повторный импорт добавит только новые прослушивания."
-              : "Временно приостановлено администратором."
-          }
-          footer={<LastfmImportStatus refreshKey={importRefresh ?? 0} />}
-        >
-          <input
-            value={data.lastfmUsername}
-            onChange={(e) => updateData("lastfmUsername", e.target.value)}
-            placeholder="Ник на Last.fm"
-            aria-label="Ник на Last.fm"
-            autoComplete="off"
-            disabled={!lastfmEnabled}
-            readOnly
-            onFocus={(e) => e.target.removeAttribute("readonly")}
-            className={`${inputOnCard} h-9`}
-          />
-          <div className="flex gap-2">
-            {data.lastfmUsername && (
-              <button
-                type="button"
-                onClick={() => handleDisconnect("lastfm")}
-                className={`${small} flex-1`}
-              >
-                Очистить
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={startLastfmImport}
-              disabled={
-                !importEnabled || !lastfmEnabled || !preferences.lastfm_enabled
-              }
-              title={
-                importEnabled && lastfmEnabled && preferences.lastfm_enabled
-                  ? undefined
-                  : preferences.lastfm_enabled
-                    ? "Импорт временно отключён"
-                    : "Last.fm приостановлен в настройках аккаунта"
-              }
-              className={`${smallPrimary} flex-1`}
-            >
-              Импорт
-            </button>
-          </div>
-        </Row>
+        <LastfmConnection {...props} />
 
-        {userProfile?.has_api_key && (
-          <Row
-            logo={<LogoGlyph size={18} />}
-            name="Расширение VEIN"
-            status="ключ выпущен"
-            statusOk
-            description="Ключ для браузерного расширения и своих скриптов."
-            footer={
-              generatedApiKey && (
-                <p className="text-xs text-accent">
-                  Ключ показывается один раз — скопируйте его сейчас. После
-                  перезагрузки страницы он скроется.
-                </p>
-              )
-            }
-          >
-            <div className="flex items-center gap-2">
-              <code className="h-9 min-w-0 flex-1 truncate rounded-lg border border-line bg-bg px-3 font-mono text-xs leading-9 text-fg-2">
-                {generatedApiKey ?? "••••••••••••••••••••••••"}
-              </code>
-              {generatedApiKey && (
-                <button type="button" onClick={handleCopyKey} className={small}>
-                  {copied ? "Готово" : "Копировать"}
-                </button>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={handleGenerateApiKey}
-              className={small}
-            >
-              {generatedApiKey ? "Выпустить другой" : "Выпустить новый ключ"}
-            </button>
-          </Row>
-        )}
+        <ExtensionConnection {...props} />
       </ul>
     </div>
   );

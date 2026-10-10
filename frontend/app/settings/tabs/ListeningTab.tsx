@@ -35,7 +35,7 @@ export default function ListeningTab({
   const startPrivate = (hours: number) =>
     update({
       private_session_until: new Date(
-        Date.now() + hours * 3600_000,
+        Date.now() + hours * 3_600_000,
       ).toISOString(),
     });
 

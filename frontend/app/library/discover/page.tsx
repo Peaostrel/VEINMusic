@@ -36,6 +36,19 @@ interface Mix {
   tracks: Track[];
 }
 
+async function recordImpressions(tracks: Track[]): Promise<void> {
+  try {
+    await qualityRequest(
+      "/api/me/recommendations/impressions",
+      jsonRequest("POST", {
+        ids: tracks.map((track) => track.id),
+      }),
+    );
+  } catch {
+    // Recording impressions is best effort and must not hide recommendations.
+  }
+}
+
 function downloadStory(story: Story) {
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
@@ -116,12 +129,7 @@ export default function DiscoverPage() {
         if (active) {
           setTracks(recs.recommendations);
           if (recs.recommendations.length)
-            void qualityRequest(
-              "/api/me/recommendations/impressions",
-              jsonRequest("POST", {
-                ids: recs.recommendations.map((track) => track.id),
-              }),
-            ).catch(() => undefined);
+            void recordImpressions(recs.recommendations);
           setEvolution(tastes);
           setStory(recap);
         }

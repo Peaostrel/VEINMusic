@@ -23,6 +23,21 @@ import { SOCIAL_NETWORKS } from "@/app/lib/socialNetworks";
 import { useLocationSuggestions } from "@/app/lib/geo";
 import { fixImageUrl, getCroppedImg } from "./utils";
 
+async function ensureSaved(
+  response: Response,
+  fallback: string,
+): Promise<void> {
+  if (response.ok) return;
+  let detail = fallback;
+  try {
+    const body = (await response.json()) as { detail?: unknown };
+    if (typeof body.detail === "string") detail = body.detail;
+  } catch {
+    // Non-JSON error responses retain the readable fallback.
+  }
+  throw new Error(detail);
+}
+
 export type SettingsTab =
   | "general"
   | "showcase"
@@ -349,32 +364,17 @@ export function useSettingsPage() {
           ),
         }),
       });
-      if (!res.ok) {
-        let detail = "Ошибка при сохранении";
-        try {
-          const body = (await res.json()) as { detail?: unknown };
-          if (typeof body.detail === "string") detail = body.detail;
-        } catch {
-          // not JSON
-        }
-        throw new Error(detail);
-      }
+      await ensureSaved(res, "Ошибка при сохранении");
       const preferencesRes = await fetch(`${API_URL}/api/profile/preferences`, {
         credentials: "include",
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data.preferences),
       });
-      if (!preferencesRes.ok) {
-        let detail = "Не удалось сохранить дополнительные настройки";
-        try {
-          const body = (await preferencesRes.json()) as { detail?: unknown };
-          if (typeof body.detail === "string") detail = body.detail;
-        } catch {
-          // not JSON
-        }
-        throw new Error(detail);
-      }
+      await ensureSaved(
+        preferencesRes,
+        "Не удалось сохранить дополнительные настройки",
+      );
       const savedPreferences = (await preferencesRes.json()) as UserPreferences;
       storePreferences(savedPreferences);
       localStorage.setItem("site_theme", data.theme);

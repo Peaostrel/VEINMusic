@@ -150,12 +150,9 @@ export function applyAppearance(appearance: UserPreferences["appearance"]) {
   const systemLight = globalThis.matchMedia?.(
     "(prefers-color-scheme: light)",
   ).matches;
+  const systemMode = systemLight ? "light" : "dark";
   const mode =
-    appearance.color_mode === "system"
-      ? systemLight
-        ? "light"
-        : "dark"
-      : appearance.color_mode;
+    appearance.color_mode === "system" ? systemMode : appearance.color_mode;
   root.dataset.colorMode = mode;
   root.dataset.density = appearance.density;
   root.dataset.fontScale = appearance.font_scale;

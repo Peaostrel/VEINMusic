@@ -50,6 +50,28 @@ USER_NOT_FOUND = "Пользователь не найден"
 
 # ─── STATS & OVERVIEW ─────────────────────────────────────────────────────────
 
+
+def _admin_user_summary(u, stats_dict):
+    scrobbles_count, sum_xp = stats_dict.get(u.id, (0, 0))
+    bonus = u.integration.bonus_xp if u.integration else 0
+    total_xp = sum_xp + (bonus or 0)
+    return {
+        "id": u.id,
+        "username": u.username,
+        "display_name": u.profile.display_name if u.profile else None,
+        "avatar_url": u.profile.avatar_url if u.profile else None,
+        "bio": u.profile.bio if u.profile else None,
+        "is_verified": u.integration.is_verified if u.integration else False,
+        "is_dev": u.role == "admin",
+        "role": u.role or "user",
+        "is_banned": bool(u.is_banned),
+        "is_flagged_antifraud": bool(u.is_flagged_antifraud),
+        "antifraud_reason": u.antifraud_reason,
+        "scrobbles": scrobbles_count,
+        "total_xp": total_xp,
+    }
+
+
 @router.get("/stats")
 def get_admin_stats(db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     total_users = db.query(User).count()
@@ -70,26 +92,7 @@ def get_admin_stats(db: Annotated[Session, Depends(get_db)], admin: Annotated[Us
     stats_dict = {row.user_id: (row.scrobbles_count, row.sum_xp or 0) for row in stats}
 
     users = db.query(User).all()
-    user_list = []
-    for u in users:
-        scrobbles_count, sum_xp = stats_dict.get(u.id, (0, 0))
-        bonus = u.integration.bonus_xp if u.integration else 0
-        total_xp = sum_xp + (bonus or 0)
-        user_list.append({
-            "id": u.id,
-            "username": u.username,
-            "display_name": u.profile.display_name if u.profile else None,
-            "avatar_url": u.profile.avatar_url if u.profile else None,
-            "bio": u.profile.bio if u.profile else None,
-            "is_verified": u.integration.is_verified if u.integration else False,
-            "is_dev": u.role == "admin",
-            "role": u.role or "user",
-            "is_banned": bool(u.is_banned),
-            "is_flagged_antifraud": bool(u.is_flagged_antifraud),
-            "antifraud_reason": u.antifraud_reason,
-            "scrobbles": scrobbles_count,
-            "total_xp": total_xp,
-        })
+    user_list = [_admin_user_summary(user, stats_dict) for user in users]
 
     achs = db.query(Achievement).all()
     ach_list = [
@@ -135,6 +138,7 @@ def get_admin_stats(db: Annotated[Session, Depends(get_db)], admin: Annotated[Us
 
 
 # ─── USER MODERATION & ANTIFRAUD ──────────────────────────────────────────────
+
 
 @router.get("/antifraud/suspicious")
 def list_suspicious_users(db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
@@ -269,6 +273,7 @@ def delete_user(target_username: str, db: Annotated[Session, Depends(get_db)], a
 
 # ─── MUSIC CATALOG & MERGE ───────────────────────────────────────────────────
 
+
 @router.post("/catalog/merge", responses={400: {"description": "Bad Request"}, 404: {"description": "Not Found"}})
 def merge_catalog_items(
     data: CatalogMergeRequest, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]
@@ -347,6 +352,7 @@ async def flush_system_cache(db: Annotated[Session, Depends(get_db)],
 
 
 # ─── GAMIFICATION: AVATAR FRAMES & ECONOMY ────────────────────────────────────
+
 
 @router.get("/frames")
 def list_avatar_frames(db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
@@ -441,6 +447,7 @@ def set_xp_multiplier(
 
 # ─── SYSTEM HEALTH & METRICS ──────────────────────────────────────────────────
 
+
 @router.get("/system/health")
 async def get_system_health(db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     def _counts() -> tuple[int, int, int, int, int, int]:
@@ -524,6 +531,7 @@ def get_system_analytics(db: Annotated[Session, Depends(get_db)], admin: Annotat
 
 
 # ─── ANNOUNCEMENTS & FEATURE FLAGS ────────────────────────────────────────────
+
 
 @router.get("/announcements")
 def list_admin_announcements(db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]):
@@ -647,6 +655,7 @@ def delete_feature_flag(key: str, db: Annotated[Session, Depends(get_db)], admin
 
 # ─── METADATA BLACKLIST & NOISE FILTERS ───────────────────────────────────────
 
+
 @router.get("/catalog/blacklist")
 def list_blacklist_filters(
     db: Annotated[Session, Depends(get_db)],
@@ -695,6 +704,7 @@ def delete_blacklist_filter(
 
 # ─── WORKER & IMPORT JOBS MONITORING ──────────────────────────────────────────
 
+
 @router.get("/jobs/lastfm")
 def list_lastfm_import_jobs(
     db: Annotated[Session, Depends(get_db)],
@@ -731,6 +741,7 @@ async def retry_lastfm_import_job(
 
 # ─── LISTEN TOGETHER ROOMS MONITORING ─────────────────────────────────────────
 
+
 @router.get("/together/rooms")
 async def list_admin_together_rooms(
     admin: Annotated[User, Depends(get_admin_user)],
@@ -740,6 +751,7 @@ async def list_admin_together_rooms(
 
 
 # ─── AUDIT LOG ────────────────────────────────────────────────────────────────
+
 
 @router.get("/audit")
 def list_audit_log(

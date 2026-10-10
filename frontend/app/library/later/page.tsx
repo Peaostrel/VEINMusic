@@ -24,7 +24,7 @@ export default function ListenLaterPage() {
     const data = await qualityRequest<{
       items: Saved[];
       next_cursor: number | null;
-    }>(`/api/me/listen-later${before ? `?before=${before}` : ""}`);
+    }>("/api/me/listen-later" + (before ? "?before=" + before : ""));
     setItems(data.items);
     setCursor(data.next_cursor);
   }, []);

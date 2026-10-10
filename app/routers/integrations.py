@@ -80,7 +80,8 @@ async def sync_integrations_now(
 @router.post("/api/import/lastfm",
              dependencies=[Depends(require_feature("lastfm_import")),
                            Depends(require_feature("integration_lastfm"))],
-             responses={400: {"description": "Last.fm username not set"},
+             responses={409: {"description": "Last.fm is paused in account settings"},
+                        400: {"description": "Last.fm username not set"},
                         503: {"description": "API key not configured or import switched off"}})
 async def start_lastfm_import(data: LikeRequest,
                               db: Annotated[Session,

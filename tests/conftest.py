@@ -99,7 +99,7 @@ def setup_test_database():
             pass
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def db():
     # Provide session for testing
     session = SessionLocal()
@@ -119,7 +119,7 @@ def db():
         cache.CACHE.clear()
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def client(db):
     # Always start with clean overrides
     app.dependency_overrides.clear()

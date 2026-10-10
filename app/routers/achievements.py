@@ -48,12 +48,12 @@ SPECIFIC_ARTIST_RULE = "specific_artist"
 
 @router.get("/api/achievements/all/{username}",
             responses={403: {"description": "Private profile"},
-                       404: {"description": "User not found"}})
+                       404: {"description": USER_NOT_FOUND}})
 def get_all_achievements(
         username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
     if not user:
-        raise HTTPException(404, "User not found")
+        raise HTTPException(404, USER_NOT_FOUND)
     is_hidden, is_owner = _check_privacy_and_owner(user, request, db)
     if is_hidden:
         raise HTTPException(403, "Это приватный профиль")
@@ -105,7 +105,7 @@ async def get_achievement_album_progress(
         db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
     if not user:
-        raise HTTPException(404, "User not found")
+        raise HTTPException(404, USER_NOT_FOUND)
     _, is_owner = _check_privacy_and_owner(user, request, db)
     if not is_owner:
         raise HTTPException(
@@ -136,7 +136,7 @@ async def get_achievement_artist_progress(
         db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
     if not user:
-        raise HTTPException(404, "User not found")
+        raise HTTPException(404, USER_NOT_FOUND)
     _, is_owner = _check_privacy_and_owner(user, request, db)
     if not is_owner:
         raise HTTPException(
@@ -259,7 +259,7 @@ def delete_track(track_id: int, db: Annotated[Session, Depends(
 
 # --- POST /api/admin/users/{target_username}/achievements ---
 @router.post("/api/admin/users/{target_username}/achievements",
-             responses={404: {"description": "User not found"}})
+             responses={404: {"description": USER_NOT_FOUND}})
 def assign_achievement(target_username: str,
                        data: AchAssign,
                        db: Annotated[Session,
@@ -290,7 +290,7 @@ def assign_achievement(target_username: str,
     "/api/admin/users/{target_username}/achievements/{achievement_id}",
     responses={
         404: {
-            "description": "User not found"}})
+            "description": USER_NOT_FOUND}})
 def remove_achievement_from_user(target_username: str,
                                  achievement_id: int,
                                  db: Annotated[Session,
@@ -316,7 +316,7 @@ def remove_achievement_from_user(target_username: str,
 
 # --- POST /api/admin/users/{target_username}/level ---
 @router.post("/api/admin/users/{target_username}/level",
-             responses={404: {"description": "User not found"},
+             responses={404: {"description": USER_NOT_FOUND},
                         400: {"description": "Invalid level"}})
 def update_user_level(target_username: str,
                       data: LevelUpdate,
@@ -344,7 +344,7 @@ def update_user_level(target_username: str,
 
 # --- DELETE /api/admin/users/{target_username}/scrobbles ---
 @router.delete("/api/admin/users/{target_username}/scrobbles",
-               responses={404: {"description": "User not found"}})
+               responses={404: {"description": USER_NOT_FOUND}})
 def wipe_user_scrobbles(target_username: str, db: Annotated[Session, Depends(
         get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     target = db.query(User).filter(User.username == target_username).first()

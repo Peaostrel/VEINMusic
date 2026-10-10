@@ -37,15 +37,17 @@ function RecapCard({
 }>) {
   const artists = stats.top_artists.slice(0, 5);
   const max = artists[0]?.plays || 1;
+  const backgrounds: Record<UserPreferences["wrapped"]["card_style"], string> =
+    {
+      minimal: "bg-bg",
+      vivid:
+        "bg-[linear-gradient(160deg,var(--accent-glow-strong),var(--color-surface)_45%)]",
+      classic: "bg-surface",
+    };
+  const background = backgrounds[preferences.card_style] ?? "bg-surface";
   return (
     <div
-      className={`flex h-[640px] w-[360px] max-w-full flex-col justify-between rounded-2xl border border-line p-7 ${
-        preferences.card_style === "minimal"
-          ? "bg-bg"
-          : preferences.card_style === "vivid"
-            ? "bg-[linear-gradient(160deg,var(--accent-glow-strong),var(--color-surface)_45%)]"
-            : "bg-surface"
-      }`}
+      className={`flex h-[640px] w-[360px] max-w-full flex-col justify-between rounded-2xl border border-line p-7 ${background}`}
     >
       <header>
         <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-accent">

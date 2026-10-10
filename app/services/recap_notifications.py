@@ -12,6 +12,59 @@ from app.services.user_preferences import get_preferences
 from app.services.user_stats import get_user_timezone_offset
 
 
+def _due_recap_messages(user, current):
+    offset = get_user_timezone_offset(
+        user.profile.location if user.profile else ""
+    )
+    local_now = current + timedelta(hours=offset)
+    if local_now.hour != 9:
+        return []
+
+    preferences = get_preferences(user.profile)
+    channels = preferences.notifications
+    if not (
+        channels.in_app.weekly_digest
+        or channels.push.weekly_digest
+    ):
+        return []
+
+    messages: list[str] = []
+    date_label = local_now.strftime("%d.%m.%Y")
+    if preferences.wrapped.auto_weekly and local_now.weekday() == 0:
+        messages.append(f"Недельные итоги за {date_label} готовы")
+    if preferences.wrapped.auto_monthly and local_now.day == 1:
+        messages.append(f"Месячные итоги за {date_label} готовы")
+
+    return messages
+
+
+def _create_recap_notification(db, user, message, current):
+    exists = db.query(Notification.id).filter(
+        Notification.user_id == user.id,
+        Notification.kind == KIND_RECAP,
+        Notification.message.startswith(message),
+    ).first()
+    if exists:
+        return None
+    notification_message = message
+    if message.startswith("Недельные"):
+        narrative = weekly_story(user, db, current)["story"]
+        notification_message = f"{message}. {narrative}"
+    # Notification.message is VARCHAR(200) in production PostgreSQL.
+    if len(notification_message) > 200:
+        notification_message = notification_message[:197] + "..."
+    notification = Notification(
+        user_id=user.id,
+        actor_id=user.id,
+        kind=KIND_RECAP,
+        message=notification_message,
+        created_at=current,
+    )
+    db.add(notification)
+    db.flush()
+    return int(notification.id)
+
+
 def create_due_recap_notifications(now: datetime | None = None) -> list[int]:
     """Create each due reminder once and return its notification IDs."""
     current = now or datetime.now(UTC)
@@ -20,53 +73,10 @@ def create_due_recap_notifications(now: datetime | None = None) -> list[int]:
     try:
         users = db.query(User).filter(User.is_banned.isnot(True)).all()
         for user in users:
-            offset = get_user_timezone_offset(
-                user.profile.location if user.profile else ""
-            )
-            local_now = current + timedelta(hours=offset)
-            if local_now.hour != 9:
-                continue
-
-            preferences = get_preferences(user.profile)
-            channels = preferences.notifications
-            if not (
-                channels.in_app.weekly_digest
-                or channels.push.weekly_digest
-            ):
-                continue
-
-            messages: list[str] = []
-            date_label = local_now.strftime("%d.%m.%Y")
-            if preferences.wrapped.auto_weekly and local_now.weekday() == 0:
-                messages.append(f"Недельные итоги за {date_label} готовы")
-            if preferences.wrapped.auto_monthly and local_now.day == 1:
-                messages.append(f"Месячные итоги за {date_label} готовы")
-
-            for message in messages:
-                exists = db.query(Notification.id).filter(
-                    Notification.user_id == user.id,
-                    Notification.kind == KIND_RECAP,
-                    Notification.message.startswith(message),
-                ).first()
-                if exists:
-                    continue
-                notification_message = message
-                if message.startswith("Недельные"):
-                    narrative = weekly_story(user, db, current)["story"]
-                    notification_message = f"{message}. {narrative}"
-                # Notification.message is VARCHAR(200) in production PostgreSQL.
-                if len(notification_message) > 200:
-                    notification_message = notification_message[:197] + "..."
-                notification = Notification(
-                    user_id=user.id,
-                    actor_id=user.id,
-                    kind=KIND_RECAP,
-                    message=notification_message,
-                    created_at=current,
-                )
-                db.add(notification)
-                db.flush()
-                created.append(int(notification.id))
+            for message in _due_recap_messages(user, current):
+                notification_id = _create_recap_notification(db, user, message, current)
+                if notification_id is not None:
+                    created.append(notification_id)
         db.commit()
         return created
     finally:

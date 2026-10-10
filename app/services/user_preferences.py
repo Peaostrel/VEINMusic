@@ -27,7 +27,7 @@ def get_preferences(profile: Any) -> UserPreferences:
             elif incoming is not None:
                 merged[key] = incoming
         return UserPreferences.model_validate(merged)
-    except (json.JSONDecodeError, TypeError, ValueError):
+    except (TypeError, ValueError):
         return UserPreferences()
 
 

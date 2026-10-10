@@ -2,6 +2,8 @@
 from alembic import op
 import sqlalchemy as sa
 
+USER_FOREIGN_KEY = "users.id"
+
 revision = "7e9a2c6d8f01"
 down_revision = "68f2a91c0d47"
 branch_labels = None
@@ -16,7 +18,7 @@ def upgrade():
     op.create_index("ix_scrobbles_user_time_id", "scrobbles", ["user_id", "played_at", "id"])
     op.create_index("ix_scrobbles_user_track", "scrobbles", ["user_id", "excluded_from_stats", "deleted_at", "track_id"])
     op.create_table("history_changes", sa.Column("id", sa.String(32), primary_key=True),
-                    sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+                    sa.Column("user_id", sa.Integer(), sa.ForeignKey(USER_FOREIGN_KEY, ondelete="CASCADE"), nullable=False),
                     sa.Column("payload", sa.JSON(), nullable=False),
                     sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
                     sa.Column("undone", sa.Boolean(), nullable=False, server_default=sa.text("false")))
@@ -24,7 +26,7 @@ def upgrade():
     op.create_index("ix_history_changes_expires_at", "history_changes", ["expires_at"])
     for name in ("listen_later", "recommendation_impressions"):
         columns = [sa.Column("id", sa.Integer(), primary_key=True),
-                   sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+                   sa.Column("user_id", sa.Integer(), sa.ForeignKey(USER_FOREIGN_KEY, ondelete="CASCADE"), nullable=False),
                    sa.Column("track_id", sa.Integer(), sa.ForeignKey("tracks.id", ondelete="CASCADE"), nullable=False)]
         if name == "listen_later":
             columns += [sa.Column("note", sa.String(1000), nullable=False, server_default=""), sa.Column("created_at", sa.DateTime(timezone=True), nullable=False)]
@@ -34,7 +36,7 @@ def upgrade():
         op.create_index(f"ix_{name}_user_id", name, ["user_id"])
         op.create_index(f"uq_{name}_user_track", name, ["user_id", "track_id"], unique=True)
     op.create_table("user_sessions", sa.Column("id", sa.String(32), primary_key=True),
-                    sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+                    sa.Column("user_id", sa.Integer(), sa.ForeignKey(USER_FOREIGN_KEY, ondelete="CASCADE"), nullable=False),
                     sa.Column("device", sa.String(100), nullable=False), sa.Column("session_version", sa.Integer(), nullable=False),
                     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
                     sa.Column("last_seen_at", sa.DateTime(timezone=True), nullable=False),

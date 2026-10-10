@@ -83,6 +83,17 @@ def get_user_mood(username: str, request: Request, db: Annotated[Session, Depend
 # --- /api/user/{username} ---
 
 
+def _showcase_fields(profile, visible):
+    fields = {}
+    for kind in ("artist", "track", "album"):
+        prefix = f"favorite_{kind}"
+        for suffix in ("", "_url", "_cover"):
+            fields[prefix + suffix] = getattr(profile, prefix + suffix) if visible else None
+        updated = getattr(profile, prefix + "_updated_at")
+        fields[prefix + "_updated_at"] = updated.isoformat() if updated else None
+    return fields
+
+
 @router.get("/api/user/{username}",
             responses={404: {"description": "User not found"}})
 def get_user_info(username: str, request: Request,
@@ -133,18 +144,7 @@ def get_user_info(username: str, request: Request,
         "hidden_artists": user.profile.hidden_artists,
         "sync_privacy": user.profile.sync_privacy or "all",
         "is_verified": user.integration.is_verified,
-        "favorite_artist": user.profile.favorite_artist if can_showcase else None,
-        "favorite_artist_url": user.profile.favorite_artist_url if can_showcase else None,
-        "favorite_artist_cover": user.profile.favorite_artist_cover if can_showcase else None,
-        "favorite_artist_updated_at": user.profile.favorite_artist_updated_at.isoformat() if user.profile.favorite_artist_updated_at else None,
-        "favorite_track": user.profile.favorite_track if can_showcase else None,
-        "favorite_track_url": user.profile.favorite_track_url if can_showcase else None,
-        "favorite_track_cover": user.profile.favorite_track_cover if can_showcase else None,
-        "favorite_track_updated_at": user.profile.favorite_track_updated_at.isoformat() if user.profile.favorite_track_updated_at else None,
-        "favorite_album": user.profile.favorite_album if can_showcase else None,
-        "favorite_album_url": user.profile.favorite_album_url if can_showcase else None,
-        "favorite_album_cover": user.profile.favorite_album_cover if can_showcase else None,
-        "favorite_album_updated_at": user.profile.favorite_album_updated_at.isoformat() if user.profile.favorite_album_updated_at else None,
+        **_showcase_fields(user.profile, can_showcase),
         "avatar_frame": user.profile.avatar_frame,
         "level": lvl,
         "rank": rnk,

@@ -16,7 +16,7 @@ export default function CatalogTab({
   setTargetArtist,
   handleMergeTracks,
   handleMergeArtists,
-}: AdminPanelState) {
+}: Readonly<AdminPanelState>) {
   return (
     <div className="space-y-8">
       {/* Merge Duplicates Tool */}

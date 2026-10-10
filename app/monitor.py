@@ -35,6 +35,21 @@ def notify(messages):
         return False
 
 
+def _notification_batch(current, delivered):
+    due = [message for code, message in current.items() if time.monotonic() - delivered.get(code, -86400) > 3600]
+    recovered = [code for code in delivered if code not in current]
+    messages = due + [f"Восстановлено: {code}" for code in recovered]
+    return messages, recovered
+
+
+def _mark_notifications_delivered(current, recovered, delivered):
+    for code in recovered:
+        delivered.pop(code, None)
+    for code in current:
+        if time.monotonic() - delivered.get(code, -86400) > 3600:
+            delivered[code] = time.monotonic()
+
+
 async def run():
     logging.basicConfig(level=logging.INFO)
     # Suppress startup noise while migrations, polling and the first dump start.
@@ -45,15 +60,9 @@ async def run():
         if not await asyncio.to_thread(api_healthy):
             alerts.append({"code": "api", "message": "API недоступен"})
         current = {item["code"]: item["message"] for item in alerts}
-        due = [message for code, message in current.items() if time.monotonic() - delivered.get(code, -86400) > 3600]
-        recovered = [code for code in delivered if code not in current]
-        messages = due + [f"Восстановлено: {code}" for code in recovered]
+        messages, recovered = _notification_batch(current, delivered)
         if messages and await asyncio.to_thread(notify, messages):
-            for code in recovered:
-                delivered.pop(code, None)
-            for code in current:
-                if time.monotonic() - delivered.get(code, -86400) > 3600:
-                    delivered[code] = time.monotonic()
+            _mark_notifications_delivered(current, recovered, delivered)
         await asyncio.sleep(60)
 
 

@@ -49,6 +49,7 @@ def _add_listened_scrobble(db, user_id: int, title="Secret Song", artist="Secret
 
 # --- Privacy settings are not reset by unrelated profile updates ---
 
+
 def test_profile_update_does_not_reset_privacy(client, db):
     key = _register(client, "alice")
     resp = client.post("/api/profile/privacy", headers=_auth(key),
@@ -73,6 +74,7 @@ def test_sync_privacy_is_validated(client):
 
 # --- Bans are enforced ---
 
+
 def test_banned_user_is_rejected(client, db):
     key = _register(client, "bob")
     user = db.query(User).filter_by(username="bob").first()
@@ -84,6 +86,7 @@ def test_banned_user_is_rejected(client, db):
 
 
 # --- Developer API key scopes ---
+
 
 def test_developer_key_scopes_are_enforced(client):
     key = _register(client, "dave")
@@ -215,6 +218,7 @@ def test_user_info_does_not_expose_key_hash(client):
 
 # --- Spotify OAuth flow ---
 
+
 def test_spotify_login_sets_state_cookie_and_callback_links_account(client, db):
     key = _register(client, "pavel")
     resp = client.get("/auth/spotify/login", headers=_auth(key), follow_redirects=False)
@@ -302,6 +306,7 @@ def test_soundcloud_callback_rejects_forged_state(client):
 
 # --- Cloud polling only picks linked accounts ---
 
+
 def test_pollable_users_only_include_linked_accounts(client, db):
     _register(client, "rita")
     _register(client, "sam")
@@ -317,6 +322,7 @@ def test_pollable_users_only_include_linked_accounts(client, db):
 
 
 # --- Shared catalog cannot be poisoned by clients ---
+
 
 def test_client_cannot_rewrite_catalog_metadata(db):
     track = Track(title="Song", artist="Band", duration=200, cover_url=None, track_url=None)
@@ -353,6 +359,7 @@ def test_scrobble_counts_only_after_threshold(db, client):
 
 # --- Duplicate rows are prevented ---
 
+
 def test_follow_and_achievement_are_unique(db, client):
     _register(client, "vera")
     _register(client, "will")
@@ -377,6 +384,7 @@ def test_follow_and_achievement_are_unique(db, client):
 
 # --- Text sanitizing / SVG rendering ---
 
+
 def test_sanitize_text_keeps_plain_text_readable():
     assert sanitize_text("<b>Nice</b> song") == "Nice song"
     assert sanitize_text("It's \"ok\"") == "It's \"ok\""
@@ -392,10 +400,12 @@ def test_svg_truncation_never_splits_entities():
 
 # --- Listen Together WebSocket ---
 
+
 def test_together_ws_rejects_foreign_origin(client):
+    connection = client.websocket_connect("/ws/together/room1", headers={"origin": "https://evil.example"})
     with pytest.raises(WebSocketDisconnect):
-        with client.websocket_connect("/ws/together/room1", headers={"origin": "https://evil.example"}) as ws:
-            ws.receive_json()
+        with connection:
+            pass
 
 
 def test_together_only_host_controls_playback(client):

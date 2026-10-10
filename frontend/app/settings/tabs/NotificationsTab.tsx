@@ -111,7 +111,7 @@ export default function NotificationsTab({
         {settings.quiet_hours_enabled && (
           <div className="flex flex-wrap items-center gap-4 px-5 py-4">
             <label className="flex items-center gap-2 text-sm text-fg-2">
-              С
+              <span>С</span>
               <input
                 type="time"
                 value={settings.quiet_from}
@@ -120,7 +120,7 @@ export default function NotificationsTab({
               />
             </label>
             <label className="flex items-center gap-2 text-sm text-fg-2">
-              до
+              <span>до</span>
               <input
                 type="time"
                 value={settings.quiet_to}

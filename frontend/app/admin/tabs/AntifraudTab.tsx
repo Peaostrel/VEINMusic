@@ -9,7 +9,7 @@ export default function AntifraudTab({
   handleToggleBan,
   handleResetSuspiciousXp,
   handleUnflagAntifraud,
-}: AdminPanelState) {
+}: Readonly<AdminPanelState>) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between p-5 bg-surface border border-danger-line rounded-xl">

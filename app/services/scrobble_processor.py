@@ -1,7 +1,7 @@
 import functools
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, TypedDict, Unpack
 from urllib.parse import urlparse
 
 import anyio
@@ -23,6 +23,15 @@ from app.services import runtime_settings
 from app.services.metadata_cleaner import clean_track_metadata
 from app.services.user_preferences import get_preferences
 
+
+class ScrobbleCreditOptions(TypedDict, total=False):
+    credit_sec: int | None
+    pending_sec: int
+    collector: str
+
+
+YANDEX_MUSIC_HOST = "music.yandex.ru"
+
 logger = logging.getLogger(__name__)
 
 TRACK_PATH = "/track/"
@@ -33,7 +42,7 @@ MIN_CATALOG_DURATION = 30
 MAX_CATALOG_DURATION = 2 * 3600
 PLACEHOLDER_DURATION = 180
 TRACK_URL_HOSTS = (
-    "music.yandex.ru", "music.yandex.com", "music.yandex.by", "music.yandex.kz",
+    YANDEX_MUSIC_HOST, "music.yandex.com", "music.yandex.by", "music.yandex.kz",
     "open.spotify.com", "music.youtube.com", "www.youtube.com", "youtube.com",
     "vk.com", "vk.ru", "soundcloud.com", "music.apple.com",
 )
@@ -73,7 +82,7 @@ async def get_track_duration(url: str) -> int:
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
         async with httpx.AsyncClient(headers=headers, timeout=5.0) as client:
-            if "music.yandex.ru" in url and TRACK_PATH in url:
+            if YANDEX_MUSIC_HOST in url and TRACK_PATH in url:
                 track_id = url.split('/track/')[1].split('/')[0].split('?')[0]
                 res = (await client.get(f"https://music.yandex.ru/handlers/track.jsx?track={track_id}")).json()
                 return int(
@@ -93,7 +102,7 @@ async def get_track_genre(url: str) -> str | None:
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
         async with httpx.AsyncClient(headers=headers, timeout=5.0) as client:
-            if "music.yandex.ru" in url:
+            if YANDEX_MUSIC_HOST in url:
                 if TRACK_PATH in url:
                     track_id = url.split(
                         '/track/')[1].split('/')[0].split('?')[0]
@@ -540,6 +549,32 @@ async def _dispatch_counted_scrobble(user_id: int, counted: dict[str, Any]) -> N
         counted["timestamp"])
 
 
+def _confirm_scrobble_source(db, last_scrobble, source_label, source_id, l_updated_at, now):
+    sources = list(last_scrobble.confirmed_sources or [last_scrobble.source])
+    if source_label not in sources:
+        sources.append(source_label)
+    last_scrobble.confirmed_sources = sources[:20]  # type: ignore[assignment]
+    primary = last_scrobble.credit_source or f"{last_scrobble.source}:client"
+    if primary != source_id and l_updated_at is not None and (now - l_updated_at).total_seconds() < 40:
+        db.commit()
+        return True
+    last_scrobble.credit_source = source_id  # type: ignore[assignment]
+    return False
+
+
+def _counted_scrobble_payload(last_scrobble: Scrobble, track: Track) -> dict[str, Any]:
+    played_at = last_scrobble.played_at
+    if played_at.tzinfo is None:
+        played_at = played_at.replace(tzinfo=UTC)
+    return {
+        "history_item": format_history_item(last_scrobble, track),
+        "artist": str(track.artist),
+        "title": str(track.title),
+        "album": str(track.album) if track.album else None,
+        "timestamp": int(played_at.timestamp()),
+    }
+
+
 def _record_scrobble(db: Session, user: User, track: Track, source: str,
                      progress_sec: int, is_playing: bool, credit_sec: int | None = None,
                      pending_sec: int = 0, collector: str = "client") -> dict[str, Any]:
@@ -570,16 +605,9 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
                               "new_item": None, "counted": None, "state_change": None}
     was_playing = bool(last_scrobble.is_playing) if last_scrobble else None
     if last_scrobble and last_scrobble.track_id == track.id:
-        sources = list(last_scrobble.confirmed_sources or [last_scrobble.source])
-        if source_label not in sources:
-            sources.append(source_label)
-        last_scrobble.confirmed_sources = sources[:20]  # type: ignore[assignment]
-        primary = last_scrobble.credit_source or f"{last_scrobble.source}:client"
-        if primary != source_id and l_updated_at is not None and (now - l_updated_at).total_seconds() < 40:
-            db.commit()
+        if _confirm_scrobble_source(db, last_scrobble, source_label, source_id, l_updated_at, now):
             result["status"] = "confirmed_duplicate"
             return result
-        last_scrobble.credit_source = source_id  # type: ignore[assignment]
     is_new, early_return = _determine_is_new(
         db, track, last_scrobble, now, l_updated_at, progress_sec)
     if early_return:
@@ -602,43 +630,14 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
         result["new_item"] = format_history_item(new_s, track)
     elif last_scrobble is not None and _update_scrobble_progress(
             db, user, track, last_scrobble, now, l_updated_at, is_playing, credit_sec, pending_sec):
-        played_at = last_scrobble.played_at
-        if played_at.tzinfo is None:
-            played_at = played_at.replace(tzinfo=UTC)
-        result["counted"] = {
-            "history_item": format_history_item(last_scrobble, track),
-            "artist": str(track.artist),
-            "title": str(track.title),
-            "album": str(track.album) if track.album else None,
-            "timestamp": int(played_at.timestamp()),
-        }
+        result["counted"] = _counted_scrobble_payload(last_scrobble, track)
     if not is_new and last_scrobble is not None and was_playing != bool(is_playing):
         # Pause / resume: pages update the "now playing" mark at once
         result["state_change"] = {"id": int(last_scrobble.id), "is_playing": bool(is_playing)}
     return result
 
 
-async def _process_scrobble(
-        db: Session,
-        user: User,
-        title: str,
-        artist: str,
-        cover_url: str,
-        track_url: str,
-        source: str,
-        progress_sec: int,
-        is_playing: bool,
-        duration: int,
-        album: str = "",
-        credit_sec: int | None = None,
-        pending_sec: int = 0, collector: str = "client"):
-    preferences = get_preferences(user.profile)
-    listening = preferences.listening
-    integrations = preferences.integrations
-    source_name = (source or "").casefold()
-    source_key = next((item for item in listening.ignored_sources if item in source_name), None)
-    if source_key:
-        return "source_ignored"
+def _integration_paused(db, integrations, source_name):
     integration_keys = {
         "spotify": integrations.spotify_enabled,
         "yandex": integrations.yandex_enabled,
@@ -654,13 +653,26 @@ async def _process_scrobble(
         "lastfm": "integration_lastfm",
     }
     if not integrations.auto_sync and any(name in source_name for name in integration_keys):
-        return "integration_paused"
+        return True
     if any(name in source_name and not enabled for name, enabled in integration_keys.items()):
-        return "integration_paused"
+        return True
     if any(
         name in source_name and not runtime_settings.is_feature_enabled(feature, db)
         for name, feature in integration_features.items()
     ):
+        return True
+    return False
+
+
+def _scrobble_filter_reason(db, user, title, artist, source, duration):
+    preferences = get_preferences(user.profile)
+    listening = preferences.listening
+    integrations = preferences.integrations
+    source_name = (source or "").casefold()
+    source_key = next((item for item in listening.ignored_sources if item in source_name), None)
+    if source_key:
+        return "source_ignored"
+    if _integration_paused(db, integrations, source_name):
         return "integration_paused"
     if artist.casefold() in {item.casefold() for item in listening.ignored_artists}:
         return "artist_ignored"
@@ -675,6 +687,26 @@ async def _process_scrobble(
             private_until = private_until.replace(tzinfo=UTC)
         if datetime.now(UTC) < private_until.astimezone(UTC):
             return "private_session"
+    return None
+
+
+async def _process_scrobble(
+        db: Session,
+        user: User,
+        title: str,
+        artist: str,
+        cover_url: str,
+        track_url: str,
+        source: str,
+        progress_sec: int,
+        is_playing: bool,
+        duration: int,
+        album: str = "",
+        **credit_options: Unpack[ScrobbleCreditOptions]):
+    reason = _scrobble_filter_reason(db, user, title, artist, source, duration)
+    if reason:
+        return reason
+    listening = get_preferences(user.profile).listening
     if await _run_db(_is_blacklisted, title, artist, album, db):
         return "blacklisted"
 
@@ -682,7 +714,8 @@ async def _process_scrobble(
         db, title, artist, cover_url, track_url, duration, album,
         enrich=listening.auto_metadata, user_id=int(user.id))
     result = await _run_db(_record_scrobble, db, user, track, source, progress_sec, is_playing,
-                           credit_sec, pending_sec, collector)
+                           credit_options.get("credit_sec"), credit_options.get("pending_sec", 0),
+                           credit_options.get("collector", "client"))
 
     if result["new_item"] is not None:
         await manager.broadcast_to_user(result["username"], {
@@ -699,14 +732,14 @@ async def _process_scrobble(
 
 async def process_scrobble(db, user, title, artist, cover_url, track_url, source,
                            progress_sec, is_playing, duration, album="",
-                           credit_sec=None, pending_sec=0, collector="client"):
+                           **credit_options: Unpack[ScrobbleCreditOptions]):
     """Record diagnostic outcomes without recording filtered track metadata."""
     from time import monotonic
     from app.services.source_health import record_health
     started = monotonic()
     status = await _process_scrobble(db, user, title, artist, cover_url, track_url,
                                      source, progress_sec, is_playing, duration,
-                                     album, credit_sec, pending_sec, collector)
+                                     album, **credit_options)
     await _run_db(record_health, db, int(user.id), source, status,
                   int((monotonic() - started) * 1000))
     return status

@@ -68,7 +68,7 @@ def _is_expired(auth: DeviceAuthorization) -> bool:
     return _as_aware(auth.expires_at) <= datetime.now(UTC)  # type: ignore[arg-type]
 
 
-@router.post("/code")
+@router.post("/code", responses={503: {"description": "Could not allocate a pairing code"}})
 @limiter.limit("10/minute")
 def create_device_code(request: Request, payload: DeviceCodeRequest,
                        db: Annotated[Session, Depends(get_db)]):

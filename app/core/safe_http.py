@@ -65,12 +65,15 @@ def _client(timeout: float) -> httpx.AsyncClient:
     return httpx.AsyncClient(timeout=timeout, follow_redirects=False, trust_env=False)
 
 
-async def pinned_request(method: str, url: str, *, timeout: float = 5.0, **kwargs: Any) -> httpx.Response:
-    pinned_url, headers, extensions = await asyncio.to_thread(
-        _pinned_target, url, kwargs.pop("headers", None))
-    async with _client(timeout) as client:
-        request = client.build_request(method, pinned_url, headers=headers, extensions=extensions, **kwargs)
-        return await client.send(request)
+async def pinned_request(method: str, url: str, **kwargs: Any) -> httpx.Response:
+    # Bound DNS resolution and the complete response, as well as each I/O phase.
+    request_timeout = kwargs.pop("timeout", 5.0)
+    async with asyncio.timeout(request_timeout):
+        pinned_url, headers, extensions = await asyncio.to_thread(
+            _pinned_target, url, kwargs.pop("headers", None))
+        async with _client(request_timeout) as client:
+            request = client.build_request(method, pinned_url, headers=headers, extensions=extensions, **kwargs)
+            return await client.send(request)
 
 
 async def pinned_download(url: str, *, max_bytes: int) -> bytes | None:

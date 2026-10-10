@@ -40,6 +40,16 @@ function isoDate(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+async function errorBody(
+  response: Response,
+): Promise<{ detail?: string } | null> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
 function Panel({
   id,
   title,
@@ -126,7 +136,7 @@ export default function DetailedStatsPage() {
     })
       .then(async (res) => {
         if (!res.ok) {
-          const body = await res.json().catch(() => null);
+          const body = await errorBody(res);
           throw new Error(
             res.status === 403
               ? "Это приватный профиль"
@@ -246,7 +256,7 @@ export default function DetailedStatsPage() {
             {period === "custom" && (
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <label className="flex items-center gap-1.5 text-[11px] text-fg-3">
-                  С
+                  <span>С</span>
                   <input
                     type="date"
                     value={dateFrom}
@@ -256,7 +266,7 @@ export default function DetailedStatsPage() {
                   />
                 </label>
                 <label className="flex items-center gap-1.5 text-[11px] text-fg-3">
-                  по
+                  <span>по</span>
                   <input
                     type="date"
                     value={dateTo}
@@ -287,7 +297,13 @@ export default function DetailedStatsPage() {
       {(["7d", "30d", "90d"] as Period[]).includes(period) && (
         <DailyActivity
           activity={activity_graph}
-          days={period === "7d" ? 7 : period === "30d" ? 30 : 90}
+          days={
+            (
+              { "7d": 7, "30d": 30, "90d": 90 } as Partial<
+                Record<Period, number>
+              >
+            )[period] ?? 90
+          }
           endDate={stats.period.end}
         />
       )}
