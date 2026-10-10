@@ -27,6 +27,7 @@ from app.routers.common import _can_view_section, _check_privacy_and_owner
 from app.schemas import CommentRequest, ScrobbleData
 from app.services import notifications
 from app.services.cache import delete_from_cache, get_from_cache, set_to_cache
+from app.services.privacy import filter_public_feed, public_statistics_users
 from app.services.scrobble_processor import format_history_item, process_scrobble
 from app.services.user_preferences import preference_enabled, preferences_dict
 
@@ -180,7 +181,7 @@ TASTE_TWINS_TTL = 600
 def get_global_history(db: Annotated[Session, Depends(get_db)]):
     cached = get_from_cache(GLOBAL_HISTORY_CACHE_KEY, ttl=GLOBAL_HISTORY_TTL)
     if cached is not None:
-        return cached
+        return filter_public_feed(cached, db)
     now = datetime.now(UTC)
     active_threshold = now - timedelta(seconds=ACTIVE_PLAYBACK_WINDOW_SEC)
 
@@ -191,7 +192,7 @@ def get_global_history(db: Annotated[Session, Depends(get_db)]):
         Scrobble.user_id == User.id).join(
             UserProfile,
             User.id == UserProfile.user_id).filter(
-                UserProfile.is_private.is_(False),
+                UserProfile.is_private.is_(False), User.is_banned.isnot(True),
                 (Scrobble.listened_sec >= 15) | (
                     Scrobble.is_playing.is_(True) & (Scrobble.updated_at >= active_threshold)
                 )
@@ -226,6 +227,7 @@ def get_global_history(db: Annotated[Session, Depends(get_db)]):
         item["can_comment"] = preference_enabled(
             scrobble.user.profile, "feed", "allow_comments")
         result.append(item)
+    result = filter_public_feed(result, db)
     set_to_cache(GLOBAL_HISTORY_CACHE_KEY, jsonable_encoder(result))
     return result
 
@@ -262,7 +264,7 @@ def get_friends_history(username: str,
         Scrobble,
         Track).join(Track).join(User, Scrobble.user_id == User.id).join(UserProfile, User.id == UserProfile.user_id).filter(
         Scrobble.user_id.in_(following_ids),
-        UserProfile.is_private.is_(False),
+        UserProfile.is_private.is_(False), User.is_banned.isnot(True),
         (Scrobble.listened_sec >= 15) | (
             Scrobble.is_playing.is_(True) & (Scrobble.updated_at >= active_threshold)
         )
@@ -272,6 +274,7 @@ def get_friends_history(username: str,
     scrobbles = [
         row for row in scrobbles
         if preference_enabled(row[0].user.profile, "feed", "share_scrobbles")
+        and _can_view_section(row[0].user, request, db, "history")
     ][:20]
 
     s_ids = [s.id for s, t in scrobbles]
@@ -307,12 +310,13 @@ def api_get_taste_twins(
         username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
     from app.routers.common import _get_visible_user
     from app.services.taste import get_taste_twins
-    _get_visible_user(username, request, db)
+    _get_visible_user(username, request, db, "statistics")
     # A full scan over everyone's scrobbles: computed at most every 10 min
-    key = f"taste_twins:{username}"
+    key = f"taste_twins:v2:{username}"
     cached = get_from_cache(key, ttl=TASTE_TWINS_TTL)
     if cached is not None:
-        return cached
+        visible_names = public_statistics_users(db)
+        return [item for item in cached if item["username"] in visible_names]
     twins = get_taste_twins(username, db)
     set_to_cache(key, jsonable_encoder(twins))
     return twins
@@ -331,6 +335,8 @@ def toggle_like(scrobble_id: int, request: Request, background_tasks: Background
     if not scrobble:
         raise HTTPException(status_code=404, detail="Скроббл не найден")
 
+    if not _can_view_section(scrobble.user, request, db, "history"):
+        raise HTTPException(403, "История прослушиваний скрыта")
     if scrobble.user_id != user.id:
         scrobble_owner_profile = db.query(UserProfile).filter(UserProfile.user_id == scrobble.user_id).first()
         if scrobble_owner_profile and scrobble_owner_profile.is_private:
@@ -381,6 +387,8 @@ def add_comment(scrobble_id: int,
     if not scrobble:
         raise HTTPException(status_code=404, detail="Скроббл не найден")
 
+    if not _can_view_section(scrobble.user, request, db, "history"):
+        raise HTTPException(403, "История прослушиваний скрыта")
     if scrobble.user_id != user.id:
         scrobble_owner_profile = db.query(UserProfile).filter(UserProfile.user_id == scrobble.user_id).first()
         if scrobble_owner_profile and scrobble_owner_profile.is_private:

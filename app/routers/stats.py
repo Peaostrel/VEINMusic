@@ -31,6 +31,7 @@ from app.routers.common import (
 )
 from app.services.cache import get_from_cache, set_to_cache
 from app.services.scrobble_processor import format_history_item
+from app.services.privacy import audience_cache_key, filter_public_feed, public_statistics_users
 from app.services.user_preferences import preference_enabled, preferences_dict
 from app.services.user_stats import (
     get_active_streak,
@@ -244,7 +245,7 @@ def get_wrapped_stats(
 def get_global_feed(db: Annotated[Session, Depends(get_db)]):
     # Latest scrobbles from public users
     scrobbles = db.query(Scrobble).join(User).join(UserProfile).filter(
-        UserProfile.is_private.is_(False)).order_by(
+        UserProfile.is_private.is_(False), User.is_banned.isnot(True)).order_by(
         Scrobble.id.desc()).limit(100).all()
     visible = [
         scrobble for scrobble in scrobbles
@@ -270,7 +271,7 @@ def get_global_feed(db: Annotated[Session, Depends(get_db)]):
         item["can_comment"] = preference_enabled(
             scrobble.user.profile, "feed", "allow_comments")
         feed.append(item)
-    return {"feed": feed}
+    return {"feed": filter_public_feed(feed, db)}
 
 
 def _get_activity_stats(
@@ -812,12 +813,18 @@ def get_current_track(username: str, request: Request, db: Annotated[Session, De
 
 
 # --- /api/leaderboard ---
+def _visible_ranking(ranking, db):
+    public_names = public_statistics_users(db)
+    return [{**item, "rank": rank} for rank, item in enumerate(
+        (entry for entry in ranking if entry["username"] in public_names), 1)]
+
+
 def _full_ranking(db: Session) -> list[dict[str, Any]]:
     """Every non-banned user with total XP, best first, with a global rank.
     Aggregates over all scrobbles: cached briefly (shared through Redis)."""
     cached = get_from_cache(LEADERBOARD_CACHE_KEY, ttl=LEADERBOARD_CACHE_TTL)
     if cached is not None:
-        return cached
+        return _visible_ranking(cached, db)
     sql = text("""
         SELECT u.username, p.display_name, p.avatar_url, i.is_verified, p.theme,
                (COALESCE(SUM(s.xp_earned), 0) + COALESCE(i.bonus_xp, 0)) as total_xp, u.role
@@ -850,6 +857,7 @@ def _full_ranking(db: Session) -> list[dict[str, Any]]:
             "role": urole or "user",
             "theme": theme
         })
+    ranking = _visible_ranking(ranking, db)
     set_to_cache(LEADERBOARD_CACHE_KEY, ranking)
     return ranking
 
@@ -995,7 +1003,9 @@ def get_public_week(db: Annotated[Session, Depends(get_db)]):
     """Site-wide listening over the last 7 days (UTC) for the landing page:
     plays per day, hours of music and the artist of the week. Only public,
     non-banned profiles count, so no private history leaks out."""
-    cached = get_from_cache(WEEK_CACHE_KEY, ttl=WEEK_CACHE_TTL)
+    public_ids = list(public_statistics_users(db).values())
+    cache_key = audience_cache_key(WEEK_CACHE_KEY, public_ids)
+    cached = get_from_cache(cache_key, ttl=WEEK_CACHE_TTL)
     if cached is not None:
         return cached
     today = datetime.now(UTC).date()
@@ -1005,7 +1015,7 @@ def get_public_week(db: Annotated[Session, Depends(get_db)]):
             .join(Track, Scrobble.track_id == Track.id)
             .join(User, Scrobble.user_id == User.id)
             .join(UserProfile, UserProfile.user_id == User.id)
-            .filter(Scrobble.played_at >= since,
+            .filter(Scrobble.user_id.in_(public_ids), Scrobble.played_at >= since,
                     _completed_scrobble(),
                     UserProfile.is_private.isnot(True),
                     User.is_banned.isnot(True)))
@@ -1029,5 +1039,5 @@ def get_public_week(db: Annotated[Session, Depends(get_db)]):
         "hours": round(seconds / 3600, 1),
         "top_artist": None if top is None else {"name": top[0], "plays": top[1]},
     }
-    set_to_cache(WEEK_CACHE_KEY, result, expire=WEEK_CACHE_TTL * 2)
+    set_to_cache(cache_key, result, expire=WEEK_CACHE_TTL * 2)
     return result

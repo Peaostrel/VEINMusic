@@ -1,7 +1,7 @@
 """Taste matching between users."""
 
 
-from sqlalchemy import func, text
+from sqlalchemy import bindparam, func, text
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -9,6 +9,8 @@ from app.models import (
     Track,
     User,
 )
+
+from app.services.privacy import public_statistics_users
 
 # Dummy taste match internal to prevent undefined errors
 
@@ -51,13 +53,16 @@ def get_taste_twins(username: str, db: Session):
     if not me:
         return []
 
+    public_ids = list(public_statistics_users(db).values())
+    if not public_ids:
+        return []
     sql = text("""
         SELECT u.id, u.username, p.display_name, p.avatar_url, COUNT(DISTINCT t.artist) as common_count
         FROM users u
         JOIN user_profiles p ON u.id = p.user_id
         JOIN scrobbles s ON u.id = s.user_id
         JOIN tracks t ON s.track_id = t.id
-        WHERE u.id != :my_id
+        WHERE u.id != :my_id AND u.id IN :public_ids
           AND (p.is_private IS NULL OR p.is_private = :not_private)
           AND (u.is_banned IS NULL OR u.is_banned = :not_private)
           AND s.excluded_from_stats = false AND s.listened_sec * 100 >= t.duration * 85
@@ -73,7 +78,8 @@ def get_taste_twins(username: str, db: Session):
         LIMIT 10
     """)
 
-    rows = db.execute(sql, {"my_id": me.id, "not_private": False}).fetchall()
+    sql = sql.bindparams(bindparam("public_ids", expanding=True))
+    rows = db.execute(sql, {"my_id": me.id, "not_private": False, "public_ids": public_ids}).fetchall()
     if not rows:
         return []
 

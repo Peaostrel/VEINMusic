@@ -13,7 +13,7 @@ from app.core.security import SECRET_KEY, get_current_user
 from app.database import get_db
 from app.models import User
 from app.schemas import PrivacyUpdate, ProfileUpdate, UserPreferences
-from app.services.cache import clear_all, delete_from_cache
+from app.services.cache import invalidate_all, delete_from_cache
 from app.services.metadata_search import search_metadata
 from app.services.user_preferences import preferences_dict, save_preferences
 from app.utils import sanitize_text
@@ -39,7 +39,7 @@ def update_user_preferences(
         current_user: Annotated[User, Depends(get_current_user)]):
     save_preferences(current_user.profile, data)
     db.commit()
-    clear_all()
+    invalidate_all()
     return preferences_dict(current_user.profile)
 
 
@@ -222,7 +222,7 @@ async def update_profile(request: Request, data: ProfileUpdate, db: Annotated[Se
 
     db.commit()
     if privacy_changed:
-        clear_all()
+        invalidate_all()
     else:
         # Name, avatar and bio of link previews
         delete_from_cache(f"preview:user:{user.username}")
@@ -243,7 +243,7 @@ def update_privacy(request: Request, data: PrivacyUpdate, db: Annotated[Session,
         current_user.profile.sync_privacy = data.sync_privacy
     db.commit()
     if privacy_changed:
-        clear_all()
+        invalidate_all()
     return {"status": "ok"}
 
 

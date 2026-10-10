@@ -1,0 +1,38 @@
+# Load alongside docker-compose.yml after filling .env.backup and backup-password.txt.
+services:
+  offsite-backup:
+    image: restic/restic:0.19.1
+    restart: unless-stopped
+    env_file: .env.backup
+    environment:
+      RESTIC_PASSWORD_FILE: /run/secrets/backup_password
+    entrypoint: ["/bin/sh", "/scripts/offsite-backup.sh"]
+    volumes:
+      - db_backups:/backups:ro
+      - ../scripts/offsite-backup.sh:/scripts/offsite-backup.sh:ro
+    secrets:
+      - backup_password
+    depends_on:
+      - db-backup
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /root/.cache/restic
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "test -n \"$$(find /tmp -maxdepth 1 -name offsite-last-success -mmin -1800)\""]
+      interval: 5m
+      timeout: 5s
+      start_period: 10m
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+secrets:
+  backup_password:
+    file: ./backup-password.txt

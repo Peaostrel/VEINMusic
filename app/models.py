@@ -34,6 +34,11 @@ class User(Base):
     is_flagged_antifraud = Column(Boolean, default=False, server_default=text("false"), nullable=False)
     # Bumped to revoke all session tokens ("log out everywhere", bans)
     session_version = Column(Integer, default=0, server_default=text("0"), nullable=False)
+    totp_enabled = Column(Boolean, default=False, server_default=text("false"), nullable=False)
+    totp_secret = Column(EncryptedString, nullable=True)
+    totp_last_step = Column(Integer, default=-1, server_default=text("-1"), nullable=False)
+    totp_setup_expires_at = Column(DateTime(timezone=True), nullable=True)
+    totp_recovery_codes = Column(String, nullable=True)
     antifraud_reason = Column(String, nullable=True)
     # NULL for accounts created before this column existed
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=True, index=True)

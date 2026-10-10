@@ -260,6 +260,9 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
 def get_admin_user(current_user: Annotated[User, Depends(get_current_user)]):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Доступ запрещен")
+    from app.services.mfa import admin_mfa_required
+    if admin_mfa_required() and not current_user.totp_enabled:
+        raise HTTPException(403, "Для доступа администратора включите двухфакторную защиту в настройках безопасности")
     return current_user
 
 

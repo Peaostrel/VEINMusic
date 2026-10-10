@@ -3,6 +3,7 @@
 import json
 import os
 import time
+import threading
 from typing import Any
 
 import redis
@@ -106,3 +107,31 @@ def clear_all() -> int:
         if keys:
             removed += int(redis_client.delete(*keys))  # type: ignore[arg-type]
     return removed
+
+
+INVALIDATION_INTERVAL_SEC = 5
+_invalidation_lock = threading.Lock()
+_last_invalidation = float("-inf")
+
+
+def invalidate_all() -> int:
+    """Coalesce user-triggered flushes across workers using a Redis lease.
+
+    The local fallback is bounded per process when Redis is unavailable.
+    Privacy checks must run on cache reads independently of this throttle.
+    Explicit administrator flushes use clear_all() instead.
+    """
+    global _last_invalidation
+    with _invalidation_lock:
+        now = time.monotonic()
+        if now - _last_invalidation < INVALIDATION_INTERVAL_SEC:
+            return 0
+        if redis_client is not None:
+            try:
+                if not redis_client.set("cache_invalidation_lease", "1", nx=True, ex=INVALIDATION_INTERVAL_SEC):
+                    _last_invalidation = now
+                    return 0
+            except redis.RedisError:
+                pass
+        _last_invalidation = now
+        return clear_all()
