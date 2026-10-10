@@ -20,7 +20,7 @@ async function createFlushAlarm() {
 // Setup periodic alarm to flush offline queue (and finish device pairing
 // if the popup was closed before the user approved the code)
 if (chrome.alarms) {
-    void createFlushAlarm();
+    void createFlushAlarm(); // NOSONAR S7785: manifest loads a classic script, not an ES module.
     chrome.alarms.onAlarm.addListener((alarm) => {
         if (alarm.name === ALARM_NAME) {
             void flushOfflineQueue();

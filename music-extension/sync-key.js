@@ -48,7 +48,7 @@ if (isVeinSite(window.location)) {
         const legacyUser = window.localStorage.getItem('username');
         if (legacyKey) {
             if (legacyUser) {
-                void sendToBackground({
+                void sendToBackground({ // NOSONAR S7785: content scripts cannot use top-level await.
                     type: "SYNC_KEYS",
                     data: { username: legacyUser, apiKey: legacyKey }
                 });
