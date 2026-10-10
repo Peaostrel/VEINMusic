@@ -127,14 +127,21 @@ export default function ListeningTab({
           onChange={(ignore_short_tracks) => update({ ignore_short_tracks })}
         />
         {settings.ignore_short_tracks && (
-          <label className="flex items-center justify-between gap-4 border-b border-line-soft px-5 py-4">
+          <div className="flex items-center justify-between gap-4 border-b border-line-soft px-5 py-4">
             <span>
-              <span className="block text-sm font-medium">
+              <label
+                htmlFor="short-track-seconds"
+                className="block text-sm font-medium"
+              >
                 Максимальная длительность
+              </label>
+              <span id="short-track-seconds-hint" className="text-xs text-fg-2">
+                От 15 до 120 секунд
               </span>
-              <span className="text-xs text-fg-2">От 15 до 120 секунд</span>
             </span>
             <input
+              id="short-track-seconds"
+              aria-describedby="short-track-seconds-hint"
               type="number"
               min={15}
               max={120}
@@ -144,7 +151,7 @@ export default function ListeningTab({
               }
               className={`${inputOnCard} w-24 text-right font-mono`}
             />
-          </label>
+          </div>
         )}
         <ToggleRow
           title="Дополнять метаданные автоматически"
