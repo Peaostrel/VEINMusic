@@ -3,6 +3,7 @@ counts, how much XP it earns and which achievements unlock."""
 import asyncio
 import json
 import time
+import os
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
@@ -480,6 +481,7 @@ def test_album_rules(db):
 
 
 def test_night_and_total_rules(db, monkeypatch):
+    original_timezone = os.environ.get("TZ")
     monkeypatch.setenv("TZ", "UTC")
     time.tzset()
     try:
@@ -493,7 +495,10 @@ def test_night_and_total_rules(db, monkeypatch):
         # progress uses the server's local time (UTC here): 22:30 is not night
         assert ach._calculate_achievement_progress(db, user, night) == 0
     finally:
-        monkeypatch.delenv("TZ")
+        if original_timezone is None:
+            monkeypatch.delenv("TZ", raising=False)
+        else:
+            monkeypatch.setenv("TZ", original_timezone)
         time.tzset()
 
 

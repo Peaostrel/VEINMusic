@@ -21,8 +21,9 @@ def _sign(username: str, expires: int, session_version: int, session_id: str | N
     if session_id:
         payload += f":{session_id}"
     message = payload.encode()
-    # Authenticate a ticket with the server key; this is not password hashing.
-    return hmac.digest(SECRET_KEY.encode(), message, "sha256").hex()
+    # HMAC authenticates the public ticket with a server key. User passwords
+    # are bcrypt hashes in security.py; the key here is not a user password.
+    return hmac.digest(SECRET_KEY.encode(), message, "sha256").hex()  # codeql[py/weak-cryptographic-algorithm]
 
 
 def issue_ticket(username: str, now: float | None = None, *, session_version: int = 0, session_id: str | None = None) -> str:
