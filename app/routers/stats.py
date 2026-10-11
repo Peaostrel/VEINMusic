@@ -42,7 +42,7 @@ from app.services.user_stats import (
     get_user_timezone_offset,
 )
 
-router = APIRouter(tags=["stats"], responses={422: {"description": "Invalid period, date range or calendar year"}})
+router = APIRouter(tags=["stats"])
 
 LEADERBOARD_CACHE_KEY = "leaderboard:raw:v3"
 LEADERBOARD_CACHE_TTL = 60
@@ -55,6 +55,10 @@ MAX_CUSTOM_PERIOD_DAYS = 366
 def _user_timezone(user: User) -> timezone:
     location = user.profile.location if user.profile else ""
     return timezone(timedelta(hours=get_user_timezone_offset(location)))
+
+
+class InvalidStatsPeriod(ValueError):
+    """A user-selected listening period is invalid."""
 
 
 def _period_bounds(
@@ -74,22 +78,22 @@ def _period_bounds(
         "custom": "Выбранный период",
     }
     if period not in labels:
-        raise HTTPException(422, "Неизвестный период")
+        raise InvalidStatsPeriod("Неизвестный период")
     if period == "all":
         return None, None, labels[period]
 
     if period == "custom":
         if not date_from or not date_to:
-            raise HTTPException(422, "Укажите начало и конец периода")
+            raise InvalidStatsPeriod("Укажите начало и конец периода")
         try:
             first = date.fromisoformat(date_from)
             last = date.fromisoformat(date_to)
         except ValueError as exc:
-            raise HTTPException(422, "Дата должна быть в формате YYYY-MM-DD") from exc
+            raise InvalidStatsPeriod("Дата должна быть в формате YYYY-MM-DD") from exc
         if first > last:
-            raise HTTPException(422, "Начало периода не может быть позже конца")
+            raise InvalidStatsPeriod("Начало периода не может быть позже конца")
         if (last - first).days + 1 > MAX_CUSTOM_PERIOD_DAYS:
-            raise HTTPException(422, "Период не может быть длиннее 366 дней")
+            raise InvalidStatsPeriod("Период не может быть длиннее 366 дней")
         start_local = datetime.combine(first, datetime.min.time(), tzinfo=user_tz)
         end_local = datetime.combine(last + timedelta(days=1), datetime.min.time(), tzinfo=user_tz)
         label = f"{first.strftime('%d.%m.%Y')} — {last.strftime('%d.%m.%Y')}"
@@ -193,7 +197,8 @@ def _new_artist_count(db: Session, user_id: int, start: datetime | None, end: da
 
 
 @router.get("/api/stats/wrapped",
-            responses={404: {"description": "User not found"}})
+            responses={404: {"description": "User not found"},
+                       422: {"description": "Invalid period or custom date range"}})
 def get_wrapped_stats(
         username: str,
         request: Request,
@@ -202,8 +207,11 @@ def get_wrapped_stats(
         date_from: str | None = None,
         date_to: str | None = None):
     user = _get_visible_user(username, request, db, "statistics")
-    period_start, period_end, period_label = _period_bounds(
-        user, period, date_from, date_to)
+    try:
+        period_start, period_end, period_label = _period_bounds(
+            user, period, date_from, date_to)
+    except InvalidStatsPeriod as exc:
+        raise HTTPException(422, str(exc)) from exc
     base_filter = _counted_filter(int(user.id), period_start, period_end)
     top_artist = db.query(
         Track.artist,
@@ -395,7 +403,8 @@ def _get_activity_stats(
 
 # --- /api/detailed-stats/{username} ---
 @router.get("/api/detailed-stats/{username}",
-            responses={404: {"description": "User not found"}})
+            responses={404: {"description": "User not found"},
+                       422: {"description": "Invalid period or custom date range"}})
 def get_detailed_stats(username: str,
                        request: Request,
                        db: Annotated[Session,
@@ -404,8 +413,11 @@ def get_detailed_stats(username: str,
                        date_from: str | None = None,
                        date_to: str | None = None):
     user = _get_visible_user(username, request, db, "statistics")
-    period_start, period_end, period_label = _period_bounds(
-        user, period, date_from, date_to)
+    try:
+        period_start, period_end, period_label = _period_bounds(
+            user, period, date_from, date_to)
+    except InvalidStatsPeriod as exc:
+        raise HTTPException(422, str(exc)) from exc
     base_filter = _counted_filter(int(user.id), period_start, period_end)
 
     # 1. General Stats
@@ -722,7 +734,8 @@ def _aggregate_calendar_days(rows, user_tz):
 
 
 @router.get("/api/stats/calendar/{username}",
-            responses={404: {"description": "User not found"}})
+            responses={404: {"description": "User not found"},
+                       422: {"description": "Calendar year is outside the supported range"}})
 def get_listening_calendar(
         username: str,
         request: Request,

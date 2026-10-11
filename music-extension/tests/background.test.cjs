@@ -105,3 +105,15 @@ test('failed offline storage is handled without losing the existing queue', asyn
     await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(state.offline_scrobbles.map((item) => item.payload.id), ['A']);
 });
+
+
+test('pairing network failure keeps authorization available for retry', async () => {
+    const { context, state } = harness([], async () => {
+        throw new Error('Network unavailable');
+    });
+    state.pairing = { device_code: 'pending-code', expires_at: Date.now() + 60_000 };
+    const status = await vm.runInContext('veinPollPairing()', context);
+    assert.equal(status, 'error');
+    assert.equal(state.pairing.device_code, 'pending-code');
+    assert.equal(state.apiKey, 'test-key');
+});
