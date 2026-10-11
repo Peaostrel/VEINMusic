@@ -122,7 +122,9 @@ test("calendar exposes a selected local-day history and date range", async ({
   });
   expect(imported.ok()).toBe(true);
   await page.goto(`/user/${username}/stats`);
-  await page.getByLabel("Год", { exact: true }).selectOption("2024");
+  await page
+    .getByRole("combobox", { name: "Год календаря", exact: true })
+    .selectOption("2024");
   await expect(
     page.getByRole("heading", { name: "История выбранного периода" }),
   ).toBeVisible();

@@ -182,6 +182,7 @@ export function MusicCalendar({ username }: Readonly<{ username: string }>) {
         <label className="flex items-center gap-2 text-xs text-fg-2">
           <span>Год</span>
           <select
+            aria-label="Год календаря"
             value={year}
             onChange={(event) => setYear(Number(event.target.value))}
             className="h-8 rounded-lg border border-line bg-bg px-2 font-mono text-xs text-fg outline-none"
