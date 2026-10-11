@@ -95,6 +95,9 @@ export default function NowPlaying({
       ? Math.min(100, Math.round((track.listened_sec / track.duration) * 100))
       : null;
   const credited = progress !== null && progress >= 85;
+  let creditLabel = `${progress}% · зачёт от 85%`;
+  if (credited) creditLabel = "Прослушивание засчитано";
+  if (track.excluded) creditLabel = "Исключено из статистики";
   const details = (
     <div className="space-y-2">
       {track.source && (
@@ -108,13 +111,7 @@ export default function NowPlaying({
             max={100}
             className="music-progress block h-1.5 w-full"
           />
-          <p className="text-xs text-fg-2">
-            {track.excluded
-              ? "Исключено из статистики"
-              : credited
-                ? "Прослушивание засчитано"
-                : `${progress}% · зачёт от 85%`}
-          </p>
+          <p className="text-xs text-fg-2">{creditLabel}</p>
         </>
       )}
     </div>
@@ -153,13 +150,9 @@ export default function NowPlaying({
         >
           {identity}
         </summary>
-        <div
-          className="mt-3"
-          role="region"
-          aria-label="Подробности прослушивания"
-        >
+        <section className="mt-3" aria-label="Подробности прослушивания">
           {details}
-        </div>
+        </section>
       </details>
     );
   return (

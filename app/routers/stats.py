@@ -800,6 +800,16 @@ def get_listening_calendar(
     }
 
 
+def _playback_details(user, scrobble, track, is_owner):
+    show_source = is_owner or preference_enabled(user.profile, "privacy", "show_listening_source")
+    details = {"source": scrobble.source if show_source else "",
+               "duration": None, "listened_sec": None, "excluded": None}
+    if is_owner:
+        details.update(duration=int(track.duration or 180), listened_sec=int(scrobble.listened_sec or 0),
+                       excluded=bool(scrobble.excluded_from_stats))
+    return details
+
+
 # --- /api/current-track/{username} ---
 @router.get("/api/current-track/{username}")
 def get_current_track(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
@@ -835,10 +845,7 @@ def get_current_track(username: str, request: Request, db: Annotated[Session, De
             "cover_url": t.cover_url,
             "level": lvl,
             "rank": rank,
-            "source": s.source if is_owner or preference_enabled(user.profile, "privacy", "show_listening_source") else "",
-            "duration": int(t.duration or 180) if is_owner else None,
-            "listened_sec": int(s.listened_sec or 0) if is_owner else None,
-            "excluded": bool(s.excluded_from_stats) if is_owner else None,
+            **_playback_details(user, s, t, is_owner),
         }
     return {"playing": False}
 
