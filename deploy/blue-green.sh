@@ -63,7 +63,7 @@ reload_proxy() {
 }
 
 restore_workers() {
-    printf '{"services":{"worker":{"image":"%s"},"monitor":{"image":"%s","environment":{"MONITOR_API_URL":"http://%s:8000/health"}}}}' "$old_image" "$old_image" "$old_api" > "$state/rollback-compose.json"
+    printf '{"services":{"worker":{"image":"%s"},"monitor":{"image":"%s","environment":{"MONITOR_API_URL":"http://%s:8000/health"}}}}' "$old_image" "$old_image" "$old_api" > "$state/rollback-compose.json" # NOSONAR: HTTP is restricted to the unpublished Compose network; Caddy terminates public TLS.
     compose -f docker-compose.yml -f "$state/rollback-compose.json" up -d --no-deps worker monitor
 }
 
@@ -99,7 +99,7 @@ echo "Starting candidate API (migrations disabled)."
 compose run -d --no-deps --name "$api" -e RUN_MIGRATIONS=0 backend >/dev/null
 probe "$api" http://127.0.0.1:8000/health
 echo "Starting candidate site."
-compose run -d --no-deps --name "$site" -e "API_INTERNAL_URL=http://$api:8000" frontend >/dev/null
+compose run -d --no-deps --name "$site" -e "API_INTERNAL_URL=http://$api:8000" frontend >/dev/null # NOSONAR: Internal API URL never leaves the unpublished Compose network; Caddy terminates public TLS.
 site_ready=0
 for ((attempt=0; attempt<60; attempt++)); do
     if docker exec "$site" node -e "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))" >/dev/null 2>&1; then site_ready=1; break; fi

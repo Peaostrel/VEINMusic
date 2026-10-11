@@ -60,7 +60,7 @@ export default function ConnectPage() {
         <section className="space-y-4">
           <h2 className="font-semibold">Где вы слушаете музыку?</h2>
           <label>
-            Музыкальный сервис
+            <span>Музыкальный сервис</span>
             <select
               className={input}
               value={source}

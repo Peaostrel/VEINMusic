@@ -40,7 +40,7 @@ if ! docker compose exec -T caddy caddy validate --config /etc/caddy/Caddyfile |
     docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile || touch maintenance/on
     exit 1
 fi
-printf '{"services":{"worker":{"image":"%s"},"monitor":{"image":"%s","environment":{"MONITOR_API_URL":"http://%s:8000/health"}}}}' "$image" "$image" "$api" > "$state/rollback-compose.json"
+printf '{"services":{"worker":{"image":"%s"},"monitor":{"image":"%s","environment":{"MONITOR_API_URL":"http://%s:8000/health"}}}}' "$image" "$image" "$api" > "$state/rollback-compose.json" # NOSONAR: HTTP is restricted to the unpublished Compose network; Caddy terminates public TLS.
 if ! docker compose -f docker-compose.yml -f "$state/rollback-compose.json" up -d --no-deps worker monitor; then
     touch maintenance/on
     echo "Worker rollback failed; maintenance mode retained." >&2

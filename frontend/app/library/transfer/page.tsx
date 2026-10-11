@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { API_URL, apiJson } from "@/app/lib/api";
-import { readHistoryFile } from "@/app/lib/historyTransfer";
+import { readHistoryFile, sequentialMap } from "@/app/lib/historyTransfer";
 import { btn, input, PageHeader } from "@/components/ui";
 
 interface Preview {
@@ -35,20 +35,23 @@ export default function TransferPage() {
     setMessage("Проверяем файл…");
     try {
       const rows = await readHistoryFile(file);
-      const results: Batch[] = [];
-      for (let index = 0; index < rows.length; index += 5000) {
-        const chunk = rows.slice(index, index + 5000);
-        results.push({
-          rows: chunk,
-          preview: await apiJson<Preview>("/api/account/history/preview", {
-            method: "POST",
-            json: { scrobbles: chunk },
-          }),
-        });
-        setMessage(
-          `Проверено ${Math.min(index + 5000, rows.length)} из ${rows.length}`,
-        );
-      }
+      const chunks = Array.from(
+        { length: Math.ceil(rows.length / 5000) },
+        (_, index) => rows.slice(index * 5000, (index + 1) * 5000),
+      );
+      const results = await sequentialMap(
+        chunks,
+        async (chunk, index): Promise<Batch> => {
+          const preview = await apiJson<Preview>(
+            "/api/account/history/preview",
+            { method: "POST", json: { scrobbles: chunk } },
+          );
+          setMessage(
+            `Проверено ${Math.min((index + 1) * 5000, rows.length)} из ${rows.length}`,
+          );
+          return { rows: chunk, preview };
+        },
+      );
       setBatches(results);
       setMessage(
         "Проверьте образец и подтвердите импорт. Предпросмотр действует 15 минут.",
@@ -66,7 +69,7 @@ export default function TransferPage() {
     let imported = 0;
     let duplicates = 0;
     try {
-      for (const batch of batches) {
+      await sequentialMap(batches, async (batch) => {
         const result = await apiJson<{ imported: number; duplicates: number }>(
           "/api/account/history/import",
           {
@@ -80,7 +83,7 @@ export default function TransferPage() {
         imported += result.imported;
         duplicates += result.duplicates;
         setMessage(`Перенесено ${imported}, пропущено дублей ${duplicates}…`);
-      }
+      });
       setBatches([]);
       setMessage(
         `Импорт завершён: ${imported} новых прослушиваний, ${duplicates} дублей пропущено.`,
@@ -107,7 +110,7 @@ export default function TransferPage() {
         <h2 className="font-semibold">Скачать данные</h2>
         <div className="grid grid-cols-2 gap-3">
           <label>
-            CSV с даты
+            <span>CSV с даты</span>
             <input
               className={input}
               type="date"
@@ -116,7 +119,7 @@ export default function TransferPage() {
             />
           </label>
           <label>
-            CSV по дату
+            <span>CSV по дату</span>
             <input
               className={input}
               type="date"
@@ -153,7 +156,7 @@ export default function TransferPage() {
           начисляются; настройки аккаунта не меняются.
         </p>
         <label className="block">
-          Файл истории
+          <span>Файл истории</span>
           <input
             type="file"
             accept=".json,.csv,application/json,text/csv"

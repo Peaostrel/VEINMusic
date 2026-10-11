@@ -75,18 +75,21 @@ def test_streaming_export_round_trip_preserves_exclusion_and_no_rewards(client, 
     assert exported["scrobbles"][0]["duration"] == 180
     payload = {"scrobbles": exported["scrobbles"]}
     preview = client.post("/api/account/history/preview", json=payload).json()
-    assert preview["new"] == 0 and preview["duplicates"] == 1
+    assert preview["new"] == 0
+    assert preview["duplicates"] == 1
     new = dict(exported["scrobbles"][0], played_at="2024-01-02T00:00:00Z")
     payload = {"scrobbles": [new, new]}
     preview = client.post("/api/account/history/preview", json=payload).json()
-    assert preview["new"] == 1 and preview["duplicates"] == 1
+    assert preview["new"] == 1
+    assert preview["duplicates"] == 1
     payload["preview_token"] = preview["preview_token"]
     result = client.post("/api/account/history/import", json=payload)
     assert result.status_code == 200, result.text
     assert result.json()["imported"] == 1
     assert client.post("/api/account/history/import", json=payload).json()["imported"] == 0
     imported = db.query(Scrobble).execution_options(include_excluded=True).filter_by(is_imported=True).one()
-    assert imported.xp_earned == 0 and not imported.is_playing
+    assert imported.xp_earned == 0
+    assert not imported.is_playing
     assert imported.excluded_from_stats
 
 
@@ -117,7 +120,8 @@ def test_search_cursor_is_owner_bound(client, db, owner):
         add_play(db, owner, title=f"Song {index}")
     first = client.get("/api/me/library/search").json()
     second = client.get(f"/api/me/library/search?before={first['next']}").json()
-    assert len(first["history"]) == 30 and len(second["history"]) == 2
+    assert len(first["history"]) == 30
+    assert len(second["history"]) == 2
     assert not ({row["id"] for row in first["history"]} & {row["id"] for row in second["history"]})
 
 

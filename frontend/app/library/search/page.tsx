@@ -101,7 +101,7 @@ export default function LibrarySearch() {
         onSubmit={(event) => event.preventDefault()}
       >
         <label className="sm:col-span-2">
-          Трек, артист или альбом
+          <span>Трек, артист или альбом</span>
           <input
             type="search"
             value={q}
@@ -111,7 +111,7 @@ export default function LibrarySearch() {
           />
         </label>
         <label>
-          Источник
+          <span>Источник</span>
           <select
             value={source}
             onChange={(event) => setSource(event.target.value)}
@@ -125,7 +125,7 @@ export default function LibrarySearch() {
         </label>
         <div className="grid grid-cols-2 gap-3">
           <label>
-            С даты
+            <span>С даты</span>
             <input
               type="date"
               value={from}
@@ -134,7 +134,7 @@ export default function LibrarySearch() {
             />
           </label>
           <label>
-            По дату
+            <span>По дату</span>
             <input
               type="date"
               value={to}

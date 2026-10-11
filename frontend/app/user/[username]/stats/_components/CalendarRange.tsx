@@ -79,7 +79,7 @@ export default function CalendarRange({
       </p>
       <div className="grid grid-cols-2 gap-3">
         <label className="text-sm">
-          Начало периода
+          <span>Начало периода</span>
           <input
             type="date"
             min="2000-01-01"
@@ -89,7 +89,7 @@ export default function CalendarRange({
           />
         </label>
         <label className="text-sm">
-          Конец периода
+          <span>Конец периода</span>
           <input
             type="date"
             min={from}

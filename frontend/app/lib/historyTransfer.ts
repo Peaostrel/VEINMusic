@@ -22,10 +22,13 @@ export function parseHistoryCsv(text: string): Record<string, unknown>[] {
     } else if (char !== "\r" || quoted) cell += char;
   }
   if (quoted) throw new Error("CSV содержит незакрытые кавычки");
-  if (cell || row.length) {
-    row.push(cell);
-    rows.push(row);
-  }
+  // Empty trailing rows are removed by the decoder.
+  row.push(cell);
+  rows.push(row);
+  return decodeCsvRows(rows);
+}
+
+function decodeCsvRows(rows: string[][]): Record<string, unknown>[] {
   const headers = rows.shift() ?? [];
   if (!["played_at", "artist", "title"].every((name) => headers.includes(name)))
     throw new Error("Нужен CSV истории VEIN с датой, артистом и треком");
@@ -66,4 +69,16 @@ export async function readHistoryFile(
       "В файле должно быть от 1 до 50 000 прослушиваний. Большую историю разделите на части.",
     );
   return rows;
+}
+
+/** Keep account mutations ordered and stop at the first failed batch. */
+export function sequentialMap<T, U>(
+  items: T[],
+  action: (item: T, index: number) => Promise<U>,
+): Promise<U[]> {
+  return items.reduce<Promise<U[]>>(async (previous, item, index) => {
+    const results = await previous;
+    results.push(await action(item, index));
+    return results;
+  }, Promise.resolve([]));
 }

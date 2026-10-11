@@ -37,10 +37,13 @@ export default function LibraryPage() {
     const controller = new AbortController();
     setLoading(true);
     setError("");
-    fetch(`${API_URL}/api/me/memories${date ? `?on=${date}` : ""}`, {
-      credentials: "include",
-      signal: controller.signal,
-    })
+    fetch(
+      `${API_URL}/api/me/memories?${new URLSearchParams(date ? { on: date } : {})}`,
+      {
+        credentials: "include",
+        signal: controller.signal,
+      },
+    )
       .then((response) => {
         if (!response.ok) throw new Error("Не удалось загрузить воспоминания");
         return response.json();
@@ -102,7 +105,7 @@ export default function LibraryPage() {
         text="Рекомендации с обратной связью, музыка для двоих и итоги недели"
       />
       <label className="block text-sm">
-        Дата воспоминаний
+        <span>Дата воспоминаний</span>
         <input
           type="date"
           aria-label="Дата воспоминаний"
