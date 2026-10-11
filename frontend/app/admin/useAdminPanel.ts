@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { API_URL } from "@/app/lib/api";
+import { API_URL, apiJson, ApiError } from "@/app/lib/api";
 import type {
   User,
   SuspiciousUser,
@@ -36,6 +36,7 @@ export function useAdminPanel() {
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
 
   // Base Data
   const [users, setUsers] = useState<User[]>([]);
@@ -93,8 +94,16 @@ export function useAdminPanel() {
   const loadAllData = async () => {
     try {
       if (!loadedOnce.current) setLoading(true);
+      setError("");
+      setErrorStatus(null);
+      const statsData = await apiJson<{
+        users?: User[];
+        tracks?: Track[];
+        achievements?: Achievement[];
+        total_scrobbles?: number;
+        total_users?: number;
+      }>("/api/admin/stats");
       const [
-        statsRes,
         healthRes,
         analyticsRes,
         suspiciousRes,
@@ -102,59 +111,54 @@ export function useAdminPanel() {
         annRes,
         flagsRes,
         multRes,
-      ] = await Promise.all([
-        fetch(`${API_BASE}/api/admin/stats`, { credentials: "include" }),
-        fetch(`${API_BASE}/api/admin/system/health`, {
-          credentials: "include",
-        }),
-        fetch(`${API_BASE}/api/admin/system/analytics`, {
-          credentials: "include",
-        }),
-        fetch(`${API_BASE}/api/admin/antifraud/suspicious`, {
-          credentials: "include",
-        }),
-        fetch(`${API_BASE}/api/admin/frames`, { credentials: "include" }),
-        fetch(`${API_BASE}/api/admin/announcements`, {
-          credentials: "include",
-        }),
-        fetch(`${API_BASE}/api/admin/feature-flags`, {
-          credentials: "include",
-        }),
-        fetch(`${API_BASE}/api/admin/economy/multiplier`, {
-          credentials: "include",
-        }),
-      ]);
-
-      if (!statsRes.ok) {
-        throw new Error("Доступ в панель администратора запрещен");
-      }
-
-      const statsData = await statsRes.json();
+      ] = (
+        await Promise.allSettled([
+          fetch(`${API_BASE}/api/admin/system/health`, {
+            credentials: "include",
+          }),
+          fetch(`${API_BASE}/api/admin/system/analytics`, {
+            credentials: "include",
+          }),
+          fetch(`${API_BASE}/api/admin/antifraud/suspicious`, {
+            credentials: "include",
+          }),
+          fetch(`${API_BASE}/api/admin/frames`, { credentials: "include" }),
+          fetch(`${API_BASE}/api/admin/announcements`, {
+            credentials: "include",
+          }),
+          fetch(`${API_BASE}/api/admin/feature-flags`, {
+            credentials: "include",
+          }),
+          fetch(`${API_BASE}/api/admin/economy/multiplier`, {
+            credentials: "include",
+          }),
+        ])
+      ).map((result) => (result.status === "fulfilled" ? result.value : null));
       setUsers(statsData.users || []);
       setTracks(statsData.tracks || []);
       setAchievements(statsData.achievements || []);
       setTotalScrobbles(statsData.total_scrobbles || 0);
       setTotalUsers(statsData.total_users || 0);
 
-      if (healthRes.ok) setHealth(await healthRes.json());
-      if (analyticsRes.ok) setAnalytics(await analyticsRes.json());
-      if (suspiciousRes.ok) {
+      if (healthRes?.ok) setHealth(await healthRes.json());
+      if (analyticsRes?.ok) setAnalytics(await analyticsRes.json());
+      if (suspiciousRes?.ok) {
         const d = await suspiciousRes.json();
         setSuspiciousUsers(d.suspicious_users || []);
       }
-      if (framesRes.ok) {
+      if (framesRes?.ok) {
         const d = await framesRes.json();
         setFrames(d.frames || []);
       }
-      if (annRes.ok) {
+      if (annRes?.ok) {
         const d = await annRes.json();
         setAnnouncements(d.announcements || []);
       }
-      if (flagsRes.ok) {
+      if (flagsRes?.ok) {
         const d = await flagsRes.json();
         setFeatureFlags(d.feature_flags || []);
       }
-      if (multRes.ok) {
+      if (multRes?.ok) {
         const d = await multRes.json();
         setXpMultiplier(d.multiplier || 1.0);
       }
@@ -162,6 +166,7 @@ export function useAdminPanel() {
       loadedOnce.current = true;
       setLoading(false);
     } catch (e) {
+      setErrorStatus(e instanceof ApiError ? e.status : null);
       setError(
         (e instanceof Error && e.message) ||
           "Ошибка загрузки панели администратора",
@@ -555,6 +560,7 @@ export function useAdminPanel() {
     loading,
     setLoading,
     error,
+    errorStatus,
     setError,
     users,
     setUsers,
