@@ -14,7 +14,10 @@ import { getRankInfo, getNextRankInfo } from "@/app/lib/ranks";
 import { ProfileActions } from "./_components/ProfileActions";
 import { formatNumber } from "@/app/lib/plural";
 import NowPlaying from "@/app/shell/NowPlaying";
-import { ProfileHeaderSection } from "./_components/ProfileHeaderSection";
+import {
+  ProfileHeaderSection,
+  ProfileAchievements,
+} from "./_components/ProfileHeaderSection";
 import { ProfileStatsSection } from "./_components/ProfileStatsSection";
 import { ProfileToasts } from "./_components/ProfileToasts";
 import { WrappedModal } from "./_components/WrappedModal";
@@ -159,7 +162,6 @@ export default function Profile() {
         followers={data.followStats.followers}
         following={data.followStats.following}
         openFollowModal={openFollowModal}
-        displayedAchs={displayedAchs}
         xpInCurrentLevel={xpInCurrentLevel}
         nextRank={nextRank}
         totalScrobbles={data.stats.total_scrobbles || 0}
@@ -237,6 +239,11 @@ export default function Profile() {
         )}
 
       <ProfileMainGrid {...view} />
+      <ProfileAchievements
+        username={String(username)}
+        displayedAchs={displayedAchs}
+        total={u.achievements?.length ?? 0}
+      />
     </div>
   );
 }

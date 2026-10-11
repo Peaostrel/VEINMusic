@@ -20,7 +20,6 @@ export interface ProfileHeaderSectionProps {
   followers: number;
   following: number;
   openFollowModal: (type: string) => void;
-  displayedAchs: AchievementInfo[];
   xpInCurrentLevel: number;
   nextRank: ReturnType<typeof getNextRankInfo>;
   totalScrobbles: number;
@@ -38,7 +37,6 @@ export function ProfileHeaderSection({
   followers,
   following,
   openFollowModal,
-  displayedAchs,
   xpInCurrentLevel,
   nextRank,
   totalScrobbles,
@@ -178,7 +176,23 @@ export function ProfileHeaderSection({
           </div>
         ))}
       </dl>
+    </div>
+  );
+}
 
+export function ProfileAchievements({
+  username,
+  displayedAchs,
+  total,
+}: Readonly<{
+  username: string;
+  displayedAchs: AchievementInfo[];
+  total: number;
+}>) {
+  if (!total) return null;
+  return (
+    <section aria-label="Достижения" className="space-y-3">
+      <h2 className="text-lg font-semibold">Достижения</h2>
       {displayedAchs.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 border-t border-line-soft pt-4">
           {displayedAchs.map((a) => (
@@ -192,14 +206,14 @@ export function ProfileHeaderSection({
           </Link>
         </div>
       )}
-      {displayedAchs.length === 0 && u.achievements?.length > 0 && (
+      {displayedAchs.length === 0 && total > 0 && (
         <Link
           href={`/user/${username}/achievements`}
           className="self-start text-xs text-fg-2 hover:text-fg"
         >
-          Достижения · {u.achievements.length} →
+          Достижения · {total} →
         </Link>
       )}
-    </div>
+    </section>
   );
 }
