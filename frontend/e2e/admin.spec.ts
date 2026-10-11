@@ -124,3 +124,61 @@ test.describe("Admin panel", () => {
     await expect(page.getByText("Ошибки и предупреждения")).toBeVisible();
   });
 });
+
+test("admin MFA refusal explains how to restore access", async ({ page }) => {
+  await signUp(page, "mfa_admin");
+  await page.route("**/api/admin/stats", (route) =>
+    route.fulfill({
+      status: 403,
+      contentType: "application/json",
+      body: JSON.stringify({
+        detail:
+          "Для доступа администратора включите двухфакторную защиту в настройках безопасности",
+      }),
+    }),
+  );
+  await page.goto("/admin");
+  await expect(
+    page.getByText(
+      "Для доступа администратора включите двухфакторную защиту в настройках безопасности",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Включить двухфакторную защиту" }),
+  ).toHaveAttribute("href", "/settings?tab=security");
+});
+
+test("admin server failure can be retried without being called a permission denial", async ({
+  page,
+}) => {
+  const username = await signUp(page, "retry_admin");
+  setRole(username, "admin");
+  await page.route("**/api/admin/stats", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Сервис временно недоступен" }),
+    }),
+  );
+  await page.goto("/admin");
+  await expect(
+    page.getByRole("heading", { name: "Не удалось загрузить админку" }),
+  ).toBeVisible();
+  await page.unroute("**/api/admin/stats");
+  await page.getByRole("button", { name: "Повторить загрузку" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Админка", exact: true }),
+  ).toBeVisible();
+});
+
+test("optional admin request network failure does not block the panel", async ({
+  page,
+}) => {
+  const username = await signUp(page, "partial_admin");
+  setRole(username, "admin");
+  await page.route("**/api/admin/system/health", (route) => route.abort());
+  await page.goto("/admin");
+  await expect(
+    page.getByRole("heading", { name: "Админка", exact: true }),
+  ).toBeVisible();
+});

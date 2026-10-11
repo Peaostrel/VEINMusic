@@ -1,4 +1,5 @@
 "use client";
+import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useState } from "react";
 import { apiJson } from "@/app/lib/api";
 
@@ -18,6 +19,7 @@ export default function TwoFactorAuth() {
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [secret, setSecret] = useState("");
+  const [provisioningUri, setProvisioningUri] = useState("");
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -43,6 +45,7 @@ export default function TwoFactorAuth() {
       if (action !== "setup") json.code = code;
       const result = await apiJson<{
         secret?: string;
+        uri?: string;
         recovery_codes?: string[];
       }>(`/auth/2fa/${action}`, {
         method: "POST",
@@ -50,8 +53,11 @@ export default function TwoFactorAuth() {
       });
       setPassword("");
       setCode("");
-      if (action === "setup") setSecret(result.secret ?? "");
-      else {
+      if (action === "setup") {
+        setSecret(result.secret ?? "");
+        setProvisioningUri(result.uri ?? "");
+      } else {
+        setProvisioningUri("");
         setSecret("");
         setStatus((value) =>
           value ? { ...value, enabled: action === "enable" } : value,
@@ -115,9 +121,26 @@ export default function TwoFactorAuth() {
       {secret && (
         <div className="space-y-2 text-sm text-fg-2">
           <p>
-            Добавьте аккаунт VEINMusic в приложение: введите ключ вручную и
-            выберите коды по времени. Затем введите шестизначный код. Ключ
-            действителен 10 минут.
+            Отсканируйте QR-код в Google Authenticator, Aegis или другом
+            приложении. Затем введите шестизначный код. Ключ действителен 10
+            минут.
+          </p>
+          {provisioningUri && (
+            <QRCodeSVG
+              value={provisioningUri}
+              size={224}
+              marginSize={4}
+              level="M"
+              bgColor="#ffffff"
+              fgColor="#000000"
+              role="img"
+              aria-label="QR-код для подключения двухфакторной защиты"
+              className="max-w-full rounded-lg"
+            />
+          )}
+          <p>
+            Для ручного подключения введите этот ключ и выберите коды по
+            времени:
           </p>
           <code className="block break-all select-all rounded-lg bg-bg p-3 text-fg">
             {secret}

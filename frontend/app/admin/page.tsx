@@ -2,6 +2,7 @@
 
 import { RefreshCw, RotateCcw, ShieldAlert } from "lucide-react";
 import { Loading, PageHeader, btn } from "@/components/ui";
+import Link from "next/link";
 import { useState } from "react";
 import OverviewTab from "./tabs/OverviewTab";
 import UsersTab from "./tabs/UsersTab";
@@ -36,6 +37,7 @@ export default function AdminPanel() {
     setActiveTab,
     loading,
     error,
+    errorStatus,
     users,
     suspiciousUsers,
     loadAllData,
@@ -48,8 +50,32 @@ export default function AdminPanel() {
     return (
       <div className="mx-auto flex max-w-md flex-col items-center gap-3 px-4 py-24 text-center">
         <ShieldAlert className="h-8 w-8 text-fg-3" aria-hidden="true" />
-        <h1 className="text-2xl font-semibold">Доступ ограничен</h1>
+        <h1 className="text-2xl font-semibold">
+          {errorStatus === 401 || errorStatus === 403
+            ? "Доступ ограничен"
+            : "Не удалось загрузить админку"}
+        </h1>
         <p className="text-sm text-fg-2">{error}</p>
+        {errorStatus === 403 && error.includes("двухфакторную") && (
+          <Link
+            href="/settings?tab=security"
+            className={`${btn.primary} ${btn.md}`}
+          >
+            Включить двухфакторную защиту
+          </Link>
+        )}
+        {errorStatus === 401 && (
+          <Link href="/auth" className={`${btn.primary} ${btn.md}`}>
+            Войти в аккаунт
+          </Link>
+        )}
+        <button
+          type="button"
+          onClick={() => void loadAllData()}
+          className={`${btn.secondary} ${btn.md}`}
+        >
+          Повторить загрузку
+        </button>
         <button
           type="button"
           onClick={() => router.push("/")}
