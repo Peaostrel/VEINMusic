@@ -92,10 +92,11 @@ test("calendar switches between one month and annual overview", async ({
     )
     .toBe(true);
   await testInfo.attach("calendar-mobile", {
-    body: await calendar.screenshot(),
+    body: await page.screenshot({ fullPage: true }),
     contentType: "image/png",
   });
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.evaluate(() => window.scrollTo(0, 0));
   await testInfo.attach("stats-desktop", {
     body: await page.screenshot({ fullPage: true }),
     contentType: "image/png",
