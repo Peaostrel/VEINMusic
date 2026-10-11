@@ -12,6 +12,8 @@ import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { Loading, btn } from "@/components/ui";
 import { getRankInfo, getNextRankInfo } from "@/app/lib/ranks";
 import { ProfileActions } from "./_components/ProfileActions";
+import { formatNumber } from "@/app/lib/plural";
+import NowPlaying from "@/app/shell/NowPlaying";
 import { ProfileHeaderSection } from "./_components/ProfileHeaderSection";
 import { ProfileStatsSection } from "./_components/ProfileStatsSection";
 import { ProfileToasts } from "./_components/ProfileToasts";
@@ -132,7 +134,7 @@ export default function Profile() {
 
       <div
         aria-hidden="true"
-        className="relative -mb-4 h-40 overflow-hidden rounded-2xl border border-line-soft bg-[radial-gradient(circle_at_20%_10%,var(--accent-glow-strong),transparent_55%),linear-gradient(135deg,var(--surface-2),var(--bg))] sm:h-52 md:h-64"
+        className="relative -mb-4 h-40 overflow-hidden rounded-2xl border border-line-soft bg-[radial-gradient(circle_at_20%_10%,var(--accent-glow-strong),transparent_55%),linear-gradient(135deg,var(--color-surface-2),var(--color-bg))] sm:h-52 md:h-64"
       >
         {sanitizeImageUrl(u.cover_url) && (
           <img
@@ -183,6 +185,8 @@ export default function Profile() {
         hasBanner
       />
 
+      <NowPlaying username={String(username)} variant="profile" />
+
       <ProfileStatsSection
         u={u}
         taste={data.taste}
@@ -191,6 +195,46 @@ export default function Profile() {
         favoriteAlbumRedirectUrl={favoriteAlbumRedirectUrl}
         showShowcase={!hiddenSections.has("showcase")}
       />
+
+      {!hiddenSections.has("top_artists") &&
+        (data.stats.top_artists ?? []).length > 0 && (
+          <section aria-label="Любимые исполнители" className="space-y-3">
+            <h2 className="text-lg font-semibold">Чаще всего звучат</h2>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {(data.stats.top_artists ?? []).slice(0, 3).map((artist) => {
+                const cover = sanitizeImageUrl(
+                  data.stats.top_tracks?.find(
+                    (track) => track.artist === artist.artist,
+                  )?.cover_url,
+                );
+                return (
+                  <div
+                    key={artist.artist}
+                    className="flex min-w-0 items-center gap-3 rounded-xl bg-surface p-4"
+                  >
+                    {cover ? (
+                      <img
+                        src={cover}
+                        alt=""
+                        className="h-12 w-12 shrink-0 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <span className="h-12 w-12 shrink-0 rounded-lg bg-surface-2" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">
+                        {artist.artist}
+                      </p>
+                      <p className="text-xs text-fg-2">
+                        {formatNumber(artist.plays)} прослушиваний
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
       <ProfileMainGrid {...view} />
     </div>

@@ -1,8 +1,9 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Heart, MessageCircle, Users } from "lucide-react";
 
+import { FeedDay, feedDay } from "@/components/FeedDay";
 import About from "./about/page";
 import GoalsCard from "./goals/GoalsCard";
 import { API_URL } from "@/app/lib/api";
@@ -27,6 +28,7 @@ const WEEKDAYS = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
 
 interface FeedItem {
   id: number;
+  time?: string;
   username: string;
   avatar_url?: string | null;
   cover_url?: string;
@@ -74,9 +76,9 @@ function sourceIsHidden(source: string, hiddenSources: string[]): boolean {
 function Cover({ src }: Readonly<{ src?: string }>) {
   const url = sanitizeImageUrl(src);
   return url ? (
-    <img src={url} alt="" className="h-12 w-12 rounded object-cover" />
+    <img src={url} alt="" className="h-12 w-12 rounded-lg object-cover" />
   ) : (
-    <span className="block h-12 w-12 rounded bg-surface-2" />
+    <span className="block h-12 w-12 rounded-lg bg-surface-2" />
   );
 }
 
@@ -86,7 +88,7 @@ function FeedRow({
   onLike,
 }: Readonly<{ item: FeedItem; liked: boolean; onLike: () => void }>) {
   return (
-    <li className="grid grid-cols-[48px_minmax(0,1fr)] items-center gap-x-4 gap-y-2 border-b border-line-soft px-1 py-3.5 sm:grid-cols-[48px_minmax(0,1fr)_170px_110px]">
+    <li className="grid grid-cols-[48px_minmax(0,1fr)] items-center gap-x-4 gap-y-2 rounded-xl px-3 py-4 transition-colors hover:bg-surface/80 sm:grid-cols-[48px_minmax(0,1fr)_170px_110px]">
       <Cover src={item.cover_url} />
       <div className="flex min-w-0 flex-col gap-0.5">
         <div className="flex min-w-0 items-center gap-2">
@@ -95,7 +97,7 @@ function FeedRow({
               <PlayingBars /> играет
             </span>
           )}
-          <span className="truncate text-[15px] font-medium">{item.title}</span>
+          <span className="truncate text-base font-semibold">{item.title}</span>
         </div>
         <span className="truncate text-[13px] text-fg-2">{item.artist}</span>
         {item.listening_with && item.listening_with.length > 0 && (
@@ -328,12 +330,12 @@ function SkeletonRows() {
       {[0, 1, 2, 3, 4, 5].map((i) => (
         <li
           key={i}
-          className="grid grid-cols-[48px_minmax(0,1fr)] items-center gap-4 border-b border-line-soft px-1 py-3.5"
+          className="grid grid-cols-[48px_minmax(0,1fr)] items-center gap-4 rounded-xl px-3 py-4 transition-colors hover:bg-surface/80"
         >
-          <span className="h-12 w-12 animate-pulse rounded bg-surface-2" />
+          <span className="h-12 w-12 animate-pulse rounded-lg bg-surface-2" />
           <span className="flex flex-col gap-2">
-            <span className="h-3 w-48 animate-pulse rounded bg-surface-2" />
-            <span className="h-3 w-28 animate-pulse rounded bg-surface-2" />
+            <span className="h-3 w-48 animate-pulse rounded-lg bg-surface-2" />
+            <span className="h-3 w-28 animate-pulse rounded-lg bg-surface-2" />
           </span>
         </li>
       ))}
@@ -492,13 +494,19 @@ export default function Home() {
   else
     feedBody = (
       <ol className="border-t border-line-soft">
-        {currentFeed.map((item) => (
-          <FeedRow
-            key={item.id}
-            item={item}
-            liked={liked.has(item.id)}
-            onLike={() => toggleLike(item.id)}
-          />
+        {currentFeed.map((item, index) => (
+          <Fragment key={item.id}>
+            {feedDay(item.time) &&
+              feedDay(item.time) !== feedDay(currentFeed[index - 1]?.time) && (
+                <FeedDay date={feedDay(item.time)!} />
+              )}
+            <FeedRow
+              key={item.id}
+              item={item}
+              liked={liked.has(item.id)}
+              onLike={() => toggleLike(item.id)}
+            />
+          </Fragment>
         ))}
       </ol>
     );

@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
 import type { CalendarDay, ListeningCalendar } from "@/app/lib/types";
 import { formatNumber, plural } from "@/app/lib/plural";
 import { getSafeUrl } from "../../_components/profileUtils";
 import CalendarRange from "./CalendarRange";
+import { btn, Segmented } from "@/components/ui";
 
 const MONTHS = [
   "Январь",
@@ -98,8 +99,10 @@ function Month({
                   ? `${day.scrobbles} · ${day.top_artist}`
                   : "Нет прослушиваний"
               }
-              className={`h-11 min-w-0 rounded-sm border font-mono text-[11px] transition-transform enabled:hover:scale-110 enabled:focus-visible:outline enabled:focus-visible:outline-2 enabled:focus-visible:outline-accent ${
-                selected === key ? "border-fg" : "border-transparent"
+              className={`h-11 min-w-0 rounded-lg border font-mono text-xs transition-transform enabled:hover:scale-110 enabled:focus-visible:outline enabled:focus-visible:outline-2 enabled:focus-visible:outline-accent ${
+                selected === key
+                  ? "border-fg ring-2 ring-fg ring-offset-2 ring-offset-surface"
+                  : "border-transparent"
               } ${day ? activeTextColor : "text-fg-3"}`}
               style={{
                 background: day
@@ -118,6 +121,8 @@ function Month({
 
 export function MusicCalendar({ username }: Readonly<{ username: string }>) {
   const currentYear = new Date().getFullYear();
+  const [mode, setMode] = useState<"month" | "year">("month");
+  const [month, setMonth] = useState(new Date().getMonth());
   const [year, setYear] = useState(currentYear);
   const [calendar, setCalendar] = useState<ListeningCalendar | null>(null);
   const [selected, setSelected] = useState<CalendarDay | null>(null);
@@ -144,6 +149,8 @@ export function MusicCalendar({ username }: Readonly<{ username: string }>) {
         if (!data || !active) return;
         setCalendar(data);
         setSelected(data.summary.best_day);
+        if (data.summary.best_day)
+          setMonth(Number(data.summary.best_day.date.slice(5, 7)) - 1);
       })
       .catch((requestError: unknown) => {
         if (active && !(requestError instanceof DOMException)) setError(true);
@@ -225,18 +232,65 @@ export function MusicCalendar({ username }: Readonly<{ username: string }>) {
             ))}
           </dl>
 
-          <div className="grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {MONTHS.map((_, month) => (
-              <Month
-                key={month}
-                year={year}
-                month={month}
-                days={dayMap}
-                max={max}
-                selected={selected?.date ?? null}
-                onSelect={setSelected}
-              />
-            ))}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Segmented
+              label="Вид календаря"
+              value={mode}
+              onChange={setMode}
+              options={[
+                { id: "month", label: "Месяц" },
+                { id: "year", label: "Весь год" },
+              ]}
+            />
+            {mode === "month" && (
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  aria-label="Предыдущий месяц"
+                  disabled={month === 0}
+                  className={btn.icon}
+                  onClick={() => setMonth((value) => value - 1)}
+                >
+                  <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                </button>
+                <span
+                  className="min-w-24 text-center text-sm font-medium"
+                  aria-live="polite"
+                >
+                  {MONTHS[month]}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Следующий месяц"
+                  disabled={month === 11}
+                  className={btn.icon}
+                  onClick={() => setMonth((value) => value + 1)}
+                >
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            )}
+          </div>
+          <div
+            className={
+              mode === "year"
+                ? "grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3"
+                : "mx-auto w-full max-w-lg"
+            }
+          >
+            {(mode === "year" ? MONTHS.map((_, index) => index) : [month]).map(
+              (monthIndex) => (
+                <Month
+                  key={monthIndex}
+                  year={year}
+                  month={monthIndex}
+                  days={dayMap}
+                  max={max}
+                  selected={selected?.date ?? null}
+                  onSelect={setSelected}
+                />
+              ),
+            )}
           </div>
 
           {selected ? (

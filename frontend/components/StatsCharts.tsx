@@ -59,7 +59,7 @@ export function BarStrip({
           />
         ))}
       </div>
-      <div className="flex gap-[3px] font-mono text-[10px] text-fg-3">
+      <div className="flex gap-[3px] font-mono text-xs text-fg-2">
         {entries.map(([k], i) => (
           <span key={k} className="min-w-0 flex-1 text-center">
             {i % labelEvery === 0 ? k : ""}

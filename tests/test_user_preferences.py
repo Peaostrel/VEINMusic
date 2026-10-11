@@ -325,3 +325,27 @@ def test_recap_reminders_are_due_once_in_user_local_time(client, db):
         user_id=user.id, kind=notifications.KIND_RECAP
     ).all()
     assert len(notes) == 2
+
+
+def test_current_track_progress_is_owner_only_and_source_respects_privacy(client, db):
+    token = _register(client, "progress_privacy")
+    user = db.query(User).filter_by(username="progress_privacy").one()
+    track = Track(title="Progress song", artist="Artist", duration=200)
+    db.add(track)
+    db.flush()
+    db.add(Scrobble(user_id=user.id, track_id=track.id, source="spotify",
+                    played_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+                    listened_sec=100, is_playing=True))
+    db.commit()
+    own = client.get("/api/current-track/progress_privacy").json()
+    assert own["listened_sec"] == 100
+    assert own["duration"] == 200
+    data = _preferences(client, token)
+    data["privacy"]["show_listening_source"] = False
+    assert _save_preferences(client, token, data).status_code == 200
+    client.cookies.clear()
+    public = client.get("/api/current-track/progress_privacy").json()
+    assert public["playing"] is True
+    assert public["source"] == ""
+    assert public["listened_sec"] is None
+    assert public["duration"] is None

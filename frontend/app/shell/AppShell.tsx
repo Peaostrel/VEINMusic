@@ -9,6 +9,7 @@ import Footer from "./Footer";
 import GuestHeader from "./GuestHeader";
 import { MobileTabBar, MobileTopBar } from "./MobileNav";
 import Sidebar from "./Sidebar";
+import NowPlaying from "./NowPlaying";
 import { activeSection } from "./nav";
 import { useAuthUser, useMediaQuery } from "./useAuthUser";
 
@@ -71,7 +72,10 @@ export default function AppShell({
 
       <div className="auth-only fixed inset-x-0 bottom-0 z-40 lg:hidden">
         {username && isDesktop === false && (
-          <MobileTabBar username={username} active={active} />
+          <>
+            <NowPlaying username={username} variant="mobile" />
+            <MobileTabBar username={username} active={active} />
+          </>
         )}
       </div>
     </div>

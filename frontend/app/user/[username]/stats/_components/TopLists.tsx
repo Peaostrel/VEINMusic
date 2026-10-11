@@ -1,3 +1,4 @@
+import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { Fragment } from "react";
 import type { DetailedStats } from "@/app/lib/types";
 import { Meter } from "@/components/ui";
@@ -110,9 +111,10 @@ export function TopArtistsCard({
           {artists.map((a, i) => (
             <li
               key={a.name}
-              className="grid grid-cols-[20px_minmax(0,1fr)_56px] items-center gap-3"
+              className="grid grid-cols-[20px_40px_minmax(0,1fr)_40px] items-center gap-3"
             >
               <span className="font-mono text-xs text-fg-3">{i + 1}</span>
+              <Cover src={sanitizeImageUrl(a.cover_url)} />
               <span className="flex min-w-0 flex-col gap-1.5">
                 <a
                   href={getArtistUrl(a.name, a.source || topSource)}

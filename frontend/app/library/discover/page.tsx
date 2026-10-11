@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { Music2 } from "lucide-react";
+import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import SaveForLater from "@/components/SaveForLater";
 import { useCallback, useEffect, useState } from "react";
 import { jsonRequest, qualityRequest } from "@/app/lib/qualityApi";
@@ -11,6 +13,7 @@ interface Track {
   title: string;
   artist: string;
   reason: string;
+  cover_url?: string | null;
 }
 interface Evolution {
   new: Artist[];
@@ -279,7 +282,7 @@ export default function DiscoverPage() {
         )}
         <div className="flex flex-wrap gap-2">
           <button
-            className={btn.secondary}
+            className={`${btn.secondary} ${btn.md}`}
             disabled={busy}
             onClick={() => {
               setBusy(true);
@@ -295,7 +298,7 @@ export default function DiscoverPage() {
             Применить разнообразие
           </button>
           <button
-            className={btn.secondary}
+            className={`${btn.secondary} ${btn.md}`}
             disabled={busy}
             onClick={() => {
               setBusy(true);
@@ -311,7 +314,7 @@ export default function DiscoverPage() {
             Новая подборка
           </button>
           <button
-            className={btn.secondary}
+            className={`${btn.secondary} ${btn.md}`}
             onClick={() => {
               void qualityRequest<{ items: { track: Track }[] }>(
                 "/api/me/recommendations/history",
@@ -361,32 +364,71 @@ export default function DiscoverPage() {
           {tracks.map((track) => (
             <article
               key={track.id}
-              className="space-y-3 rounded-xl border border-line bg-surface p-4"
+              className="flex flex-col gap-4 rounded-xl bg-surface p-5"
             >
-              <Link href={`/track/${track.id}`} className="font-medium">
-                {track.artist} — {track.title}
-              </Link>
-              <p className="text-xs text-fg-3">{track.reason}</p>
-              <SaveForLater trackId={track.id} />
-              <div className="flex flex-wrap gap-2">
-                {[
-                  ["known", "Уже знаю"],
-                  ["dislike", "Не нравится"],
-                  ["like", "Больше такого"],
-                  ["block_artist", "Не рекомендовать артиста"],
-                ].map(([value, label]) => (
-                  <button
-                    type="button"
-                    key={value}
-                    disabled={busy}
-                    className={`${btn.secondary} ${btn.sm}`}
-                    onClick={() => {
-                      void feedback(track.id, value);
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
+              <div className="flex min-w-0 items-center gap-3">
+                {sanitizeImageUrl(track.cover_url) ? (
+                  <img
+                    src={sanitizeImageUrl(track.cover_url)}
+                    alt=""
+                    className="h-16 w-16 shrink-0 rounded-lg object-cover"
+                  />
+                ) : (
+                  <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-surface-2">
+                    <Music2 className="h-6 w-6 text-fg-3" aria-hidden="true" />
+                  </span>
+                )}
+                <Link href={`/track/${track.id}`} className="min-w-0">
+                  <span className="block truncate text-base font-semibold">
+                    {track.title}
+                  </span>
+                  <span className="block truncate text-sm text-fg-2">
+                    {track.artist}
+                  </span>
+                </Link>
+              </div>
+              <p className="text-sm leading-relaxed text-fg-2">
+                <span className="mb-1 block text-xs font-medium text-accent">
+                  Почему этот трек
+                </span>
+                {track.reason}
+              </p>
+              <div className="mt-auto flex flex-wrap items-start gap-2">
+                <SaveForLater trackId={track.id} />
+                <button
+                  type="button"
+                  disabled={busy}
+                  className={`${btn.ghost} ${btn.sm}`}
+                  onClick={() => {
+                    void feedback(track.id, "dislike");
+                  }}
+                >
+                  Скрыть
+                </button>
+                <details className="w-full">
+                  <summary className="cursor-pointer py-2 text-xs text-fg-2">
+                    Ещё действия
+                  </summary>
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {[
+                      ["known", "Уже знаю"],
+                      ["like", "Больше такого"],
+                      ["block_artist", "Не рекомендовать артиста"],
+                    ].map(([value, label]) => (
+                      <button
+                        type="button"
+                        key={value}
+                        disabled={busy}
+                        className={`${btn.secondary} ${btn.sm}`}
+                        onClick={() => {
+                          void feedback(track.id, value);
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </details>
               </div>
             </article>
           ))}

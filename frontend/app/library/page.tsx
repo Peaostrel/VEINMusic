@@ -2,15 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  ArrowRight,
-  CalendarClock,
-  ListRestart,
-  Sparkles,
-  Target,
-} from "lucide-react";
+import { CalendarClock, Sparkles, Search, Music2 } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
-import { EmptyState, Loading, PageHeader } from "@/components/ui";
+import { btn, input, EmptyState, Loading, PageHeader } from "@/components/ui";
 
 interface MemoryTrack {
   id: number;
@@ -29,10 +23,35 @@ interface Memories {
 }
 
 export default function LibraryPage() {
+  const [query, setQuery] = useState("");
+  const [saved, setSaved] = useState<MemoryTrack[]>([]);
+  const [savedError, setSavedError] = useState("");
   const [date, setDate] = useState("");
   const [error, setError] = useState("");
   const [data, setData] = useState<Memories | null>(null);
   const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`${API_URL}/api/me/listen-later?limit=4`, {
+      credentials: "include",
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!response.ok)
+          throw new Error("Не удалось загрузить список на потом");
+        return response.json();
+      })
+      .then((result: { items: { track: MemoryTrack }[] }) =>
+        setSaved(result.items.map((item) => item.track)),
+      )
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted)
+          setSavedError(
+            cause instanceof Error ? cause.message : "Ошибка загрузки",
+          );
+      });
+    return () => controller.abort();
+  }, []);
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -66,44 +85,90 @@ export default function LibraryPage() {
         title="Моя библиотека"
         subtitle="Воспоминания, забытая музыка и порядок в истории"
       />
-      <div className="grid gap-3 sm:grid-cols-2">
-        <ActionCard
-          href="/library/connect"
-          icon={<ArrowRight className="h-5 w-5" />}
-          title="Подключить музыку"
-          text="Выбрать источник и проверить первое прослушивание шаг за шагом."
-        />
-        <ActionCard
-          href="/library/search"
-          icon={<ListRestart className="h-5 w-5" />}
-          title="Поиск в моей музыке"
-          text="Артисты, альбомы, история и список на потом — с фильтрами по датам и источникам."
-        />
-        <ActionCard
-          href="/library/transfer"
-          icon={<ArrowRight className="h-5 w-5" />}
-          title="Перенести историю"
-          text="Скачать JSON или CSV и импортировать свою историю с проверкой дублей."
-        />
-        <ActionCard
-          href="/library/cleanup"
-          icon={<ListRestart className="h-5 w-5" />}
-          title="Навести порядок"
-          text="Найти дубли, объединить версии и удалить ошибочные прослушивания."
-        />
-        <ActionCard
-          href="/goals"
-          icon={<Target className="h-5 w-5" />}
-          title="Музыкальные цели"
-          text="Поставить цель на неделю или месяц и отслеживать прогресс."
-        />
+      <form
+        action="/library/search"
+        className="flex flex-wrap gap-3"
+        role="search"
+        aria-label="Поиск в библиотеке"
+      >
+        <label className="relative min-w-0 flex-1 basis-52">
+          <Search
+            className="pointer-events-none absolute left-3 top-3 h-5 w-5 text-fg-3"
+            aria-hidden="true"
+          />
+          <input
+            name="q"
+            type="search"
+            aria-label="Поиск в моей музыке"
+            placeholder="Трек, артист или альбом"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className={`${input} h-12 pl-10`}
+          />
+        </label>
+        <button className={`${btn.primary} ${btn.lg}`} type="submit">
+          Найти музыку
+        </button>
+      </form>
+      <div className="flex flex-wrap items-center gap-3">
+        <Link href="/library/discover" className={`${btn.secondary} ${btn.md}`}>
+          Открытия и ваш вкус
+        </Link>
+        <Link href="/goals" className={`${btn.ghost} ${btn.md}`}>
+          Музыкальные цели
+        </Link>
+        <details className="relative">
+          <summary className={`${btn.ghost} ${btn.md} cursor-pointer`}>
+            Управление библиотекой
+          </summary>
+          <nav
+            aria-label="Управление библиотекой"
+            className="absolute left-0 z-20 mt-2 flex w-64 flex-col gap-1 rounded-xl border border-line bg-surface p-2 shadow-xl"
+          >
+            <Link
+              href="/library/connect"
+              className={`${btn.ghost} ${btn.md} justify-start`}
+            >
+              Подключить музыку
+            </Link>
+            <Link
+              href="/library/transfer"
+              className={`${btn.ghost} ${btn.md} justify-start`}
+            >
+              Перенести историю
+            </Link>
+            <Link
+              href="/library/cleanup"
+              className={`${btn.ghost} ${btn.md} justify-start`}
+            >
+              Навести порядок
+            </Link>
+          </nav>
+        </details>
       </div>
-      <ActionCard
-        href="/library/discover"
-        icon={<Sparkles className="h-5 w-5" />}
-        title="Открытия и ваш вкус"
-        text="Рекомендации с обратной связью, музыка для двоих и итоги недели"
-      />
+      <section aria-labelledby="saved-music-title" className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="saved-music-title" className="text-lg font-semibold">
+            Послушать позже
+          </h2>
+          <Link href="/library/later" className="text-sm text-accent">
+            Весь список →
+          </Link>
+        </div>
+        {savedError ? (
+          <p role="alert" className="text-sm text-danger">
+            {savedError}
+          </p>
+        ) : (
+          <MemorySection
+            title=""
+            subtitle=""
+            icon={null}
+            tracks={saved}
+            empty="Сохраняйте музыку из рекомендаций — она появится здесь."
+          />
+        )}
+      </section>
       <label className="block text-sm">
         <span>Дата воспоминаний</span>
         <input
@@ -118,77 +183,47 @@ export default function LibraryPage() {
       </label>
       {error && <p role="alert">{error}</p>}
       {loading && <Loading label="Собираем воспоминания…" />}
-      <ActionCard
-        href="/library/later"
-        icon={<ListRestart className="h-5 w-5" />}
-        title="Послушать позже"
-        text="Личный список музыки, заметки и впечатления после прослушивания"
-      />
-      <MemorySection
-        title="В этот день"
-        subtitle="Что играло в эту дату в прошлые годы"
-        icon={<CalendarClock className="h-4 w-4" />}
-        tracks={data?.on_this_day ?? []}
-        empty="Через год здесь появятся музыкальные воспоминания."
-      />
-      <MemorySection
-        title="Давно не звучало"
-        subtitle="Любимые треки, которые вы не включали больше 90 дней"
-        icon={<Sparkles className="h-4 w-4" />}
-        tracks={data?.forgotten ?? []}
-        empty="Пока нет забытых треков — продолжайте слушать музыку."
-      />
-      {!!data?.returning_artists?.length && (
-        <section className="space-y-3">
-          <h2 className="font-semibold">Снова с вами</h2>
-          <p className="text-sm text-fg-3">
-            Исполнители, к которым вы вернулись за последний месяц после
-            перерыва от 90 дней.
-          </p>
-          <ul className="space-y-2">
-            {data.returning_artists.map((artist) => (
-              <li key={artist.artist}>
-                <Link
-                  className="inline-flex min-h-11 items-center text-accent"
-                  href={`/library/search?q=${encodeURIComponent(artist.artist)}`}
-                >
-                  {artist.artist} · перерыв {artist.days_away} дней ·{" "}
-                  {artist.plays} прослушиваний
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
+      {!loading && !error && (
+        <>
+          <MemorySection
+            title="В этот день"
+            subtitle="Что играло в эту дату в прошлые годы"
+            icon={<CalendarClock className="h-4 w-4" />}
+            tracks={data?.on_this_day ?? []}
+            empty="Через год здесь появятся музыкальные воспоминания."
+          />
+          <MemorySection
+            title="Давно не звучало"
+            subtitle="Любимые треки, которые вы не включали больше 90 дней"
+            icon={<Sparkles className="h-4 w-4" />}
+            tracks={data?.forgotten ?? []}
+            empty="Пока нет забытых треков — продолжайте слушать музыку."
+          />
+          {!!data?.returning_artists?.length && (
+            <section className="space-y-3">
+              <h2 className="font-semibold">Снова с вами</h2>
+              <p className="text-sm text-fg-3">
+                Исполнители, к которым вы вернулись за последний месяц после
+                перерыва от 90 дней.
+              </p>
+              <ul className="space-y-2">
+                {data.returning_artists.map((artist) => (
+                  <li key={artist.artist}>
+                    <Link
+                      className="inline-flex min-h-11 items-center text-accent"
+                      href={`/library/search?q=${encodeURIComponent(artist.artist)}`}
+                    >
+                      {artist.artist} · перерыв {artist.days_away} дней ·{" "}
+                      {artist.plays} прослушиваний
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
       )}
     </main>
-  );
-}
-
-function ActionCard({
-  href,
-  icon,
-  title,
-  text,
-}: Readonly<{
-  href: string;
-  icon: React.ReactNode;
-  title: string;
-  text: string;
-}>) {
-  return (
-    <Link
-      href={href}
-      className="group flex items-start gap-4 rounded-xl border border-line bg-surface p-5 transition-colors hover:bg-surface-2"
-    >
-      <span className="rounded-lg bg-accent/10 p-2 text-accent">{icon}</span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold">{title}</span>
-        <span className="mt-1 block text-xs leading-relaxed text-fg-2">
-          {text}
-        </span>
-      </span>
-      <ArrowRight className="h-4 w-4 text-fg-3 transition-transform group-hover:translate-x-0.5" />
-    </Link>
   );
 }
 
@@ -207,13 +242,15 @@ function MemorySection({
 }>) {
   return (
     <section className="flex flex-col gap-4">
-      <div>
-        <h2 className="flex items-center gap-2 text-base font-semibold">
-          {icon}
-          {title}
-        </h2>
-        <p className="mt-1 text-xs text-fg-3">{subtitle}</p>
-      </div>
+      {title && (
+        <div>
+          <h2 className="flex items-center gap-2 text-base font-semibold">
+            {icon}
+            {title}
+          </h2>
+          <p className="mt-1 text-xs text-fg-3">{subtitle}</p>
+        </div>
+      )}
       {tracks.length === 0 ? (
         <EmptyState title="Пока пусто">{empty}</EmptyState>
       ) : (
@@ -222,7 +259,7 @@ function MemorySection({
             <Link
               key={`${track.id}-${track.played_at || track.last_played}`}
               href={`/library/search?q=${encodeURIComponent(track.title)}`}
-              className="overflow-hidden rounded-xl border border-line bg-surface hover:bg-surface-2"
+              className="group overflow-hidden rounded-xl bg-surface transition-colors hover:bg-surface-2"
             >
               {track.cover_url ? (
                 <img
@@ -231,7 +268,9 @@ function MemorySection({
                   className="aspect-square w-full object-cover"
                 />
               ) : (
-                <span className="block aspect-square w-full bg-surface-2" />
+                <span className="flex aspect-square w-full items-center justify-center bg-surface-2">
+                  <Music2 className="h-10 w-10 text-fg-3" aria-hidden="true" />
+                </span>
               )}
               <span className="block p-3">
                 <span className="block truncate text-sm font-medium">

@@ -55,7 +55,7 @@ export function PageHeader({
       <div className="flex min-w-0 flex-col gap-1">
         <h1
           id={id}
-          className="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-fg"
+          className="text-[30px] sm:text-[34px] font-semibold leading-tight tracking-[-0.02em] text-fg"
         >
           {title}
         </h1>
@@ -80,7 +80,7 @@ export function SectionTitle({
 }>) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <Tag id={id} className="text-sm font-semibold text-fg">
+      <Tag id={id} className="text-base font-semibold text-fg">
         {children}
       </Tag>
       {aside && <span className="text-xs text-fg-3">{aside}</span>}
@@ -267,8 +267,8 @@ export function EmptyState({
   action,
 }: Readonly<{ title: ReactNode; children?: ReactNode; action?: ReactNode }>) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-line px-6 py-12 text-center">
-      <p className="text-sm font-medium text-fg">{title}</p>
+    <div className="flex flex-col items-center gap-3 rounded-xl bg-surface px-6 py-10 text-center">
+      <p className="text-base font-medium text-fg">{title}</p>
       {children && <p className="max-w-sm text-sm text-fg-2">{children}</p>}
       {action && <div className="mt-2">{action}</div>}
     </div>
@@ -280,7 +280,10 @@ export function Loading({
   label: text = "Загрузка…",
 }: Readonly<{ label?: string }>) {
   return (
-    <output className="flex items-center justify-center gap-3 py-16 text-sm text-fg-3">
+    <output
+      aria-live="polite"
+      className="flex items-center justify-center gap-3 rounded-xl bg-surface/60 px-4 py-14 text-sm text-fg-2"
+    >
       <span className="flex h-4 items-end gap-[3px]" aria-hidden="true">
         {[0, 1, 2].map((i) => (
           <span

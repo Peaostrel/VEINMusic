@@ -446,7 +446,8 @@ def get_detailed_stats(username: str,
         func.count(
             Scrobble.id).label('plays'),
         func.max(
-            Scrobble.source).label('source')) .join(Scrobble).filter(
+            Scrobble.source).label('source'),
+        func.max(Track.cover_url).label('cover_url')) .join(Scrobble).filter(
                 *
                 base_filter).group_by(
                     Track.artist) .order_by(
@@ -543,7 +544,8 @@ def get_detailed_stats(username: str,
             "comparison": comparison,
             "top_artists": [{"name": r[0],
                              "plays": r[1],
-                             "source": r[2]} for r in top_artists_raw],
+                             "source": r[2],
+                             "cover_url": r[3]} for r in top_artists_raw],
             "top_tracks": [{"title": r[0],
                             "artist": r[1],
                             "cover_url": r[2],
@@ -832,7 +834,11 @@ def get_current_track(username: str, request: Request, db: Annotated[Session, De
             "artist": t.artist,
             "cover_url": t.cover_url,
             "level": lvl,
-            "rank": rank
+            "rank": rank,
+            "source": s.source if is_owner or preference_enabled(user.profile, "privacy", "show_listening_source") else "",
+            "duration": int(t.duration or 180) if is_owner else None,
+            "listened_sec": int(s.listened_sec or 0) if is_owner else None,
+            "excluded": bool(s.excluded_from_stats) if is_owner else None,
         }
     return {"playing": False}
 

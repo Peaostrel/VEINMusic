@@ -370,7 +370,12 @@ export interface DetailedStats {
       tracks: number | null;
     };
   } | null;
-  top_artists: { name: string; plays: number; source: string }[];
+  top_artists: {
+    name: string;
+    plays: number;
+    source: string;
+    cover_url?: string | null;
+  }[];
   top_tracks: TopTrack[];
   top_albums: {
     album: string;

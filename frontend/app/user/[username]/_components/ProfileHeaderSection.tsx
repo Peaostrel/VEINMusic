@@ -161,7 +161,7 @@ export function ProfileHeaderSection({
             className="flex flex-col-reverse gap-1 bg-bg px-5 py-4"
           >
             <dt className="text-xs text-fg-2">{n.label}</dt>
-            <dd className="font-mono text-[22px] font-medium">
+            <dd className="font-mono text-2xl font-medium">
               {n.onClick ? (
                 <button
                   type="button"
@@ -180,7 +180,7 @@ export function ProfileHeaderSection({
       </dl>
 
       {displayedAchs.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 border-t border-line-soft pt-4">
           {displayedAchs.map((a) => (
             <AchievementChip key={a.id} a={a} />
           ))}
