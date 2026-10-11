@@ -19,6 +19,7 @@ from app.routers import (
     history_tools,
     discovery_tools,
     session_tools,
+    experience,
     stats,
     users,
 )
@@ -42,3 +43,4 @@ from app.services.user_stats import (  # noqa: F401
 router = APIRouter()
 for _module in (users, stats, discovery, achievements, integrations, library, media, platform, quality, mfa, history_tools, discovery_tools, session_tools):
     router.include_router(_module.router)
+router.include_router(experience.router)

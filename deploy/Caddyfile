@@ -4,6 +4,8 @@
 	email {$ACME_EMAIL}
 }
 
+import /srv/routing/upstreams.caddy
+
 # "Update in progress": deploy.sh creates deploy/maintenance/on while it
 # restarts the containers, and a restarting container answers 502-504.
 # Both get these answers, marked with X-Maintenance so the site's pages
@@ -43,7 +45,7 @@
 		import maintenance_page
 	}
 	handle {
-		reverse_proxy frontend:3000
+		import site_upstream
 	}
 	handle_errors 502 503 504 {
 		import maintenance_page
@@ -62,7 +64,7 @@
 			max_size 20MB
 		}
 		# WebSockets (rooms, live status) are proxied as-is
-		reverse_proxy backend:8000
+		import api_upstream
 	}
 	handle_errors 502 503 504 {
 		import maintenance_json

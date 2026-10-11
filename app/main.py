@@ -21,6 +21,7 @@ from app.database import Base, SessionLocal, engine
 from app.models import User
 from app.routers import (
     account,
+    portability,
     admin,
     admin_data,
     admin_tools,
@@ -169,6 +170,7 @@ app.include_router(widgets.router)
 app.include_router(developer.router)
 app.include_router(devices.router)
 app.include_router(account.router)
+app.include_router(portability.router)
 app.include_router(notifications.router)
 app.include_router(reports.router)
 app.include_router(lastfm_connect.router)

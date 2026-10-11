@@ -50,6 +50,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # "Update in progress" page; deploy.sh creates maintenance/on meanwhile
       - ./maintenance:/srv/maintenance:ro
+      - ./routing:/srv/routing:ro
       - caddy_data:/data
       - caddy_config:/config
     networks:
@@ -184,7 +185,7 @@ services:
       OFFSITE_BACKUP_ENABLED: ${OFFSITE_BACKUP_ENABLED:-0}
       OFFSITE_STATUS_FILE: /backup-status/offsite-last-success
       MONITOR_WEBHOOK_URL: ${MONITOR_WEBHOOK_URL:-}
-      MONITOR_API_URL: http://backend:8000/health
+      MONITOR_API_URL: http://${API_UPSTREAM:-backend}:8000/health
       BACKUP_DIR: /backups
     volumes:
       - db_backups:/backups:ro

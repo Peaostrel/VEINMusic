@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
  */
 
 const btnBase =
-  "inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 whitespace-nowrap";
+  "inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
 /** Button looks. Combine a variant with a size: `${btn.primary} ${btn.md}`. */
 export const btn = {
@@ -24,7 +24,7 @@ export const btn = {
 export const card = "rounded-xl border border-line bg-surface";
 
 const inputBase =
-  "h-10 w-full rounded-lg border border-line px-3 text-sm text-fg placeholder:text-fg-3 outline-none transition-colors focus:border-fg-3";
+  "h-10 w-full min-w-0 rounded-lg border border-line px-3 text-sm text-fg placeholder:text-fg-3 outline-none transition-colors focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/40";
 
 /** Text field on the page background. */
 export const input = `${inputBase} bg-surface`;

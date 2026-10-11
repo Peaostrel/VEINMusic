@@ -57,3 +57,6 @@ deploy/maintenance/on
 # External encrypted backup credentials
 /deploy/.env.backup
 /deploy/backup-password.txt
+
+# Runtime proxy routing survives git reset during auto-updates
+/deploy/routing/

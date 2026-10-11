@@ -63,6 +63,15 @@ jobs:
       - name: Run Flake8 Check
         run: flake8 app
 
+      - name: Validate release scripts and proxy configuration
+        run: |
+          bash -n deploy/deploy.sh deploy/blue-green.sh deploy/rollback.sh
+          docker run --rm \
+            -e SITE_DOMAIN=music.example.org -e API_DOMAIN=api.example.org -e ACME_EMAIL=admin@example.org \
+            -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            -v "$PWD/deploy/upstreams.example.caddy:/srv/routing/upstreams.caddy:ro" \
+            caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
+
       - name: Run Pytest (SQLite)
         env:
           DATABASE_URL: 'sqlite:///:memory:'
