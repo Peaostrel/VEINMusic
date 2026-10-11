@@ -273,13 +273,22 @@ export function MusicCalendar({ username }: Readonly<{ username: string }>) {
           </div>
           <div
             className={
-              mode === "year"
-                ? "grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3"
-                : "mx-auto w-full max-w-lg"
+              mode === "month" && selected
+                ? "grid items-start gap-5 xl:grid-cols-2"
+                : "space-y-5"
             }
           >
-            {(mode === "year" ? MONTHS.map((_, index) => index) : [month]).map(
-              (monthIndex) => (
+            <div
+              className={
+                mode === "year"
+                  ? "grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3"
+                  : "mx-auto w-full max-w-lg"
+              }
+            >
+              {(mode === "year"
+                ? MONTHS.map((_, index) => index)
+                : [month]
+              ).map((monthIndex) => (
                 <Month
                   key={monthIndex}
                   year={year}
@@ -289,73 +298,75 @@ export function MusicCalendar({ username }: Readonly<{ username: string }>) {
                   selected={selected?.date ?? null}
                   onSelect={setSelected}
                 />
-              ),
-            )}
-          </div>
-
-          {selected ? (
-            <div className="flex flex-col gap-4 rounded-lg border border-line bg-bg p-4 sm:flex-row sm:items-center">
-              {selected.top_track.cover_url ? (
-                <img
-                  src={getSafeUrl(selected.top_track.cover_url)}
-                  alt=""
-                  className="h-16 w-16 rounded-lg object-cover"
-                />
-              ) : (
-                <span className="h-16 w-16 rounded-lg bg-surface-2" />
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="text-xs capitalize text-fg-3">
-                  {dayLabel(selected.date)}
-                </p>
-                <p className="mt-1 truncate text-base font-medium">
-                  {selected.top_track.title}
-                </p>
-                <p className="truncate text-sm text-fg-2">
-                  {selected.top_track.artist}
-                </p>
-              </div>
-              <dl className="grid grid-cols-3 gap-5 text-right">
-                <div>
-                  <dt className="text-[10px] text-fg-3">прослушивания</dt>
-                  <dd className="font-mono text-base">
-                    {formatNumber(selected.scrobbles)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[10px] text-fg-3">минуты</dt>
-                  <dd className="font-mono text-base">
-                    {formatNumber(selected.minutes)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[10px] text-fg-3">артисты</dt>
-                  <dd
-                    className="font-mono text-base"
-                    title={plural(
-                      selected.unique_artists,
-                      "артист",
-                      "артиста",
-                      "артистов",
-                    )}
-                  >
-                    {formatNumber(selected.unique_artists)}
-                  </dd>
-                </div>
-              </dl>
+              ))}
             </div>
-          ) : (
-            <p className="rounded-lg border border-dashed border-line py-8 text-center text-sm text-fg-3">
-              В этом году пока нет прослушиваний.
-            </p>
-          )}
-          {selected && (
-            <CalendarRange
-              key={`${username}-${selected.date}`}
-              username={username}
-              date={selected.date}
-            />
-          )}
+
+            <div className="min-w-0 space-y-4">
+              {selected ? (
+                <div className="flex flex-col gap-4 rounded-lg border border-line bg-bg p-4 sm:flex-row sm:flex-wrap sm:items-center">
+                  {selected.top_track.cover_url ? (
+                    <img
+                      src={getSafeUrl(selected.top_track.cover_url)}
+                      alt=""
+                      className="h-16 w-16 rounded-lg object-cover"
+                    />
+                  ) : (
+                    <span className="h-16 w-16 rounded-lg bg-surface-2" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs capitalize text-fg-3">
+                      {dayLabel(selected.date)}
+                    </p>
+                    <p className="mt-1 truncate text-base font-medium">
+                      {selected.top_track.title}
+                    </p>
+                    <p className="truncate text-sm text-fg-2">
+                      {selected.top_track.artist}
+                    </p>
+                  </div>
+                  <dl className="grid w-full grid-cols-3 gap-3">
+                    <div>
+                      <dt className="text-[10px] text-fg-3">прослушивания</dt>
+                      <dd className="font-mono text-base">
+                        {formatNumber(selected.scrobbles)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[10px] text-fg-3">минуты</dt>
+                      <dd className="font-mono text-base">
+                        {formatNumber(selected.minutes)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[10px] text-fg-3">артисты</dt>
+                      <dd
+                        className="font-mono text-base"
+                        title={plural(
+                          selected.unique_artists,
+                          "артист",
+                          "артиста",
+                          "артистов",
+                        )}
+                      >
+                        {formatNumber(selected.unique_artists)}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              ) : (
+                <p className="rounded-lg border border-dashed border-line py-8 text-center text-sm text-fg-3">
+                  В этом году пока нет прослушиваний.
+                </p>
+              )}
+              {selected && (
+                <CalendarRange
+                  key={`${username}-${selected.date}`}
+                  username={username}
+                  date={selected.date}
+                />
+              )}
+            </div>
+          </div>
         </>
       )}
     </section>

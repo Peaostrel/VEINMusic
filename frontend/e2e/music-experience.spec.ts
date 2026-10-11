@@ -100,7 +100,7 @@ test("history transfer previews a file and retries without duplicates", async ({
 
 test("calendar exposes a selected local-day history and date range", async ({
   page,
-}) => {
+}, testInfo) => {
   const username = await signUp(page, "calendarrange");
   const payload = {
     scrobbles: [
@@ -133,6 +133,21 @@ test("calendar exposes a selected local-day history and date range", async ({
       exact: false,
     }),
   ).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const month = await page
+    .getByRole("heading", { name: "Январь", exact: true })
+    .boundingBox();
+  const history = await page
+    .getByRole("heading", { name: "История выбранного периода" })
+    .boundingBox();
+  expect(month).not.toBeNull();
+  expect(history).not.toBeNull();
+  expect(history!.x).toBeGreaterThan(month!.x);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await testInfo.attach("calendar-selected-desktop", {
+    body: await page.screenshot({ fullPage: true }),
+    contentType: "image/png",
+  });
   await page.getByLabel("Конец периода").fill("2024-01-03");
   await expect(
     page.getByText("1 прослушиваний · 3 минут", { exact: true }),
