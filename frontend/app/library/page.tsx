@@ -22,21 +22,44 @@ interface MemoryTrack {
   last_played?: string;
 }
 interface Memories {
+  date: string;
+  returning_artists: { artist: string; days_away: number; plays: number }[];
   on_this_day: MemoryTrack[];
   forgotten: MemoryTrack[];
 }
 
 export default function LibraryPage() {
+  const [date, setDate] = useState("");
+  const [error, setError] = useState("");
   const [data, setData] = useState<Memories | null>(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    fetch(`${API_URL}/api/me/memories`, { credentials: "include" })
-      .then((response) => (response.ok ? response.json() : null))
+    const controller = new AbortController();
+    setLoading(true);
+    setError("");
+    fetch(
+      `${API_URL}/api/me/memories?${new URLSearchParams(date ? { on: date } : {})}`,
+      {
+        credentials: "include",
+        signal: controller.signal,
+      },
+    )
+      .then((response) => {
+        if (!response.ok) throw new Error("Не удалось загрузить воспоминания");
+        return response.json();
+      })
       .then(setData)
-      .catch(() => setData(null))
-      .finally(() => setLoading(false));
-  }, []);
-  if (loading) return <Loading label="Собираем библиотеку…" />;
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted) {
+          setData(null);
+          setError(cause instanceof Error ? cause.message : "Ошибка загрузки");
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [date]);
   return (
     <main className="mx-auto flex w-full max-w-[1000px] flex-col gap-8 px-4 py-8 sm:px-8 lg:py-10">
       <PageHeader
@@ -44,6 +67,24 @@ export default function LibraryPage() {
         subtitle="Воспоминания, забытая музыка и порядок в истории"
       />
       <div className="grid gap-3 sm:grid-cols-2">
+        <ActionCard
+          href="/library/connect"
+          icon={<ArrowRight className="h-5 w-5" />}
+          title="Подключить музыку"
+          text="Выбрать источник и проверить первое прослушивание шаг за шагом."
+        />
+        <ActionCard
+          href="/library/search"
+          icon={<ListRestart className="h-5 w-5" />}
+          title="Поиск в моей музыке"
+          text="Артисты, альбомы, история и список на потом — с фильтрами по датам и источникам."
+        />
+        <ActionCard
+          href="/library/transfer"
+          icon={<ArrowRight className="h-5 w-5" />}
+          title="Перенести историю"
+          text="Скачать JSON или CSV и импортировать свою историю с проверкой дублей."
+        />
         <ActionCard
           href="/library/cleanup"
           icon={<ListRestart className="h-5 w-5" />}
@@ -63,6 +104,20 @@ export default function LibraryPage() {
         title="Открытия и ваш вкус"
         text="Рекомендации с обратной связью, музыка для двоих и итоги недели"
       />
+      <label className="block text-sm">
+        <span>Дата воспоминаний</span>
+        <input
+          type="date"
+          aria-label="Дата воспоминаний"
+          min="2000-01-01"
+          max={new Date().toLocaleDateString("en-CA")}
+          value={date || data?.date || ""}
+          onChange={(event) => setDate(event.target.value)}
+          className="mt-2 block min-h-11 w-full rounded-lg border border-line bg-surface px-3 sm:w-64"
+        />
+      </label>
+      {error && <p role="alert">{error}</p>}
+      {loading && <Loading label="Собираем воспоминания…" />}
       <ActionCard
         href="/library/later"
         icon={<ListRestart className="h-5 w-5" />}
@@ -83,6 +138,28 @@ export default function LibraryPage() {
         tracks={data?.forgotten ?? []}
         empty="Пока нет забытых треков — продолжайте слушать музыку."
       />
+      {!!data?.returning_artists?.length && (
+        <section className="space-y-3">
+          <h2 className="font-semibold">Снова с вами</h2>
+          <p className="text-sm text-fg-3">
+            Исполнители, к которым вы вернулись за последний месяц после
+            перерыва от 90 дней.
+          </p>
+          <ul className="space-y-2">
+            {data.returning_artists.map((artist) => (
+              <li key={artist.artist}>
+                <Link
+                  className="inline-flex min-h-11 items-center text-accent"
+                  href={`/library/search?q=${encodeURIComponent(artist.artist)}`}
+                >
+                  {artist.artist} · перерыв {artist.days_away} дней ·{" "}
+                  {artist.plays} прослушиваний
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </main>
   );
 }
@@ -144,7 +221,7 @@ function MemorySection({
           {tracks.map((track) => (
             <Link
               key={`${track.id}-${track.played_at || track.last_played}`}
-              href={`/track/${track.id}`}
+              href={`/library/search?q=${encodeURIComponent(track.title)}`}
               className="overflow-hidden rounded-xl border border-line bg-surface hover:bg-surface-2"
             >
               {track.cover_url ? (

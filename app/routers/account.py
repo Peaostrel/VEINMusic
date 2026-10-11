@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -45,17 +46,11 @@ def _iso(value: Any) -> Any:
     return value.isoformat() if isinstance(value, datetime) else value
 
 
-def build_account_export(user: User, db: Session) -> dict[str, Any]:
+def build_account_export(user: User, db: Session, include_history: bool = True) -> dict[str, Any]:
     profile = user.profile
     integration = user.integration
 
-    scrobbles = [
-        {"played_at": _iso(s.played_at), "artist": t.artist, "title": t.title, "album": t.album,
-         "source": s.source, "listened_sec": s.listened_sec, "xp_earned": s.xp_earned,
-         "is_imported": s.is_imported, "track_url": t.track_url}
-        for s, t in db.query(Scrobble, Track).join(Track).filter(Scrobble.user_id == user.id)
-        .order_by(Scrobble.played_at.asc()).yield_per(1000)
-    ]
+    scrobbles = list(export_history(db, int(user.id))) if include_history else []
     following = [u for (u,) in db.query(User.username).join(Follow, Follow.following_id == User.id)
                  .filter(Follow.follower_id == user.id)]
     followers = [u for (u,) in db.query(User.username).join(Follow, Follow.follower_id == User.id)
@@ -86,6 +81,8 @@ def build_account_export(user: User, db: Session) -> dict[str, Any]:
         "favorite_track", "favorite_album", "avatar_frame",
     ]
     return {
+        "format": "veinmusic",
+        "version": 1,
         "exported_at": datetime.now(UTC).isoformat(),
         "account": {"username": user.username, "role": user.role, "is_banned": user.is_banned},
         "profile": {f: _iso(getattr(profile, f, None)) for f in profile_fields} if profile else {},
@@ -118,18 +115,48 @@ def build_account_export(user: User, db: Session) -> dict[str, Any]:
     }
 
 
+def export_history(db, user_id, start=None, end=None):
+    query = db.query(Scrobble, Track).execution_options(include_excluded=True).join(Track).filter(
+        Scrobble.user_id == user_id)
+    if start:
+        query = query.filter(Scrobble.played_at >= start)
+    if end:
+        query = query.filter(Scrobble.played_at < end)
+    query = query.order_by(Scrobble.played_at, Scrobble.id).yield_per(500)
+    for row, track in query:
+        yield {"played_at": _iso(row.played_at), "artist": track.artist, "title": track.title,
+               "album": track.album, "duration": int(track.duration or 0), "source": row.source,
+               "listened_sec": int(row.listened_sec or 0), "xp_earned": row.xp_earned,
+               "excluded_from_stats": bool(row.excluded_from_stats),
+               "is_imported": bool(row.is_imported), "track_url": track.track_url}
+
+
+def stream_account_export(bind, user_id):
+    # Own the session for the lifetime of the stream, including disconnects.
+    with Session(bind=bind) as session:
+        user = session.get(User, user_id)
+        data = build_account_export(user, session, include_history=False)
+        data.pop("scrobbles")
+        prefix = json.dumps(data, ensure_ascii=False)
+        yield prefix[:-1] + ', "scrobbles": ['
+        separator = ""
+        for item in export_history(session, user_id):
+            yield separator + json.dumps(item, ensure_ascii=False)
+            separator = ","
+        yield "]}"
+
+
 @router.get("/export")
 @limiter.limit("5/hour")
 def export_account(request: Request,
                    db: Annotated[Session, Depends(get_db)],
                    current_user: Annotated[User, Depends(get_current_user)]):
     """Download all personal data as JSON."""
-    data = build_account_export(current_user, db)
     filename = f"veinmusic-{current_user.username}-{datetime.now(UTC):%Y%m%d}.json"
-    return Response(
-        content=json.dumps(data, ensure_ascii=False, indent=2),
+    return StreamingResponse(
+        stream_account_export(db.get_bind(), int(current_user.id)),
         media_type="application/json",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"', "Cache-Control": "no-store"},
     )
 
 

@@ -6,6 +6,7 @@ import { API_URL } from "@/app/lib/api";
 import type { CalendarDay, ListeningCalendar } from "@/app/lib/types";
 import { formatNumber, plural } from "@/app/lib/plural";
 import { getSafeUrl } from "../../_components/profileUtils";
+import CalendarRange from "./CalendarRange";
 
 const MONTHS = [
   "Январь",
@@ -85,6 +86,7 @@ function Month({
               key={key}
               type="button"
               disabled={!day}
+              aria-pressed={selected === key}
               onClick={() => day && onSelect(day)}
               aria-label={
                 day
@@ -96,7 +98,7 @@ function Month({
                   ? `${day.scrobbles} · ${day.top_artist}`
                   : "Нет прослушиваний"
               }
-              className={`h-8 min-w-0 rounded-sm border font-mono text-[11px] transition-transform enabled:hover:scale-110 enabled:focus-visible:outline enabled:focus-visible:outline-2 enabled:focus-visible:outline-accent ${
+              className={`h-11 min-w-0 rounded-sm border font-mono text-[11px] transition-transform enabled:hover:scale-110 enabled:focus-visible:outline enabled:focus-visible:outline-2 enabled:focus-visible:outline-accent ${
                 selected === key ? "border-fg" : "border-transparent"
               } ${day ? activeTextColor : "text-fg-3"}`}
               style={{
@@ -180,6 +182,7 @@ export function MusicCalendar({ username }: Readonly<{ username: string }>) {
         <label className="flex items-center gap-2 text-xs text-fg-2">
           <span>Год</span>
           <select
+            aria-label="Год календаря"
             value={year}
             onChange={(event) => setYear(Number(event.target.value))}
             className="h-8 rounded-lg border border-line bg-bg px-2 font-mono text-xs text-fg outline-none"
@@ -291,6 +294,13 @@ export function MusicCalendar({ username }: Readonly<{ username: string }>) {
             <p className="rounded-lg border border-dashed border-line py-8 text-center text-sm text-fg-3">
               В этом году пока нет прослушиваний.
             </p>
+          )}
+          {selected && (
+            <CalendarRange
+              key={`${username}-${selected.date}`}
+              username={username}
+              date={selected.date}
+            />
           )}
         </>
       )}

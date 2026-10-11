@@ -24,7 +24,7 @@ Admin = Annotated[User, Depends(get_admin_user)]
 
 
 class FeedbackRequest(BaseModel):
-    value: Literal["known", "dislike", "like", "reset"]
+    value: Literal["known", "dislike", "like", "block_artist", "reset"]
 
 
 class HistoryEdit(BaseModel):
@@ -46,7 +46,9 @@ class ExcludeRequest(BaseModel):
 
 @router.post("/api/me/recommendations/{track_id}/feedback", responses={404: {"description": "Track not found"}})
 def feedback(track_id: int, data: FeedbackRequest, db: DB, user: Owner):
-    if db.get(Track, track_id) is None:
+    from app.routers.discovery_tools import accessible_track_ids
+
+    if data.value != "reset" and track_id not in accessible_track_ids(db, user, [track_id]):
         raise HTTPException(404, "Трек не найден")
     row = db.query(RecommendationFeedback).filter_by(user_id=user.id, track_id=track_id).first()
     if data.value == "reset":
@@ -58,6 +60,15 @@ def feedback(track_id: int, data: FeedbackRequest, db: DB, user: Owner):
         db.add(RecommendationFeedback(user_id=user.id, track_id=track_id, value=data.value))
     db.commit()
     return {"status": "ok"}
+
+
+@router.get("/api/me/recommendations/blocked-artists")
+def blocked_artists(db: DB, user: Owner):
+    rows = db.query(RecommendationFeedback.track_id, Track.artist).join(
+        Track, Track.id == RecommendationFeedback.track_id).filter(
+        RecommendationFeedback.user_id == user.id,
+        RecommendationFeedback.value == "block_artist").order_by(Track.artist).all()
+    return [{"track_id": track_id, "artist": artist} for track_id, artist in rows]
 
 
 def own_scrobble(db, user, scrobble_id):

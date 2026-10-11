@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { qualityRequest } from "@/app/lib/qualityApi";
 import { btn, inputOnCard } from "@/components/ui";
 
@@ -19,17 +20,20 @@ const sources = [
   ["extension", "Другое через расширение"],
 ];
 
-export default function ConnectionCheck() {
-  const [source, setSource] = useState("spotify");
+export default function ConnectionCheck({
+  defaultSource = "spotify",
+}: Readonly<{ defaultSource?: string }>) {
+  const [source, setSource] = useState(defaultSource);
   const [started, setStarted] = useState<string | null>(null);
   const [check, setCheck] = useState<Check | null>(null);
   const [error, setError] = useState("");
+  const finished = useRef(false);
   useEffect(() => {
     if (!started) return;
     let active = true;
     let busy = false;
     const poll = async () => {
-      if (busy || document.hidden) return;
+      if (busy || finished.current || document.hidden) return;
       busy = true;
       try {
         const result = await qualityRequest<Check>(
@@ -38,6 +42,7 @@ export default function ConnectionCheck() {
         if (active) {
           setCheck(result);
           setError("");
+          finished.current = result.counted;
         }
       } catch (cause) {
         if (active)
@@ -83,6 +88,7 @@ export default function ConnectionCheck() {
             setSource(event.target.value);
             setStarted(null);
             setCheck(null);
+            finished.current = false;
           }}
         >
           {sources.map(([id, name]) => (
@@ -96,6 +102,7 @@ export default function ConnectionCheck() {
           className={`${btn.primary} ${btn.sm}`}
           onClick={() => {
             setCheck(null);
+            finished.current = false;
             setStarted(new Date().toISOString());
           }}
         >
@@ -122,6 +129,11 @@ export default function ConnectionCheck() {
           Последнее событие:{" "}
           {new Date(check.last_event_at).toLocaleString("ru-RU")}
         </p>
+      )}
+      {check?.counted && (
+        <Link className={`${btn.primary} ${btn.md}`} href="/library/search">
+          Посмотреть свою историю
+        </Link>
       )}
       <p className="text-xs text-fg-3">
         Импорт Last.fm не подтверждает живое подключение. Для расширения

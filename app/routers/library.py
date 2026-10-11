@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import extract, func, or_
+from sqlalchemy import and_, case, false, func, or_
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user
@@ -336,20 +336,26 @@ def merge_own_tracks(
     return {"status": "ok", "reassigned_scrobbles": int(count)}
 
 
-@router.get("/api/me/memories")
+@router.get("/api/me/memories", responses={422: {"description": "Date is outside the supported range"}})
 def music_memories(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
+    on: date | None = None,
 ):
+    from app.routers.stats import _user_timezone
+
     now = datetime.now(UTC)
+    zone = _user_timezone(current_user)
+    selected = on or now.astimezone(zone).date()
+    if selected < date(2000, 1, 1) or selected > now.astimezone(zone).date():
+        raise HTTPException(422, "Выберите дату между 2000 годом и сегодняшним днём")
+    periods = _anniversary_periods(zone, selected)
     on_this_day = (
         db.query(Scrobble, Track)
         .join(Track, Track.id == Scrobble.track_id)
         .filter(
             Scrobble.user_id == current_user.id,
-            extract("month", Scrobble.played_at) == now.month,
-            extract("day", Scrobble.played_at) == now.day,
-            extract("year", Scrobble.played_at) < now.year,
+            or_(*periods) if periods else false(),
         )
         .order_by(Scrobble.played_at.desc())
         .limit(8)
@@ -371,6 +377,8 @@ def music_memories(
         .all()
     )
     return {
+        "date": selected.isoformat(),
+        "returning_artists": _returning_artists(db, int(current_user.id), now),
         "on_this_day": [
             {**_track_dict(track), "played_at": scrobble.played_at}
             for scrobble, track in on_this_day
@@ -380,6 +388,38 @@ def music_memories(
             for track, plays, last_played in forgotten
         ],
     }
+
+
+def _anniversary_periods(zone, selected):
+    periods = []
+    for year in range(2000, selected.year):
+        try:
+            start = datetime(year, selected.month, selected.day, tzinfo=zone).astimezone(UTC)
+        except ValueError:
+            continue  # February 29 has no anniversary in non-leap years.
+        periods.append(and_(Scrobble.played_at >= start, Scrobble.played_at < start + timedelta(days=1)))
+    return periods
+
+
+def _returning_artists(db, user_id, now):
+    recent = now - timedelta(days=30)
+    rows = db.query(
+        Track.artist,
+        func.min(case((Scrobble.played_at >= recent, Scrobble.played_at))),
+        func.max(case((Scrobble.played_at < recent, Scrobble.played_at))),
+        func.sum(case((Scrobble.played_at >= recent, 1), else_=0)),
+    ).join(Scrobble, Scrobble.track_id == Track.id).filter(
+        Scrobble.user_id == user_id,
+        Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,
+    ).group_by(Track.artist).all()
+    items = []
+    for artist, first_recent, last_old, count in rows:
+        if not first_recent or not last_old:
+            continue
+        gap = (first_recent.replace(tzinfo=UTC) - last_old.replace(tzinfo=UTC)).days
+        if gap >= 90:
+            items.append({"artist": artist, "days_away": gap, "plays": int(count), "returned_at": first_recent})
+    return sorted(items, key=lambda item: (-item["days_away"], item["artist"]))[:8]
 
 
 @router.get("/api/integrations/status")

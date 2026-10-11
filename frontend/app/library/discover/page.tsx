@@ -90,6 +90,10 @@ function downloadStory(story: Story) {
 
 export default function DiscoverPage() {
   const [novelty, setNovelty] = useState(50);
+  const [recentInterest, setRecentInterest] = useState(50);
+  const [blocked, setBlocked] = useState<
+    { track_id: number; artist: string }[]
+  >([]);
   const [recommendationHistory, setRecommendationHistory] = useState<Track[]>(
     [],
   );
@@ -105,7 +109,7 @@ export default function DiscoverPage() {
   const loadRecommendations = useCallback(
     async (avoidRecent = false) => {
       const result = await qualityRequest<{ recommendations: Track[] }>(
-        `/api/recommendations/me?novelty=${novelty}&avoid_recent=${avoidRecent}`,
+        `/api/recommendations/me?novelty=${novelty}&recent_interest=${recentInterest}&avoid_recent=${avoidRecent}`,
       );
       setTracks(result.recommendations);
       if (result.recommendations.length)
@@ -116,7 +120,7 @@ export default function DiscoverPage() {
           }),
         );
     },
-    [novelty],
+    [novelty, recentInterest],
   );
   useEffect(() => {
     let active = true;
@@ -124,14 +128,18 @@ export default function DiscoverPage() {
       qualityRequest<{ recommendations: Track[] }>("/api/recommendations/me"),
       qualityRequest<Evolution>("/api/me/taste-evolution"),
       qualityRequest<Story>("/api/me/weekly-story"),
+      qualityRequest<{ track_id: number; artist: string }[]>(
+        "/api/me/recommendations/blocked-artists",
+      ),
     ])
-      .then(([recs, tastes, recap]) => {
+      .then(([recs, tastes, recap, excluded]) => {
         if (active) {
           setTracks(recs.recommendations);
           if (recs.recommendations.length)
             void recordImpressions(recs.recommendations);
           setEvolution(tastes);
           setStory(recap);
+          setBlocked(excluded);
         }
       })
       .catch((cause) => {
@@ -158,6 +166,11 @@ export default function DiscoverPage() {
       );
       setLastFeedback(value === "reset" ? null : id);
       await loadRecommendations();
+      setBlocked(
+        await qualityRequest<{ track_id: number; artist: string }[]>(
+          "/api/me/recommendations/blocked-artists",
+        ),
+      );
       setMessage(
         value === "reset" ? "Выбор отменён." : "Учли ваш выбор в подборке.",
       );
@@ -222,6 +235,48 @@ export default function DiscoverPage() {
             треков одного артиста.
           </span>
         </label>
+        <label className="block text-sm">
+          Недавние интересы: {recentInterest}%
+          <input
+            aria-label="Вес недавних интересов"
+            type="range"
+            min="0"
+            max="100"
+            step="10"
+            value={recentInterest}
+            onChange={(event) => setRecentInterest(Number(event.target.value))}
+            className="block w-full"
+          />
+          <span className="text-xs text-fg-3">
+            0 — общий вкус; 100 — сильнее учитываем последние 30 дней.
+            Применяется кнопкой ниже.
+          </span>
+        </label>
+        {!!blocked.length && (
+          <section className="space-y-2">
+            <h3 className="text-sm font-medium">Исключённые исполнители</h3>
+            <ul>
+              {blocked.map((row) => (
+                <li
+                  key={row.track_id}
+                  className="flex flex-wrap items-center gap-3 text-sm"
+                >
+                  {row.artist}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className={`${btn.secondary} ${btn.md}`}
+                    onClick={() => {
+                      void feedback(row.track_id, "reset");
+                    }}
+                  >
+                    Вернуть {row.artist}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         <div className="flex flex-wrap gap-2">
           <button
             className={btn.secondary}
@@ -318,6 +373,7 @@ export default function DiscoverPage() {
                   ["known", "Уже знаю"],
                   ["dislike", "Не нравится"],
                   ["like", "Больше такого"],
+                  ["block_artist", "Не рекомендовать артиста"],
                 ].map(([value, label]) => (
                   <button
                     type="button"

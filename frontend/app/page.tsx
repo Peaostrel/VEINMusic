@@ -307,10 +307,12 @@ function DashboardStatus({
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">Состояние VEIN</h2>
         <Link
-          href="/settings?tab=integrations"
+          href={
+            connected.length ? "/settings?tab=integrations" : "/library/connect"
+          }
           className="text-xs text-fg-3 hover:text-accent"
         >
-          Интеграции →
+          {connected.length ? "Интеграции →" : "Подключить музыку →"}
         </Link>
       </div>
       <p className={`mt-3 text-sm ${problems ? "text-fg-2" : "text-ok"}`}>

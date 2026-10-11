@@ -250,8 +250,9 @@ def get_my_recommendations(
     limit: Annotated[int, Query(ge=1, le=50)] = 15,
     novelty: Annotated[int, Query(ge=0, le=100)] = 50,
     avoid_recent: bool = False,
+    recent_interest: Annotated[int, Query(ge=0, le=100)] = 50,
 ):
     """Get personalized smart recommendations for the authenticated user."""
     from app.services.recommendations import generate_smart_recommendations
 
-    return generate_smart_recommendations(current_user, db, limit=limit, novelty=novelty, avoid_recent=avoid_recent)
+    return generate_smart_recommendations(current_user, db, limit=limit, novelty=novelty, avoid_recent=avoid_recent, recent_interest=recent_interest)
