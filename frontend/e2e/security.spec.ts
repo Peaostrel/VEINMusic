@@ -19,6 +19,11 @@ test("two-factor enrollment downloads recovery codes and login requires the fact
   });
   await card.getByLabel("Пароль для двухфакторной защиты").fill(PASSWORD);
   await card.getByRole("button", { name: "Настроить защиту" }).click();
+  await expect(
+    card.getByRole("img", {
+      name: "QR-код для подключения двухфакторной защиты",
+    }),
+  ).toBeVisible();
   await expect(card.locator("code")).toBeVisible();
   const secret = await card.locator("code").innerText();
   const otp = execFileSync(
@@ -31,6 +36,11 @@ test("two-factor enrollment downloads recovery codes and login requires the fact
   await expect(
     card.getByText("Защита включена. Остальные сеансы завершены."),
   ).toBeVisible();
+  await expect(
+    card.getByRole("img", {
+      name: "QR-код для подключения двухфакторной защиты",
+    }),
+  ).toHaveCount(0);
   const codes = (await card.locator("pre").innerText()).split("\n");
   expect(codes).toHaveLength(8);
   const download = page.waitForEvent("download");
