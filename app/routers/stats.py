@@ -446,7 +446,8 @@ def get_detailed_stats(username: str,
         func.count(
             Scrobble.id).label('plays'),
         func.max(
-            Scrobble.source).label('source')) .join(Scrobble).filter(
+            Scrobble.source).label('source'),
+        func.max(Track.cover_url).label('cover_url')) .join(Scrobble).filter(
                 *
                 base_filter).group_by(
                     Track.artist) .order_by(
@@ -543,7 +544,8 @@ def get_detailed_stats(username: str,
             "comparison": comparison,
             "top_artists": [{"name": r[0],
                              "plays": r[1],
-                             "source": r[2]} for r in top_artists_raw],
+                             "source": r[2],
+                             "cover_url": r[3]} for r in top_artists_raw],
             "top_tracks": [{"title": r[0],
                             "artist": r[1],
                             "cover_url": r[2],
@@ -798,6 +800,16 @@ def get_listening_calendar(
     }
 
 
+def _playback_details(user, scrobble, track, is_owner):
+    show_source = is_owner or preference_enabled(user.profile, "privacy", "show_listening_source")
+    details = {"source": scrobble.source if show_source else "",
+               "duration": None, "listened_sec": None, "excluded": None}
+    if is_owner:
+        details.update(duration=int(track.duration or 180), listened_sec=int(scrobble.listened_sec or 0),
+                       excluded=bool(scrobble.excluded_from_stats))
+    return details
+
+
 # --- /api/current-track/{username} ---
 @router.get("/api/current-track/{username}")
 def get_current_track(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
@@ -832,7 +844,8 @@ def get_current_track(username: str, request: Request, db: Annotated[Session, De
             "artist": t.artist,
             "cover_url": t.cover_url,
             "level": lvl,
-            "rank": rank
+            "rank": rank,
+            **_playback_details(user, s, t, is_owner),
         }
     return {"playing": False}
 

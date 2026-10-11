@@ -36,15 +36,15 @@ export function StatTiles({
   ];
   return (
     <div className="flex flex-col gap-3">
-      <dl className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        {tiles.map((t) => (
+      <dl className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        {tiles.map((t, index) => (
           <div
             key={t.label}
             title={t.hint}
-            className="flex flex-col-reverse gap-1.5 rounded-xl border border-line bg-surface px-4 py-4"
+            className={`flex min-w-0 flex-col-reverse gap-2 rounded-xl px-5 py-5 ${index < 2 ? "bg-accent-soft" : "bg-surface"}`}
           >
             <dt className="text-xs text-fg-2">{t.label}</dt>
-            <dd className="whitespace-nowrap font-mono text-[22px] font-medium">
+            <dd className="break-words font-mono text-2xl font-medium tracking-tight sm:text-3xl">
               {t.value}
             </dd>
           </div>

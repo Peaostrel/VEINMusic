@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
 import type { CalendarDay, ListeningCalendar } from "@/app/lib/types";
 import { formatNumber, plural } from "@/app/lib/plural";
 import { getSafeUrl } from "../../_components/profileUtils";
 import CalendarRange from "./CalendarRange";
+import { btn, Segmented } from "@/components/ui";
 
 const MONTHS = [
   "Январь",
@@ -98,8 +99,10 @@ function Month({
                   ? `${day.scrobbles} · ${day.top_artist}`
                   : "Нет прослушиваний"
               }
-              className={`h-11 min-w-0 rounded-sm border font-mono text-[11px] transition-transform enabled:hover:scale-110 enabled:focus-visible:outline enabled:focus-visible:outline-2 enabled:focus-visible:outline-accent ${
-                selected === key ? "border-fg" : "border-transparent"
+              className={`h-11 min-w-0 rounded-lg border font-mono text-xs transition-transform enabled:hover:scale-110 enabled:focus-visible:outline enabled:focus-visible:outline-2 enabled:focus-visible:outline-accent ${
+                selected === key
+                  ? "border-fg ring-2 ring-fg ring-offset-2 ring-offset-surface"
+                  : "border-transparent"
               } ${day ? activeTextColor : "text-fg-3"}`}
               style={{
                 background: day
@@ -118,6 +121,8 @@ function Month({
 
 export function MusicCalendar({ username }: Readonly<{ username: string }>) {
   const currentYear = new Date().getFullYear();
+  const [mode, setMode] = useState<"month" | "year">("month");
+  const [month, setMonth] = useState(new Date().getMonth());
   const [year, setYear] = useState(currentYear);
   const [calendar, setCalendar] = useState<ListeningCalendar | null>(null);
   const [selected, setSelected] = useState<CalendarDay | null>(null);
@@ -144,6 +149,8 @@ export function MusicCalendar({ username }: Readonly<{ username: string }>) {
         if (!data || !active) return;
         setCalendar(data);
         setSelected(data.summary.best_day);
+        if (data.summary.best_day)
+          setMonth(Number(data.summary.best_day.date.slice(5, 7)) - 1);
       })
       .catch((requestError: unknown) => {
         if (active && !(requestError instanceof DOMException)) setError(true);
@@ -225,83 +232,141 @@ export function MusicCalendar({ username }: Readonly<{ username: string }>) {
             ))}
           </dl>
 
-          <div className="grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {MONTHS.map((_, month) => (
-              <Month
-                key={month}
-                year={year}
-                month={month}
-                days={dayMap}
-                max={max}
-                selected={selected?.date ?? null}
-                onSelect={setSelected}
-              />
-            ))}
-          </div>
-
-          {selected ? (
-            <div className="flex flex-col gap-4 rounded-lg border border-line bg-bg p-4 sm:flex-row sm:items-center">
-              {selected.top_track.cover_url ? (
-                <img
-                  src={getSafeUrl(selected.top_track.cover_url)}
-                  alt=""
-                  className="h-16 w-16 rounded-lg object-cover"
-                />
-              ) : (
-                <span className="h-16 w-16 rounded-lg bg-surface-2" />
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="text-xs capitalize text-fg-3">
-                  {dayLabel(selected.date)}
-                </p>
-                <p className="mt-1 truncate text-base font-medium">
-                  {selected.top_track.title}
-                </p>
-                <p className="truncate text-sm text-fg-2">
-                  {selected.top_track.artist}
-                </p>
-              </div>
-              <dl className="grid grid-cols-3 gap-5 text-right">
-                <div>
-                  <dt className="text-[10px] text-fg-3">прослушивания</dt>
-                  <dd className="font-mono text-base">
-                    {formatNumber(selected.scrobbles)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[10px] text-fg-3">минуты</dt>
-                  <dd className="font-mono text-base">
-                    {formatNumber(selected.minutes)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[10px] text-fg-3">артисты</dt>
-                  <dd
-                    className="font-mono text-base"
-                    title={plural(
-                      selected.unique_artists,
-                      "артист",
-                      "артиста",
-                      "артистов",
-                    )}
-                  >
-                    {formatNumber(selected.unique_artists)}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          ) : (
-            <p className="rounded-lg border border-dashed border-line py-8 text-center text-sm text-fg-3">
-              В этом году пока нет прослушиваний.
-            </p>
-          )}
-          {selected && (
-            <CalendarRange
-              key={`${username}-${selected.date}`}
-              username={username}
-              date={selected.date}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Segmented
+              label="Вид календаря"
+              value={mode}
+              onChange={setMode}
+              options={[
+                { id: "month", label: "Месяц" },
+                { id: "year", label: "Весь год" },
+              ]}
             />
-          )}
+            {mode === "month" && (
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  aria-label="Предыдущий месяц"
+                  disabled={month === 0}
+                  className={btn.icon}
+                  onClick={() => setMonth((value) => value - 1)}
+                >
+                  <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                </button>
+                <span
+                  className="min-w-24 text-center text-sm font-medium"
+                  aria-live="polite"
+                >
+                  {MONTHS[month]}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Следующий месяц"
+                  disabled={month === 11}
+                  className={btn.icon}
+                  onClick={() => setMonth((value) => value + 1)}
+                >
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            )}
+          </div>
+          <div
+            className={
+              mode === "month" && selected
+                ? "grid items-start gap-5 xl:grid-cols-2"
+                : "space-y-5"
+            }
+          >
+            <div
+              className={
+                mode === "year"
+                  ? "grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3"
+                  : "mx-auto w-full max-w-lg"
+              }
+            >
+              {(mode === "year"
+                ? MONTHS.map((_, index) => index)
+                : [month]
+              ).map((monthIndex) => (
+                <Month
+                  key={monthIndex}
+                  year={year}
+                  month={monthIndex}
+                  days={dayMap}
+                  max={max}
+                  selected={selected?.date ?? null}
+                  onSelect={setSelected}
+                />
+              ))}
+            </div>
+
+            <div className="min-w-0 space-y-4">
+              {selected ? (
+                <div className="flex flex-col gap-4 rounded-lg border border-line bg-bg p-4 sm:flex-row sm:flex-wrap sm:items-center">
+                  {selected.top_track.cover_url ? (
+                    <img
+                      src={getSafeUrl(selected.top_track.cover_url)}
+                      alt=""
+                      className="h-16 w-16 rounded-lg object-cover"
+                    />
+                  ) : (
+                    <span className="h-16 w-16 rounded-lg bg-surface-2" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs capitalize text-fg-3">
+                      {dayLabel(selected.date)}
+                    </p>
+                    <p className="mt-1 truncate text-base font-medium">
+                      {selected.top_track.title}
+                    </p>
+                    <p className="truncate text-sm text-fg-2">
+                      {selected.top_track.artist}
+                    </p>
+                  </div>
+                  <dl className="grid w-full grid-cols-3 gap-3">
+                    <div>
+                      <dt className="text-[10px] text-fg-3">прослушивания</dt>
+                      <dd className="font-mono text-base">
+                        {formatNumber(selected.scrobbles)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[10px] text-fg-3">минуты</dt>
+                      <dd className="font-mono text-base">
+                        {formatNumber(selected.minutes)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[10px] text-fg-3">артисты</dt>
+                      <dd
+                        className="font-mono text-base"
+                        title={plural(
+                          selected.unique_artists,
+                          "артист",
+                          "артиста",
+                          "артистов",
+                        )}
+                      >
+                        {formatNumber(selected.unique_artists)}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              ) : (
+                <p className="rounded-lg border border-dashed border-line py-8 text-center text-sm text-fg-3">
+                  В этом году пока нет прослушиваний.
+                </p>
+              )}
+              {selected && (
+                <CalendarRange
+                  key={`${username}-${selected.date}`}
+                  username={username}
+                  date={selected.date}
+                />
+              )}
+            </div>
+          </div>
         </>
       )}
     </section>

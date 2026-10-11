@@ -150,7 +150,9 @@ html:not([data-auth="1"]) .auth-only {
 
 @media (max-width: 1023.98px) {
   html[data-auth="1"] {
-    --tabbar-offset: calc(64px + env(safe-area-inset-bottom));
+    --tabbar-offset: calc(
+      64px + var(--playing-offset, 0px) + env(safe-area-inset-bottom)
+    );
   }
   html[data-auth="1"] .shell-main {
     padding-bottom: var(--tabbar-offset);
@@ -226,4 +228,27 @@ html:not([data-auth="1"]) .auth-only {
 :where(a, button, input, select, textarea):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
+}
+
+/* Shared music controls keep the active theme and reduced-motion settings. */
+.music-progress {
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--color-surface-2);
+}
+.music-progress::-webkit-progress-bar {
+  background: var(--color-surface-2);
+}
+.music-progress::-webkit-progress-value {
+  background: var(--accent);
+  border-radius: 999px;
+}
+.music-progress::-moz-progress-bar {
+  background: var(--accent);
+  border-radius: 999px;
+}
+summary::marker {
+  color: var(--accent);
 }

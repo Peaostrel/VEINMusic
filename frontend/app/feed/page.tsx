@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { FeedDay, feedDay } from "@/components/FeedDay";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
@@ -19,6 +20,7 @@ import {
 
 interface FeedItem {
   id: number;
+  time?: string;
   username: string;
   avatar_url?: string;
   cover_url?: string;
@@ -125,50 +127,56 @@ export default function GlobalFeed() {
   else
     list = (
       <ol className="border-t border-line-soft">
-        {filteredFeed.map((s) => {
+        {filteredFeed.map((s, index) => {
           const cover = sanitizeImageUrl(s.cover_url);
           return (
-            <li
-              key={s.id}
-              className="grid grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-4 border-b border-line-soft px-1 py-3"
-            >
-              {cover ? (
-                <img
-                  src={cover}
-                  alt=""
-                  className="h-12 w-12 rounded object-cover"
-                />
-              ) : (
-                <span className="h-12 w-12 rounded bg-surface-2" />
-              )}
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <span className="flex min-w-0 items-center gap-2">
-                  {s.is_playing && (
-                    <span className="flex shrink-0 items-center gap-1.5 font-mono text-[11px] text-accent">
-                      <PlayingBars /> играет
-                    </span>
-                  )}
-                  <span className="truncate text-[15px] font-medium">
-                    {s.title}
-                  </span>
-                </span>
-                <span className="truncate text-[13px] text-fg-2">
-                  {s.artist}
-                </span>
-              </div>
-              <Link
-                href={`/user/${s.username}`}
-                className="flex min-w-0 items-center gap-2"
+            <Fragment key={s.id}>
+              {feedDay(s.time) &&
+                feedDay(s.time) !== feedDay(filteredFeed[index - 1]?.time) && (
+                  <FeedDay date={feedDay(s.time)!} />
+                )}
+              <li
+                key={s.id}
+                className="grid grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-4 rounded-xl px-3 py-4 transition-colors hover:bg-surface/80"
               >
-                <Avatar src={s.avatar_url} seed={s.username} size={28} />
-                <span className="hidden min-w-0 flex-col sm:flex">
-                  <span className="truncate text-[13px]">{s.username}</span>
-                  <span className="truncate font-mono text-[11px] text-fg-3">
-                    {sourceLabel(s.source)} · {s.relative_time}
+                {cover ? (
+                  <img
+                    src={cover}
+                    alt=""
+                    className="h-12 w-12 rounded-lg object-cover"
+                  />
+                ) : (
+                  <span className="h-12 w-12 rounded-lg bg-surface-2" />
+                )}
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="flex min-w-0 items-center gap-2">
+                    {s.is_playing && (
+                      <span className="flex shrink-0 items-center gap-1.5 font-mono text-[11px] text-accent">
+                        <PlayingBars /> играет
+                      </span>
+                    )}
+                    <span className="truncate text-base font-semibold">
+                      {s.title}
+                    </span>
                   </span>
-                </span>
-              </Link>
-            </li>
+                  <span className="truncate text-[13px] text-fg-2">
+                    {s.artist}
+                  </span>
+                </div>
+                <Link
+                  href={`/user/${s.username}`}
+                  className="flex min-w-0 items-center gap-2"
+                >
+                  <Avatar src={s.avatar_url} seed={s.username} size={28} />
+                  <span className="hidden min-w-0 flex-col sm:flex">
+                    <span className="truncate text-[13px]">{s.username}</span>
+                    <span className="truncate font-mono text-[11px] text-fg-3">
+                      {sourceLabel(s.source)} · {s.relative_time}
+                    </span>
+                  </span>
+                </Link>
+              </li>
+            </Fragment>
           );
         })}
       </ol>

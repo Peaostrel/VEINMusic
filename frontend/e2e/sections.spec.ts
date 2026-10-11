@@ -60,6 +60,7 @@ test.describe("Library", () => {
     await expect(
       page.getByRole("heading", { name: "Моя библиотека" }),
     ).toBeVisible({ timeout: 15000 });
+    await page.getByText("Управление библиотекой", { exact: true }).click();
     await page.getByRole("link", { name: /Навести порядок/ }).click();
     await expect(
       page.getByRole("heading", { name: "Порядок в истории" }),

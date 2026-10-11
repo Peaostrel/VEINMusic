@@ -60,7 +60,7 @@ test("discovery feedback and a downloadable weekly card", async ({ page }) => {
     page.getByRole("heading", { name: "Открытия и ваш вкус" }),
   ).toBeVisible();
   hidden = true;
-  await page.getByRole("button", { name: "Не нравится", exact: true }).click();
+  await page.getByRole("button", { name: "Скрыть", exact: true }).click();
   await expect(page.getByText("Учли ваш выбор в подборке.")).toBeVisible();
   await expect(
     page.getByText("Пока нет новых рекомендаций", { exact: true }),
@@ -68,7 +68,7 @@ test("discovery feedback and a downloadable weekly card", async ({ page }) => {
   hidden = false;
   await page.getByRole("button", { name: "Отменить последний выбор" }).click();
   await expect(
-    page.getByRole("button", { name: "Не нравится", exact: true }),
+    page.getByRole("button", { name: "Скрыть", exact: true }),
   ).toBeVisible();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Скачать карточку PNG" }).click();
