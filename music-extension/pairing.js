@@ -76,8 +76,9 @@ async function veinPollPairing() {
         if (data.status === 'pending') return 'pending';
         await veinStorageRemove(['pairing']);
         return data.status === 'denied' ? 'denied' : 'expired';
-    } catch (e) {
-        // Network failures are reported to the popup as a retryable pairing state.
+    } catch {
+        // Keep the pending authorization for retry; never log its code or keys.
+        console.warn('[VEIN] Не удалось проверить подключение устройства. Повторим проверку позже.');
         return 'error';
     }
 }

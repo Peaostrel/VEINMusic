@@ -148,12 +148,30 @@ def test_calendar_and_custom_wrapped_use_local_days(auth_client, db, auth_user):
     assert wrapped.json()["total_scrobbles"] == 3
 
 
-def test_stats_reject_invalid_periods(auth_client, auth_user):
-    username = auth_user.username
-    assert auth_client.get(
-        f"/api/detailed-stats/{username}?period=unknown").status_code == 422
-    assert auth_client.get(
-        f"/api/detailed-stats/{username}?period=custom").status_code == 422
-    assert auth_client.get(
-        f"/api/detailed-stats/{username}?period=custom&date_from=2026-02-02&date_to=2026-01-01"
-    ).status_code == 422
+@pytest.mark.parametrize("endpoint", ["detailed", "wrapped"])
+@pytest.mark.parametrize("query, detail", [
+    ("period=unknown", "Неизвестный период"),
+    ("period=custom", "Укажите начало и конец периода"),
+    ("period=custom&date_from=bad-date&date_to=2026-01-01", "Дата должна быть в формате YYYY-MM-DD"),
+    ("period=custom&date_from=2026-02-02&date_to=2026-01-01", "Начало периода не может быть позже конца"),
+    ("period=custom&date_from=2025-01-01&date_to=2026-02-01", "Период не может быть длиннее 366 дней"),
+])
+def test_stats_reject_invalid_periods(auth_client, auth_user, endpoint, query, detail):
+    if endpoint == "wrapped":
+        url = f"/api/stats/wrapped?username={auth_user.username}&{query}"
+    else:
+        url = f"/api/detailed-stats/{auth_user.username}?{query}"
+    response = auth_client.get(url)
+    assert response.status_code == 422
+    assert response.json() == {"detail": detail}
+
+
+@pytest.mark.parametrize("path", [
+    "/api/stats/wrapped",
+    "/api/detailed-stats/{username}",
+    "/api/stats/calendar/{username}",
+])
+def test_stats_openapi_documents_invalid_input(client, path):
+    schema = client.get("/openapi.json").json()
+    response = schema["paths"][path]["get"]["responses"]["422"]
+    assert response["description"]
