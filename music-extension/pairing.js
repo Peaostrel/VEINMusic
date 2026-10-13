@@ -5,7 +5,11 @@
 const VEIN_DEFAULT_API = 'https://api.music.vein.guru';
 
 function veinApiBase(settings) {
-    return settings?.apiUrl || VEIN_DEFAULT_API;
+    const candidate = settings?.apiUrl || VEIN_DEFAULT_API;
+    const url = new URL(candidate);
+    const local = (url.hostname === 'localhost' || url.hostname === '127.0.0.1') && url.protocol === 'http:';
+    if (url.origin !== VEIN_DEFAULT_API && !local) throw new Error('Недопустимый адрес API');
+    return url.origin;
 }
 
 function veinStorageGet(keys) {
@@ -13,7 +17,11 @@ function veinStorageGet(keys) {
 }
 
 function veinStorageSet(values) {
-    return new Promise((resolve) => chrome.storage.local.set(values, resolve));
+    return new Promise((resolve, reject) => chrome.storage.local.set(values, () => {
+        const error = chrome.runtime.lastError;
+        if (error) reject(new Error(error.message));
+        else resolve();
+    }));
 }
 
 function veinStorageRemove(keys) {
@@ -21,16 +29,11 @@ function veinStorageRemove(keys) {
 }
 
 function veinClientName() {
-    const ua = navigator.userAgent;
-    const browsers = [
-        ['Firefox', 'Firefox'], ['Edg/', 'Edge'], ['OPR/', 'Opera'],
-        ['YaBrowser', 'Яндекс Браузер']
-    ];
-    const browser = browsers.find(([marker]) => ua.includes(marker))?.[1] || 'Chrome';
-    return `Расширение VEIN (${browser})`;
+    return 'Расширение VEIN';
 }
 
 async function veinStartPairing() {
+    await veinStorageRemove(['pairing']);
     const settings = await veinStorageGet(['apiUrl']);
     const res = await fetch(`${veinApiBase(settings)}/api/devices/code`, {
         method: 'POST',
@@ -41,6 +44,11 @@ async function veinStartPairing() {
         throw new Error(`Сервер ответил ${res.status}`);
     }
     const data = await res.json();
+    const verificationUrl = new URL(data.verification_uri_complete);
+    if (verificationUrl.origin !== 'https://music.vein.guru' &&
+        !((verificationUrl.hostname === 'localhost' || verificationUrl.hostname === '127.0.0.1') && verificationUrl.protocol === 'http:')) {
+        throw new Error('Сервер вернул недопустимую страницу подтверждения');
+    }
     const pairing = {
         device_code: data.device_code,
         user_code: data.user_code,
@@ -53,7 +61,15 @@ async function veinStartPairing() {
 }
 
 // Returns 'none' | 'pending' | 'approved' | 'denied' | 'expired' | 'error'
-async function veinPollPairing() {
+let veinPairingPoll = null;
+function veinPollPairing() {
+    if (!veinPairingPoll) {
+        veinPairingPoll = veinPollPairingOnce().finally(() => { veinPairingPoll = null; });
+    }
+    return veinPairingPoll;
+}
+
+async function veinPollPairingOnce() {
     const { pairing, apiUrl } = await veinStorageGet(['pairing', 'apiUrl']);
     if (!pairing) return 'none';
     if (Date.now() > pairing.expires_at) {
@@ -69,12 +85,17 @@ async function veinPollPairing() {
         if (!res.ok) return 'error';
         const data = await res.json();
         if (data.status === 'approved') {
-            await veinStorageSet({ apiKey: data.api_key, username: data.username });
+            if (typeof data.api_key !== 'string' || !data.api_key || typeof data.username !== 'string') return 'error';
+            const current = await veinStorageGet(['pairing', 'trackingEnabled']);
+            // A response to an old poll must not reconnect a disconnected device.
+            if (current.pairing?.device_code !== pairing.device_code || current.trackingEnabled !== true) return 'none';
+            await veinStorageSet({ apiKey: data.api_key, username: data.username, offline_scrobbles: [] });
             await veinStorageRemove(['pairing']);
             return 'approved';
         }
         if (data.status === 'pending') return 'pending';
-        await veinStorageRemove(['pairing']);
+        const current = await veinStorageGet(['pairing']);
+        if (current.pairing?.device_code === pairing.device_code) await veinStorageRemove(['pairing']);
         return data.status === 'denied' ? 'denied' : 'expired';
     } catch {
         // Keep the pending authorization for retry; never log its code or keys.

@@ -1,48 +1,81 @@
 {
   "manifest_version": 3,
   "name": "VEIN Music Tracker",
-  "version": "1.4.3",
-  "description": "Универсальный скроблер треков для VEIN Music.",
-  
+  "version": "1.5.0",
+  "description": "История прослушиваний из музыкальных веб-плееров в вашем аккаунте VEINMusic.",
   "browser_specific_settings": {
     "gecko": {
       "id": "vein-tracker@vein.music",
-      "strict_min_version": "109.0"
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": [
+          "authenticationInfo",
+          "browsingActivity",
+          "websiteContent",
+          "websiteActivity"
+        ]
+      }
     }
   },
-
   "permissions": [
     "storage",
     "alarms"
   ],
-
   "host_permissions": [
-    "*://music.vein.guru/*",
-    "*://*.vein.guru/*",
-    "*://localhost/*",
-    "*://127.0.0.1/*"
+    "https://music.vein.guru/*",
+    "https://api.music.vein.guru/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
   ],
-
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
   },
-
   "background": {
-    "scripts": ["pairing.js", "background.js"],
+    "scripts": [
+      "pairing.js",
+      "background.js"
+    ],
     "service_worker": "background.js"
   },
-
   "content_scripts": [
     {
       "matches": [
-        "*://music.yandex.ru/*",
-        "*://*.spotify.com/*",
-        "*://music.youtube.com/*",
-        "*://vk.com/*",
-        "*://soundcloud.com/*",
-        "*://music.apple.com/*"
+        "https://music.yandex.ru/*",
+        "https://music.yandex.com/*",
+        "https://open.spotify.com/*",
+        "https://music.youtube.com/*",
+        "https://vk.com/*",
+        "https://vk.ru/*",
+        "https://soundcloud.com/*",
+        "https://music.apple.com/*"
       ],
-      "js": ["content.js"],
+      "js": [
+        "page_world.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "https://music.yandex.ru/*",
+        "https://music.yandex.com/*",
+        "https://open.spotify.com/*",
+        "https://music.youtube.com/*",
+        "https://vk.com/*",
+        "https://vk.ru/*",
+        "https://soundcloud.com/*",
+        "https://music.apple.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_start",
       "all_frames": false
     },
@@ -50,24 +83,20 @@
       "matches": [
         "*://localhost/*",
         "*://127.0.0.1/*",
-        "*://music.vein.guru/*"
+        "https://music.vein.guru/*"
       ],
-      "js": ["sync-key.js"],
+      "js": [
+        "sync-key.js"
+      ],
       "run_at": "document_end"
     }
   ],
-
-  "web_accessible_resources": [
-    {
-      "resources": ["page_world.js"],
-      "matches": [
-        "*://music.yandex.ru/*",
-        "*://*.spotify.com/*",
-        "*://music.youtube.com/*",
-        "*://vk.com/*",
-        "*://soundcloud.com/*",
-        "*://music.apple.com/*"
-      ]
-    }
-  ]
+  "homepage_url": "https://music.vein.guru",
+  "minimum_chrome_version": "111",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
 }

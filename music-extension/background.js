@@ -49,9 +49,9 @@ let flushInProgress = false;
 
 function mutateOfflineQueue(update) {
     const operation = queueMutation.then(async () => {
-        const res = await storageGet(['offline_scrobbles']);
+        const res = await storageGet(['offline_scrobbles', 'apiKey', 'trackingEnabled']);
         const queue = Array.isArray(res.offline_scrobbles) ? res.offline_scrobbles : [];
-        await storageSet({ offline_scrobbles: update(queue) });
+        await storageSet({ offline_scrobbles: update(queue, res) });
     });
     queueMutation = operation.catch((error) => {
         console.warn('[VEIN] Не удалось сохранить оффлайн-очередь:', error);
@@ -59,34 +59,49 @@ function mutateOfflineQueue(update) {
     return operation;
 }
 
-function addToOfflineQueue(scrobbleData) {
-    return mutateOfflineQueue((queue) => {
+function addToOfflineQueue(scrobbleData, accountKey) {
+    return mutateOfflineQueue((queue, settings) => {
+        if (!accountKey || settings.apiKey !== accountKey || settings.trackingEnabled !== true) return queue;
         if (queue.length >= 500) return queue;
-        return [...queue, { payload: scrobbleData, queuedAt: Date.now() }];
+        return [...queue, { id: crypto.randomUUID(), accountKey, payload: scrobbleData, queuedAt: Date.now() }];
     });
 }
 
-function bufferScrobble(scrobbleData) {
-    addToOfflineQueue(scrobbleData).catch((error) => {
+function bufferScrobble(scrobbleData, accountKey) {
+    addToOfflineQueue(scrobbleData, accountKey).catch((error) => {
         console.warn('[VEIN] Прослушивание не удалось сохранить для повторной отправки:', error);
     });
 }
+
+// Serialize cleanup behind any queue write already in progress, including
+// writes that began before the popup removed credentials or paused tracking.
+chrome.storage.onChanged?.addListener((changes, area) => {
+    if (area !== 'local' || (!changes.apiKey && !changes.trackingEnabled)) return;
+    void mutateOfflineQueue((queue, settings) => queue.filter((item) =>
+        settings.trackingEnabled === true && item.accountKey === settings.apiKey));
+});
 
 async function flushOfflineQueue() {
     if (flushInProgress) return;
     flushInProgress = true;
     try {
         await queueMutation;
-        const res = await storageGet(['apiUrl', 'apiKey', 'offline_scrobbles']);
+        await mutateOfflineQueue((queue, settings) => queue.filter((item) =>
+            settings.trackingEnabled === true && item.accountKey === settings.apiKey &&
+            Date.now() - item.queuedAt < 7 * 24 * 60 * 60 * 1000));
+        const res = await storageGet(['apiUrl', 'apiKey', 'offline_scrobbles', 'trackingEnabled']);
         const queue = Array.isArray(res.offline_scrobbles) ? res.offline_scrobbles : [];
-        if (queue.length === 0 || !res.apiKey) return;
+        if (queue.length === 0 || !res.apiKey || res.trackingEnabled !== true) return;
 
         const API_BASE = veinApiBase(res);
-        let sent = 0;
+        const sent = new Set();
         for (const item of queue) {
             try {
+                const current = await storageGet(['apiKey', 'trackingEnabled']);
+                if (current.apiKey !== res.apiKey || current.trackingEnabled !== true) break;
                 const response = await fetch(`${API_BASE}/api/scrobble`, {
                     method: 'POST',
+                    signal: AbortSignal.timeout(15000),
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${res.apiKey}`
@@ -97,18 +112,18 @@ async function flushOfflineQueue() {
                     console.warn(`[VEIN] Оффлайн-очередь остановлена: сервер ответил ${response.status}.`);
                     break;
                 }
-                sent++;
+                sent.add(item.id);
             } catch (error) {
                 console.warn('[VEIN] Оффлайн-очередь остановлена из-за ошибки сети:', error);
                 break;
             }
         }
 
-        if (sent > 0) {
+        if (sent.size > 0) {
             // Only remove the sent prefix. New items appended while the network
             // requests were in flight remain in the queue.
-            await mutateOfflineQueue((current) => current.slice(sent));
-            console.log(`[VEIN] Успешно синхронизировано ${sent} оффлайн-скробблов.`);
+            await mutateOfflineQueue((current) => current.filter((item) => !sent.has(item.id)));
+            console.log(`[VEIN] Успешно синхронизировано ${sent.size} оффлайн-скробблов.`);
         }
     } catch (error) {
         console.warn('[VEIN] Не удалось синхронизировать оффлайн-очередь:', error);
@@ -132,14 +147,14 @@ function shouldSendScrobble(payload) {
 }
 
 async function sendScrobble(payload) {
+    let accountKey;
     try {
-        const settings = await storageGet(['apiUrl', 'apiKey']);
-        if (!settings.apiKey) {
-            bufferScrobble(payload);
-            return;
-        }
+        const settings = await storageGet(['apiUrl', 'apiKey', 'trackingEnabled']);
+        if (!settings.apiKey || settings.trackingEnabled !== true || !shouldSendScrobble(payload)) return;
+        accountKey = settings.apiKey;
         const response = await fetch(`${veinApiBase(settings)}/api/scrobble`, {
             method: 'POST',
+            signal: AbortSignal.timeout(15000),
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${settings.apiKey}`
@@ -148,27 +163,78 @@ async function sendScrobble(payload) {
         });
         if (!response.ok) {
             console.warn(`[VEIN] Сервер ответил ${response.status}, сохраняем в оффлайн-очередь.`);
-            bufferScrobble(payload);
+            bufferScrobble(payload, accountKey);
             return;
         }
-        console.log('[VEIN] Трек успешно отправлен на сервер:', await response.json());
+        console.log('[VEIN] Состояние воспроизведения отправлено.');
         await flushOfflineQueue();
     } catch (error) {
         console.warn('[VEIN] Не удалось отправить прослушивание, сохраняем в оффлайн-очередь:', error);
-        bufferScrobble(payload);
+        bufferScrobble(payload, accountKey);
     }
 }
 
+function messageSenderUrl(sender) {
+    try { return new URL(sender.url || sender.tab?.url); }
+    catch { return null; }
+}
+
+function platformForUrl(url) {
+    if (url?.protocol !== 'https:') return null;
+    return {
+        'music.yandex.ru': 'yandex', 'music.yandex.com': 'yandex',
+        'open.spotify.com': 'spotify', 'music.youtube.com': 'youtube_music',
+        'vk.com': 'vk', 'vk.ru': 'vk', 'soundcloud.com': 'soundcloud',
+        'music.apple.com': 'apple_music'
+    }[url.hostname] || null;
+}
+
+function safeTrackPayload(data, source) {
+    if (!data || data.source !== source || typeof data.title !== 'string' || !data.title.trim() ||
+        typeof data.artist !== 'string' || data.title.length > 500 || data.artist.length > 500 ||
+        !Number.isFinite(data.progress_sec) || data.progress_sec < 0 ||
+        !Number.isFinite(data.duration) || data.duration < 0) return null;
+    let trackUrl = '';
+    try {
+        const url = new URL(data.track_url);
+        if (platformForUrl(url) === source) {
+            const videoId = source === 'youtube_music' ? url.searchParams.get('v') : null;
+            url.username = ''; url.password = ''; url.search = ''; url.hash = '';
+            if (videoId) url.searchParams.set('v', videoId);
+            trackUrl = url.href;
+        }
+    } catch { /* A track URL is optional. */ }
+    let coverUrl = '';
+    try {
+        const url = new URL(data.cover_url);
+        if (url.protocol === 'https:' && !url.username && !url.password) coverUrl = url.href.slice(0, 2000);
+    } catch { /* Artwork is optional. */ }
+    return {
+        title: data.title.trim(), artist: data.artist.trim(),
+        album: typeof data.album === 'string' ? data.album.slice(0, 500) : '',
+        source, track_url: trackUrl, cover_url: coverUrl,
+        progress_sec: Math.floor(data.progress_sec), duration: Math.floor(data.duration),
+        is_playing: data.is_playing === true
+    };
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (!request || typeof request !== 'object') return;
     // Security: only the VEIN site may change the stored key (see sync-key.js)
-    const senderUrl = sender.tab?.url ? new URL(sender.tab.url) : null;
+    const senderUrl = messageSenderUrl(sender);
+    if (request.type === 'PAIRING_POLL' && sender?.id === chrome.runtime.id &&
+        senderUrl?.href === chrome.runtime.getURL('popup.html')) {
+        veinPollPairing().then(sendResponse).catch(() => sendResponse('error'));
+        return true;
+    }
     const isTrusted = Boolean(senderUrl) && (
         (senderUrl.hostname === "music.vein.guru" && senderUrl.protocol === "https:") ||
         ((senderUrl.hostname === "localhost" || senderUrl.hostname === "127.0.0.1") && senderUrl.port === "3000")
     );
 
     // 1. Принимаем ключи с сайта
-    if (request.type === 'SYNC_KEYS' && isTrusted) {
+    if (request.type === 'SYNC_KEYS' && isTrusted && typeof request.data?.apiKey === 'string' &&
+        request.data.apiKey && typeof request.data.username === 'string') {
         storageSet({
             username: request.data.username,
             apiKey: request.data.apiKey
@@ -183,7 +249,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     // 2. Стираем ключи, если вышли
     if (request.type === 'LOGOUT' && isTrusted) {
-        chrome.storage.local.remove(['username', 'apiKey'], () => {
+        chrome.storage.local.remove(['username', 'apiKey', 'pairing', 'offline_scrobbles', 'trackingEnabled'], () => {
             const error = chrome.runtime.lastError;
             if (error) console.warn('[VEIN] Не удалось удалить ключи:', error.message);
             else console.log('[VEIN] Ключи стерты по запросу с сайта.');
@@ -194,7 +260,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // Вкладка присылает состояние каждые 800 мс; серверу достаточно сигнала
     // раз в несколько секунд (он учитывает паузы между сигналами до 35 с),
     // поэтому одинаковые сигналы чаще раза в 5 секунд не отправляем.
-    if (request.type === 'SCROBBLE' && shouldSendScrobble(request.data)) {
-        void sendScrobble(request.data);
+    if (request.type === 'SCROBBLE') {
+        const source = platformForUrl(senderUrl);
+        const payload = source && safeTrackPayload(request.data, source);
+        if (payload) void sendScrobble(payload);
     }
 });

@@ -1,0 +1,86 @@
+name: Browser extension
+
+on:
+  pull_request:
+    branches: [VEIN]
+    paths:
+      - 'music-extension/**'
+      - 'scripts/package_extension.py'
+      - '.github/workflows/extension.yml'
+  push:
+    branches: [VEIN]
+    paths:
+      - 'music-extension/**'
+      - 'scripts/package_extension.py'
+      - '.github/workflows/extension.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Extension tests and packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Extension regression tests
+        run: node --test music-extension/tests/*.test.cjs
+      - name: Build distributable packages
+        run: |
+          python3 scripts/package_extension.py
+          python3 scripts/package_extension.py --development --output dist/extension-smoke
+      - name: Validate Firefox package
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund --prefix "$RUNNER_TEMP/extension-tools" web-ext@10.7.0
+          "$RUNNER_TEMP/extension-tools/node_modules/.bin/web-ext" lint --source-dir dist/extension/firefox --warnings-as-errors
+      - name: Install browser test dependencies
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts
+          ./node_modules/.bin/playwright install --with-deps chromium
+      - name: Test installed Chromium extension
+        env:
+          NODE_PATH: ${{ github.workspace }}/frontend/node_modules
+        run: xvfb-run -a node music-extension/tests/browser-smoke.cjs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: VEINMusic-extension
+          path: |
+            dist/extension/*.zip
+            dist/extension/SHA256SUMS.txt
+          if-no-files-found: error
+
+  publish:
+    name: Publish extension downloads
+    needs: verify
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/VEIN'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: VEINMusic-extension
+          path: packages
+      - name: Publish verified archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          version="$(node -p "require('./music-extension/manifest.json').version")"
+          tag="extension-v${version}"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            echo "This version is already published. Bump the manifest version for another release."
+            exit 0
+          fi
+          gh release create "$tag" packages/*.zip packages/SHA256SUMS.txt \
+            --target "$GITHUB_SHA" --latest=false \
+            --title "VEINMusic: расширение ${version}" \
+            --notes-file music-extension/RELEASE.md

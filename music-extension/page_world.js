@@ -7,7 +7,7 @@ if (globalThis.__VEIN_LOADED) {
 }
 globalThis.__VEIN_LOADED = true;
 
-console.log("[VEIN MAIN] 🌍 Мультиплатформенный трекер запущен. Взламываем аудио-движок...");
+console.log("[VEIN MAIN] 🌍 Мультиплатформенный трекер запущен. Отслеживаем воспроизведение.");
 
 if (!globalThis.__VEIN_AUDIO_HOOK) {
     globalThis.__VEIN_AUDIO_HOOK = true;
@@ -35,7 +35,7 @@ function getPlatformSource(hostname) {
         return 'soundcloud';
     }
     if (isHostOrSubdomain(hostname, 'music.apple.com')) return 'apple_music';
-    if (isHostOrSubdomain(hostname, 'vk.com')) {
+    if (isHostOrSubdomain(hostname, 'vk.com') || isHostOrSubdomain(hostname, 'vk.ru')) {
         const isVideoPlaying = Array.from(document.querySelectorAll('video')).some(v => !v.paused && v.offsetHeight > 150 && v.offsetWidth > 150);
         if (!isVideoPlaying) return 'vk';
     }
@@ -314,7 +314,7 @@ setInterval(() => {
             const { isPlaying, progressSec, durationSec } = getMediaProgress(sessionPlaying, source);
             // SoundCloud populates the mini-player as soon as a track is selected.
             // Do not create a zero-second scrobble until playback has actually begun.
-            if (source === 'soundcloud' && !isPlaying && progressSec <= 0) return;
+            if (!isPlaying && progressSec <= 0) return;
             globalThis.postMessage({
                 type: 'VEIN_SCROBBLE',
                 payload: {

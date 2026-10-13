@@ -38,7 +38,7 @@ interface FeedItem {
 }
 
 const EXTENSION_URL =
-  "https://github.com/Peaostrel/VEINMusic/blob/VEIN/README.md#6-установка-браузерного-расширения";
+  "https://github.com/Peaostrel/VEINMusic/releases/tag/extension-v1.5.0";
 const WEEKDAYS = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
 
 /** Short weekday of a "YYYY-MM-DD" date (UTC). */
@@ -349,7 +349,7 @@ export default function About() {
               className={`${btn.secondary} ${btn.lg}`}
             >
               <Download className="h-4 w-4" aria-hidden="true" />
-              Как установить расширение
+              Скачать расширение
             </a>
           </div>
           <ul
