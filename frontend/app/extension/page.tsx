@@ -5,7 +5,7 @@ import { ArrowUpRight, Headphones, Pause, ShieldCheck } from "lucide-react";
 import { btn, card } from "@/components/ui";
 
 export const metadata: Metadata = {
-  title: "Расширение для браузера — VEINMusic",
+  title: "Расширение для браузера",
   description:
     "Сохраняйте музыку из Яндекс Музыки, Spotify, YouTube Music, VK, SoundCloud и Apple Music в одной истории VEIN.",
   alternates: { canonical: "/extension" },
