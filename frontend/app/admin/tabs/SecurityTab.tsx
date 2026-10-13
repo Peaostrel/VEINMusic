@@ -251,7 +251,7 @@ export default function SecurityTab() {
         </form>
         <Notice text={notice} />
 
-        {blocks.data && blocks.data.items.length === 0 && (
+        {blocks.data?.items.length === 0 && (
           <p className="text-xs text-fg-3">Активных блокировок нет.</p>
         )}
         {blocks.data && blocks.data.items.length > 0 && (

@@ -73,6 +73,21 @@ function widget(provider: Provider): Widget | undefined {
   return provider === "yandex" ? globalThis.smartCaptcha : globalThis.turnstile;
 }
 
+/** `get()` once it returns something, checking every 100 ms for 5 s.
+ * SmartCaptcha's script defines its global a moment after onload. */
+function whenDefined<T>(get: () => T | undefined): Promise<T | undefined> {
+  return new Promise((resolve) => {
+    let tries = 0;
+    const timer = setInterval(() => {
+      const value = get();
+      if (value !== undefined || ++tries >= 50) {
+        clearInterval(timer);
+        resolve(value);
+      }
+    }, 100);
+  });
+}
+
 export default function Captcha({
   onToken,
 }: Readonly<{ onToken: (token: string) => void }>) {
@@ -88,10 +103,7 @@ export default function Captcha({
         if (!provider || !site_key || !active) return;
         setEnabled(true);
         await loadScript(provider);
-        // SmartCaptcha's script defines its global a moment after onload
-        for (let i = 0; i < 50 && !widget(provider); i++)
-          await new Promise((r) => setTimeout(r, 100));
-        const api = widget(provider);
+        const api = await whenDefined(() => widget(provider));
         if (!api || !box.current || !active) throw new Error("captcha");
         box.current.replaceChildren();
         api.render(box.current, {
