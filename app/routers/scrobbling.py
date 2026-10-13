@@ -50,8 +50,21 @@ def get_scrobble_counters(db: Session, s_ids: list) -> dict:
 router = APIRouter(prefix="/api", tags=["scrobbling"])
 
 
+def _scrobble_body_credentials(request: Request, data: ScrobbleData) -> None:
+    """Expose the validated legacy body key to the shared authentication checks.
+
+    Headers and cookies retain their normal precedence. No other endpoint
+    gains body authentication and all key scope/revocation checks still apply.
+    """
+    request.state.json_body = {"api_key": data.api_key}
+
+
 @router.post("/scrobble",
-             responses={500: {"description": "Internal server error"}})
+             dependencies=[Depends(_scrobble_body_credentials)],
+             responses={401: {"description": "Missing or invalid credentials"},
+                        403: {"description": "Insufficient key scope or blocked account"},
+                        422: {"description": "Invalid playback payload"},
+                        500: {"description": "Internal server error"}})
 @limiter.limit("120/minute", key_func=credential_key)
 async def add_scrobble(request: Request,
                        data: ScrobbleData,

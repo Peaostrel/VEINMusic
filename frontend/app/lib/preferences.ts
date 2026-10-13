@@ -94,6 +94,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
     youtube_music_enabled: true,
     soundcloud_enabled: true,
     lastfm_enabled: true,
+    plat_enabled: true,
     auto_sync: true,
   },
   experiments: {

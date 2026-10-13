@@ -4,8 +4,9 @@ from datetime import UTC, datetime
 from sqlalchemy.exc import IntegrityError
 
 from app.models import SourceHealth
+from app.core.sources import normalize_source
 
-SOURCES = ("spotify", "yandex", "youtube", "soundcloud", "lastfm", "extension")
+SOURCES = ("spotify", "yandex", "youtube", "soundcloud", "lastfm", "plat", "extension")
 ERRORS = {"token_expired", "network_error", "provider_error"}
 MESSAGES = {
     "token_expired": "Доступ истёк. Переподключите аккаунт в настройках интеграций.",
@@ -25,7 +26,7 @@ MESSAGES = {
 
 
 def source_key(source):
-    name = (source or "").casefold()
+    name = normalize_source(source or "").casefold()
     return next((key for key in SOURCES if key in name), "extension")
 
 

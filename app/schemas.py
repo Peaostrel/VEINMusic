@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
+from app.core.sources import normalize_source
 
 SyncPrivacy = Literal["all", "followers", "none"]
 Visibility = Literal["all", "followers", "private"]
@@ -63,7 +64,7 @@ class ScrobbleData(BaseModel):
     cover_url: OptionalUrl = None
     track_url: OptionalUrl = None
     album: OptionalTrackText = None
-    source: Annotated[str, _truncate(32)]
+    source: Annotated[str, _truncate(32), BeforeValidator(normalize_source)]
     progress_sec: Seconds = 0
     is_playing: bool | None = True
     duration: Seconds = 0
@@ -242,8 +243,8 @@ class ListeningPreferences(BaseModel):
     ignored_artists: list[str] = Field(default_factory=list, max_length=50)
     ignored_tracks: list[str] = Field(default_factory=list, max_length=100)
     ignored_sources: list[Literal[
-        "yandex", "spotify", "vk", "youtube", "apple", "soundcloud", "desktop",
-    ]] = Field(default_factory=list, max_length=7)
+        "yandex", "spotify", "vk", "youtube", "apple", "soundcloud", "desktop", "plat",
+    ]] = Field(default_factory=list, max_length=8)
     ignore_short_tracks: bool = False
     short_track_seconds: int = Field(30, ge=15, le=120)
     private_session_until: datetime | None = None
@@ -269,8 +270,8 @@ class FeedPreferences(BaseModel):
     allow_likes: bool = True
     default_scope: Literal["all", "following"] = "all"
     hidden_sources: list[Literal[
-        "yandex", "spotify", "vk", "youtube", "apple", "soundcloud", "desktop",
-    ]] = Field(default_factory=list, max_length=7)
+        "yandex", "spotify", "vk", "youtube", "apple", "soundcloud", "desktop", "plat",
+    ]] = Field(default_factory=list, max_length=8)
 
 
 class NotificationChannelPreferences(BaseModel):
@@ -318,6 +319,7 @@ class IntegrationPreferences(BaseModel):
     youtube_music_enabled: bool = True
     soundcloud_enabled: bool = True
     lastfm_enabled: bool = True
+    plat_enabled: bool = True
     auto_sync: bool = True
 
 

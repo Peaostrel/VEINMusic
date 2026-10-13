@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.rate_limit import HEAVY_READ_LIMIT, limiter
 from app.core.security import get_current_user
 from app.database import get_db
-from app.models import Scrobble, SourceHealth, Track, TrackAlias, User, UserProfile
+from app.models import ApiKey, Scrobble, SourceHealth, Track, TrackAlias, User, UserProfile
 from app.schemas import ScrobbleMergeRequest
 from app.services import runtime_settings
 from app.services.cache import invalidate_all
@@ -435,12 +435,18 @@ def integration_status(
 ):
     preferences = get_preferences(current_user.profile).integrations
     integration = current_user.integration
+    plat_linked = db.query(ApiKey).filter(
+        ApiKey.user_id == current_user.id, ApiKey.is_active.is_(True),
+        ApiKey.name.ilike("%Plat%"),
+        or_(ApiKey.expires_at.is_(None), ApiKey.expires_at > datetime.now(UTC)),
+    ).first() is not None
     definitions = [
         ("spotify", "Spotify", bool(integration.spotify_access_token), "cloud", preferences.spotify_enabled),
         ("yandex", "Яндекс Музыка", bool(integration.yandex_token), "cloud", preferences.yandex_enabled),
         ("soundcloud", "SoundCloud", bool(integration.soundcloud_access_token), "cloud", preferences.soundcloud_enabled),
         ("youtube_music", "YouTube Music", bool(current_user.api_key), "extension", preferences.youtube_music_enabled),
         ("lastfm", "Last.fm", bool(integration.lastfm_username), "import", preferences.lastfm_enabled),
+        ("plat", "Plat Music", plat_linked, "partner", preferences.plat_enabled),
     ]
     diagnostics = {row.source: row for row in db.query(SourceHealth).filter_by(user_id=current_user.id).all()}
 

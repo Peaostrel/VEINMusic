@@ -1,4 +1,5 @@
 const SOURCE_LABELS: [RegExp, string][] = [
+  [/^plat(?:[_ -]?music)?(?:$|[_ -])/, "Plat Music"],
   [/yandex/, "Яндекс"],
   [/spotify/, "Spotify"],
   [/vk/, "VK"],

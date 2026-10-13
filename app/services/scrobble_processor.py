@@ -44,7 +44,7 @@ PLACEHOLDER_DURATION = 180
 TRACK_URL_HOSTS = (
     YANDEX_MUSIC_HOST, "music.yandex.com", "music.yandex.by", "music.yandex.kz",
     "open.spotify.com", "music.youtube.com", "www.youtube.com", "youtube.com",
-    "vk.com", "vk.ru", "soundcloud.com", "music.apple.com",
+    "vk.com", "vk.ru", "soundcloud.com", "music.apple.com", "plat-music.ru",
 )
 
 
@@ -644,6 +644,7 @@ def _integration_paused(db, integrations, source_name):
         "youtube": integrations.youtube_music_enabled,
         "soundcloud": integrations.soundcloud_enabled,
         "lastfm": integrations.lastfm_enabled,
+        "plat": integrations.plat_enabled,
     }
     integration_features = {
         "spotify": "integration_spotify",
@@ -651,6 +652,7 @@ def _integration_paused(db, integrations, source_name):
         "youtube": "integration_youtube_music",
         "soundcloud": "integration_soundcloud",
         "lastfm": "integration_lastfm",
+        "plat": "integration_plat",
     }
     if not integrations.auto_sync and any(name in source_name for name in integration_keys):
         return True

@@ -17,6 +17,7 @@ const sources = [
   ["yandex", "Яндекс Музыка"],
   ["youtube", "YouTube Music"],
   ["soundcloud", "SoundCloud"],
+  ["plat", "Plat Music"],
   ["extension", "Другое через расширение"],
 ];
 

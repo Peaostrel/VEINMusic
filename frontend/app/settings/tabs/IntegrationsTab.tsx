@@ -36,7 +36,7 @@ interface IntegrationStatus {
     id: string;
     name: string;
     linked: boolean;
-    mode: "cloud" | "extension" | "import";
+    mode: "cloud" | "extension" | "import" | "partner";
     user_enabled: boolean;
     admin_enabled: boolean;
     diagnostic: string;
@@ -81,7 +81,8 @@ function IntegrationHealth({ API_URL }: Readonly<{ API_URL: string }>) {
     }
   };
   const icon = (mode: string) => {
-    if (mode === "cloud") return <Cloud className="h-3.5 w-3.5" />;
+    if (mode === "cloud" || mode === "partner")
+      return <Cloud className="h-3.5 w-3.5" />;
     if (mode === "import") return <Import className="h-3.5 w-3.5" />;
     return <Puzzle className="h-3.5 w-3.5" />;
   };
@@ -129,6 +130,10 @@ function IntegrationHealth({ API_URL }: Readonly<{ API_URL: string }>) {
             label = service.last_event_at
               ? "события получены"
               : "ожидает расширение";
+          if (service.mode === "partner")
+            label = service.last_event_at
+              ? "события получены"
+              : "ожидает сервис";
           if (service.error) {
             label = "требует внимания";
             color = "text-danger";
@@ -586,6 +591,23 @@ export default function IntegrationsTab(props: Readonly<IntegrationsTabProps>) {
       <ConnectionCheck />
       <IntegrationHealth API_URL={API_URL} />
 
+      <section className={`${settingsCard} p-5`}>
+        <h3 className="text-sm font-medium">Plat Music</h3>
+        <p className="mt-2 text-sm text-fg-2">
+          В настройках Plat Music откройте «Интеграции», выберите VEIN Music и
+          подтвердите подключение на сайте VEIN. После этого включите музыку:
+          прослушивания будут приходить напрямую, расширение не требуется.
+        </p>
+        <a
+          href="https://plat-music.ru"
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`${small} mt-4`}
+        >
+          Открыть Plat Music
+        </a>
+      </section>
+
       <section className={settingsCard}>
         <ToggleRow
           title="Автоматическая синхронизация"
@@ -626,6 +648,12 @@ export default function IntegrationsTab(props: Readonly<IntegrationsTabProps>) {
           description="Приостановить автоматическую работу с Last.fm без удаления аккаунта."
           checked={preferences.lastfm_enabled}
           onChange={(lastfm_enabled) => updateIntegration({ lastfm_enabled })}
+        />
+        <ToggleRow
+          title="Plat Music"
+          description="Приостановить запись из Plat Music, сохранив подключение."
+          checked={preferences.plat_enabled}
+          onChange={(plat_enabled) => updateIntegration({ plat_enabled })}
         />
       </section>
 

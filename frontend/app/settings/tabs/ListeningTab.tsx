@@ -18,6 +18,7 @@ const SOURCES = [
   { value: "youtube", label: "YouTube Music" },
   { value: "apple", label: "Apple Music" },
   { value: "soundcloud", label: "SoundCloud" },
+  { value: "plat", label: "Plat Music" },
   { value: "desktop", label: "Десктопный клиент" },
 ];
 
