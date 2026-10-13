@@ -14,6 +14,8 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
 
+from app.core.body_limit import BodySizeLimitMiddleware
+from app.core.flood_guard import FloodGuardMiddleware
 from app.core.observability import setup_observability
 from app.core.rate_limit import limiter
 from app.core.websockets import manager
@@ -24,6 +26,7 @@ from app.routers import (
     portability,
     admin,
     admin_data,
+    admin_security,
     admin_tools,
     auth,
     developer,
@@ -124,20 +127,11 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
-allowed_origins = [
-    FRONTEND_URL,
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://music.vein.guru"
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
+allowed_origins = [FRONTEND_URL, "https://music.vein.guru"]
+if os.getenv("ENVIRONMENT") != "production":
+    # Local development only: in production any page a visitor happens to run
+    # on localhost (a dev server, a malicious tool) must not act as the site
+    allowed_origins += ["http://localhost:3000", "http://127.0.0.1:3000"]
 
 _API_CSP = "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; frame-ancestors 'none'"
 _DOCS_PATHS = ("/docs", "/redoc", "/openapi.json")
@@ -158,12 +152,28 @@ async def security_headers(request, call_next):
     return response
 
 
+# Refuse oversized bodies before any other code reads them
+app.add_middleware(BodySizeLimitMiddleware)
+# A per-IP ceiling for the whole API
+app.add_middleware(FloodGuardMiddleware)
+# Outermost, so refusals (413, 429) also carry CORS headers and the site can
+# show them instead of a network error
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
+
 # Include Routers
 app.include_router(auth.router)
 app.include_router(profile.router)
 app.include_router(scrobbling.router)
 app.include_router(admin.router)
 app.include_router(admin_tools.router)
+app.include_router(admin_security.router)
 app.include_router(admin_data.router)
 app.include_router(extended.router)
 app.include_router(widgets.router)
@@ -243,7 +253,8 @@ def _get_ws_authenticated_username(websocket: WebSocket) -> str | None:
             return _get_ticket_username(ticket, db)
         if not token:
             return None
-        auth_user, scopes = _authenticate_user_with_scopes(token, db)
+        client_ip = websocket.client.host if websocket.client else None
+        auth_user, scopes = _authenticate_user_with_scopes(token, db, client_ip)
         if scopes is not None and not {"profile:read", "*"}.intersection(scopes.split(",")):
             return None
         if auth_user and not auth_user.is_banned:

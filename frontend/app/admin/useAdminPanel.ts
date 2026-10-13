@@ -28,7 +28,8 @@ export type AdminTab =
   | "reports"
   | "scrobbles"
   | "integrations"
-  | "logs";
+  | "logs"
+  | "security";
 
 /** All state, data loading and actions of the admin panel. */
 export function useAdminPanel() {

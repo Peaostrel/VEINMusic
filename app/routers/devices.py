@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.rate_limit import limiter
+from app.core.rate_limit import credential_key, limiter
 from app.core.security import get_current_user, hash_developer_key
 from app.database import get_db
 from app.models import ApiKey, DeviceAuthorization, User
@@ -28,6 +28,7 @@ router = APIRouter(prefix="/api/devices", tags=["devices"])
 
 CODE_TTL = timedelta(minutes=10)
 POLL_INTERVAL_SEC = 5
+CODE_NOT_FOUND = "Код не найден или устарел"
 EXTENSION_SCOPES = "scrobble:write,profile:read"
 # No 0/O/1/I to avoid confusion when typing the code
 _USER_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -122,6 +123,15 @@ def poll_device_token(request: Request, payload: DeviceTokenRequest,
     if not user or user.is_banned:
         return {"status": "denied"}
 
+    # Claim the approval atomically: two polls racing with the same device
+    # code must not both receive a key
+    claimed = db.query(DeviceAuthorization).filter(
+        DeviceAuthorization.id == auth.id, DeviceAuthorization.status == "approved",
+    ).update({"status": "consumed"}, synchronize_session=False)
+    if claimed != 1:
+        db.rollback()
+        return {"status": "invalid"}
+
     raw_secret = secrets.token_urlsafe(32)
     full_key = f"vm_{raw_secret}"
     db.add(ApiKey(
@@ -132,33 +142,40 @@ def poll_device_token(request: Request, payload: DeviceTokenRequest,
         scopes=EXTENSION_SCOPES,
         is_active=True,
     ))
-    auth.status = "consumed"  # type: ignore[assignment]
     db.commit()
     return {"status": "approved", "api_key": full_key, "username": user.username}
 
 
 @router.get("/code/{user_code}", responses={404: {"description": "Unknown or expired code"}})
-def get_device_code(user_code: str,
+@limiter.limit("30/minute", key_func=credential_key)
+def get_device_code(user_code: str, request: Request,
                     db: Annotated[Session, Depends(get_db)],
                     current_user: Annotated[User, Depends(get_current_user)]):
     """Details shown on the confirmation page before approving."""
     auth = db.query(DeviceAuthorization).filter(
         DeviceAuthorization.user_code == _normalize_user_code(user_code)).first()
     if not auth or auth.status != "pending" or _is_expired(auth):
-        raise HTTPException(404, "Код не найден или устарел")
+        raise HTTPException(404, CODE_NOT_FOUND)
     return {"user_code": auth.user_code, "client_name": auth.client_name,
             "expires_at": _as_aware(auth.expires_at).isoformat()}  # type: ignore[arg-type]
 
 
 @router.post("/approve", responses={404: {"description": "Unknown or expired code"}})
-def approve_device(payload: DeviceApproveRequest,
+@limiter.limit("10/minute", key_func=credential_key)
+def approve_device(payload: DeviceApproveRequest, request: Request,
                    db: Annotated[Session, Depends(get_db)],
                    current_user: Annotated[User, Depends(get_current_user)]):
     auth = db.query(DeviceAuthorization).filter(
         DeviceAuthorization.user_code == _normalize_user_code(payload.user_code)).first()
     if not auth or auth.status != "pending" or _is_expired(auth):
-        raise HTTPException(404, "Код не найден или устарел")
-    auth.user_id = current_user.id
-    auth.status = "approved" if payload.approve else "denied"  # type: ignore[assignment]
+        raise HTTPException(404, CODE_NOT_FOUND)
+    status = "approved" if payload.approve else "denied"
+    # Only a still-pending code can be decided, and only once
+    decided = db.query(DeviceAuthorization).filter(
+        DeviceAuthorization.id == auth.id, DeviceAuthorization.status == "pending",
+    ).update({"status": status, "user_id": current_user.id}, synchronize_session=False)
+    if decided != 1:
+        db.rollback()
+        raise HTTPException(404, CODE_NOT_FOUND)
     db.commit()
-    return {"status": auth.status}
+    return {"status": status}

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
+from app.core.rate_limit import HEAVY_READ_LIMIT, limiter
 from app.core.security import get_current_user
 from app.database import get_db
 from app.models import ListenLater, Scrobble, Track, User
@@ -87,6 +88,7 @@ def personal_search(db: DB, user: Owner,
 @router.get("/api/stats/calendar/{username}/range", responses={
     403: {"description": "History or statistics are private"},
     404: {"description": "User not found"}, 422: {"description": "Invalid date range"}})
+@limiter.limit(HEAVY_READ_LIMIT)
 def calendar_range(username: str, request: Request, db: DB,
                    date_from: date, date_to: date,
                    before: Annotated[int | None, Query(ge=1)] = None):

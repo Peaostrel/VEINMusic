@@ -12,6 +12,17 @@ updates:
     schedule:
       interval: "weekly"
 
+  # Десктопное приложение: интерфейс (npm) и ядро на Rust (cargo)
+  - package-ecosystem: "npm"
+    directory: "/desktop"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "cargo"
+    directory: "/desktop/src-tauri"
+    schedule:
+      interval: "weekly"
+
   # 3. Настройки для самих скриптов GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"

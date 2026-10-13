@@ -33,6 +33,10 @@ x-backend-env: &backend-env
   SOUNDCLOUD_REDIRECT_URI: https://${API_DOMAIN}/auth/soundcloud/callback
   # 0 turns off the open Ynison connections (Yandex Music falls back to polling)
   YANDEX_LIVE: ${YANDEX_LIVE:-1}
+  # Captcha on sign-up and after failed sign-ins (off while the keys are empty)
+  CAPTCHA_PROVIDER: ${CAPTCHA_PROVIDER:-}
+  CAPTCHA_SITE_KEY: ${CAPTCHA_SITE_KEY:-}
+  CAPTCHA_SECRET_KEY: ${CAPTCHA_SECRET_KEY:-}
 
 services:
   caddy:
@@ -46,6 +50,8 @@ services:
       SITE_DOMAIN: ${SITE_DOMAIN}
       API_DOMAIN: ${API_DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+      # Cloudflare's networks when the site is behind it (deploy/cloudflare.sh)
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-private_ranges}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # "Update in progress" page; deploy.sh creates maintenance/on meanwhile
@@ -144,7 +150,8 @@ services:
       ADMIN_REQUIRE_2FA: ${ADMIN_REQUIRE_2FA:-1}
       # Spotify/Yandex/SoundCloud polling runs in the worker (arq cron job)
       RUN_CLOUD_POLLING: "0"
-      FORWARDED_ALLOW_IPS: 172.30.0.10
+      # Caddy, plus Cloudflare's networks behind it (deploy/cloudflare.sh)
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-172.30.0.10}
       BACKUP_DIR: /backups
     volumes:
       - uploads:/app/uploads

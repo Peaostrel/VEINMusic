@@ -65,7 +65,7 @@ jobs:
 
       - name: Validate release scripts and proxy configuration
         run: |
-          bash -n deploy/deploy.sh deploy/blue-green.sh deploy/rollback.sh
+          bash -n deploy/deploy.sh deploy/blue-green.sh deploy/rollback.sh deploy/cloudflare.sh
           docker run --rm \
             -e SITE_DOMAIN=music.example.org -e API_DOMAIN=api.example.org -e ACME_EMAIL=admin@example.org \
             -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
@@ -143,6 +143,37 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # Known vulnerabilities in the libraries the site runs on (most breaches go
+  # through a dependency, not through the site's own code)
+  dependency-audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Audit Python packages
+        run: |
+          pip install --only-binary :all: pip-audit==2.10.1
+          # requirements.txt is fully pinned with hashes: no install needed
+          pip-audit --disable-pip -r requirements.txt
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+
+      - name: Audit site and desktop packages
+        run: |
+          # Only what ships (no dev tools), and only serious findings
+          (cd frontend && npm audit --omit=dev --audit-level=high)
+          (cd desktop && npm audit --omit=dev --audit-level=high)
 
   frontend-build:
     name: Frontend Tests & Lint

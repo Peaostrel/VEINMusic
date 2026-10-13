@@ -169,3 +169,6 @@ docker compose exec -T db-backup pg_restore --clean --if-exists \
 [incident-response.md](../docs/incident-response.md).
 Дополнительное шифрованное S3-копирование и проверка восстановления:
 [offsite-backups.md](../docs/offsite-backups.md).
+Cloudflare перед сервером (`deploy/cloudflare.sh`), капча, SSH по ключу,
+2FA в аккаунтах и блокировки адресов в админке:
+[security-setup.md](../docs/security-setup.md).

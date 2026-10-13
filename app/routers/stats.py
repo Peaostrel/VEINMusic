@@ -14,6 +14,7 @@ from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from app.core.constants import ACTIVE_PLAYBACK_WINDOW_SEC, ORDER_PLAYS_DESC
+from app.core.rate_limit import HEAVY_READ_LIMIT, limiter
 from app.core.security import get_current_user
 from app.database import get_db
 from app.models import (
@@ -49,6 +50,8 @@ LEADERBOARD_CACHE_TTL = 60
 LEADERBOARD_SIZE = 50
 WEEK_CACHE_KEY = "public-week:v1"
 WEEK_CACHE_TTL = 300
+PUBLIC_STATS_CACHE_KEY = "public-stats:v1"
+PUBLIC_STATS_TTL = 30
 MAX_CUSTOM_PERIOD_DAYS = 366
 
 
@@ -199,6 +202,7 @@ def _new_artist_count(db: Session, user_id: int, start: datetime | None, end: da
 @router.get("/api/stats/wrapped",
             responses={404: {"description": "User not found"},
                        422: {"description": "Invalid period or custom date range"}})
+@limiter.limit(HEAVY_READ_LIMIT)
 def get_wrapped_stats(
         username: str,
         request: Request,
@@ -405,6 +409,7 @@ def _get_activity_stats(
 @router.get("/api/detailed-stats/{username}",
             responses={404: {"description": "User not found"},
                        422: {"description": "Invalid period or custom date range"}})
+@limiter.limit(HEAVY_READ_LIMIT)
 def get_detailed_stats(username: str,
                        request: Request,
                        db: Annotated[Session,
@@ -569,6 +574,7 @@ def get_detailed_stats(username: str,
 
 @router.get("/api/stats/{username}",
             responses={404: {"description": "User not found"}})
+@limiter.limit(HEAVY_READ_LIMIT)
 def get_stats(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
     user = _get_visible_user(username, request, db, "statistics")
     streak = get_active_streak(user)
@@ -657,6 +663,7 @@ def get_stats(username: str, request: Request, db: Annotated[Session, Depends(ge
 # --- /api/activity/{username} ---
 @router.get("/api/activity/{username}",
             responses={404: {"description": "User not found"}})
+@limiter.limit(HEAVY_READ_LIMIT)
 def get_activity(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
     user = _get_visible_user(username, request, db, "statistics")
 
@@ -738,6 +745,7 @@ def _aggregate_calendar_days(rows, user_tz):
 @router.get("/api/stats/calendar/{username}",
             responses={404: {"description": "User not found"},
                        422: {"description": "Calendar year is outside the supported range"}})
+@limiter.limit(HEAVY_READ_LIMIT)
 def get_listening_calendar(
         username: str,
         request: Request,
@@ -956,7 +964,9 @@ def _period_ranking(db: Session, period: str, viewer_id: int | None = None) -> l
 
 
 @router.get("/api/leaderboard")
+@limiter.limit(HEAVY_READ_LIMIT)
 def get_leaderboard(
+        request: Request,
         db: Annotated[Session, Depends(get_db)],
         period: Literal["7d", "30d", "all"] = "all"):
     return _period_ranking(db, period)[:LEADERBOARD_SIZE]
@@ -1002,7 +1012,13 @@ def get_my_rank(
 
 # --- /api/public-stats ---
 @router.get("/api/public-stats")
-def get_public_stats(db: Annotated[Session, Depends(get_db)]):
+@limiter.limit(HEAVY_READ_LIMIT)
+def get_public_stats(request: Request, db: Annotated[Session, Depends(get_db)]):
+    # The landing page asks on every visit; counting all plays each time
+    # would let anyone keep the database busy
+    cached = get_from_cache(PUBLIC_STATS_CACHE_KEY, ttl=PUBLIC_STATS_TTL)
+    if cached is not None:
+        return cached
     total_users = db.query(User).count()
     total_scrobbles = db.query(Scrobble).join(Track).filter(
         Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85).count()
@@ -1022,11 +1038,13 @@ def get_public_stats(db: Annotated[Session, Depends(get_db)]):
         UserProfile.is_private.isnot(True),
         User.is_banned.isnot(True)).scalar() or 0
 
-    return {
+    result = {
         "total_users": total_users,
         "total_scrobbles": total_scrobbles,
         "total_tracks": total_tracks,
         "online": online_count}
+    set_to_cache(PUBLIC_STATS_CACHE_KEY, result, PUBLIC_STATS_TTL)
+    return result
 
 
 def _completed_scrobble():
@@ -1036,7 +1054,8 @@ def _completed_scrobble():
 
 
 @router.get("/api/public-stats/week")
-def get_public_week(db: Annotated[Session, Depends(get_db)]):
+@limiter.limit(HEAVY_READ_LIMIT)
+def get_public_week(request: Request, db: Annotated[Session, Depends(get_db)]):
     """Site-wide listening over the last 7 days (UTC) for the landing page:
     plays per day, hours of music and the artist of the week. Only public,
     non-banned profiles count, so no private history leaks out."""

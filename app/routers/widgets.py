@@ -1,18 +1,54 @@
 import html
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.constants import ACTIVE_PLAYBACK_WINDOW_SEC
 from app.database import get_db
 from app.models import Scrobble, Track, User
+from app.services.privacy import is_public_section
+from app.services.user_preferences import preference_enabled
 
 router = APIRouter(prefix="/api/widgets", tags=["widgets"])
 
 SVG_MEDIA_TYPE = "image/svg+xml"
 SVG_UTF8_MEDIA_TYPE = "image/svg+xml; charset=utf-8"
 DEFAULT_ARTIST = "VEIN Music"
+USERNAME_LIMIT = 32
+NO_CACHE = {"Cache-Control": "no-cache"}
+
+
+def _find_user(db: Session, username: str) -> User | None:
+    """Widgets are embedded anywhere, so only what any visitor may see counts."""
+    if len(username) > USERNAME_LIMIT:
+        return None
+    user = db.query(User).filter(User.username == username).first()
+    if user is None or user.is_banned or user.profile is None:
+        return None
+    return user
+
+
+def _shown_name(username: str) -> str:
+    return username[:USERNAME_LIMIT]
+
+
+def _listening(user_id):
+    """Plays a widget may count: not deleted, not excluded from statistics."""
+    return (Scrobble.user_id == user_id, Scrobble.deleted_at.is_(None),
+            Scrobble.excluded_from_stats.is_(False))
+
+
+def _is_active(scrobble: Scrobble) -> bool:
+    last_seen = scrobble.updated_at or scrobble.played_at
+    if last_seen is None:
+        return False
+    if last_seen.tzinfo is None:
+        last_seen = last_seen.replace(tzinfo=UTC)
+    return bool(scrobble.is_playing) and (
+        datetime.now(UTC) - last_seen).total_seconds() < ACTIVE_PLAYBACK_WINDOW_SEC
 
 
 def _escape(text: str | None) -> str:
@@ -156,34 +192,52 @@ def _render_top_artists_svg(username: str, top_artists: list[tuple[str, int]]) -
     return svg
 
 
+def _now_playing_text(db: Session, user: User) -> tuple[str, str, bool]:
+    """Title, artist and "playing now" for the widget, by the profile's rules:
+    the current track only when it and the online status are public, past
+    plays only when the history is."""
+    show_current = (is_public_section(user.profile, "current_track")
+                    and preference_enabled(user.profile, "profile", "show_online_status"))
+    show_history = is_public_section(user.profile, "history")
+    recent = (
+        db.query(Scrobble)
+        .filter(Scrobble.user_id == user.id, Scrobble.deleted_at.is_(None))
+        .order_by(Scrobble.id.desc())
+        .limit(2)
+        .all()
+    )
+    shown, is_playing = _visible_play(recent, show_current, show_history)
+    if shown is None or not shown.track:
+        hidden = recent and not show_history
+        return ("Listening is hidden" if hidden else "No scrobbles yet"), DEFAULT_ARTIST, False
+    return shown.track.title or "Unknown Track", shown.track.artist or "Unknown Artist", is_playing
+
+
+def _visible_play(recent: list[Scrobble], show_current: bool,
+                  show_history: bool) -> tuple[Scrobble | None, bool]:
+    """The newest play the widget may show, and whether it is playing now."""
+    if not recent:
+        return None, False
+    if _is_active(recent[0]):
+        if show_current:
+            return recent[0], True
+        # A hidden track is playing: the one before it is the last played
+        recent = recent[1:]
+    return (recent[0] if recent and show_history else None), False
+
+
 @router.get("/now-playing/{username}.svg")
 def get_now_playing_widget(username: str, db: Annotated[Session, Depends(get_db)]):
-    user = db.query(User).filter(User.username == username).first()
+    user = _find_user(db, username)
     if not user:
-        svg_content = _render_now_playing_svg(username, "User not found", DEFAULT_ARTIST, False)
-        return Response(content=svg_content, media_type=SVG_MEDIA_TYPE, headers={"Cache-Control": "no-cache"})
+        svg_content = _render_now_playing_svg(_shown_name(username), "User not found", DEFAULT_ARTIST, False)
+        return Response(content=svg_content, media_type=SVG_MEDIA_TYPE, headers=NO_CACHE)
 
-    if user.profile and user.profile.is_private:
+    if user.profile.is_private:
         svg_content = _render_now_playing_svg(username, "Private Profile", DEFAULT_ARTIST, False)
-        return Response(content=svg_content, media_type=SVG_MEDIA_TYPE, headers={"Cache-Control": "no-cache"})
+        return Response(content=svg_content, media_type=SVG_MEDIA_TYPE, headers=NO_CACHE)
 
-    # Check currently playing or most recent scrobble
-    last_scrobble = (
-        db.query(Scrobble)
-        .filter(Scrobble.user_id == user.id)
-        .order_by(Scrobble.id.desc())
-        .first()
-    )
-
-    if last_scrobble and last_scrobble.track:
-        title = last_scrobble.track.title or "Unknown Track"
-        artist = last_scrobble.track.artist or "Unknown Artist"
-        is_playing = bool(last_scrobble.is_playing)
-    else:
-        title = "No scrobbles yet"
-        artist = DEFAULT_ARTIST
-        is_playing = False
-
+    title, artist, is_playing = _now_playing_text(db, user)
     svg_content = _render_now_playing_svg(username, title, artist, is_playing)
     return Response(
         content=svg_content,
@@ -197,19 +251,15 @@ def get_now_playing_widget(username: str, db: Annotated[Session, Depends(get_db)
 
 @router.get("/top-artists/{username}.svg")
 def get_top_artists_widget(username: str, db: Annotated[Session, Depends(get_db)]):
-    user = db.query(User).filter(User.username == username).first()
-    if not user:
-        svg_content = _render_top_artists_svg(username, [])
-        return Response(content=svg_content, media_type=SVG_MEDIA_TYPE, headers={"Cache-Control": "no-cache"})
-
-    if user.profile and user.profile.is_private:
-        svg_content = _render_top_artists_svg(username, [])
-        return Response(content=svg_content, media_type=SVG_MEDIA_TYPE, headers={"Cache-Control": "no-cache"})
+    user = _find_user(db, username)
+    if not user or not is_public_section(user.profile, "statistics"):
+        svg_content = _render_top_artists_svg(_shown_name(username), [])
+        return Response(content=svg_content, media_type=SVG_MEDIA_TYPE, headers=NO_CACHE)
 
     top_artists = (
         db.query(Track.artist, func.count(Scrobble.id).label("count"))
         .join(Scrobble, Scrobble.track_id == Track.id)
-        .filter(Scrobble.user_id == user.id, Track.artist.isnot(None))
+        .filter(*_listening(user.id), Track.artist.isnot(None))
         .group_by(Track.artist)
         .order_by(func.count(Scrobble.id).desc())
         .limit(5)
@@ -235,14 +285,14 @@ def get_og_recap_card(username: str, period: str = "week", db: Annotated[Session
 
     from app.services.og_image import generate_recap_card_svg
 
-    user = db.query(User).filter(User.username == username).first()
+    user = _find_user(db, username)
     if not user:
-        svg_content = generate_recap_card_svg(username, "User Not Found", 0, 0.0, [])
+        svg_content = generate_recap_card_svg(_shown_name(username), "User Not Found", 0, 0.0, [])
         return Response(content=svg_content, media_type=SVG_UTF8_MEDIA_TYPE)
 
-    if user.profile and user.profile.is_private:
+    if not is_public_section(user.profile, "statistics"):
         svg_content = generate_recap_card_svg(username, "Private Profile", 0, 0.0, [])
-        return Response(content=svg_content, media_type=SVG_UTF8_MEDIA_TYPE, headers={"Cache-Control": "no-cache"})
+        return Response(content=svg_content, media_type=SVG_UTF8_MEDIA_TYPE, headers=NO_CACHE)
 
     now = datetime.now(UTC)
     delta_days = 30 if period == "month" else 7
@@ -250,7 +300,7 @@ def get_og_recap_card(username: str, period: str = "week", db: Annotated[Session
     period_title = "ИТОГИ МЕСЯЦА" if period == "month" else "ИТОГИ НЕДЕЛИ"
 
     scrobbles_query = db.query(Scrobble).filter(
-        Scrobble.user_id == user.id,
+        *_listening(user.id),
         Scrobble.played_at >= since_date,
     )
     total_scrobbles = scrobbles_query.count()
@@ -258,7 +308,7 @@ def get_og_recap_card(username: str, period: str = "week", db: Annotated[Session
     total_sec = (
         db.query(func.sum(Track.duration))
         .join(Scrobble, Scrobble.track_id == Track.id)
-        .filter(Scrobble.user_id == user.id, Scrobble.played_at >= since_date)
+        .filter(*_listening(user.id), Scrobble.played_at >= since_date)
         .scalar()
         or 0
     )
@@ -267,7 +317,7 @@ def get_og_recap_card(username: str, period: str = "week", db: Annotated[Session
     top_artists = (
         db.query(Track.artist, func.count(Scrobble.id).label("count"))
         .join(Scrobble, Scrobble.track_id == Track.id)
-        .filter(Scrobble.user_id == user.id, Scrobble.played_at >= since_date, Track.artist.isnot(None))
+        .filter(*_listening(user.id), Scrobble.played_at >= since_date, Track.artist.isnot(None))
         .group_by(Track.artist)
         .order_by(func.count(Scrobble.id).desc())
         .limit(5)
@@ -278,7 +328,7 @@ def get_og_recap_card(username: str, period: str = "week", db: Annotated[Session
     top_genre_row = (
         db.query(Track.genre, func.count(Scrobble.id).label("count"))
         .join(Scrobble, Scrobble.track_id == Track.id)
-        .filter(Scrobble.user_id == user.id, Scrobble.played_at >= since_date, Track.genre.isnot(None))
+        .filter(*_listening(user.id), Scrobble.played_at >= since_date, Track.genre.isnot(None))
         .group_by(Track.genre)
         .order_by(func.count(Scrobble.id).desc())
         .first()
@@ -314,7 +364,7 @@ def get_og_achievement_card(
     from app.models import Achievement, UserAchievement
     from app.services.og_image import generate_achievement_card_svg
 
-    user = db.query(User).filter(User.username == username).first()
+    user = _find_user(db, username)
     ach = db.query(Achievement).filter(Achievement.id == achievement_id).first()
     # Only a public profile that really unlocked the achievement gets a
     # personalised card; otherwise anyone could forge "X unlocked Y" images.
@@ -328,7 +378,7 @@ def get_og_achievement_card(
     )
 
     if not unlocked or ach is None:
-        svg_content = generate_achievement_card_svg(username, "Достижение", "VEIN Music Gamification", "🏆", 0)
+        svg_content = generate_achievement_card_svg(_shown_name(username), "Достижение", "VEIN Music Gamification", "🏆", 0)
         return Response(content=svg_content, media_type=SVG_UTF8_MEDIA_TYPE)
 
     svg_content = generate_achievement_card_svg(

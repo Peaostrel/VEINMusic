@@ -7,13 +7,14 @@ from fastapi import (
     BackgroundTasks,
     Depends,
     HTTPException,
+    Query,
     Request,
 )
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.constants import USER_NOT_FOUND
-from app.core.rate_limit import limiter
+from app.core.rate_limit import HEAVY_READ_LIMIT, limiter
 from app.core.security import get_current_user, get_current_user_optional
 from app.database import get_db
 from app.models import (
@@ -53,6 +54,7 @@ router = APIRouter(tags=["users"])
 @router.get("/api/user/mood",
             responses={403: {"description": "Private profile"},
                        404: {"description": "User not found"}})
+@limiter.limit(HEAVY_READ_LIMIT)
 def get_user_mood(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
     user = _get_visible_user(username, request, db, "statistics")
 
@@ -204,12 +206,13 @@ def get_notifications(username: str,
             responses={404: {"description": "Скроббл не найден"},
                        403: {"description": "Доступ запрещен (приватный профиль)"}})
 def get_comments(scrobble_id: int, request: Request, db: Annotated[Session, Depends(get_db)]):
-    scrobble = db.query(Scrobble).filter(Scrobble.id == scrobble_id).first()
+    scrobble = db.query(Scrobble).filter(
+        Scrobble.id == scrobble_id, Scrobble.deleted_at.is_(None)).first()
     if not scrobble:
         raise HTTPException(404, "Скроббл не найден")
 
-    is_hidden, _ = _check_privacy_and_owner(scrobble.user, request, db)
-    if is_hidden:
+    # Comments belong to a play in the history, so they follow its visibility
+    if not _can_view_section(scrobble.user, request, db, "history"):
         raise HTTPException(403, "Доступ запрещен (приватный профиль)")
 
     comments = db.query(
@@ -318,12 +321,16 @@ def get_following(username: str, request: Request,
 
 # --- /api/search/users ---
 @router.get("/api/search/users")
-def search_users(q: str, db: Annotated[Session, Depends(get_db)]):
+@limiter.limit(HEAVY_READ_LIMIT)
+def search_users(request: Request, q: Annotated[str, Query(max_length=100)],
+                 db: Annotated[Session, Depends(get_db)]):
     if not q or len(q) < 2:
         return []
     # Escape LIKE wildcards so "%"/"_" in the query match literally
     pattern = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    # Same audience as /api/search: private and banned profiles stay hidden
     users = db.query(User).join(UserProfile).filter(
+        UserProfile.is_private.isnot(True), User.is_banned.isnot(True),
         (User.username.ilike(pattern, escape="\\")) | (
             UserProfile.display_name.ilike(pattern, escape="\\"))).limit(10).all()
     return _user_cards(users, db)

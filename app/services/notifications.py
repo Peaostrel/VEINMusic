@@ -209,6 +209,8 @@ def _push_payload(notification_id: int) -> Optional[tuple[int, str, str, str]]:
             url = f"/user/{actor.username}/stats"
         elif n.kind == KIND_ACHIEVEMENT:
             url = f"/user/{actor.username}/achievements"
+        elif n.kind == KIND_SECURITY:
+            url = "/settings"
         else:
             url = "/"
         return int(n.user_id), "VEIN Music", body, url

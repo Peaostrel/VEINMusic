@@ -20,11 +20,13 @@ export default async function Image({
     previewJson<UserPreview>(path),
     previewImage(path),
   ]);
+  // Unknown names get one shared card: the picture never repeats text from
+  // the address, and it is drawn only once however many names are tried
   if (!p)
     return renderCard({
       kicker: "ПРОФИЛЬ",
-      title: `@${username}`,
-      round: true,
+      title: "Профиль на VEINMusic",
+      logo: true,
     });
   const stats = [];
   if (p.scrobbles !== null)

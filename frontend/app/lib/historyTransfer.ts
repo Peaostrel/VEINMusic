@@ -82,3 +82,33 @@ export function sequentialMap<T, U>(
     return results;
   }, Promise.resolve([]));
 }
+
+/** The API takes at most this many plays per request… */
+const BATCH_ROWS = 5000;
+/** …and at most 2 MB per request; batches stay below it with room to spare. */
+const BATCH_BYTES = 1_500_000;
+
+/** Split plays into requests the API accepts, by count and by size. */
+export function historyBatches(
+  rows: Record<string, unknown>[],
+): Record<string, unknown>[][] {
+  const encoder = new TextEncoder();
+  const batches: Record<string, unknown>[][] = [];
+  let current: Record<string, unknown>[] = [];
+  let bytes = 0;
+  for (const row of rows) {
+    const size = encoder.encode(JSON.stringify(row)).length + 1;
+    if (
+      current.length &&
+      (current.length >= BATCH_ROWS || bytes + size > BATCH_BYTES)
+    ) {
+      batches.push(current);
+      current = [];
+      bytes = 0;
+    }
+    current.push(row);
+    bytes += size;
+  }
+  if (current.length) batches.push(current);
+  return batches;
+}

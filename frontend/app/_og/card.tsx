@@ -8,6 +8,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ImageResponse } from "next/og";
 import { SITE_URL } from "@/app/lib/preview";
+import { cardKey, limitedCard } from "./limits";
 
 /** Must match `size` in the opengraph-image routes. */
 const OG_SIZE = { width: 1200, height: 630 };
@@ -154,7 +155,23 @@ function titleFontSize(title: string): number {
   return 72;
 }
 
-export async function renderCard({
+/** The site's own card, shown when a picture can't be drawn right now. */
+const SITE_CARD: CardProps = {
+  kicker: "МУЗЫКАЛЬНЫЙ ДНЕВНИК",
+  title: "VEINMusic",
+  logo: true,
+};
+
+/** Draw a card, reusing recent ones and never too many at once. */
+export function renderCard(props: CardProps): Promise<Response> {
+  return limitedCard(
+    cardKey(props),
+    () => drawCard(props),
+    () => drawCard(SITE_CARD),
+  );
+}
+
+async function drawCard({
   kicker,
   title,
   subtitle,
