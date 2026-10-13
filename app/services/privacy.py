@@ -58,10 +58,12 @@ def invalidate_visibility() -> None:
         delete_from_cache(key)
 
 
-def _touches_visibility(obj) -> bool:
-    state = inspect(obj)
-    if state.pending or state.deleted:
+def _touches_visibility(session, obj) -> bool:
+    # Before the flush a deleted object is only listed in session.deleted;
+    # its state says "deleted" only after the DELETE has run
+    if obj in session.new or obj in session.deleted:
         return True
+    state = inspect(obj)
     if isinstance(obj, UserProfile):
         attrs: tuple[str, ...] = ("preferences", "is_private")
     else:
@@ -72,7 +74,7 @@ def _touches_visibility(obj) -> bool:
 @event.listens_for(Session, "before_flush")
 def _watch_visibility_changes(session, _flush_context, _instances) -> None:
     for obj in (*session.new, *session.dirty, *session.deleted):
-        if isinstance(obj, (User, UserProfile)) and _touches_visibility(obj):
+        if isinstance(obj, (User, UserProfile)) and _touches_visibility(session, obj):
             session.info["visibility_changed"] = True
             return
 

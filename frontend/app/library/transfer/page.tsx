@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 import { API_URL, apiJson } from "@/app/lib/api";
-import { readHistoryFile, sequentialMap } from "@/app/lib/historyTransfer";
+import {
+  historyBatches,
+  readHistoryFile,
+  sequentialMap,
+} from "@/app/lib/historyTransfer";
 import { btn, input, PageHeader } from "@/components/ui";
 
 interface Preview {
@@ -35,20 +39,17 @@ export default function TransferPage() {
     setMessage("Проверяем файл…");
     try {
       const rows = await readHistoryFile(file);
-      const chunks = Array.from(
-        { length: Math.ceil(rows.length / 5000) },
-        (_, index) => rows.slice(index * 5000, (index + 1) * 5000),
-      );
+      const chunks = historyBatches(rows);
+      let checked = 0;
       const results = await sequentialMap(
         chunks,
-        async (chunk, index): Promise<Batch> => {
+        async (chunk): Promise<Batch> => {
           const preview = await apiJson<Preview>(
             "/api/account/history/preview",
             { method: "POST", json: { scrobbles: chunk } },
           );
-          setMessage(
-            `Проверено ${Math.min((index + 1) * 5000, rows.length)} из ${rows.length}`,
-          );
+          checked += chunk.length;
+          setMessage(`Проверено ${checked} из ${rows.length}`);
           return { rows: chunk, preview };
         },
       );

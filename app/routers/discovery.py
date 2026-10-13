@@ -181,13 +181,15 @@ def _yandex_fallback_redirect(type: str, q: str):
 
 
 SuggestionQuery = Annotated[str, Query(max_length=200)]
+# Profile links join two favourites (artist and album or track), 256 each
+RedirectQuery = Annotated[str, Query(max_length=600)]
 EntityType = Annotated[str, Query(max_length=20)]
 
 
 @router.get("/api/redirect")
 @limiter.limit(OUTBOUND_LIMIT)
 async def smart_redirect(request: Request, source: Annotated[str, Query(max_length=20)],
-                         type: EntityType, q: SuggestionQuery):
+                         type: EntityType, q: RedirectQuery):
     if source == "yandex":
         try:
             async with httpx.AsyncClient() as client:

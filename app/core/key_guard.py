@@ -41,6 +41,9 @@ def cached(token: str) -> tuple[int, str] | None:
         if entry[2] <= time.time():
             _cache.pop(token, None)
             return None
+        # Sliding expiry: a client in regular use stays known and never
+        # reaches the per-address penalty for wrong keys (shared NATs)
+        _cache[token] = (entry[0], entry[1], time.time() + CACHE_TTL_SEC)
         _cache.move_to_end(token)
         return entry[0], entry[1]
 

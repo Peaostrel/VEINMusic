@@ -9,6 +9,7 @@ checks inside Docker.
 from __future__ import annotations
 
 import ipaddress
+import os
 import threading
 import time
 
@@ -29,22 +30,28 @@ def _exempt(ip: str | None) -> bool:
     return address.is_private or address.is_loopback
 
 
+_client = None
+_redis_down_until = 0.0
+# Give up on Redis for a while after an error, so a slow or broken Redis
+# doesn't add its timeout to every request
+REDIS_RETRY_SEC = 30
+
+
 def _redis():
+    """An async client with short timeouts, or None to count locally."""
+    global _client
     from app.services.cache import redis_client
-    return redis_client
+    if redis_client is None or time.monotonic() < _redis_down_until:
+        return None
+    if _client is None:
+        import redis.asyncio as aioredis
+        _client = aioredis.from_url(
+            os.getenv("REDIS_URL", "redis://localhost:6379"), decode_responses=True,
+            socket_connect_timeout=0.5, socket_timeout=0.5)
+    return _client
 
 
-def _hits(ip: str, window: int) -> int:
-    key = f"flood:{ip}:{window}"
-    client = _redis()
-    if client is not None:
-        try:
-            pipe = client.pipeline()
-            pipe.incr(key)
-            pipe.expire(key, 120, nx=True)
-            return int(pipe.execute()[0])
-        except Exception:
-            pass
+def _local_hits(ip: str, window: int) -> int:
     with _local_lock:
         count, seen_window = _local.get(ip, (0, window))
         if seen_window != window:
@@ -53,6 +60,20 @@ def _hits(ip: str, window: int) -> int:
             _local.clear()
         _local[ip] = (count + 1, window)
         return count + 1
+
+
+async def _hits(ip: str, window: int) -> int:
+    global _redis_down_until
+    client = _redis()
+    if client is not None:
+        try:
+            pipe = client.pipeline(transaction=False)
+            pipe.incr(f"flood:{ip}:{window}")
+            pipe.expire(f"flood:{ip}:{window}", 120, nx=True)
+            return int((await pipe.execute())[0])
+        except Exception:
+            _redis_down_until = time.monotonic() + REDIS_RETRY_SEC
+    return _local_hits(ip, window)
 
 
 async def _too_many(send) -> None:
@@ -75,7 +96,7 @@ class FloodGuardMiddleware:
         if scope["type"] == "http":
             client = scope.get("client")
             ip = client[0] if client else None
-            if not _exempt(ip) and _hits(str(ip), int(time.time()) // 60) > REQUESTS_PER_MINUTE:
+            if not _exempt(ip) and await _hits(str(ip), int(time.time()) // 60) > REQUESTS_PER_MINUTE:
                 await _too_many(send)
                 return
         await self.app(scope, receive, send)

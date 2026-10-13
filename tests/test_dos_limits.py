@@ -361,3 +361,52 @@ def test_refusals_carry_cors_headers(client, monkeypatch):
     assert response.status_code == 429
     # The site can read the refusal and say "try again later"
     assert response.headers["access-control-allow-origin"] == ORIGIN["Origin"]
+
+
+def test_deleted_account_leaves_the_visibility_lists(client, db):
+    from app.models import User, UserIntegration, UserProfile
+    from app.services import privacy
+
+    user = User(username="visibility_deleted", hashed_password="x")
+    user.profile = UserProfile()
+    user.integration = UserIntegration()
+    db.add(user)
+    db.commit()
+    assert "visibility_deleted" in privacy.public_statistics_users(db)
+    db.delete(user)
+    db.commit()
+    assert "visibility_deleted" not in privacy.public_statistics_users(db)
+
+
+def test_flood_guard_counts_locally_when_redis_fails(monkeypatch):
+    from app.core import flood_guard
+
+    class Broken:
+        def pipeline(self, transaction=False):
+            raise ConnectionError("redis is down")
+
+    flood_guard.reset()
+    monkeypatch.setattr(flood_guard, "REQUESTS_PER_MINUTE", 2)
+    monkeypatch.setattr(flood_guard, "_redis", lambda: Broken())
+    assert [_flood_call("1.1.1.1") for _ in range(3)] == [200, 200, 429]
+    flood_guard.reset()
+
+
+def test_keys_in_use_stay_known(monkeypatch):
+    from app.core import key_guard
+
+    key_guard.reset()
+    key_guard.remember("vm_in_use", 1, "stored")
+    now = key_guard.time.time()
+    monkeypatch.setattr(key_guard.time, "time", lambda: now + key_guard.CACHE_TTL_SEC - 1)
+    assert key_guard.cached("vm_in_use") == (1, "stored")
+    monkeypatch.setattr(key_guard.time, "time", lambda: now + 2 * key_guard.CACHE_TTL_SEC - 5)
+    # Used a moment before expiring, so still known now
+    assert key_guard.cached("vm_in_use") == (1, "stored")
+    key_guard.reset()
+
+
+def test_profile_links_with_long_favourites_still_redirect(client):
+    response = client.get("/api/redirect", params={"source": "other", "type": "album", "q": "a" * 513},
+                          follow_redirects=False)
+    assert response.status_code in (302, 307)
