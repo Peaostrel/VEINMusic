@@ -23,12 +23,11 @@ export default function EmailAction({
     try {
       const path =
         mode === "verify" ? "/auth/email/verify" : `/auth/password/${mode}`;
-      const json =
-        mode === "forgot"
-          ? { email }
-          : mode === "verify"
-            ? { token }
-            : { token, password, otp_code: otp || null };
+      const json = {
+        forgot: { email },
+        verify: { token },
+        reset: { token, password, otp_code: otp || null },
+      }[mode];
       const result = await apiJson<{ message: string }>(path, {
         method: "POST",
         json,
@@ -44,12 +43,16 @@ export default function EmailAction({
       setBusy(false);
     }
   }
-  const title =
-    mode === "verify"
-      ? "Подтверждение почты"
-      : mode === "reset"
-        ? "Новый пароль"
-        : "Восстановление пароля";
+  const title = {
+    verify: "Подтверждение почты",
+    reset: "Новый пароль",
+    forgot: "Восстановление пароля",
+  }[mode];
+  const submitLabel = {
+    verify: "Подтвердить",
+    forgot: "Получить письмо",
+    reset: "Сохранить пароль",
+  }[mode];
   return (
     <div className="mx-auto max-w-md space-y-5 px-4 py-16">
       <h1 className="text-2xl font-semibold">{title}</h1>
@@ -67,7 +70,7 @@ export default function EmailAction({
                 Введите почту, которую вы подтвердили в настройках VEIN.
               </p>
               <label className={label}>
-                Почта
+                <span>Почта</span>
                 <input
                   className={`${input} mt-1`}
                   type="email"
@@ -87,7 +90,7 @@ export default function EmailAction({
           {mode === "reset" && (
             <>
               <label className={label}>
-                Новый пароль
+                <span>Новый пароль</span>
                 <input
                   className={`${input} mt-1`}
                   type="password"
@@ -100,7 +103,7 @@ export default function EmailAction({
                 />
               </label>
               <label className={label}>
-                Код 2FA, если защита включена
+                <span>Код 2FA, если защита включена</span>
                 <input
                   className={`${input} mt-1`}
                   value={otp}
@@ -118,22 +121,15 @@ export default function EmailAction({
             </p>
           )}
           <button
+            type="submit"
             className={`${btn.primary} ${btn.md}`}
             disabled={busy || (mode !== "forgot" && !token)}
           >
-            {mode === "verify"
-              ? "Подтвердить"
-              : mode === "forgot"
-                ? "Получить письмо"
-                : "Сохранить пароль"}
+            {submitLabel}
           </button>
         </form>
       )}
-      {message && (
-        <p role="status" className="text-sm">
-          {message}
-        </p>
-      )}
+      {message && <output className="text-sm">{message}</output>}
       <Link
         className="text-sm text-accent"
         href={mode === "verify" ? "/settings?tab=security" : "/auth"}

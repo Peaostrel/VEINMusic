@@ -73,7 +73,7 @@ export default function EmailSettings() {
                     })
                   }
                 />
-                Предупреждать о входах с новых устройств
+                <span>Предупреждать о входах с новых устройств</span>
               </label>
               <label className="flex gap-2 text-sm">
                 <input
@@ -87,7 +87,7 @@ export default function EmailSettings() {
                     })
                   }
                 />
-                Получать письма от администрации VEIN
+                <span>Получать письма от администрации VEIN</span>
               </label>
             </div>
           )}
@@ -99,7 +99,7 @@ export default function EmailSettings() {
             }}
           >
             <label className={label}>
-              Адрес почты
+              <span>Адрес почты</span>
               <input
                 className={`${input} mt-1`}
                 type="email"
@@ -111,7 +111,7 @@ export default function EmailSettings() {
               />
             </label>
             <label className={label}>
-              Текущий пароль
+              <span>Текущий пароль</span>
               <input
                 className={`${input} mt-1`}
                 type="password"
@@ -123,7 +123,7 @@ export default function EmailSettings() {
               />
             </label>
             <label className={label}>
-              Код 2FA, если защита включена
+              <span>Код 2FA, если защита включена</span>
               <input
                 className={`${input} mt-1`}
                 value={otp}
@@ -134,6 +134,7 @@ export default function EmailSettings() {
             </label>
             <div className="flex flex-wrap gap-2">
               <button
+                type="submit"
                 className={`${btn.primary} ${btn.md}`}
                 disabled={busy || !data.configured}
               >
@@ -160,11 +161,7 @@ export default function EmailSettings() {
           </form>
         </>
       )}
-      {message && (
-        <p role="status" className="text-sm">
-          {message}
-        </p>
-      )}
+      {message && <output className="text-sm">{message}</output>}
     </section>
   );
 }

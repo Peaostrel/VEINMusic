@@ -49,7 +49,8 @@ def test_verification_private_single_use(client, db, owner):
     assert account.email is None
     assert account.verify_hash != token
     stored = db.execute(text("select payload from email_outbox")).scalar_one()
-    assert token not in stored and "user@example.com" not in stored
+    assert token not in stored
+    assert "user@example.com" not in stored
     response = client.get("/api/account/email")
     assert response.headers["cache-control"] == "no-store"
     assert "verify_hash" not in response.json()
@@ -188,11 +189,13 @@ def test_transport_retry_is_bounded(client, db, owner):
     transport = Mock()
     transport.post.side_effect = httpx.ConnectError("secret diagnostic detail")
     mail.deliver_one(db, row, transport)
-    assert row.status == "pending" and row.error_code == "transport_error"
+    assert row.status == "pending"
+    assert row.error_code == "transport_error"
     assert "secret" not in row.error_code
     row.attempts = 7
     mail.deliver_one(db, row, transport)
-    assert row.status == "failed" and row.payload == "{}"
+    assert row.status == "failed"
+    assert row.payload == "{}"
 
 
 def test_expired_verify_is_not_sent(client, db, owner):
@@ -213,4 +216,14 @@ def test_account_export_and_deletion_remove_email(client, db, owner):
     assert "verify_hash" not in str(exported)
     assert client.request("DELETE", "/api/account", json={"password": PASSWORD}).status_code == 200
     assert db.query(EmailAccount).count() == 0
+    assert db.query(EmailOutbox).count() == 0
+
+
+def test_disabled_worker_still_purges_expired_data(client, db, owner, monkeypatch):
+    row = mail.queue(db, owner.id, "verify", "user@example.com", "Hi", "Hi")
+    row.created_at = datetime.now(UTC) - timedelta(days=31)
+    db.commit()
+    monkeypatch.delenv("BREVO_API_KEY")
+    mail.drain()
+    db.expire_all()
     assert db.query(EmailOutbox).count() == 0

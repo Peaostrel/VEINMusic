@@ -107,18 +107,19 @@ def deliver_one(db, row, client):
 
 
 def drain():
-    if not configured():
-        return
-    with SessionLocal() as db, httpx.Client(timeout=10, follow_redirects=False) as client:
+    with SessionLocal() as db:
         now = datetime.now(UTC)
         db.query(EmailOutbox).filter(EmailOutbox.created_at < now - timedelta(days=30)).delete(synchronize_session=False)
         db.query(EmailOutbox).filter(EmailOutbox.status == "pending", EmailOutbox.created_at < now - timedelta(hours=24)).update(
             {"status": "expired", "payload": "{}"}, synchronize_session=False)
         db.commit()
-        for _ in range(20):
-            row = db.query(EmailOutbox).filter(EmailOutbox.status == "pending", EmailOutbox.next_attempt <= datetime.now(UTC)).order_by(
-                EmailOutbox.created_at).with_for_update(skip_locked=True).first()
-            if row is None:
-                break
-            deliver_one(db, row, client)
-            db.commit()
+        if not configured():
+            return
+        with httpx.Client(timeout=10, follow_redirects=False) as client:
+            for _ in range(20):
+                row = db.query(EmailOutbox).filter(EmailOutbox.status == "pending", EmailOutbox.next_attempt <= datetime.now(UTC)).order_by(
+                    EmailOutbox.created_at).with_for_update(skip_locked=True).first()
+                if row is None:
+                    break
+                deliver_one(db, row, client)
+                db.commit()

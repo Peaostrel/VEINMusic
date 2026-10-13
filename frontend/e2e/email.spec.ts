@@ -1,4 +1,8 @@
 import { test, expect } from "@playwright/test";
+const headers = {
+  "Access-Control-Allow-Origin": "http://localhost:3000",
+  "Access-Control-Allow-Credentials": "true",
+};
 
 test("verification requires an explicit click and removes the token from the URL", async ({
   page,
@@ -7,7 +11,7 @@ test("verification requires an explicit click and removes the token from the URL
   const requests: unknown[] = [];
   await page.route("**/auth/email/verify", async (route) => {
     requests.push(route.request().postDataJSON());
-    await route.fulfill({ json: { message: "Почта подтверждена" } });
+    await route.fulfill({ headers, json: { message: "Почта подтверждена" } });
   });
   await page.goto(`/email/verify#${token}`);
   await expect(
@@ -28,6 +32,7 @@ test("recovery accepts an address without exposing account existence", async ({
       email: "user@example.com",
     });
     await route.fulfill({
+      headers,
       json: {
         message:
           "Если почта привязана к аккаунту, мы отправим ссылку восстановления",
@@ -50,7 +55,7 @@ test("reset sends the token and second factor only after submitting", async ({
       password: "new-password",
       otp_code: "123456",
     });
-    await route.fulfill({ json: { message: "Пароль изменён" } });
+    await route.fulfill({ headers, json: { message: "Пароль изменён" } });
   });
   await page.goto(`/email/reset#${token}`);
   await page.getByLabel("Новый пароль", { exact: true }).fill("new-password");

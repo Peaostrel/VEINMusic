@@ -68,7 +68,7 @@ export default function EmailManager() {
         }}
       >
         <label className={label}>
-          Никнейм
+          <span>Никнейм</span>
           <input
             className={`${input} mt-1`}
             value={username}
@@ -82,7 +82,7 @@ export default function EmailManager() {
           />
         </label>
         <label className={label}>
-          Тема
+          <span>Тема</span>
           <input
             className={`${input} mt-1`}
             value={subject}
@@ -95,7 +95,7 @@ export default function EmailManager() {
           />
         </label>
         <label className={label}>
-          Текст
+          <span>Текст</span>
           <textarea
             className={`${input} mt-1 min-h-28`}
             value={text}
@@ -107,7 +107,9 @@ export default function EmailManager() {
             maxLength={5000}
           />
         </label>
-        <button className={`${btn.secondary} ${btn.md}`}>Предпросмотр</button>
+        <button type="submit" className={`${btn.secondary} ${btn.md}`}>
+          Предпросмотр
+        </button>
       </form>
       {preview && (
         <div className="space-y-3 rounded-lg border border-line p-4">
@@ -118,6 +120,7 @@ export default function EmailManager() {
             Внизу письма будет ссылка на настройки отключения писем.
           </p>
           <button
+            type="button"
             className={`${btn.primary} ${btn.md}`}
             disabled={busy || !history?.configured}
             onClick={() => void send()}
@@ -126,14 +129,11 @@ export default function EmailManager() {
           </button>
         </div>
       )}
-      {message && (
-        <p role="status" className="text-sm">
-          {message}
-        </p>
-      )}
+      {message && <output className="text-sm">{message}</output>}
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-semibold">Последние отправки</h4>
         <button
+          type="button"
           className={`${btn.secondary} ${btn.sm}`}
           onClick={() => void load().catch((e) => setMessage(e.message))}
         >

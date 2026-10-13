@@ -18,6 +18,7 @@ router = APIRouter(tags=["email"])
 DB = Annotated[Session, Depends(get_db)]
 Owner = Annotated[User, Depends(get_current_user)]
 Admin = Annotated[User, Depends(get_admin_user)]
+INVALID_LINK = "Ссылка недействительна или устарела"
 ERRORS = {400: {"description": "Invalid input or expired token"}, 403: {"description": "Forbidden"},
           409: {"description": "Address already linked"}, 429: {"description": "Rate limit"},
           503: {"description": "Email delivery not configured"}}
@@ -137,7 +138,7 @@ def active_token(db, raw, purpose):
     row = db.query(EmailAccount).filter(column == mail.digest(raw)).with_for_update().first()
     expiry = getattr(row, purpose + "_expires", None)
     if row is None or expiry is None or expiry.replace(tzinfo=UTC) <= datetime.now(UTC):
-        raise HTTPException(400, "Ссылка недействительна или устарела")
+        raise HTTPException(400, INVALID_LINK)
     return row
 
 
@@ -147,7 +148,7 @@ def verify(request: Request, data: Token, db: DB):
     row = active_token(db, data.token, "verify")
     user = db.get(User, row.user_id)
     if not user or user.is_banned or row.verify_stamp != mail.digest(str(user.hashed_password)):
-        raise HTTPException(400, "Ссылка недействительна или устарела")
+        raise HTTPException(400, INVALID_LINK)
     row.email = row.pending_email
     row.pending_email = row.verify_hash = row.verify_expires = row.verify_stamp = None
     row.reset_hash = row.reset_expires = None
@@ -208,7 +209,7 @@ def reset(request: Request, data: Reset, db: DB):
     row = active_token(db, data.token, "reset")
     user = db.query(User).filter_by(id=row.user_id).with_for_update(of=User).first()
     if not user or user.is_banned or row.password_stamp != mail.digest(str(user.hashed_password)):
-        raise HTTPException(400, "Ссылка недействительна или устарела")
+        raise HTTPException(400, INVALID_LINK)
     second_factor(db, user, data.otp_code)
     user.hashed_password = get_password_hash(data.password)
     revoke_all_sessions(user)
