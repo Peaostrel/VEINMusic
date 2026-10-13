@@ -84,7 +84,8 @@ def record(kind: str, ip: str | None = None) -> None:
         if count == ALERT_THRESHOLDS.get(kind):
             _alert_admins(kind, count)
     except Exception:
-        logger.warning("Could not record security event %s", kind, exc_info=True)
+        # Only the failure: the event's details may come from a sign-in attempt
+        logger.warning("Could not record a security event", exc_info=True)
 
 
 def _alert_admins(kind: str, count: int) -> None:
@@ -92,7 +93,8 @@ def _alert_admins(kind: str, count: int) -> None:
     from app.models import User
     from app.services import notifications
 
-    logger.warning("Security alert: %s reached %s within an hour", kind, count)
+    # Details go to the administrators' notification, not to the log
+    logger.warning("Security alert: an event threshold was crossed within an hour")
     db = SessionLocal()
     try:
         admins = db.query(User).filter(User.role == "admin", User.is_banned.isnot(True)).all()

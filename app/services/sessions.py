@@ -18,19 +18,22 @@ DEVICE_COOKIE_MAX_AGE = 2 * 365 * 24 * 3600
 _HEX = set("0123456789abcdef")
 
 
-def _device_id(request) -> str:
+def _known_device_id(request) -> str | None:
+    """The browser's device id, if it carries a well-formed one."""
     value = request.cookies.get(DEVICE_COOKIE, "")
-    if len(value) == 32 and set(value) <= _HEX:
-        return value
-    return uuid4().hex
+    return value if len(value) == 32 and set(value) <= _HEX else None
 
 
 def issue_session(db, user, request, notify=True, response=None, background_tasks=None):
     from app.services import notifications
 
     now = datetime.now(UTC)
-    device_id = _device_id(request)
-    known_device = db.query(UserSession.id).filter(
+    # The cookie is only ever set to an id made here, never echoed back
+    new_device_id = None
+    device_id = _known_device_id(request)
+    if device_id is None:
+        device_id = new_device_id = uuid4().hex
+    known_device = new_device_id is None and db.query(UserSession.id).filter(
         UserSession.user_id == user.id, UserSession.device_id == device_id).first() is not None
     row = UserSession(id=uuid4().hex, user_id=user.id, device=device_label(request.headers.get("user-agent")),
                       device_id=device_id, session_version=int(user.session_version or 0),
@@ -48,8 +51,8 @@ def issue_session(db, user, request, notify=True, response=None, background_task
             message=f"Вход с нового устройства: {row.device}. Не вы? Смените пароль и завершите сеансы")
     db.commit()
     notifications.schedule_push(background_tasks, alert)
-    if response is not None:
-        response.set_cookie(DEVICE_COOKIE, device_id, max_age=DEVICE_COOKIE_MAX_AGE, httponly=True,
+    if response is not None and new_device_id is not None:
+        response.set_cookie(DEVICE_COOKIE, new_device_id, max_age=DEVICE_COOKIE_MAX_AGE, httponly=True,
                             secure=os.getenv("ENVIRONMENT") == "production", samesite="strict")
     return create_session_token(str(user.id), str(user.hashed_password), int(user.session_version or 0), str(row.id))
 
