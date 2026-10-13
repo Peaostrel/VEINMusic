@@ -7,6 +7,8 @@ Apple Music в вашем аккаунте [VEINMusic](https://music.vein.guru).
 
 ## Скачать
 
+Описание расширения и актуальный статус установки: <https://music.vein.guru/extension>.
+
 **[Открыть выпуск 1.5.0](https://github.com/Peaostrel/VEINMusic/releases/tag/extension-v1.5.0)** — скачивание без регистрации на GitHub.
 
 - Chrome / Edge / Brave / Яндекс Браузер: `VEINMusic-extension-chromium-1.5.0.zip`.
@@ -72,6 +74,15 @@ npx --yes web-ext@10.7.0 lint --source-dir dist/extension/firefox --warnings-as-
 Пакеты находятся в `dist/extension`. Тесты, локальные настройки и другие файлы
 репозитория в ZIP не включаются. Один manifest преобразуется в отдельные
 Chromium service-worker и Firefox background-scripts manifests.
+
+## Кнопка установки на сайте
+
+После одобрения публикации задайте `FIREFOX_ADDON_URL` в `.env` развёртывания:
+точный HTTPS-адрес публичной карточки `addons.mozilla.org/.../firefox/addon/.../`.
+Пересоздайте контейнер frontend, чтобы применить переменную. Страница `/extension`
+читает её при запросе и показывает кнопку установки через Firefox Add-ons.
+Пустой или неверный адрес оставляет честный статус «Скоро в Firefox Add-ons».
+Неподписанный ZIP не используется для постоянной установки.
 
 CI дополнительно устанавливает Chromium-пакет и проверяет popup, передачу
 из веб-плеера со строгой CSP, проверку связи и остановку после отключения.

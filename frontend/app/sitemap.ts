@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 const STATIC_PAGES = [
   "/",
   "/about",
+  "/extension",
   "/leaderboard",
   "/developers",
   "/privacy",
