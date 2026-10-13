@@ -192,6 +192,34 @@ def _render_top_artists_svg(username: str, top_artists: list[tuple[str, int]]) -
     return svg
 
 
+def _now_playing_text(db: Session, user: User) -> tuple[str, str, bool]:
+    """Title, artist and "playing now" for the widget, by the profile's rules:
+    the current track only when it and the online status are public, past
+    plays only when the history is."""
+    show_current = (is_public_section(user.profile, "current_track")
+                    and preference_enabled(user.profile, "profile", "show_online_status"))
+    show_history = is_public_section(user.profile, "history")
+    recent = (
+        db.query(Scrobble)
+        .filter(Scrobble.user_id == user.id, Scrobble.deleted_at.is_(None))
+        .order_by(Scrobble.id.desc())
+        .limit(2)
+        .all()
+    )
+    if not recent:
+        return "No scrobbles yet", DEFAULT_ARTIST, False
+    playing_now = _is_active(recent[0])
+    is_playing = playing_now and show_current
+    if is_playing or not playing_now:
+        shown = recent[0] if is_playing or show_history else None
+    else:
+        # A hidden track is playing: the one before it is the last played
+        shown = recent[1] if show_history and len(recent) > 1 else None
+    if shown is None or not shown.track:
+        return ("No scrobbles yet" if show_history else "Listening is hidden"), DEFAULT_ARTIST, False
+    return shown.track.title or "Unknown Track", shown.track.artist or "Unknown Artist", is_playing
+
+
 @router.get("/now-playing/{username}.svg")
 def get_now_playing_widget(username: str, db: Annotated[Session, Depends(get_db)]):
     user = _find_user(db, username)
@@ -203,35 +231,7 @@ def get_now_playing_widget(username: str, db: Annotated[Session, Depends(get_db)
         svg_content = _render_now_playing_svg(username, "Private Profile", DEFAULT_ARTIST, False)
         return Response(content=svg_content, media_type=SVG_MEDIA_TYPE, headers=NO_CACHE)
 
-    # The same rules as the profile page: the current track only when it and
-    # the online status are public, past plays only when the history is
-    show_current = (is_public_section(user.profile, "current_track")
-                    and preference_enabled(user.profile, "profile", "show_online_status"))
-    show_history = is_public_section(user.profile, "history")
-    recent = (
-        db.query(Scrobble)
-        .filter(Scrobble.user_id == user.id, Scrobble.deleted_at.is_(None))
-        .order_by(Scrobble.id.desc())
-        .limit(2)
-        .all()
-    )
-    shown, is_playing = None, False
-    if recent and _is_active(recent[0]):
-        if show_current:
-            shown, is_playing = recent[0], True
-        elif show_history and len(recent) > 1:
-            shown = recent[1]
-    elif recent and show_history:
-        shown = recent[0]
-
-    if shown is not None and shown.track:
-        title = shown.track.title or "Unknown Track"
-        artist = shown.track.artist or "Unknown Artist"
-    elif recent and not (show_current or show_history):
-        title, artist = "Listening is hidden", DEFAULT_ARTIST
-    else:
-        title, artist = "No scrobbles yet", DEFAULT_ARTIST
-
+    title, artist, is_playing = _now_playing_text(db, user)
     svg_content = _render_now_playing_svg(username, title, artist, is_playing)
     return Response(
         content=svg_content,

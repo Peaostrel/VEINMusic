@@ -132,14 +132,6 @@ if os.getenv("ENVIRONMENT") != "production":
     # on localhost (a dev server, a malicious tool) must not act as the site
     allowed_origins += ["http://localhost:3000", "http://127.0.0.1:3000"]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
-
 _API_CSP = "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; frame-ancestors 'none'"
 _DOCS_PATHS = ("/docs", "/redoc", "/openapi.json")
 
@@ -161,8 +153,17 @@ async def security_headers(request, call_next):
 
 # Refuse oversized bodies before any other code reads them
 app.add_middleware(BodySizeLimitMiddleware)
-# Outermost: a per-IP ceiling for the whole API
+# A per-IP ceiling for the whole API
 app.add_middleware(FloodGuardMiddleware)
+# Outermost, so refusals (413, 429) also carry CORS headers and the site can
+# show them instead of a network error
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
 
 
 # Include Routers

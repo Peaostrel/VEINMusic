@@ -349,3 +349,15 @@ def test_public_counters_are_cached(client, db, monkeypatch):
     monkeypatch.setattr(type(db), "query", lambda self, *a, **k: queries.append(a) or real_query(*a, **k))
     assert client.get("/api/public-stats").json() == first
     assert not [q for q in queries if q and q[0] is User]
+
+
+def test_refusals_carry_cors_headers(client, monkeypatch):
+    from app.core import flood_guard
+
+    monkeypatch.setattr(flood_guard, "REQUESTS_PER_MINUTE", 0)
+    monkeypatch.setattr(flood_guard, "_redis", lambda: None)
+    response = client.get("/api/leaderboard", headers=ORIGIN)
+    flood_guard.reset()
+    assert response.status_code == 429
+    # The site can read the refusal and say "try again later"
+    assert response.headers["access-control-allow-origin"] == ORIGIN["Origin"]

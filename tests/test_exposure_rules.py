@@ -44,7 +44,8 @@ def test_now_playing_widget_shows_current_track_only_when_public(client, db):
     _play(db, user, "OlderSong", minutes_ago=10)
     _play(db, user, "LiveSong", playing=True)
     svg = _now_playing(client, "widget_current")
-    assert "LiveSong" in svg and "LISTENING NOW" in svg
+    assert "LiveSong" in svg
+    assert "LISTENING NOW" in svg
     assert "OlderSong" not in svg
 
 
@@ -54,7 +55,8 @@ def test_now_playing_widget_hides_current_track_when_private(client, db):
     _play(db, user, "LiveSong", playing=True)
     svg = _now_playing(client, "widget_hidden_now")
     assert "LiveSong" not in svg
-    assert "OlderSong" in svg and "LAST PLAYED" in svg
+    assert "OlderSong" in svg
+    assert "LAST PLAYED" in svg
 
 
 def test_now_playing_widget_hides_everything_when_both_private(client, db):
@@ -70,7 +72,8 @@ def test_now_playing_widget_skips_deleted_plays_and_banned_users(client, db):
     _play(db, user, "KeptSong", minutes_ago=10)
     _play(db, user, "DeletedSong", deleted=True)
     svg = _now_playing(client, "widget_deleted")
-    assert "DeletedSong" not in svg and "KeptSong" in svg
+    assert "DeletedSong" not in svg
+    assert "KeptSong" in svg
 
     banned = _user(db, "widget_banned", banned=True)
     _play(db, banned, "BannedSong")

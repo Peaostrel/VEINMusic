@@ -28,6 +28,7 @@ router = APIRouter(prefix="/api/devices", tags=["devices"])
 
 CODE_TTL = timedelta(minutes=10)
 POLL_INTERVAL_SEC = 5
+CODE_NOT_FOUND = "Код не найден или устарел"
 EXTENSION_SCOPES = "scrobble:write,profile:read"
 # No 0/O/1/I to avoid confusion when typing the code
 _USER_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -154,7 +155,7 @@ def get_device_code(user_code: str, request: Request,
     auth = db.query(DeviceAuthorization).filter(
         DeviceAuthorization.user_code == _normalize_user_code(user_code)).first()
     if not auth or auth.status != "pending" or _is_expired(auth):
-        raise HTTPException(404, "Код не найден или устарел")
+        raise HTTPException(404, CODE_NOT_FOUND)
     return {"user_code": auth.user_code, "client_name": auth.client_name,
             "expires_at": _as_aware(auth.expires_at).isoformat()}  # type: ignore[arg-type]
 
@@ -167,7 +168,7 @@ def approve_device(payload: DeviceApproveRequest, request: Request,
     auth = db.query(DeviceAuthorization).filter(
         DeviceAuthorization.user_code == _normalize_user_code(payload.user_code)).first()
     if not auth or auth.status != "pending" or _is_expired(auth):
-        raise HTTPException(404, "Код не найден или устарел")
+        raise HTTPException(404, CODE_NOT_FOUND)
     status = "approved" if payload.approve else "denied"
     # Only a still-pending code can be decided, and only once
     decided = db.query(DeviceAuthorization).filter(
@@ -175,6 +176,6 @@ def approve_device(payload: DeviceApproveRequest, request: Request,
     ).update({"status": status, "user_id": current_user.id}, synchronize_session=False)
     if decided != 1:
         db.rollback()
-        raise HTTPException(404, "Код не найден или устарел")
+        raise HTTPException(404, CODE_NOT_FOUND)
     db.commit()
     return {"status": status}

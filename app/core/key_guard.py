@@ -4,16 +4,14 @@ Personal and developer keys are stored as PBKDF2 hashes (100 000 rounds,
 ~70 ms of CPU). Computing that for every request let anyone keep the API's
 CPU busy with made-up keys. Now:
 
-* a key that verified recently is recognised by a fast lookup, and
-  re-checked against the stored hash, so a regenerated or revoked key stops
-  working at once;
+* a key that verified recently is found in an in-memory table (only in
+  this process, for five minutes) and re-checked against the stored hash,
+  so a regenerated or revoked key stops working at once;
 * a client that keeps sending wrong keys is refused before any PBKDF2 runs;
 * only a few PBKDF2 computations run at the same time.
 """
 from __future__ import annotations
 
-import hashlib
-import secrets
 import threading
 import time
 from collections import OrderedDict
@@ -27,8 +25,6 @@ FAILURE_WINDOW_SEC = 600  # ... within this window
 MAX_CONCURRENT_HASHES = 4
 _LOCAL_MAX_COUNTERS = 10_000
 
-_FINGERPRINT_SALT = secrets.token_bytes(16)
-
 _cache: OrderedDict[str, tuple[int, str, float]] = OrderedDict()
 _cache_lock = threading.Lock()
 _hash_slots = threading.BoundedSemaphore(MAX_CONCURRENT_HASHES)
@@ -36,41 +32,30 @@ _local_failures: dict[str, tuple[int, float]] = {}
 _local_lock = threading.Lock()
 
 
-def fingerprint(token: str) -> str:
-    """A cache key for a token that is useless outside this process.
-
-    Keys are 32 random bytes, so they need no key stretching: scrypt at its
-    lowest cost (~15 µs) with a salt drawn at start-up is enough, and the
-    fingerprints can't be matched against anything precomputed."""
-    return hashlib.scrypt(token.encode("utf-8"), salt=_FINGERPRINT_SALT,
-                          n=2, r=1, p=1, dklen=32).hex()
-
-
 def cached(token: str) -> tuple[int, str] | None:
     """(owner id, stored hash) of a key that verified recently."""
-    key = fingerprint(token)
     with _cache_lock:
-        entry = _cache.get(key)
+        entry = _cache.get(token)
         if entry is None:
             return None
         if entry[2] <= time.time():
-            _cache.pop(key, None)
+            _cache.pop(token, None)
             return None
-        _cache.move_to_end(key)
+        _cache.move_to_end(token)
         return entry[0], entry[1]
 
 
 def remember(token: str, owner_id: int, stored_hash: str) -> None:
     with _cache_lock:
-        _cache[fingerprint(token)] = (owner_id, stored_hash, time.time() + CACHE_TTL_SEC)
-        _cache.move_to_end(fingerprint(token))
+        _cache[token] = (owner_id, stored_hash, time.time() + CACHE_TTL_SEC)
+        _cache.move_to_end(token)
         while len(_cache) > CACHE_MAX_ENTRIES:
             _cache.popitem(last=False)
 
 
 def forget(token: str) -> None:
     with _cache_lock:
-        _cache.pop(fingerprint(token), None)
+        _cache.pop(token, None)
 
 
 def _redis():
