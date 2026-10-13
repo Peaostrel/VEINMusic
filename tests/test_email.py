@@ -3,6 +3,9 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import Mock
 
 import httpx
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from app.database import get_db
 import pytest
 from sqlalchemy import text
 
@@ -22,7 +25,9 @@ def owner(db, monkeypatch):
     u = User(username="mailuser", hashed_password=get_password_hash(PASSWORD), session_version=0)
     db.add(u)
     db.commit()
-    app.dependency_overrides[get_current_user] = lambda: u
+    def current(session: Session = Depends(get_db)):
+        return session.get(User, u.id)
+    app.dependency_overrides[get_current_user] = current
     return u
 
 
