@@ -35,6 +35,7 @@ KNOWN_FEATURES: dict[str, str] = {
     "integration_spotify": "Spotify: подключения и скробблинг",
     "integration_youtube_music": "YouTube Music: скробблинг через расширение",
     "integration_soundcloud": "SoundCloud: подключения и облачный скробблинг",
+    "integration_plat": "Plat Music: приём прослушиваний",
     "integration_lastfm": "Last.fm: подключения, импорт и экспорт",
 }
 

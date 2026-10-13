@@ -128,7 +128,7 @@ def undo_import(job_id: int, db: DB, user: Owner):
 
 
 @router.get("/api/me/connection-check")
-def connection_check(db: DB, user: Owner, source: Annotated[Literal["spotify", "yandex", "youtube", "soundcloud", "lastfm", "extension"], Query()] = "extension", since: datetime | None = None):
+def connection_check(db: DB, user: Owner, source: Annotated[Literal["spotify", "yandex", "youtube", "soundcloud", "lastfm", "plat", "extension"], Query()] = "extension", since: datetime | None = None):
     cutoff = max(_aware(since), datetime.now(UTC) - timedelta(minutes=10)) if since else datetime.now(UTC) - timedelta(minutes=10)
     health = db.query(SourceHealth).filter_by(user_id=user.id, source=source).first()
     recent = db.query(Scrobble).filter(

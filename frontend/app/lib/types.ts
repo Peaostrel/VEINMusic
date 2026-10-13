@@ -268,6 +268,7 @@ export interface UserPreferences {
     youtube_music_enabled: boolean;
     soundcloud_enabled: boolean;
     lastfm_enabled: boolean;
+    plat_enabled: boolean;
     auto_sync: boolean;
   };
   experiments: {
