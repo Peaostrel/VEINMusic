@@ -186,7 +186,8 @@ def test_forged_device_cookie_is_not_trusted(client, db):
 def test_device_cookie_is_only_ever_made_by_the_server(client):
     response = client.post("/auth/register", json={"username": "device_cookie", "password": PASSWORD})
     issued = response.cookies.get("device_id")
-    assert issued and len(issued) == 32
+    assert issued is not None
+    assert len(issued) == 32
     # A browser that already has one keeps it: nothing is echoed back
     again = client.post("/auth/login", json={"username": "device_cookie", "password": PASSWORD})
     assert "device_id" not in again.cookies
