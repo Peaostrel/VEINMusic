@@ -49,6 +49,9 @@ def issue_session(db, user, request, notify=True, response=None, background_task
         alert = notifications.create(
             db, recipient_id=int(user.id), actor_id=int(user.id), kind=notifications.KIND_SECURITY,
             message=f"Вход с нового устройства: {row.device}. Не вы? Смените пароль и завершите сеансы")
+    if notify and not known_device:
+        from app.services.email_delivery import new_login
+        new_login(db, user, row.device)
     db.commit()
     notifications.schedule_push(background_tasks, alert)
     if response is not None and new_device_id is not None:

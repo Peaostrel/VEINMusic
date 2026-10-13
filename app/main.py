@@ -23,6 +23,7 @@ from app.database import Base, SessionLocal, engine
 from app.models import User
 from app.routers import (
     account,
+    email,
     portability,
     admin,
     admin_data,
@@ -169,6 +170,7 @@ app.add_middleware(
 
 # Include Routers
 app.include_router(auth.router)
+app.include_router(email.router)
 app.include_router(profile.router)
 app.include_router(scrobbling.router)
 app.include_router(admin.router)

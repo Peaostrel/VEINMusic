@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
@@ -323,6 +324,11 @@ export default function Auth() {
           >
             {submitLabel}
           </button>
+          {isLogin && (
+            <Link href="/email/forgot" className="text-sm text-accent">
+              Забыли пароль?
+            </Link>
+          )}
           {!registrationOpen && isLogin && (
             <p className="text-[13px] text-fg-3">
               Регистрация новых аккаунтов временно закрыта.

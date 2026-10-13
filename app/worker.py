@@ -138,6 +138,12 @@ async def cleanup_history(ctx: dict[str, Any]) -> None:
     await _mark_cron_run(ctx, "cleanup_history")
 
 
+async def deliver_emails(ctx: dict[str, Any]) -> None:
+    from app.services.email_delivery import drain
+    await asyncio.to_thread(drain)
+    await _mark_cron_run(ctx, "deliver_emails")
+
+
 async def startup(ctx: dict[str, Any]) -> None:
     setup_observability("worker")
     if os.getenv("YANDEX_LIVE", "1") != "0":
@@ -168,6 +174,7 @@ class WorkerSettings:
         broadcast_push,
     ]
     cron_jobs: ClassVar[list] = [
+        cron(deliver_emails, second={15, 45}, run_at_startup=True, unique=True, timeout=240),
         # Every 30 seconds; poll_once itself takes a Redis lock, so several
         # workers never poll the same accounts concurrently.
         cron(cloud_poll, second={0, 30}, run_at_startup=True, unique=True, timeout=25),

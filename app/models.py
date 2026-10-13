@@ -127,6 +127,35 @@ class UserProfile(Base):
     user = relationship("User", back_populates="profile")
 
 
+class EmailAccount(Base):
+    __tablename__ = "email_accounts"
+    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), primary_key=True)
+    email = Column(String(254), unique=True, nullable=True)
+    pending_email = Column(String(254), nullable=True)
+    verify_hash = Column(String(64), nullable=True)
+    verify_expires = Column(DateTime(timezone=True), nullable=True)
+    verify_stamp = Column(String(64), nullable=True)
+    reset_hash = Column(String(64), nullable=True)
+    reset_expires = Column(DateTime(timezone=True), nullable=True)
+    password_stamp = Column(String(64), nullable=True)
+    security_alerts = Column(Boolean, nullable=False, default=True, server_default=text("true"))
+    messages_enabled = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+
+
+class EmailOutbox(Base):
+    __tablename__ = "email_outbox"
+    id = Column(String(32), primary_key=True)
+    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=False, index=True)
+    kind = Column(String(20), nullable=False)
+    payload = Column(EncryptedString, nullable=False)
+    status = Column(String(20), nullable=False, default="pending")
+    attempts = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    next_attempt = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC), index=True)
+    error_code = Column(String(40), nullable=True)
+    message_id = Column(String(254), nullable=True)
+
+
 class UserIntegration(Base):
     __tablename__ = "user_integrations"
     user_id = Column(
