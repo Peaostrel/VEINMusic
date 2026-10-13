@@ -15,6 +15,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from app.core.crypto import EncryptedString
+from app.core.cover_urls import TrackCoverURL
 from app.database import Base
 
 CASCADE_ALL_DELETE = "all, delete"
@@ -166,7 +167,7 @@ class Track(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, index=True)
     artist = Column(String, index=True)
-    cover_url = Column(String, nullable=True)
+    cover_url = Column(TrackCoverURL, nullable=True)
     track_url = Column(String, nullable=True)
     album = Column(String, nullable=True, index=True)
     genre = Column(String, nullable=True, index=True)
