@@ -206,7 +206,7 @@ def reset(request: Request, data: Reset, db: DB):
     if len(data.password) < 8:
         raise HTTPException(400, "Пароль должен содержать не менее 8 символов")
     row = active_token(db, data.token, "reset")
-    user = db.query(User).filter_by(id=row.user_id).with_for_update().first()
+    user = db.query(User).filter_by(id=row.user_id).with_for_update(of=User).first()
     if not user or user.is_banned or row.password_stamp != mail.digest(str(user.hashed_password)):
         raise HTTPException(400, "Ссылка недействительна или устарела")
     second_factor(db, user, data.otp_code)

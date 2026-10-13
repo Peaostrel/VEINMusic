@@ -159,3 +159,53 @@ def test_admin_permissions_consent_and_unlink(client, db, owner):
 @pytest.mark.parametrize("address", ["bad", "a\r\n@example.com", "a@localhost", "a@b..com"])
 def test_invalid_address(client, db, owner, address):
     assert client.post("/api/account/email", json={"email": address, "password": PASSWORD}).status_code == 422
+
+
+def test_verify_invalid_after_password_change(client, db, owner):
+    token = bind(client, db, owner)
+    owner.hashed_password = get_password_hash("changed-password")
+    db.commit()
+    assert client.post("/auth/email/verify", json={"token": token}).status_code == 400
+
+
+def test_pending_address_does_not_replace_verified_address(client, db, owner):
+    verified(client, db, owner)
+    token = bind(client, db, owner, "new@example.com")
+    assert client.get("/api/account/email").json()["email"] == "user@example.com"
+    assert client.post("/auth/email/verify", json={"token": token}).status_code == 200
+    assert client.get("/api/account/email").json()["email"] == "new@example.com"
+
+
+def test_transport_retry_is_bounded(client, db, owner):
+    verified(client, db, owner)
+    row = mail.queue(db, owner.id, "security", "user@example.com", "Hi", "Hi")
+    db.commit()
+    transport = Mock()
+    transport.post.side_effect = httpx.ConnectError("secret diagnostic detail")
+    mail.deliver_one(db, row, transport)
+    assert row.status == "pending" and row.error_code == "transport_error"
+    assert "secret" not in row.error_code
+    row.attempts = 7
+    mail.deliver_one(db, row, transport)
+    assert row.status == "failed" and row.payload == "{}"
+
+
+def test_expired_verify_is_not_sent(client, db, owner):
+    bind(client, db, owner)
+    account = db.get(EmailAccount, owner.id)
+    account.verify_expires = datetime.now(UTC) - timedelta(seconds=1)
+    row = db.query(EmailOutbox).filter_by(kind="verify").one()
+    transport = Mock()
+    mail.deliver_one(db, row, transport)
+    assert row.status == "cancelled"
+    transport.post.assert_not_called()
+
+
+def test_account_export_and_deletion_remove_email(client, db, owner):
+    verified(client, db, owner)
+    exported = client.get("/api/account/export").json()
+    assert exported["email_settings"]["email"] == "user@example.com"
+    assert "verify_hash" not in str(exported)
+    assert client.request("DELETE", "/api/account", json={"password": PASSWORD}).status_code == 200
+    assert db.query(EmailAccount).count() == 0
+    assert db.query(EmailOutbox).count() == 0
