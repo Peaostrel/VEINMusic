@@ -46,6 +46,8 @@ OptionalUrl = Annotated[str | None, _truncate(2048)]
 class UserCreate(BaseModel):
     username: str = Field(..., max_length=32)
     password: str = Field(..., max_length=128)
+    # Answer of the captcha widget, when captcha is switched on
+    captcha_token: str | None = Field(None, max_length=4096)
 
 
 class UserLogin(UserCreate):

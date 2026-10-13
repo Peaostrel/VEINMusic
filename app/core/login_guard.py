@@ -18,6 +18,9 @@ import time
 
 MAX_FAILED_ATTEMPTS = 10
 MAX_FAILED_ATTEMPTS_TOTAL = 100
+# After this many failures a captcha is asked before the next attempt
+CAPTCHA_AFTER = 3
+CAPTCHA_AFTER_TOTAL = 10
 LOCKOUT_WINDOW_SEC = 15 * 60
 # Bound of the in-memory fallback, so random usernames can't grow it forever
 _LOCAL_MAX_ENTRIES = 10_000
@@ -102,3 +105,21 @@ def reset(username: str, ip: str | None = None) -> None:
     with _local_lock:
         for key in keys:
             _local.pop(key, None)
+
+
+def _count(key: str) -> int:
+    client = _redis()
+    if client is not None:
+        try:
+            return int(client.get(key) or 0)
+        except Exception:  # fall back to the local counters
+            pass
+    with _local_lock:
+        count, expires = _local.get(key, (0, 0.0))
+        return count if expires > time.time() else 0
+
+
+def captcha_needed(username: str, ip: str | None = None) -> bool:
+    """Whether recent failures call for a captcha before the next attempt."""
+    (pair_key, _), (total_key, _) = _keys(username, ip)
+    return _count(pair_key) >= CAPTCHA_AFTER or _count(total_key) >= CAPTCHA_AFTER_TOTAL

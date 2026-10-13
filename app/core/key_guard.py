@@ -81,6 +81,8 @@ def _failures(ip: str) -> int:
 def register_failure(ip: str | None) -> None:
     if not ip:
         return
+    from app.services import security_events
+    security_events.record(security_events.BAD_API_KEY, ip)
     client = _redis()
     if client is not None:
         try:

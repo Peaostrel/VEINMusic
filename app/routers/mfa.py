@@ -45,7 +45,7 @@ def _check_password(data: PasswordConfirmation, user: User) -> None:
 
 def _refresh_session(response: Response, user: User, db: Session, request: Request) -> None:
     response.headers["Cache-Control"] = "no-store"
-    token = issue_session(db, user, request, notify=False)
+    token = issue_session(db, user, request, notify=False, response=response)
     response.set_cookie("api_key", token,
                         httponly=True, secure=os.getenv("ENVIRONMENT") == "production",
                         samesite="strict", max_age=30 * 24 * 3600)

@@ -182,3 +182,39 @@ test("optional admin request network failure does not block the panel", async ({
     page.getByRole("heading", { name: "Админка", exact: true }),
   ).toBeVisible();
 });
+
+test("security tab blocks an address for a while and lifts the block", async ({
+  page,
+}) => {
+  await openAdmin(page);
+  await openTab(page, "Безопасность");
+  await expect(page.getByText("Отказы за сутки")).toBeVisible();
+  await expect(
+    page.getByRole("cell", { name: "Неудачные входы" }),
+  ).toBeVisible();
+
+  // A public address nobody in the test run uses (earlier runs may share the database)
+  const address = `9.9.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250) + 1}`;
+  await page.getByLabel("Адрес или подсеть").fill(address);
+  await page.getByLabel("Срок").selectOption({ label: "1 час" });
+  await page.getByLabel("Причина").fill("E2E");
+  await page
+    .getByRole("button", { name: "Заблокировать", exact: true })
+    .click();
+  await expect(page.getByText(`${address} заблокирован`)).toBeVisible();
+  const row = page.getByRole("listitem").filter({ hasText: `${address}/32` });
+  await expect(row).toContainText("E2E");
+
+  await row.getByRole("button", { name: "Снять" }).click();
+  await expect(page.getByText(`${address}/32 разблокирован`)).toBeVisible();
+  await expect(row).toBeHidden();
+
+  // Internal addresses can't be blocked: that would cut off the site itself
+  await page.getByLabel("Адрес или подсеть").fill("10.0.0.0/8");
+  await page
+    .getByRole("button", { name: "Заблокировать", exact: true })
+    .click();
+  await expect(
+    page.getByText("Внутренние адреса блокировать нельзя"),
+  ).toBeVisible();
+});

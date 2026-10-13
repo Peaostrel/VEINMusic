@@ -7,7 +7,7 @@ import urllib.parse
 from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
@@ -24,7 +24,7 @@ from app.core.security import (
 from app.database import get_db
 from app.models import User, UserIntegration, UserProfile
 from app.schemas import UserCreate, UserLogin
-from app.services import runtime_settings
+from app.services import captcha, runtime_settings, security_events
 from app.services.sessions import current_session_id, issue_session
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -56,6 +56,7 @@ def register(request: Request, data: UserCreate, response: Response,
              db: Annotated[Session, Depends(get_db)]):
     if not runtime_settings.is_feature_enabled("registration", db):
         raise HTTPException(403, "Регистрация временно закрыта")
+    captcha.verify(data.captcha_token, get_remote_address(request))
     data.username = data.username.lower()
     if len(data.username) < 3:
         raise HTTPException(400, "Никнейм слишком короткий")
@@ -82,7 +83,7 @@ def register(request: Request, data: UserCreate, response: Response,
     db.commit()
 
     # Set signed session token in cookie
-    session_token = issue_session(db, new_user, request, notify=False)
+    session_token = issue_session(db, new_user, request, notify=False, response=response)
     safe_token = session_token.replace('\r', '').replace('\n', '')
     response.set_cookie(
         key="api_key",
@@ -96,10 +97,16 @@ def register(request: Request, data: UserCreate, response: Response,
     return {"message": "Успешная регистрация", "username": new_user.username, "api_key": raw_api_key}
 
 
+@router.get("/captcha")
+def captcha_config():
+    """Which captcha the sign-in and sign-up forms show (provider null: none)."""
+    return captcha.public_config()
+
+
 @router.post("/login", responses={403: {"description": "Second factor required or account banned"}, 400: {"description": "Bad Request"},
                                    429: {"description": "Too many failed attempts"}})
 @limiter.limit("5/minute")
-def login(request: Request, data: UserLogin, response: Response,
+def login(request: Request, data: UserLogin, response: Response, background_tasks: BackgroundTasks,
           db: Annotated[Session, Depends(get_db)]):
     data.username = data.username.lower()
     client_ip = get_remote_address(request)
@@ -108,9 +115,14 @@ def login(request: Request, data: UserLogin, response: Response,
         raise HTTPException(
             429, f"Слишком много неудачных попыток входа. Попробуйте через {max(locked_for // 60, 1)} мин.")
 
+    # After a few failures, a captcha before the password is even checked
+    if login_guard.captcha_needed(data.username, client_ip):
+        captcha.verify(data.captcha_token, client_ip)
+
     user = db.query(User).filter(User.username == data.username).first()
     if not user or not verify_password(data.password, str(user.hashed_password)):
         login_guard.register_failure(data.username, client_ip)
+        security_events.record(security_events.LOGIN_FAILED, client_ip)
         raise HTTPException(400, "Неверный логин/пароль")
     if user.is_banned:
         raise HTTPException(403, "Аккаунт заблокирован")
@@ -120,12 +132,13 @@ def login(request: Request, data: UserLogin, response: Response,
             raise HTTPException(403, {"code": "mfa_required", "message": "Введите код из приложения или резервный код"})
         if not consume_code(db, user, data.otp_code):
             login_guard.register_failure(data.username, client_ip)
+            security_events.record(security_events.LOGIN_FAILED, client_ip)
             raise HTTPException(400, "Неверный или уже использованный код")
         db.commit()
     login_guard.reset(data.username, client_ip)
 
     # Set signed session token in cookie
-    session_token = issue_session(db, user, request)
+    session_token = issue_session(db, user, request, response=response, background_tasks=background_tasks)
     safe_token = session_token.replace('\r', '').replace('\n', '')
     response.set_cookie(
         key="api_key",

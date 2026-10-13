@@ -127,6 +127,9 @@ def client(db):
     from app.core import flood_guard, key_guard
     key_guard.reset()
     flood_guard.reset()
+    from app.services import ip_blocks, security_events
+    ip_blocks.reset()
+    security_events.reset()
     with TestClient(app) as test_client:
         yield test_client
     # Always clear overrides after the test

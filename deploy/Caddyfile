@@ -2,6 +2,17 @@
 # Domains come from deploy/.env: SITE_DOMAIN, API_DOMAIN, ACME_EMAIL.
 {
 	email {$ACME_EMAIL}
+	servers {
+		# Who may tell us the visitor's real address. By default nobody from
+		# the internet; behind Cloudflare its networks (deploy/cloudflare.sh
+		# fills TRUSTED_PROXIES), otherwise every visitor would look like
+		# Cloudflare and share one rate limit.
+		trusted_proxies static {$TRUSTED_PROXIES:private_ranges}
+		# Read the chain from the right, so a forged header can't pose as a
+		# trusted hop
+		trusted_proxies_strict
+		client_ip_headers CF-Connecting-IP X-Forwarded-For
+	}
 }
 
 import /srv/routing/upstreams.caddy

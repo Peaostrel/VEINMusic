@@ -26,6 +26,7 @@ from app.routers import (
     portability,
     admin,
     admin_data,
+    admin_security,
     admin_tools,
     auth,
     developer,
@@ -172,6 +173,7 @@ app.include_router(profile.router)
 app.include_router(scrobbling.router)
 app.include_router(admin.router)
 app.include_router(admin_tools.router)
+app.include_router(admin_security.router)
 app.include_router(admin_data.router)
 app.include_router(extended.router)
 app.include_router(widgets.router)

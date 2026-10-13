@@ -17,6 +17,7 @@ import ReportsTab from "./tabs/ReportsTab";
 import ScrobblesTab from "./tabs/ScrobblesTab";
 import IntegrationsTab from "./tabs/IntegrationsTab";
 import LogsTab from "./tabs/LogsTab";
+import SecurityTab from "./tabs/SecurityTab";
 import UserCard from "./components/UserCard";
 import { type AdminTab, useAdminPanel } from "./useAdminPanel";
 import type { ReportPage } from "./types";
@@ -140,6 +141,7 @@ export default function AdminPanel() {
             { id: "catalog", label: "Каталог" },
             { id: "gamification", label: "Геймификация" },
             { id: "announcements", label: "Оповещения и флаги" },
+            { id: "security", label: "Безопасность" },
             { id: "system", label: "Система" },
             { id: "logs", label: "Логи" },
             { id: "audit", label: "Журнал" },
@@ -207,6 +209,7 @@ export default function AdminPanel() {
         <IntegrationsTab onOpenUser={setOpenUser} />
       )}
       {admin.activeTab === "logs" && <LogsTab />}
+      {admin.activeTab === "security" && <SecurityTab />}
 
       {openUser && (
         <UserCard

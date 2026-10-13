@@ -674,8 +674,21 @@ class UserSession(Base):
     id = Column(String(32), primary_key=True)
     user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=False, index=True)
     device = Column(String(100), nullable=False)
+    # Random id from a long-lived browser cookie: tells a known device from a new one
+    device_id = Column(String(32), nullable=True, index=True)
     session_version = Column(Integer, nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
     last_seen_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
     expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
     revoked = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+
+
+class IpBlock(Base):
+    """A client address or network refused for a while (an attack, not a person)."""
+    __tablename__ = "ip_blocks"
+    id = Column(Integer, primary_key=True)
+    network = Column(String(64), nullable=False, index=True)  # "203.0.113.7/32", "2001:db8::/48"
+    reason = Column(String(200), nullable=False, default="", server_default="")
+    created_by = Column(String(64), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)

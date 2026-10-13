@@ -6,6 +6,7 @@ import { useFeature } from "@/app/lib/featureFlags";
 import { clearOfflineCache } from "@/app/lib/offline";
 import { isValidUser } from "@/app/lib/theme";
 import { Segmented, btn, input, label } from "@/components/ui";
+import Captcha from "./Captcha";
 
 type Mode = "login" | "register";
 
@@ -121,6 +122,11 @@ export default function Auth() {
   const [password, setPassword] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [mfaRequired, setMfaRequired] = useState(false);
+  // Sign-ups always show the captcha (when it is on); sign-ins after the
+  // server asked for it
+  const [captchaAsked, setCaptchaAsked] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaRound, setCaptchaRound] = useState(0);
   const [error, setError] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [loading, setLoading] = useState(false);
@@ -149,12 +155,18 @@ export default function Auth() {
         body: JSON.stringify({
           username,
           password,
+          captcha_token: captchaToken || undefined,
           ...(isLogin ? { otp_code: otpCode || undefined } : {}),
         }),
       });
       const data = await res.json();
       if (!res.ok) {
-        if (data.detail?.code === "mfa_required") {
+        // Every captcha answer works once: show a fresh one
+        setCaptchaRound((n) => n + 1);
+        if (data.detail?.code === "captcha_required") {
+          setCaptchaAsked(true);
+          setError(data.detail.message);
+        } else if (data.detail?.code === "mfa_required") {
           setMfaRequired(true);
           setError(data.detail.message);
         } else {
@@ -289,6 +301,12 @@ export default function Auth() {
                 required
               />
             </div>
+          )}
+          {(!isLogin || captchaAsked) && (
+            <Captcha
+              key={`${mode}-${captchaRound}`}
+              onToken={setCaptchaToken}
+            />
           )}
           {error && (
             <p
