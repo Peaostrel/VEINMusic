@@ -14,6 +14,8 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
 
+from app.core.body_limit import BodySizeLimitMiddleware
+from app.core.flood_guard import FloodGuardMiddleware
 from app.core.observability import setup_observability
 from app.core.rate_limit import limiter
 from app.core.websockets import manager
@@ -124,12 +126,11 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
-allowed_origins = [
-    FRONTEND_URL,
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://music.vein.guru"
-]
+allowed_origins = [FRONTEND_URL, "https://music.vein.guru"]
+if os.getenv("ENVIRONMENT") != "production":
+    # Local development only: in production any page a visitor happens to run
+    # on localhost (a dev server, a malicious tool) must not act as the site
+    allowed_origins += ["http://localhost:3000", "http://127.0.0.1:3000"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -156,6 +157,12 @@ async def security_headers(request, call_next):
     if os.getenv("ENVIRONMENT") == "production":
         headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     return response
+
+
+# Refuse oversized bodies before any other code reads them
+app.add_middleware(BodySizeLimitMiddleware)
+# Outermost: a per-IP ceiling for the whole API
+app.add_middleware(FloodGuardMiddleware)
 
 
 # Include Routers
@@ -243,7 +250,8 @@ def _get_ws_authenticated_username(websocket: WebSocket) -> str | None:
             return _get_ticket_username(ticket, db)
         if not token:
             return None
-        auth_user, scopes = _authenticate_user_with_scopes(token, db)
+        client_ip = websocket.client.host if websocket.client else None
+        auth_user, scopes = _authenticate_user_with_scopes(token, db, client_ip)
         if scopes is not None and not {"profile:read", "*"}.intersection(scopes.split(",")):
             return None
         if auth_user and not auth_user.is_banned:

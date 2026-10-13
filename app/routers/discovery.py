@@ -16,11 +16,12 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 from app.core.constants import USER_AGENT_MOZILLA, YANDEX_MUSIC_DOMAIN
-from app.core.rate_limit import limiter
+from app.core.rate_limit import HEAVY_READ_LIMIT, OUTBOUND_LIMIT, limiter
 from app.core.security import get_current_user
 from app.database import get_db
 from app.models import User
 from app.routers.common import _can_view_section, _get_visible_user
+from app.services.cache import get_from_cache, set_to_cache
 from app.services.privacy import public_statistics_users
 from app.services.taste import get_taste_match_internal, get_taste_twins
 
@@ -32,6 +33,7 @@ router = APIRouter(tags=["discovery"])
 
 
 @router.get("/api/taste-match/{viewer}/{profile}")
+@limiter.limit(HEAVY_READ_LIMIT)
 def get_taste_match(viewer: str, profile: str, request: Request,
                     db: Annotated[Session, Depends(get_db)]):
     viewer_user = db.query(User).filter(User.username == viewer).first()
@@ -84,6 +86,7 @@ def get_taste_match(viewer: str, profile: str, request: Request,
 # --- /api/recommendations ---
 @router.get("/api/recommendations",
             responses={403: {"description": "Statistics hidden"}, 404: {"description": "User not found"}})
+@limiter.limit(HEAVY_READ_LIMIT)
 def get_recommendations(
         username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
     user = _get_visible_user(username, request, db, "statistics")
@@ -177,8 +180,14 @@ def _yandex_fallback_redirect(type: str, q: str):
     return RedirectResponse(url=url)  # NOSONAR
 
 
+SuggestionQuery = Annotated[str, Query(max_length=200)]
+EntityType = Annotated[str, Query(max_length=20)]
+
+
 @router.get("/api/redirect")
-async def smart_redirect(source: str, type: str, q: str):
+@limiter.limit(OUTBOUND_LIMIT)
+async def smart_redirect(request: Request, source: Annotated[str, Query(max_length=20)],
+                         type: EntityType, q: SuggestionQuery):
     if source == "yandex":
         try:
             async with httpx.AsyncClient() as client:
@@ -195,10 +204,21 @@ async def smart_redirect(source: str, type: str, q: str):
     return RedirectResponse(url=f"https://{YANDEX_MUSIC_DOMAIN}")
 
 
+SUGGESTIONS_TTL_SEC = 600
+
+
 @router.get("/api/search-suggestions")
-async def get_search_suggestions(q: str, type: str):
+@limiter.limit(OUTBOUND_LIMIT)
+async def get_search_suggestions(request: Request, q: SuggestionQuery, type: EntityType):
     from app.services.metadata_search import search_suggestions
+    # Typing in a search box repeats the same queries; answer them from the
+    # cache instead of asking Deezer, Genius and Last.fm again
+    key = f"suggestions:{type}:{q.strip().casefold()}"
+    cached = get_from_cache(key, SUGGESTIONS_TTL_SEC)
+    if cached is not None:
+        return {"results": cached}
     suggestions = await search_suggestions(q, type)
+    set_to_cache(key, suggestions, SUGGESTIONS_TTL_SEC)
     return {"results": suggestions}
 
 
@@ -207,6 +227,7 @@ async def get_search_suggestions(q: str, type: str):
     "/api/user/{username}/compatibility/{target_username}",
     responses={403: {"description": "Private profile"}, 404: {"description": "User Not Found"}}
 )
+@limiter.limit(HEAVY_READ_LIMIT)
 def get_user_taste_compatibility(
     username: str, target_username: str, request: Request, db: Annotated[Session, Depends(get_db)]
 ):
@@ -229,6 +250,7 @@ def get_user_taste_compatibility(
     "/api/recommendations/user/{username}",
     responses={404: {"description": "User Not Found"}}
 )
+@limiter.limit(HEAVY_READ_LIMIT)
 def get_user_recommendations(
     username: str,
     request: Request,

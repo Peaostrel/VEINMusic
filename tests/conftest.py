@@ -123,6 +123,10 @@ def db():
 def client(db):
     # Always start with clean overrides
     app.dependency_overrides.clear()
+    # API-key cache and wrong-key counters are per process: start clean
+    from app.core import flood_guard, key_guard
+    key_guard.reset()
+    flood_guard.reset()
     with TestClient(app) as test_client:
         yield test_client
     # Always clear overrides after the test

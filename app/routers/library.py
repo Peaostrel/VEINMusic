@@ -6,10 +6,11 @@ import re
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy import and_, case, false, func, or_
 from sqlalchemy.orm import Session
 
+from app.core.rate_limit import HEAVY_READ_LIMIT, limiter
 from app.core.security import get_current_user
 from app.database import get_db
 from app.models import Scrobble, SourceHealth, Track, TrackAlias, User, UserProfile
@@ -58,7 +59,9 @@ def _public_play_counts(db: Session):
     "/api/search",
     responses={422: {"description": "Search query is shorter than two characters"}},
 )
+@limiter.limit(HEAVY_READ_LIMIT)
 def unified_search(
+    request: Request,
     q: Annotated[str, Query(min_length=2, max_length=100)],
     db: Annotated[Session, Depends(get_db)],
 ):
@@ -138,7 +141,9 @@ def _public_scrobble_query(db: Session):
     "/api/music/artist/{artist}",
     responses={404: {"description": "Artist not found in the public catalog"}},
 )
-def artist_details(artist: str, db: Annotated[Session, Depends(get_db)]):
+@limiter.limit(HEAVY_READ_LIMIT)
+def artist_details(request: Request, artist: Annotated[str, Path(max_length=300)],
+                   db: Annotated[Session, Depends(get_db)]):
     public_plays = _public_play_counts(db)
     tracks = (
         db.query(Track, func.coalesce(public_plays.c.plays, 0).label("plays"))
@@ -171,7 +176,8 @@ def artist_details(artist: str, db: Annotated[Session, Depends(get_db)]):
     "/api/music/track/{track_id}",
     responses={404: {"description": "Track not found in the public catalog"}},
 )
-def track_details(track_id: int, db: Annotated[Session, Depends(get_db)]):
+@limiter.limit(HEAVY_READ_LIMIT)
+def track_details(request: Request, track_id: int, db: Annotated[Session, Depends(get_db)]):
     track = db.query(Track).filter(Track.id == track_id).first()
     if not track:
         raise HTTPException(404, TRACK_NOT_FOUND)

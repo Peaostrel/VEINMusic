@@ -20,7 +20,12 @@ export default async function Image({
     previewJson<ArtistPreview>(path),
     previewImage(path),
   ]);
-  if (!a) return renderCard({ kicker: "ИСПОЛНИТЕЛЬ", title: clip(name, 40) });
+  if (!a)
+    return renderCard({
+      kicker: "ИСПОЛНИТЕЛЬ",
+      title: "Исполнитель на VEINMusic",
+      logo: true,
+    });
   return renderCard({
     kicker: "ИСПОЛНИТЕЛЬ",
     title: clip(a.name, 40),

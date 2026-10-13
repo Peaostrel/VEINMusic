@@ -162,31 +162,54 @@ def _check_dev_key_scope(request: Request, scopes: str | None):
             detail="API ключ не имеет прав для этого действия")
 
 
-def _authenticate_user(token: str, db: Session) -> User | None:
-    user, _ = _authenticate_user_with_scopes(token, db)
+def _authenticate_user(token: str, db: Session, client_ip: str | None = None) -> User | None:
+    user, _ = _authenticate_user_with_scopes(token, db, client_ip)
     return user
 
 
-def _authenticate_user_with_scopes(token: str, db: Session) -> tuple[User | None, str | None]:
-    """Authenticate a token. Returns (user, scopes); scopes is None for session tokens."""
-    # Check if this is a developer API key (prefix 'vm_')
-    if token.startswith("vm_"):
-        from app.models import ApiKey
-        key_hash = hash_developer_key(token)
-        api_key_obj = db.query(ApiKey).filter(
-            ApiKey.key_hash == key_hash,
-            ApiKey.is_active == True,  # noqa: E712
-        ).first()
-        if api_key_obj and (not api_key_obj.expires_at or _as_aware(api_key_obj.expires_at) > datetime.now(UTC)):
-            api_key_obj.last_used_at = datetime.now(UTC)  # type: ignore[assignment]
-            db.commit()
-            user = db.query(User).filter(User.id == api_key_obj.user_id).first()
-            return user, str(api_key_obj.scopes or "")
-        return None, None
+def _authenticate_user_with_scopes(token: str, db: Session,
+                                   client_ip: str | None = None) -> tuple[User | None, str | None]:
+    """Authenticate a token. Returns (user, scopes); scopes is None for session tokens.
 
+    `client_ip` lets key checks refuse a client that keeps guessing keys
+    before any expensive hashing (see app/core/key_guard.py)."""
     if ":" in token:
         return _authenticate_session_token(token, db), None
-    return _authenticate_personal_key(token, db), PERSONAL_KEY_SCOPES
+    if len(token) > 256:
+        return None, None
+    if token.startswith("vm_"):
+        return _authenticate_developer_key(token, db, client_ip)
+    return _authenticate_personal_key(token, db, client_ip), PERSONAL_KEY_SCOPES
+
+
+def _authenticate_developer_key(token: str, db: Session,
+                                client_ip: str | None) -> tuple[User | None, str | None]:
+    from app.core import key_guard
+    from app.models import ApiKey
+
+    known = key_guard.cached(token)
+    if known is not None:
+        key_hash = known[1]
+    else:
+        key_guard.check_allowed(client_ip)
+        key_hash = key_guard.slow_hash(lambda: hash_developer_key(token))
+    api_key_obj = db.query(ApiKey).filter(
+        ApiKey.key_hash == key_hash,
+        ApiKey.is_active == True,  # noqa: E712
+    ).first()
+    if not api_key_obj or (api_key_obj.expires_at and _as_aware(api_key_obj.expires_at) <= datetime.now(UTC)):
+        key_guard.forget(token)
+        if known is None:
+            key_guard.register_failure(client_ip)
+        return None, None
+    key_guard.remember(token, int(api_key_obj.id), key_hash)
+    now = datetime.now(UTC)
+    last_used = api_key_obj.last_used_at
+    if last_used is None or (now - _as_aware(last_used)).total_seconds() >= 60:
+        api_key_obj.last_used_at = now  # type: ignore[assignment]
+        db.commit()
+    user = db.query(User).filter(User.id == api_key_obj.user_id).first()
+    return user, str(api_key_obj.scopes or "")
 
 
 def _as_aware(dt: Any) -> datetime:
@@ -213,9 +236,26 @@ def _authenticate_session_token(token: str, db: Session) -> User | None:
     return None
 
 
-def _authenticate_personal_key(token: str, db: Session) -> User | None:
-    hashed_token = hashlib.pbkdf2_hmac('sha256', token.encode('utf-8'), SECRET_KEY.encode(), 100000).hex()
-    return db.query(User).filter(User.api_key == hashed_token).first()
+def _authenticate_personal_key(token: str, db: Session, client_ip: str | None = None) -> User | None:
+    from app.core import key_guard
+
+    known = key_guard.cached(token)
+    if known is not None:
+        user = db.query(User).filter(User.id == known[0]).first()
+        # A regenerated key changes the stored hash: the old one stops at once
+        if user is not None and user.api_key == known[1]:
+            return user
+        key_guard.forget(token)
+        return None
+    key_guard.check_allowed(client_ip)
+    hashed_token = key_guard.slow_hash(
+        lambda: hashlib.pbkdf2_hmac('sha256', token.encode('utf-8'), SECRET_KEY.encode(), 100000).hex())
+    user = db.query(User).filter(User.api_key == hashed_token).first()
+    if user is None:
+        key_guard.register_failure(client_ip)
+        return None
+    key_guard.remember(token, int(user.id), hashed_token)
+    return user
 
 
 def _check_csrf(request: Request, from_cookie: bool):
@@ -253,7 +293,9 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    user, dev_key_scopes = _authenticate_user_with_scopes(token, db)
+    from slowapi.util import get_remote_address
+
+    user, dev_key_scopes = _authenticate_user_with_scopes(token, db, get_remote_address(request))
     if not user:
         raise HTTPException(
             status_code=401,

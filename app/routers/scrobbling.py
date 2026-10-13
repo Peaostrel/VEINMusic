@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.constants import ACTIVE_PLAYBACK_WINDOW_SEC
-from app.core.rate_limit import credential_key, limiter
+from app.core.rate_limit import HEAVY_READ_LIMIT, credential_key, limiter
 from app.core.redis import redis_lock
 from app.core.security import get_current_user, get_current_user_optional
 from app.database import get_db
@@ -307,6 +307,7 @@ def get_friends_history(username: str,
 @router.get("/discovery/taste-twins",
             responses={403: {"description": "Private profile"},
                        404: {"description": "User not found"}})
+@limiter.limit(HEAVY_READ_LIMIT)
 def api_get_taste_twins(
         username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
     from app.routers.common import _get_visible_user
@@ -332,7 +333,8 @@ def toggle_like(scrobble_id: int, request: Request, background_tasks: Background
                 current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
     # Verify scrobble exists
-    scrobble = db.query(Scrobble).filter(Scrobble.id == scrobble_id).first()
+    scrobble = db.query(Scrobble).filter(
+        Scrobble.id == scrobble_id, Scrobble.deleted_at.is_(None)).first()
     if not scrobble:
         raise HTTPException(status_code=404, detail="Скроббл не найден")
 
@@ -384,7 +386,8 @@ def add_comment(scrobble_id: int,
     from app.utils import sanitize_text
     user = current_user
     # Verify scrobble exists
-    scrobble = db.query(Scrobble).filter(Scrobble.id == scrobble_id).first()
+    scrobble = db.query(Scrobble).filter(
+        Scrobble.id == scrobble_id, Scrobble.deleted_at.is_(None)).first()
     if not scrobble:
         raise HTTPException(status_code=404, detail="Скроббл не найден")
 

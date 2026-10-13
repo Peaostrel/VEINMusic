@@ -24,3 +24,10 @@ def credential_key(request) -> str:
     if user_id is not None:
         return f"user:{user_id}"
     return get_remote_address(request)
+
+
+# Public reads that aggregate many rows (statistics, search, recommendations).
+# A profile page makes a handful of these, so normal browsing stays far below.
+HEAVY_READ_LIMIT = "120/minute"
+# Endpoints that call third-party services on the client's behalf
+OUTBOUND_LIMIT = "40/minute"

@@ -12,6 +12,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.constants import USER_NOT_FOUND
+from app.core.rate_limit import HEAVY_READ_LIMIT, limiter
 from app.core.security import get_admin_user
 from app.database import get_db
 from app.models import (
@@ -49,6 +50,7 @@ SPECIFIC_ARTIST_RULE = "specific_artist"
 @router.get("/api/achievements/all/{username}",
             responses={403: {"description": "Private profile"},
                        404: {"description": USER_NOT_FOUND}})
+@limiter.limit(HEAVY_READ_LIMIT)
 def get_all_achievements(
         username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.username == username).first()
