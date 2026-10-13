@@ -116,9 +116,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { Authorization: `Bearer ${settings.apiKey}` },
                 signal: AbortSignal.timeout(15000)
             });
-            logBox.innerText = response.ok ? 'Связь с VEIN работает.' :
-                `Ошибка ${response.status}: ${response.status === 401 || response.status === 403 ?
-                    'подключите аккаунт заново.' : 'попробуйте позже.'}`;
+            const hint = response.status === 401 || response.status === 403 ?
+                'подключите аккаунт заново.' : 'попробуйте позже.';
+            logBox.innerText = response.ok ? 'Связь с VEIN работает.' : `Ошибка ${response.status}: ${hint}`;
         } catch (error) {
             logBox.innerText = `Ошибка: ${error.message}`;
         }

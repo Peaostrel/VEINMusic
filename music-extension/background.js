@@ -180,7 +180,7 @@ function messageSenderUrl(sender) {
 }
 
 function platformForUrl(url) {
-    if (!url || url.protocol !== 'https:') return null;
+    if (url?.protocol !== 'https:') return null;
     return {
         'music.yandex.ru': 'yandex', 'music.yandex.com': 'yandex',
         'open.spotify.com': 'spotify', 'music.youtube.com': 'youtube_music',
@@ -222,7 +222,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (!request || typeof request !== 'object') return;
     // Security: only the VEIN site may change the stored key (see sync-key.js)
     const senderUrl = messageSenderUrl(sender);
-    if (request.type === 'PAIRING_POLL' && sender.id === chrome.runtime.id &&
+    if (request.type === 'PAIRING_POLL' && sender?.id === chrome.runtime.id &&
         senderUrl?.href === chrome.runtime.getURL('popup.html')) {
         veinPollPairing().then(sendResponse).catch(() => sendResponse('error'));
         return true;

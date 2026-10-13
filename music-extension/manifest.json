@@ -83,7 +83,7 @@
       "matches": [
         "*://localhost/*",
         "*://127.0.0.1/*",
-        "*://music.vein.guru/*"
+        "https://music.vein.guru/*"
       ],
       "js": [
         "sync-key.js"

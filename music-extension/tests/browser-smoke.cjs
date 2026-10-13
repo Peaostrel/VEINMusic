@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
-const {chromium} = require('../../frontend/node_modules/playwright');
+const {chromium} = require('playwright');
 
 (async () => {
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'vein-extension-'));
@@ -54,8 +54,16 @@ const {chromium} = require('../../frontend/node_modules/playwright');
             Object.defineProperties(video, {paused: {get: () => false}, duration: {get: () => 180}, currentTime: {get: () => 32}});
         });
         await music.waitForFunction(() => globalThis.__VEIN_LOADED === true);
-        const deadline = Date.now() + 15_000;
-        while (!calls.some(x => x.url === '/api/scrobble') && Date.now() < deadline) await new Promise(r => setTimeout(r,100));
+        await new Promise((resolve, reject) => {
+            const timer = setInterval(() => {
+                if (calls.some(x => x.url === '/api/scrobble')) {
+                    clearInterval(timer); clearTimeout(timeout); resolve();
+                }
+            }, 100);
+            const timeout = setTimeout(() => {
+                clearInterval(timer); reject(new Error('Playback was not received within 15 seconds'));
+            }, 15_000);
+        });
         const play = calls.find(x => x.url === '/api/scrobble');
         assert.ok(play, 'Installed extension must send playback from MAIN despite strict CSP');
         assert.equal(play.authorization, 'Bearer fixture-key');

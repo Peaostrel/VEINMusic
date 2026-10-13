@@ -36,13 +36,17 @@ jobs:
           python3 scripts/package_extension.py
           python3 scripts/package_extension.py --development --output dist/extension-smoke
       - name: Validate Firefox package
-        run: npx --yes web-ext@10.7.0 lint --source-dir dist/extension/firefox --warnings-as-errors
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund --prefix "$RUNNER_TEMP/extension-tools" web-ext@10.7.0
+          "$RUNNER_TEMP/extension-tools/node_modules/.bin/web-ext" lint --source-dir dist/extension/firefox --warnings-as-errors
       - name: Install browser test dependencies
         working-directory: frontend
         run: |
           npm ci --ignore-scripts
           ./node_modules/.bin/playwright install --with-deps chromium
       - name: Test installed Chromium extension
+        env:
+          NODE_PATH: ${{ github.workspace }}/frontend/node_modules
         run: xvfb-run -a node music-extension/tests/browser-smoke.cjs
       - uses: actions/upload-artifact@v7
         with:

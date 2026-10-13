@@ -9,11 +9,45 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'music-extension'
-FILES = ['background.js', 'content.js', 'page_world.js', 'pairing.js', 'popup.html', 'popup.js', 'sync-key.js']
+MANIFEST = 'manifest.json'
+BACKGROUND = 'background.js'
+FILES = [BACKGROUND, 'content.js', 'page_world.js', 'pairing.js', 'popup.html', 'popup.js', 'sync-key.js']
+
+
+def browser_manifest(manifest: dict, browser: str, development: bool) -> dict:
+    result = json.loads(json.dumps(manifest))
+    if browser == 'chromium':
+        result.pop('browser_specific_settings')
+        result['background'] = {'service_worker': BACKGROUND}
+    else:
+        result.pop('minimum_chrome_version', None)
+        result['background'] = {'scripts': ['pairing.js', BACKGROUND]}
+    if not development:
+        result['host_permissions'] = production_hosts(result['host_permissions'])
+        for script in result['content_scripts']:
+            script['matches'] = production_hosts(script['matches'])
+    return result
+
+
+def production_hosts(hosts: list[str]) -> list[str]:
+    return [x for x in hosts if 'localhost' not in x and '127.0.0.1' not in x]
+
+
+def write_archive(archive: Path, directory: Path, assets: list[str]) -> None:
+    with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+        for name in [MANIFEST] + assets:
+            info = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o100644 << 16
+            z.writestr(info, (directory / name).read_bytes())
+    with zipfile.ZipFile(archive) as z:
+        assert z.testzip() is None
+        assert MANIFEST in z.namelist()
+        assert not any('tests/' in p or p.endswith('.env') for p in z.namelist())
 
 
 def build(output: Path, development: bool = False) -> str:
-    manifest = json.loads((SOURCE / 'manifest.json').read_text())
+    manifest = json.loads((SOURCE / MANIFEST).read_text())
     version = manifest['version']
     if not re.fullmatch(r'\d+\.\d+\.\d+', version):
         raise ValueError('Extension version must have three numeric components')
@@ -21,35 +55,16 @@ def build(output: Path, development: bool = False) -> str:
     assets = FILES + sorted(str(p.relative_to(SOURCE)) for p in (SOURCE / 'icons').glob('*.png'))
     hashes = []
     for browser in ['chromium', 'firefox']:
-        package_manifest = json.loads(json.dumps(manifest))
-        if browser == 'chromium':
-            package_manifest.pop('browser_specific_settings')
-            package_manifest['background'] = {'service_worker': 'background.js'}
-        else:
-            package_manifest.pop('minimum_chrome_version', None)
-            package_manifest['background'] = {'scripts': ['pairing.js', 'background.js']}
-        if not development:
-            package_manifest['host_permissions'] = [x for x in manifest['host_permissions'] if 'localhost' not in x and '127.0.0.1' not in x]
-            for script in package_manifest['content_scripts']:
-                script['matches'] = [x for x in script['matches'] if 'localhost' not in x and '127.0.0.1' not in x]
         directory = output / browser
         directory.mkdir(exist_ok=True)
-        (directory / 'manifest.json').write_text(json.dumps(package_manifest, ensure_ascii=False, indent=2) + '\n')
+        package_manifest = browser_manifest(manifest, browser, development)
+        (directory / MANIFEST).write_text(json.dumps(package_manifest, ensure_ascii=False, indent=2) + '\n')
         for name in assets:
             target = directory / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((SOURCE / name).read_bytes())
         archive = output / f'VEINMusic-extension-{browser}-{version}.zip'
-        with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
-            for name in ['manifest.json'] + assets:
-                info = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
-                info.compress_type = zipfile.ZIP_DEFLATED
-                info.external_attr = 0o100644 << 16
-                z.writestr(info, (directory / name).read_bytes())
-        with zipfile.ZipFile(archive) as z:
-            assert z.testzip() is None
-            assert 'manifest.json' in z.namelist()
-            assert not any('tests/' in p or p.endswith('.env') for p in z.namelist())
+        write_archive(archive, directory, assets)
         hashes.append(f'{hashlib.sha256(archive.read_bytes()).hexdigest()}  {archive.name}')
     (output / 'SHA256SUMS.txt').write_text('\n'.join(hashes) + '\n')
     print(f'Built VEINMusic extension {version}: {output}')
