@@ -37,8 +37,6 @@ interface FeedItem {
   is_playing?: boolean;
 }
 
-const EXTENSION_URL =
-  "https://github.com/Peaostrel/VEINMusic/releases/tag/extension-v1.5.0";
 const WEEKDAYS = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
 
 /** Short weekday of a "YYYY-MM-DD" date (UTC). */
@@ -342,15 +340,10 @@ export default function About() {
             <Link href={primaryHref} className={`${btn.primary} ${btn.lg}`}>
               {primaryLabel}
             </Link>
-            <a
-              href={EXTENSION_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`${btn.secondary} ${btn.lg}`}
-            >
+            <Link href="/extension" className={`${btn.secondary} ${btn.lg}`}>
               <Download className="h-4 w-4" aria-hidden="true" />
-              Скачать расширение
-            </a>
+              Расширение для браузера
+            </Link>
           </div>
           <ul
             aria-label="Поддерживаемые сервисы"

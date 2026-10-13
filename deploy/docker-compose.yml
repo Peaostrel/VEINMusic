@@ -213,6 +213,7 @@ services:
       # API reached directly inside the network instead of through Caddy
       SITE_URL: https://${SITE_DOMAIN}
       API_INTERNAL_URL: http://backend:8000
+      FIREFOX_ADDON_URL: ${FIREFOX_ADDON_URL:-}
     depends_on:
       - backend
     mem_limit: 256m
