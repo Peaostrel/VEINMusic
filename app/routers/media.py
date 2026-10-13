@@ -1,9 +1,12 @@
 """Image uploads."""
 
+import asyncio
 import os
 import re
 import uuid
 from typing import Annotated
+
+import httpx
 
 from fastapi import (
     APIRouter,
@@ -12,10 +15,13 @@ from fastapi import (
     HTTPException,
     Request,
     UploadFile,
+    Response,
 )
 from fastapi.responses import FileResponse
 
 from app.core.rate_limit import credential_key, limiter
+from app.core.cover_urls import PLAT_COVER_PATH
+from app.core.safe_http import UnsafeURLError, pinned_download
 from app.core.security import get_current_user
 from app.models import (
     User,
@@ -36,6 +42,31 @@ MIME_IMAGE_JPEG = "image/jpeg"
 MIME_IMAGE_PNG = "image/png"
 MIME_IMAGE_GIF = "image/gif"
 MIME_IMAGE_WEBP = "image/webp"
+
+
+@router.get("/api/media/plat-covers/{cover_path:path}",
+            responses={404: {"description": "Invalid or unavailable artwork"},
+                       502: {"description": "Artwork provider unavailable"}})
+@limiter.limit("120/minute")
+async def plat_cover(cover_path: str, request: Request):
+    """Public artwork only: fixed host/path, bounded download, no redirects.
+
+    No upstream cookies, credentials or headers are relayed to the browser.
+    """
+    if not re.fullmatch(PLAT_COVER_PATH, cover_path):
+        raise HTTPException(404, "Обложка не найдена")
+    url = f"https://plat-music.ru/api/media/covers/{cover_path}?w=512"
+    try:
+        async with asyncio.timeout(8):
+            content = await pinned_download(url, max_bytes=2 * 1024 * 1024)
+    except (UnsafeURLError, TimeoutError, OSError, httpx.HTTPError):
+        raise HTTPException(502, "Сервис обложек недоступен")
+    if content:
+        for mime in (MIME_IMAGE_JPEG, MIME_IMAGE_PNG, MIME_IMAGE_GIF, MIME_IMAGE_WEBP):
+            if _is_valid_image_bytes(content, mime):
+                return Response(content, media_type=mime,
+                                headers={"Cache-Control": "public, max-age=3600"})
+    raise HTTPException(404, "Обложка не найдена")
 
 
 def _is_valid_image_bytes(content: bytes, content_type: str) -> bool:
