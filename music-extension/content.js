@@ -5,21 +5,24 @@
  * Перехватывает данные о текущем треке с поддерживаемых сайтов
  * и отправляет их на бэкенд VEIN для скроблинга.
  */
-console.log("[VEIN] 💉 content.js запущен: Внедряем page_world.js в обход защиты Яндекса...");
-
-// Легальный инжект файла, который не блокируется Content-Security-Policy
-const script = document.createElement('script');
-script.src = chrome.runtime.getURL('page_world.js');
-script.onload = function() {
-    this.remove(); // Убираем следы из DOM после загрузки
-};
-(document.head || document.documentElement).appendChild(script);
+// The manifest loads page_world.js in MAIN directly, including on pages
+// with a strict CSP. No script tag or public extension resource is needed.
+let trackingEnabled = false;
+let lastMainMessageAt = 0;
+function updateTrackingState(settings) {
+    trackingEnabled = settings.trackingEnabled === true && Boolean(settings.apiKey);
+}
+chrome.storage.local.get(['trackingEnabled', 'apiKey'], updateTrackingState);
+chrome.storage.onChanged.addListener((_changes, area) => {
+    if (area === 'local') chrome.storage.local.get(['trackingEnabled', 'apiKey'], updateTrackingState);
+});
 
 // Слушаем сообщения от page_world.js и передаем их в ядро расширения
 globalThis.addEventListener('message', (event) => {
-    if (event.origin !== location.origin) return;
+    if (!trackingEnabled || event.origin !== location.origin) return;
     if (event.source != globalThis || event.data?.type !== 'VEIN_SCROBBLE') return;
     
+    lastMainMessageAt = Date.now();
     chrome.runtime.sendMessage({ 
         type: 'SCROBBLE', 
         data: event.data.payload 
@@ -92,7 +95,8 @@ function getPlaybackStatus() {
 setInterval(() => {
     try {
         const host = window.location.hostname;
-        if (!host.includes('yandex')) return;
+        if (!trackingEnabled || Date.now() - lastMainMessageAt < 6000) return;
+        if (host !== 'music.yandex.ru' && host !== 'music.yandex.com') return;
 
         let meta = getMediaSessionMetadata() || getDOMMetadata();
         

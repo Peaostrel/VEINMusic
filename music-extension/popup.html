@@ -14,6 +14,14 @@
 </head>
 <body>
     <h3>VEIN TRACKER</h3>
+    <label style="display: block; font-size: 12px; text-align: left; line-height: 1.5;">
+        <input type="checkbox" id="tracking-enabled" /> Передавать прослушивания в VEIN
+    </label>
+    <p style="font-size: 11px; color: #aaa; text-align: left; line-height: 1.5;">
+        Название трека, исполнитель, обложка, ссылка и время воспроизведения
+        отправляются в ваш аккаунт. Передача начинается после подключения.
+        <a href="https://music.vein.guru/privacy" target="_blank" rel="noopener noreferrer" style="color: #ffcc00;">Конфиденциальность</a>
+    </p>
     
     <div id="pair-box" class="box">
         <div style="font-size: 11px; color: #888; margin-bottom: 8px;">Рекомендуемый способ: подтвердить расширение на сайте VEIN.</div>
@@ -29,7 +37,7 @@
 
     <div id="unauth-box" class="box">
         <div style="font-size: 11px; color: #888; margin-bottom: 8px;">Или вставь API ключ со страницы настроек VEIN:</div>
-        <input type="text" id="api-key-input" aria-label="API Ключ" placeholder="API Ключ" style="width: 100%; box-sizing: border-box; padding: 5px; margin-bottom: 5px; background: #222; color: white; border: 1px solid #444;" />
+        <input type="password" autocomplete="off" id="api-key-input" aria-label="API Ключ" placeholder="API Ключ" style="width: 100%; box-sizing: border-box; padding: 5px; margin-bottom: 5px; background: #222; color: white; border: 1px solid #444;" />
         <input type="text" id="username-input" aria-label="Твой никнейм" placeholder="Твой никнейм" style="width: 100%; box-sizing: border-box; padding: 5px; margin-bottom: 5px; background: #222; color: white; border: 1px solid #444;" />
         <button id="save-btn" style="width: 100%; padding: 6px; background: #ffcc00; border: none; cursor: pointer; font-weight: bold; color: black; border-radius: 4px;">Сохранить</button>
     </div>
@@ -37,7 +45,7 @@
     <div id="auth-box" class="box" style="display: none;">
         <div class="success">Подключено</div>
         <div style="font-weight: bold; margin-top: 5px; color: #fff;">@<span id="username-display"></span></div>
-        <div style="font-size: 10px; color: #888; margin-top: 5px;">Скробблер работает в фоновом режиме.</div>
+        <div style="font-size: 10px; color: #888; margin-top: 5px;"><span id="tracking-status"></span></div>
         <button id="test-btn" style="width: 100%; padding: 6px; margin-top: 10px; background: #333; color: white; border: 1px solid #555; cursor: pointer; border-radius: 4px;">Тест связи</button>
         <button id="logout-btn" style="width: 100%; padding: 6px; margin-top: 6px; background: transparent; color: #ef4444; border: 1px solid #5a1f1f; cursor: pointer; border-radius: 4px;">Отключить</button>
         <div id="log-box" style="margin-top: 10px; font-size: 10px; color: #ffcc00; word-break: break-all;"></div>

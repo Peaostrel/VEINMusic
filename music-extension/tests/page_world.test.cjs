@@ -174,3 +174,23 @@ test('does not scrobble YouTube Music advertisements', () => {
     runInterval();
     assert.equal(messages.length, 0);
 });
+
+for (const [hostname, sourceName] of [['music.yandex.ru', 'yandex'], ['music.yandex.com', 'yandex'],
+    ['open.spotify.com', 'spotify'], ['music.apple.com', 'apple_music'], ['vk.ru', 'vk']]) {
+    test(`reads MediaSession playback on ${hostname}`, () => {
+        const {context, messages, runInterval} = runPageWorld({nodes: {}, hostname, href: `https://${hostname}/`, media: [{paused: false, currentTime: 24, duration: 180}]});
+        context.navigator.mediaSession = {metadata: {title: 'Fixture Song', artist: 'Fixture Artist', album: 'Album', artwork: []}, playbackState: 'playing'};
+        runInterval();
+        assert.equal(messages.length, 1);
+        assert.equal(messages[0].payload.source, sourceName);
+        assert.equal(messages[0].payload.title, 'Fixture Song');
+        assert.equal(messages[0].payload.progress_sec, 24);
+    });
+}
+
+test('does not report an unplayed MediaSession selection', () => {
+    const {context, messages, runInterval} = runPageWorld({nodes: {}, hostname: 'open.spotify.com', href: 'https://open.spotify.com/'});
+    context.navigator.mediaSession = {metadata: {title: 'Selected Song', artist: 'Artist'}, playbackState: 'paused'};
+    runInterval();
+    assert.equal(messages.length, 0);
+});

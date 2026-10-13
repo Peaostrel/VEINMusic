@@ -1,21 +1,43 @@
 document.addEventListener('DOMContentLoaded', () => {
     const $ = (id) => document.getElementById(id);
-    let pollTimer = null;
+    let pollTimer;
+
+    function setPairStatus(text, color = '#aaa') {
+        $('pair-status').innerText = text;
+        $('pair-status').style.color = color;
+    }
 
     function showState(data) {
-        const connected = Boolean(data.username && data.apiKey);
+        const connected = Boolean(data.apiKey);
+        $('tracking-enabled').checked = data.trackingEnabled === true;
+        $('pair-btn').disabled = data.trackingEnabled !== true;
+        $('save-btn').disabled = data.trackingEnabled !== true;
         $('auth-box').style.display = connected ? 'block' : 'none';
         $('unauth-box').style.display = connected ? 'none' : 'block';
         $('pair-box').style.display = connected ? 'none' : 'block';
-        if (connected) {
-            $('username-display').innerText = data.username;
-        }
+        $('username-display').innerText = data.username || '';
+        $('tracking-status').innerText = data.trackingEnabled === true ?
+            'Прослушивания передаются в ваш аккаунт.' : 'Передача прослушиваний приостановлена.';
     }
 
-    function setPairStatus(text, color) {
-        $('pair-status').innerText = text;
-        $('pair-status').style.color = color || '#888';
+    function refreshState() {
+        chrome.storage.local.get(['apiKey', 'username', 'trackingEnabled'], showState);
     }
+
+    $('tracking-enabled').addEventListener('change', async () => {
+        const enabled = $('tracking-enabled').checked;
+        try {
+            await veinStorageSet({ trackingEnabled: enabled });
+            if (!enabled) {
+                clearTimeout(pollTimer);
+                await veinStorageRemove(['offline_scrobbles', 'pairing']);
+                $('pair-code-box').style.display = 'none';
+            }
+            refreshState();
+        } catch {
+            setPairStatus('Не удалось сохранить настройку.', '#ef4444');
+        }
+    });
 
     function showPairing(pairing) {
         $('pair-code-box').style.display = 'block';
@@ -26,32 +48,33 @@ document.addEventListener('DOMContentLoaded', () => {
     function pollLoop(intervalSec) {
         clearTimeout(pollTimer);
         pollTimer = setTimeout(async () => {
-            const status = await veinPollPairing();
+            // Keep popup and minute-alarm polling in one background context.
+            const status = await chrome.runtime.sendMessage({ type: 'PAIRING_POLL' }).catch(() => 'error');
             if (status === 'approved') {
                 setPairStatus('Подключено!', '#1DB954');
-                chrome.storage.local.get(['username', 'apiKey'], showState);
+                refreshState();
             } else if (status === 'pending' || status === 'error') {
                 pollLoop(intervalSec);
-            } else if (status === 'denied') {
+            } else {
                 $('pair-code-box').style.display = 'none';
-                setPairStatus('Подключение отклонено на сайте.', '#ef4444');
-            } else if (status === 'expired') {
-                $('pair-code-box').style.display = 'none';
-                setPairStatus('Код устарел, попробуйте ещё раз.', '#ef4444');
+                if (status !== 'none') setPairStatus(status === 'denied' ?
+                    'Подключение отклонено на сайте.' : 'Код устарел. Попробуйте ещё раз.', '#ef4444');
             }
         }, intervalSec * 1000);
     }
 
-    chrome.storage.local.get(['username', 'apiKey', 'pairing'], (data) => {
+    chrome.storage.local.get(['username', 'apiKey', 'pairing', 'trackingEnabled'], (data) => {
         showState(data);
-        // Resume a pairing started before the popup was closed
-        if (!data.apiKey && data.pairing && Date.now() < data.pairing.expires_at) {
+        if (!data.apiKey && data.trackingEnabled === true && data.pairing && Date.now() < data.pairing.expires_at) {
             showPairing(data.pairing);
             pollLoop(data.pairing.interval);
         }
     });
+    chrome.storage.onChanged.addListener((_changes, area) => { if (area === 'local') refreshState(); });
 
-    $('pair-btn')?.addEventListener('click', async () => {
+    $('pair-btn').addEventListener('click', async () => {
+        if (!$('tracking-enabled').checked) return;
+        $('pair-btn').disabled = true;
         setPairStatus('Получаем код…');
         try {
             const pairing = await veinStartPairing();
@@ -59,58 +82,45 @@ document.addEventListener('DOMContentLoaded', () => {
             showPairing(pairing);
             chrome.tabs.create({ url: pairing.url });
             pollLoop(pairing.interval);
-        } catch (e) {
-            setPairStatus(`Ошибка: ${e.message}`, '#ef4444');
+        } catch (error) {
+            setPairStatus(`Ошибка: ${error.message}`, '#ef4444');
+        } finally {
+            refreshState();
         }
     });
 
-    $('save-btn')?.addEventListener('click', () => {
+    $('save-btn').addEventListener('click', async () => {
+        if (!$('tracking-enabled').checked) return;
         const apiKey = $('api-key-input').value.trim();
         const username = $('username-input').value.trim();
-        if (apiKey && username) {
-            chrome.storage.local.set({ apiKey, username }, () => {
-                location.reload();
-            });
-        }
+        if (!apiKey || !username) return setPairStatus('Введите ключ и никнейм.', '#ef4444');
+        await veinStorageSet({ apiKey, username, offline_scrobbles: [] });
+        $('api-key-input').value = '';
+        refreshState();
     });
 
-    $('logout-btn')?.addEventListener('click', () => {
-        chrome.storage.local.remove(['username', 'apiKey', 'pairing'], () => location.reload());
+    $('logout-btn').addEventListener('click', async () => {
+        clearTimeout(pollTimer);
+        await veinStorageRemove(['username', 'apiKey', 'pairing', 'offline_scrobbles', 'trackingEnabled']);
+        refreshState();
     });
 
-    $('test-btn')?.addEventListener('click', () => {
+    $('test-btn').addEventListener('click', async () => {
         const logBox = $('log-box');
-        logBox.innerText = "Отправка...";
-        chrome.storage.local.get(['apiUrl', 'apiKey'], (settings) => {
-            // Same server as the background scrobbler uses
-            const API_BASE = veinApiBase(settings);
-            const apiKey = settings.apiKey;
-
-            fetch(`${API_BASE}/api/scrobble`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                },
-                body: JSON.stringify({
-                    title: "Test Track from Extension",
-                    artist: "VEIN Test",
-                    album: "",
-                    cover_url: "",
-                    track_url: "",
-                    source: "yandex",
-                    progress_sec: 1,
-                    is_playing: true,
-                    duration: 60
-                })
-            })
-            .then(res => res.json().then(data => ({status: res.status, data})))
-            .then(out => {
-                logBox.innerText = `Успех: ${out.status} - ${JSON.stringify(out.data)}`;
-            })
-            .catch(err => {
-                logBox.innerText = `Ошибка: ${err.message}`;
+        logBox.innerText = 'Проверяем связь…';
+        try {
+            const settings = await veinStorageGet(['apiUrl', 'apiKey']);
+            if (!settings.apiKey) throw new Error('Сначала подключите аккаунт');
+            // Read-only endpoint: testing must not create a fictitious play.
+            const response = await fetch(`${veinApiBase(settings)}/api/profile/preferences`, {
+                headers: { Authorization: `Bearer ${settings.apiKey}` },
+                signal: AbortSignal.timeout(15000)
             });
-        });
+            logBox.innerText = response.ok ? 'Связь с VEIN работает.' :
+                `Ошибка ${response.status}: ${response.status === 401 || response.status === 403 ?
+                    'подключите аккаунт заново.' : 'попробуйте позже.'}`;
+        } catch (error) {
+            logBox.innerText = `Ошибка: ${error.message}`;
+        }
     });
 });
