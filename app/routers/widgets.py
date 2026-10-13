@@ -206,18 +206,24 @@ def _now_playing_text(db: Session, user: User) -> tuple[str, str, bool]:
         .limit(2)
         .all()
     )
-    if not recent:
-        return "No scrobbles yet", DEFAULT_ARTIST, False
-    playing_now = _is_active(recent[0])
-    is_playing = playing_now and show_current
-    if is_playing or not playing_now:
-        shown = recent[0] if is_playing or show_history else None
-    else:
-        # A hidden track is playing: the one before it is the last played
-        shown = recent[1] if show_history and len(recent) > 1 else None
+    shown, is_playing = _visible_play(recent, show_current, show_history)
     if shown is None or not shown.track:
-        return ("No scrobbles yet" if show_history else "Listening is hidden"), DEFAULT_ARTIST, False
+        hidden = recent and not show_history
+        return ("Listening is hidden" if hidden else "No scrobbles yet"), DEFAULT_ARTIST, False
     return shown.track.title or "Unknown Track", shown.track.artist or "Unknown Artist", is_playing
+
+
+def _visible_play(recent: list[Scrobble], show_current: bool,
+                  show_history: bool) -> tuple[Scrobble | None, bool]:
+    """The newest play the widget may show, and whether it is playing now."""
+    if not recent:
+        return None, False
+    if _is_active(recent[0]):
+        if show_current:
+            return recent[0], True
+        # A hidden track is playing: the one before it is the last played
+        recent = recent[1:]
+    return (recent[0] if recent and show_history else None), False
 
 
 @router.get("/now-playing/{username}.svg")
