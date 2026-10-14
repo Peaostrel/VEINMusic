@@ -1,6 +1,10 @@
 import { test, expect, type WebSocketRoute } from "@playwright/test";
 import { API_URL, scrobble, signUp } from "./helpers";
 
+// Worker-owned API requests bypass page routes. These tests mock API snapshots;
+// offline caching itself is covered separately with the worker enabled.
+test.use({ serviceWorkers: "block" });
+
 test("history caps stale playback and reconciles history and counters without navigation", async ({
   page,
 }) => {
