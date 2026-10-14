@@ -5,7 +5,9 @@ test("now playing advances locally, reconciles tracks and waits for confirmed cr
   page,
 }) => {
   const username = await signUp(page, "liveprogress");
-  await page.clock.install();
+  const time = new Date("2026-10-14T12:00:00Z");
+  await page.clock.install({ time });
+  await page.clock.pauseAt(new Date(time.getTime() + 1000));
   let current = {
     playing: true,
     title: "First live track",
@@ -60,7 +62,9 @@ test("a missing heartbeat expires even when polling fails", async ({
   page,
 }) => {
   const username = await signUp(page, "staleprogress");
-  await page.clock.install();
+  const time = new Date("2026-10-14T12:00:00Z");
+  await page.clock.install({ time });
+  await page.clock.pauseAt(new Date(time.getTime() + 1000));
   await page.route(`**/api/current-track/${username}`, (route) =>
     route.fulfill({
       json: {
