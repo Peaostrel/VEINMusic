@@ -9,6 +9,7 @@ import { isValidUser } from "@/app/lib/theme";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { sourceLabel } from "@/utils/formatters";
 import { PlayingBars, btn } from "@/components/ui";
+import { coverAt } from "@/app/lib/coverSize";
 
 interface PublicStats {
   total_scrobbles: number;
@@ -106,6 +107,13 @@ function useLandingData() {
   const [week, setWeek] = useState<Week | null>(null);
   const [feed, setFeed] = useState<FeedItem[]>([]);
   useEffect(() => {
+    // The home page mounts this landing hidden until it has read the
+    // session: a signed-in visitor never sees it, so skip its requests
+    if (
+      location.pathname === "/" &&
+      document.documentElement.dataset.auth === "1"
+    )
+      return;
     const get = <T,>(path: string) =>
       fetch(`${API_URL}${path}`)
         .then((r) => (r.ok ? (r.json() as Promise<T>) : null))
@@ -268,7 +276,7 @@ function WeekCard({ week }: Readonly<{ week: Week | null }>) {
 }
 
 function Cover({ src, size }: Readonly<{ src?: string | null; size: number }>) {
-  const url = sanitizeImageUrl(src);
+  const url = sanitizeImageUrl(coverAt(src, size));
   return url ? (
     <img
       src={url}
@@ -296,10 +304,32 @@ export default function About() {
   const primaryHref = username ? `/user/${username}` : "/auth?mode=register";
   const primaryLabel = username ? "В мой профиль" : "Начать скроблить";
   const online = stats?.online ?? 0;
+  // "2 слушателя", not "2 слушателей"
+  const label = (n: number | undefined, ...forms: [string, string, string]) =>
+    plural(n ?? 0, ...forms);
   const numbers = [
-    { label: "прослушиваний", value: stats?.total_scrobbles },
-    { label: "уникальных треков", value: stats?.total_tracks },
-    { label: "слушателей", value: stats?.total_users },
+    {
+      label: label(
+        stats?.total_scrobbles,
+        "прослушивание",
+        "прослушивания",
+        "прослушиваний",
+      ),
+      value: stats?.total_scrobbles,
+    },
+    {
+      label: label(
+        stats?.total_tracks,
+        "уникальный трек",
+        "уникальных трека",
+        "уникальных треков",
+      ),
+      value: stats?.total_tracks,
+    },
+    {
+      label: label(stats?.total_users, "слушатель", "слушателя", "слушателей"),
+      value: stats?.total_users,
+    },
     { label: "онлайн сейчас", value: stats?.online },
   ];
 

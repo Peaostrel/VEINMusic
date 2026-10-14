@@ -1,5 +1,6 @@
 import functools
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any, TypedDict, Unpack
 from urllib.parse import urlparse
@@ -41,6 +42,16 @@ TRACK_PATH = "/track/"
 MIN_CATALOG_DURATION = 30
 MAX_CATALOG_DURATION = 2 * 3600
 PLACEHOLDER_DURATION = 180
+# Players that push every play/pause/track change at once with their own
+# position, plus a heartbeat while playing (Plat Music: 15 s). The shown time
+# is their position, and a pause or switch credits the stretch played since
+# the previous report. Polled sources see a pause late, so they never do.
+POSITION_SOURCES = frozenset({"plat"})
+# Longest gap between two reports still taken as continuous playback
+LIVE_GAP_SEC = 35
+# A position this far behind the expected one, reached from the start since
+# the previous report, means the track started over (repeat, "previous")
+RESTART_JUMP_SEC = 10
 TRACK_URL_HOSTS = (
     YANDEX_MUSIC_HOST, "music.yandex.com", "music.yandex.by", "music.yandex.kz",
     "open.spotify.com", "music.youtube.com", "www.youtube.com", "youtube.com",
@@ -167,6 +178,16 @@ def _shown_listened_sec(scrobble, track, is_playing: bool) -> int:
     return min(total, int(track.duration)) if track.duration else total
 
 
+def _shown_position(scrobble, track) -> float | None:
+    """Player position at `updated_at` (players in POSITION_SOURCES only)."""
+    position = getattr(scrobble, "position_sec", None)
+    if position is None:
+        return None
+    if track.duration:
+        position = min(position, int(track.duration))
+    return round(max(float(position), 0.0), 3)
+
+
 def format_history_item(
         scrobble,
         track,
@@ -208,6 +229,7 @@ def format_history_item(
         "relative_time": rel_time,
         "duration": track.duration,
         "listened_sec": _shown_listened_sec(scrobble, track, is_playing),
+        "position_sec": _shown_position(scrobble, track),
         "is_playing": is_playing,
         "updated_at": str(upd_time),
         "is_imported": scrobble.is_imported}
@@ -400,9 +422,14 @@ def _determine_is_new(db: Session,
                       last_scrobble,
                       now,
                       l_updated_at,
-                      progress_sec: int) -> tuple[bool,
-                                                  str | None]:
-    """Determine if a new scrobble should be created. Returns (is_new, early_return_status)."""
+                      progress_sec: float,
+                      restarted: bool = False,
+                      uncredited_sec: float = 0) -> tuple[bool,
+                                                          str | None]:
+    """Determine if a new scrobble should be created. Returns (is_new, early_return_status).
+
+    `uncredited_sec`: listening since the previous report that ended the
+    previous play (a detected restart), not added to it yet."""
     if not last_scrobble or last_scrobble.track_id != track.id:
         if last_scrobble and last_scrobble.is_playing and (
                 now - l_updated_at).total_seconds() < 1.0:
@@ -416,9 +443,9 @@ def _determine_is_new(db: Session,
 
     # Check for track loops. Only count as a new scrobble if they actually
     # listened to most of the track before the progress reset.
-    if progress_sec < 5:
+    if progress_sec < 5 or restarted:
         track_dur = getattr(track, 'duration', 180) or 180
-        if (last_scrobble.listened_sec or 0) > (track_dur * 0.8):
+        if (last_scrobble.listened_sec or 0) + uncredited_sec > (track_dur * 0.8):
             return True, None
 
     return False, None
@@ -436,15 +463,22 @@ def _apply_credit(last_scrobble, now, is_playing: bool, credit_sec: int, pending
     last_scrobble.updated_at = now
 
 
-def _advance_by_elapsed(last_scrobble, now, l_updated_at, is_playing: bool) -> None:
-    """Other clients: add the time between two "still playing" reports."""
+def _advance_by_elapsed(last_scrobble, now, l_updated_at, is_playing: bool,
+                        until_now: bool = False, cap: int | None = None) -> None:
+    """Other clients: add the time between two "still playing" reports.
+
+    `until_now`: the report is sent when playback changes (POSITION_SOURCES),
+    so a pause or a switch also ends a stretch that was playing until now."""
     time_elapsed = (now - l_updated_at).total_seconds()
     last_scrobble.pending_sec = 0
     # Accumulate integer seconds cleanly to avoid drifting and rounding errors.
-    if last_scrobble.is_playing and is_playing and 0 < time_elapsed < 35:
+    if last_scrobble.is_playing and (is_playing or until_now) and 0 < time_elapsed < LIVE_GAP_SEC:
         increment = int(time_elapsed)
         if increment > 0:
-            last_scrobble.listened_sec = (last_scrobble.listened_sec or 0) + increment
+            listened = (last_scrobble.listened_sec or 0) + increment
+            if cap:
+                listened = max(last_scrobble.listened_sec or 0, min(listened, cap))
+            last_scrobble.listened_sec = listened
             # Keep fractional precision by only advancing updated_at by the integer increment
             last_scrobble.updated_at = l_updated_at + timedelta(seconds=increment)
     else:
@@ -461,7 +495,8 @@ def _update_scrobble_progress(
         l_updated_at,
         is_playing: bool,
         credit_sec: int | None = None,
-        pending_sec: int = 0) -> bool:
+        pending_sec: int = 0,
+        until_now: bool = False) -> bool:
     """Update listened_sec, xp, and streak on an existing scrobble.
 
     `credit_sec` (live player connections) adds exactly the listening the
@@ -477,7 +512,8 @@ def _update_scrobble_progress(
     if credit_sec is not None:
         _apply_credit(last_scrobble, now, is_playing, credit_sec, pending_sec, track_dur)
     else:
-        _advance_by_elapsed(last_scrobble, now, l_updated_at, is_playing)
+        cap = int(track.duration) if until_now and track.duration else None
+        _advance_by_elapsed(last_scrobble, now, l_updated_at, is_playing, until_now, cap)
 
     last_scrobble.is_playing = is_playing
     db.commit()
@@ -575,62 +611,148 @@ def _counted_scrobble_payload(last_scrobble: Scrobble, track: Track) -> dict[str
     }
 
 
+def _restarted(last_scrobble, now, l_updated_at, progress_sec: float) -> bool:
+    """The player's position went back to (near) the start since the
+    previous report: repeat-one or "previous" replays the same track."""
+    if last_scrobble.position_sec is None or l_updated_at is None:
+        return False
+    elapsed = max((now - l_updated_at).total_seconds(), 0.0)
+    expected = last_scrobble.position_sec + (elapsed if last_scrobble.is_playing else 0)
+    return progress_sec + RESTART_JUMP_SEC < expected and progress_sec <= elapsed + 2
+
+
+def _end_previous_play(db: Session, user: User, last_scrobble, now, l_updated_at) -> dict[str, Any] | None:
+    """Another track started: the previous one played until now."""
+    if not last_scrobble.is_playing or last_scrobble.track is None:
+        return None
+    if _update_scrobble_progress(db, user, last_scrobble.track, last_scrobble, now,
+                                 l_updated_at, False, until_now=True):
+        return _counted_scrobble_payload(last_scrobble, last_scrobble.track)
+    return None
+
+
+def _set_position(db: Session, scrobble, now, progress_sec: float) -> None:
+    """Store the reported position as of the scrobble's `updated_at` (which
+    may trail `now` by the fraction of a second not credited yet)."""
+    updated_at = scrobble.updated_at
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=UTC)
+    lag = max((now - updated_at).total_seconds(), 0.0) if scrobble.is_playing else 0.0
+    scrobble.position_sec = max(float(progress_sec) - lag, 0.0)
+    db.commit()
+
+
+_COLLECTOR_LABELS = {'client': 'клиент', 'cloud': 'облако', 'live': 'живое подключение'}
+
+
+def _locked_last_scrobble(db: Session, user_id: int):
+    """The user's latest scrobble and its `updated_at` (aware), after locking
+    the user row: serializes writes from independent clients on PostgreSQL.
+    Never sum two clocks for the same play: secondary sources only confirm
+    provenance."""
+    db.query(User.id).filter(User.id == user_id).with_for_update().first()
+    last_scrobble = db.query(Scrobble).execution_options(include_excluded=True).filter(
+        Scrobble.user_id == user_id).order_by(
+        Scrobble.id.desc()).first()
+    if last_scrobble is None:
+        return None, None
+    updated_at = last_scrobble.updated_at
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=UTC)
+    return last_scrobble, updated_at
+
+
+def _position_change(db: Session, user: User, track: Track, source: str, last_scrobble, now,
+                     l_updated_at, progress_sec: float) -> tuple[dict[str, Any] | None, bool]:
+    """(play counted for the previous track, whether the same track restarted)
+    for a source that reports the player's position."""
+    if last_scrobble is None or l_updated_at is None:
+        return None, False
+    if last_scrobble.track_id != track.id:
+        if last_scrobble.source != source:
+            return None, False
+        return _end_previous_play(db, user, last_scrobble, now, l_updated_at), False
+    return None, _restarted(last_scrobble, now, l_updated_at, progress_sec)
+
+
+def _restart_split(last_scrobble, now, l_updated_at, progress_sec: float,
+                   restarted: bool) -> tuple[int, float]:
+    """A detected restart splits the time since the previous report:
+    (seconds of the repeat already played, the player position; the rest,
+    which ended the previous play). Zero unless playback ran without a gap."""
+    if not restarted:
+        return 0, 0.0
+    elapsed = (now - l_updated_at).total_seconds()
+    if not last_scrobble.is_playing or not 0 < elapsed < LIVE_GAP_SEC:
+        return 0, 0.0
+    replayed = int(min(max(progress_sec, 0.0), elapsed))
+    return replayed, elapsed - replayed
+
+
+def _start_scrobble(db: Session, user_id: int, track: Track, source: str, source_label: str,
+                    source_id: str, is_playing: bool, now, listened_sec: int = 0) -> Scrobble:
+    scrobble = Scrobble(
+        user_id=user_id,
+        track_id=track.id,
+        source=source,
+        confirmed_sources=[source_label],
+        credit_source=source_id,
+        played_at=now - timedelta(seconds=listened_sec),
+        listened_sec=listened_sec,
+        is_playing=is_playing,
+        updated_at=now)
+    db.add(scrobble)
+    db.commit()
+    return scrobble
+
+
 def _record_scrobble(db: Session, user: User, track: Track, source: str,
-                     progress_sec: int, is_playing: bool, credit_sec: int | None = None,
+                     progress_sec: float, is_playing: bool, credit_sec: int | None = None,
                      pending_sec: int = 0, collector: str = "client") -> dict[str, Any]:
     """Create or advance the user's current scrobble (blocking DB work).
 
     Returns plain data only, so nothing touches expired ORM objects (and the
     DB) from the event loop afterwards."""
-    username = str(user.username)
     user_id = int(user.id)
     now = datetime.now(UTC)
     source_id = f"{source}:{collector}"
-    collector_labels = {'client': 'клиент', 'cloud': 'облако', 'live': 'живое подключение'}
-    source_label = f"{source} · {collector_labels.get(collector, 'клиент')}"
-    # Serialize writes from independent clients on PostgreSQL. Never sum two
-    # clocks for the same play: secondary sources only confirm provenance.
-    db.query(User.id).filter(User.id == user_id).with_for_update().first()
-    last_scrobble = db.query(Scrobble).execution_options(include_excluded=True).filter(
-        Scrobble.user_id == user_id).order_by(
-        Scrobble.id.desc()).first()
+    source_label = f"{source} · {_COLLECTOR_LABELS.get(collector, 'клиент')}"
+    last_scrobble, l_updated_at = _locked_last_scrobble(db, user_id)
 
-    if last_scrobble:
-        l_updated_at = last_scrobble.updated_at.replace(
-            tzinfo=UTC) if last_scrobble.updated_at.tzinfo is None else last_scrobble.updated_at
-    else:
-        l_updated_at = None
-
-    result: dict[str, Any] = {"status": "ok", "username": username, "user_id": user_id,
+    result: dict[str, Any] = {"status": "ok", "username": str(user.username), "user_id": user_id,
                               "new_item": None, "counted": None, "state_change": None}
     was_playing = bool(last_scrobble.is_playing) if last_scrobble else None
-    if last_scrobble and last_scrobble.track_id == track.id:
-        if _confirm_scrobble_source(db, last_scrobble, source_label, source_id, l_updated_at, now):
-            result["status"] = "confirmed_duplicate"
-            return result
+    if (last_scrobble and last_scrobble.track_id == track.id
+            and _confirm_scrobble_source(db, last_scrobble, source_label, source_id, l_updated_at, now)):
+        result["status"] = "confirmed_duplicate"
+        return result
+    positional = source in POSITION_SOURCES and credit_sec is None
+    restarted, replayed, uncredited = False, 0, 0.0
+    if positional:
+        result["counted"], restarted = _position_change(
+            db, user, track, source, last_scrobble, now, l_updated_at, progress_sec)
+        replayed, uncredited = _restart_split(last_scrobble, now, l_updated_at, progress_sec, restarted)
     is_new, early_return = _determine_is_new(
-        db, track, last_scrobble, now, l_updated_at, progress_sec)
+        db, track, last_scrobble, now, l_updated_at, progress_sec, restarted, uncredited)
     if early_return:
         result["status"] = early_return
         return result
 
+    current = last_scrobble
     if is_new:
-        new_s = Scrobble(
-            user_id=user_id,
-            track_id=track.id,
-            source=source,
-            confirmed_sources=[source_label],
-            credit_source=source_id,
-            played_at=now,
-            listened_sec=0,
-            is_playing=is_playing,
-            updated_at=now)
-        db.add(new_s)
-        db.commit()
-        result["new_item"] = format_history_item(new_s, track)
+        if restarted and last_scrobble is not None:
+            # The previous play ended where the repeat began
+            result["counted"] = _end_previous_play(
+                db, user, last_scrobble, now - timedelta(seconds=replayed), l_updated_at)
+        current = _start_scrobble(db, user_id, track, source, source_label, source_id, is_playing, now,
+                                  replayed)
+        result["new_item"] = format_history_item(current, track)
     elif last_scrobble is not None and _update_scrobble_progress(
-            db, user, track, last_scrobble, now, l_updated_at, is_playing, credit_sec, pending_sec):
+            db, user, track, last_scrobble, now, l_updated_at, is_playing, credit_sec, pending_sec,
+            until_now=positional):
         result["counted"] = _counted_scrobble_payload(last_scrobble, track)
+    if positional:
+        _set_position(db, current, now, progress_sec)
     if not is_new and last_scrobble is not None and was_playing != bool(is_playing):
         # Pause / resume: pages update the "now playing" mark at once
         result["state_change"] = {"id": int(last_scrobble.id), "is_playing": bool(is_playing)}
@@ -666,7 +788,21 @@ def _integration_paused(db, integrations, source_name):
     return False
 
 
-def _scrobble_filter_reason(db, user, title, artist, source, duration):
+# Links in a title or artist are spam (the shared catalog and the public feed
+# would advertise them), never music metadata: only explicit link markers,
+# so names like "Dr.Dre" or "Love.com" pass
+_LINK_IN_METADATA = re.compile(
+    r"(?:https?://|\bwww\.|\b(?:t|telegram)\.me/|\bdiscord\.(?:gg|com/invite)/|\b(?:bit\.ly|vk\.cc|clck\.ru)/)",
+    re.IGNORECASE)
+
+
+def _has_link(*values: str | None) -> bool:
+    return any(value and _LINK_IN_METADATA.search(value) for value in values)
+
+
+def _scrobble_filter_reason(db, user, title, artist, source, duration, album=""):
+    if _has_link(title, artist, album):
+        return "link_ignored"
     preferences = get_preferences(user.profile)
     listening = preferences.listening
     integrations = preferences.integrations
@@ -705,7 +841,7 @@ async def _process_scrobble(
         duration: int,
         album: str = "",
         **credit_options: Unpack[ScrobbleCreditOptions]):
-    reason = _scrobble_filter_reason(db, user, title, artist, source, duration)
+    reason = _scrobble_filter_reason(db, user, title, artist, source, duration, album)
     if reason:
         return reason
     listening = get_preferences(user.profile).listening

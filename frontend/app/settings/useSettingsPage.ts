@@ -209,10 +209,17 @@ export function useSettingsPage() {
     if (!cropImageSrc || !croppedAreaPixels || !cropFieldTarget) return;
     setStatus("Обрезаем...");
     try {
-      const croppedFile = await getCroppedImg(cropImageSrc, croppedAreaPixels);
+      // Sizes match the API's limits for each kind (app/services/images.py)
+      const kind = cropFieldTarget === "avatarUrl" ? "avatar" : "banner";
+      const croppedFile = await getCroppedImg(
+        cropImageSrc,
+        croppedAreaPixels,
+        kind === "avatar" ? 512 : 2000,
+      );
       if (croppedFile) {
         const formData = new FormData();
         formData.append("file", croppedFile);
+        formData.append("kind", kind);
         const res = await fetch(`${API_URL}/api/upload`, {
           credentials: "include",
           method: "POST",

@@ -12,6 +12,7 @@ from fastapi import (
     APIRouter,
     Depends,
     File,
+    Form,
     HTTPException,
     Request,
     UploadFile,
@@ -26,6 +27,7 @@ from app.core.security import get_current_user
 from app.models import (
     User,
 )
+from app.services.images import InvalidImage, UploadKind, shrink_image
 
 router = APIRouter(tags=["media"])
 
@@ -92,7 +94,8 @@ def _save_file_sync(file_path: str, content: bytes):
 @limiter.limit("30/hour", key_func=credential_key)
 async def upload_file(request: Request,
                       current_user: Annotated[User, Depends(get_current_user)],
-                      file: Annotated[UploadFile, File()]):
+                      file: Annotated[UploadFile, File()],
+                      kind: Annotated[UploadKind, Form()] = "image"):
     import anyio
     # Security: Validate file type
     allowed_types = [MIME_IMAGE_JPEG, MIME_IMAGE_PNG, MIME_IMAGE_WEBP, MIME_IMAGE_GIF]
@@ -109,13 +112,12 @@ async def upload_file(request: Request,
     if not _is_valid_image_bytes(content, file.content_type):
         raise HTTPException(400, "Некорректный формат или поврежденный файл изображения")
 
-    mime_to_ext = {
-        MIME_IMAGE_JPEG: "jpg",
-        MIME_IMAGE_PNG: "png",
-        MIME_IMAGE_WEBP: "webp",
-        MIME_IMAGE_GIF: "gif"
-    }
-    ext = mime_to_ext.get(file.content_type, "jpg")
+    # Fitted to the size it is shown at (a banner is no longer a 1 MB
+    # original), upright, without camera/GPS metadata
+    try:
+        content, ext = await anyio.to_thread.run_sync(shrink_image, content, kind)
+    except InvalidImage:
+        raise HTTPException(400, "Некорректный формат или поврежденный файл изображения")
     filename = f"{uuid.uuid4().hex}.{ext}"
     # codeql[py/path-injection] - uuid is safe
     file_path = os.path.join(UPLOADS_DIR, filename)
@@ -142,5 +144,8 @@ async def get_upload(filename: str):
         raise HTTPException(status_code=400, detail="Invalid path")
 
     if os.path.exists(real_path):
-        return FileResponse(real_path, headers={"X-Content-Type-Options": "nosniff"})
+        # Names are random and never reused for other content: browsers keep
+        # avatars and banners instead of fetching them on every profile view
+        return FileResponse(real_path, headers={"X-Content-Type-Options": "nosniff",
+                                                "Cache-Control": "public, max-age=31536000, immutable"})
     raise HTTPException(status_code=404, detail="Файл не найден")

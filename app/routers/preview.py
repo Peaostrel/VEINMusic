@@ -176,6 +176,9 @@ def artist_preview(artist: str, db: Annotated[Session, Depends(get_db)]):
         "tracks": int(row[2]),
         "top_track": top[0] if top else None,
         "has_cover": has_cover,
+        # Search engines only get artists someone has really listened to:
+        # a name sent once by a fake player is shown but not indexed
+        "indexable": _counted(base).first() is not None,
     }
     set_to_cache(cache_key, data, PREVIEW_TTL)
     return data
@@ -198,6 +201,8 @@ def track_preview(track_id: int, db: Annotated[Session, Depends(get_db)]):
         "album": track.album,
         "plays": int(plays),
         "has_cover": bool(track.cover_url),
+        "indexable": _counted(_public_scrobbles(db).join(Track, Track.id == Scrobble.track_id)
+                              .filter(Scrobble.track_id == track_id)).first() is not None,
     }
     set_to_cache(cache_key, data, PREVIEW_TTL)
     return data
@@ -329,7 +334,9 @@ def sitemap(db: Annotated[Session, Depends(get_db)]):
         if len(users) >= SITEMAP_USERS or len(batch) < SITEMAP_BATCH:
             break
     users = users[:SITEMAP_USERS]
-    public = _public_scrobbles(db).join(Track, Track.id == Scrobble.track_id)
+    # Only music with a counted play: titles a fake player merely started
+    # must not become pages search engines are invited to index
+    public = _counted(_public_scrobbles(db).join(Track, Track.id == Scrobble.track_id))
     artists = (
         public.with_entities(Track.artist, func.count(Scrobble.id))
         .filter(Track.artist.isnot(None), Track.artist != "")

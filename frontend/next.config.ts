@@ -1,47 +1,11 @@
 import type { NextConfig } from "next";
 
 const isDev = process.env.NODE_ENV !== "production";
-const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-const wsHost = process.env.NEXT_PUBLIC_WS_URL || "127.0.0.1:8000";
 
-// The captcha of the sign-in form (app/auth/Captcha.tsx): one of the two
-// providers, chosen on the API by CAPTCHA_PROVIDER
-const captchaOrigins = [
-  "https://smartcaptcha.yandexcloud.net",
-  "https://challenges.cloudflare.com",
-];
-
-// Origins the browser may connect to (fetch / WebSocket)
-const connectSrc = [
-  "'self'",
-  ...captchaOrigins,
-  apiUrl,
-  apiUrl.replace(/^http/, "ws"),
-  `ws://${wsHost}`,
-  `wss://${wsHost}`,
-];
-
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  // Next.js injects inline bootstrap scripts; eval is only needed by the dev server
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} ${captchaOrigins.join(" ")}`,
-  "style-src 'self' 'unsafe-inline'",
-  // Avatars, covers and artwork come from arbitrary user-provided hosts
-  "img-src * data: blob:",
-  "font-src 'self' data:",
-  `connect-src ${connectSrc.join(" ")}`,
-  `frame-src ${captchaOrigins.join(" ")}`,
-  "worker-src 'self'",
-  "manifest-src 'self'",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-  ...(isDev ? [] : ["upgrade-insecure-requests"]),
-].join("; ");
+// The Content-Security-Policy of pages is set per request by proxy.ts (a
+// fresh nonce for Next's inline scripts instead of 'unsafe-inline').
 
 const securityHeaders = [
-  { key: "Content-Security-Policy", value: contentSecurityPolicy },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

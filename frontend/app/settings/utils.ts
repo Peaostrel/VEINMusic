@@ -11,17 +11,25 @@ export const createImage = (url: string) =>
     image.src = url;
   });
 
+/** The crop, scaled down to fit `maxSide` (the server fits it again): a
+ * phone photo is not sent at full resolution. */
 export async function getCroppedImg(
   imageSrc: string,
   pixelCrop: Area,
+  maxSide = Infinity,
 ): Promise<File | null> {
   const image = await createImage(imageSrc);
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
 
-  canvas.width = pixelCrop.width;
-  canvas.height = pixelCrop.height;
+  const scale = Math.min(
+    1,
+    maxSide / Math.max(pixelCrop.width, pixelCrop.height),
+  );
+  canvas.width = Math.round(pixelCrop.width * scale);
+  canvas.height = Math.round(pixelCrop.height * scale);
+  ctx.imageSmoothingQuality = "high";
 
   ctx.drawImage(
     image,
@@ -31,8 +39,8 @@ export async function getCroppedImg(
     pixelCrop.height,
     0,
     0,
-    pixelCrop.width,
-    pixelCrop.height,
+    canvas.width,
+    canvas.height,
   );
 
   return new Promise((resolve, reject) => {

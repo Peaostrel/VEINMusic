@@ -135,6 +135,16 @@
 docker compose exec backend python -m app.cli set-role <username> admin
 ```
 
+Аватары и обложки профиля при загрузке уменьшаются (аватар до 512 px,
+обложка до 2000 px по длинной стороне), разворачиваются по EXIF и теряют
+метаданные камеры и GPS. Файлы, загруженные раньше, один раз ужимаются на
+месте (имена и ссылки не меняются; `--dry-run` только покажет экономию):
+
+```bash
+docker compose exec backend python -m app.cli shrink-uploads --dry-run
+docker compose exec backend python -m app.cli shrink-uploads
+```
+
 ---
 
 ## Надёжность библиотеки

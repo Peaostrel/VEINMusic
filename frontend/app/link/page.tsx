@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Check, LogIn, Monitor, X } from "lucide-react";
+import { Check, LogIn, Monitor, ShieldAlert, X } from "lucide-react";
 import { ApiError, apiJson } from "@/app/lib/api";
 import type { DeviceCodeInfo } from "@/app/lib/types";
 import { btn } from "@/components/ui";
@@ -95,6 +95,9 @@ function LinkDevice() {
   const [step, setStep] = useState<Step>("enter");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // A code from another network must be confirmed as started by the user:
+  // the classic attack sends someone a /link?code=… they did not request
+  const [startedHere, setStartedHere] = useState(false);
 
   const lookup = async (value: string) => {
     setError("");
@@ -104,6 +107,7 @@ function LinkDevice() {
         `/api/devices/code/${encodeURIComponent(value)}`,
       );
       setInfo(found);
+      setStartedHere(false);
       setStep("confirm");
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
@@ -156,6 +160,17 @@ function LinkDevice() {
         minute: "2-digit",
       })
     : "";
+  const requestedAgo = info?.created_at
+    ? Math.max(
+        0,
+        Math.round((Date.now() - Date.parse(info.created_at)) / 60_000),
+      )
+    : null;
+  const needsConfirmation = info?.same_network !== true;
+  let requested = "";
+  if (requestedAgo === 0) requested = " · запрошен только что";
+  else if (requestedAgo !== null)
+    requested = ` · запрошен ${requestedAgo} мин назад`;
 
   const errorLine = error && (
     <p role="alert" className="text-[13px] text-danger">
@@ -226,8 +241,13 @@ function LinkDevice() {
                 <span className="truncate text-sm font-medium">
                   {info.client_name}
                 </span>
+                <span className="text-xs text-fg-3">
+                  Название указало само устройство
+                </span>
                 <span className="font-mono text-xs text-fg-3">
-                  код {info.user_code} · до {expires}
+                  код {info.user_code}
+                  {requested}
+                  {` · до ${expires}`}
                 </span>
               </span>
             </div>
@@ -246,6 +266,37 @@ function LinkDevice() {
               </li>
             </ul>
           </div>
+          <div
+            role="note"
+            className={`flex gap-3 rounded-xl border px-4 py-3 text-[13px] leading-relaxed ${
+              info.same_network === false
+                ? "border-danger-line bg-danger-soft text-fg"
+                : "border-line bg-surface text-fg-2"
+            }`}
+          >
+            <ShieldAlert
+              className={`mt-0.5 h-4 w-4 shrink-0 ${info.same_network === false ? "text-danger" : "text-fg-3"}`}
+              aria-hidden="true"
+            />
+            <span>
+              {info.same_network === false &&
+                "Код запрошен не из той сети, где вы сейчас. Так бывает, если вы подключаете сервис на его сайте (например, Plat Music). "}
+              Подтверждайте только код, который сами получили в расширении или
+              приложении. Если код или ссылку вам прислали в сообщении, нажмите
+              «Отклонить»: так крадут доступ к аккаунтам.
+            </span>
+          </div>
+          {needsConfirmation && (
+            <label className="flex cursor-pointer items-start gap-3 text-[13px] leading-relaxed text-fg">
+              <input
+                type="checkbox"
+                checked={startedHere}
+                onChange={(e) => setStartedHere(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
+              />
+              <span>Я сам начал подключение и вижу этот код у себя</span>
+            </label>
+          )}
           <p className="text-[13px] leading-relaxed text-fg-3">
             Устройство получит отдельный ключ. Отозвать его можно в настройках,
             раздел «Безопасность и данные».
@@ -263,7 +314,7 @@ function LinkDevice() {
             <button
               type="button"
               onClick={() => decide(true)}
-              disabled={busy}
+              disabled={busy || (needsConfirmation && !startedHere)}
               className={`${btn.primary} ${btn.lg} flex-1`}
             >
               Разрешить

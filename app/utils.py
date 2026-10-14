@@ -33,6 +33,9 @@ def sanitize_text(text_val: str) -> str:
         return text_val.replace('<', '').replace('>', '')
 
 
+_NAT64 = ipaddress.ip_network("64:ff9b::/96")
+
+
 def _is_public_ip(ip_str: str) -> bool:
     try:
         ip = ipaddress.ip_address(ip_str.split('%', 1)[0])
@@ -41,6 +44,10 @@ def _is_public_ip(ip_str: str) -> bool:
     # IPv4-mapped IPv6 addresses (::ffff:127.0.0.1) must be judged as IPv4
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
         ip = ip.ipv4_mapped
+    # NAT64 (64:ff9b::/96, RFC 6052): on a host with a NAT64 gateway
+    # 64:ff9b::7f00:1 reaches 127.0.0.1, so judge the embedded IPv4 address
+    if isinstance(ip, ipaddress.IPv6Address) and ip in _NAT64:
+        ip = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
     return ip.is_global and not ip.is_multicast
 
 

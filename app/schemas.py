@@ -1,4 +1,5 @@
 
+import math
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
@@ -38,6 +39,19 @@ def _clamp_seconds(value: Any) -> Any:
 
 Seconds = Annotated[int | None, BeforeValidator(_clamp_seconds)]
 
+
+def _clamp_position(value: Any) -> Any:
+    """Like `_clamp_seconds`, keeping the fraction: a player position
+    (audio currentTime) shown live must not lag up to a second behind."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if not math.isfinite(value):
+            raise ValueError("position must be a finite number")  # NaN would break JSON output
+        return round(float(min(max(value, 0), 86400)), 3)
+    return value
+
+
+Position = Annotated[float | None, BeforeValidator(_clamp_position)]
+
 # Scrobbles feed a catalog shared by all users, so their text is bounded
 TrackText = Annotated[str, _truncate(300)]
 OptionalTrackText = Annotated[str | None, _truncate(300)]
@@ -65,7 +79,7 @@ class ScrobbleData(BaseModel):
     track_url: OptionalUrl = None
     album: OptionalTrackText = None
     source: Annotated[str, _truncate(32), BeforeValidator(normalize_source)]
-    progress_sec: Seconds = 0
+    progress_sec: Position = 0
     is_playing: bool | None = True
     duration: Seconds = 0
 

@@ -7,6 +7,7 @@ import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { Music2 } from "lucide-react";
 import { sourceLabel } from "@/utils/formatters";
 import { PlayingBars } from "@/components/ui";
+import { coverAt } from "@/app/lib/coverSize";
 
 interface CurrentTrack {
   playing: boolean;
@@ -29,7 +30,14 @@ const POLL_MS = 60_000;
 export default function NowPlaying({
   username,
   variant = "sidebar",
-}: Readonly<{ username: string; variant?: "sidebar" | "mobile" | "profile" }>) {
+  live = true,
+}: Readonly<{
+  username: string;
+  variant?: "sidebar" | "mobile" | "profile";
+  /** Live updates: the server opens only the viewer's own channel, so on
+   * someone else's profile a socket is rejected and retried forever. */
+  live?: boolean;
+}>) {
   const mobileRef = useRef<HTMLDetailsElement>(null);
   const [track, setTrack] = useState<CurrentTrack | null>(null);
   const [clock, setClock] = useState(0);
@@ -74,22 +82,27 @@ export default function NowPlaying({
 
   useEffect(
     () =>
-      openSocket(
-        `/ws/${encodeURIComponent(username)}`,
-        (ws) => {
-          ws.onmessage = (event) => {
-            try {
-              const msg = JSON.parse(event.data);
-              if (msg.type === "NEW_SCROBBLE" || msg.type === "PLAYBACK_STATE")
-                void load();
-            } catch {
-              // not JSON
-            }
-          };
-        },
-        { authed: true },
-      ),
-    [username, load],
+      live
+        ? openSocket(
+            `/ws/${encodeURIComponent(username)}`,
+            (ws) => {
+              ws.onmessage = (event) => {
+                try {
+                  const msg = JSON.parse(event.data);
+                  if (
+                    msg.type === "NEW_SCROBBLE" ||
+                    msg.type === "PLAYBACK_STATE"
+                  )
+                    void load();
+                } catch {
+                  // not JSON
+                }
+              };
+            },
+            { authed: true },
+          )
+        : undefined,
+    [username, load, live],
   );
 
   const elapsed = Math.max(0, (clock - (track?.receivedAt ?? clock)) / 1_000);
@@ -144,7 +157,7 @@ export default function NowPlaying({
     <span className="flex min-w-0 items-center gap-3">
       {cover ? (
         <img
-          src={cover}
+          src={coverAt(cover, 48)}
           alt=""
           className="h-12 w-12 shrink-0 rounded-lg object-cover"
         />

@@ -1,19 +1,24 @@
 """Country list and city suggestions for the profile location.
 
 The browser used to call restcountries.com and OpenStreetMap Nominatim
-directly, handing every visitor's IP to both. The API now asks them on the
-user's behalf and caches the answers (Nominatim's usage policy also asks for
-caching, an identifying User-Agent and a low request rate).
+directly, handing every visitor's IP to both. Countries are now a bundled
+list (ISO 3166-1 codes with Russian names, app/data/countries.json): the
+restcountries API it came from was retired, so it can't break again. Cities
+are asked from Nominatim on the user's behalf and cached (its usage policy
+also asks for caching, an identifying User-Agent and a low request rate).
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
+from functools import cache
+from pathlib import Path
 from typing import Annotated, Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from app.core.rate_limit import limiter
 from app.services.cache import get_from_cache, set_to_cache
@@ -21,9 +26,8 @@ from app.services.cache import get_from_cache, set_to_cache
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/geo", tags=["geo"])
 
-RESTCOUNTRIES_URL = "https://restcountries.com/v3.1/all?fields=name,translations,cca2,flag"
+COUNTRIES_FILE = Path(__file__).resolve().parent.parent / "data" / "countries.json"
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-COUNTRIES_TTL = 7 * 24 * 3600
 CITIES_TTL = 24 * 3600
 MAX_CITIES = 10
 _USER_AGENT = f"VEINMusic/1.0 (+{os.getenv('FRONTEND_URL', 'https://music.vein.guru')})"
@@ -39,18 +43,9 @@ async def _get_json(url: str, params: dict[str, str] | None = None) -> Any:
         return res.json()
 
 
-def _parse_countries(raw: Any) -> list[dict[str, str]]:
-    if not isinstance(raw, list):
-        return []
-    countries = []
-    for c in raw:
-        if not isinstance(c, dict) or not isinstance(c.get("cca2"), str):
-            continue
-        name = (c.get("translations", {}).get("rus", {}) or {}).get("common") \
-            or (c.get("name") or {}).get("common")
-        if name:
-            countries.append({"name": str(name), "code": c["cca2"], "flag": str(c.get("flag") or "")})
-    return sorted(countries, key=lambda c: c["name"])
+@cache
+def _countries() -> list[dict[str, str]]:
+    return json.loads(COUNTRIES_FILE.read_text(encoding="utf-8"))
 
 
 def _city_name(place: dict[str, Any]) -> str:
@@ -76,21 +71,11 @@ def _parse_cities(raw: Any, query: str) -> list[str]:
     return result
 
 
-@router.get("/countries", responses={502: {"description": "Country list unavailable"}})
-async def list_countries():
+@router.get("/countries")
+def list_countries(response: Response):
     """Countries with Russian names, ISO code and flag."""
-    cached = get_from_cache("geo:countries", ttl=COUNTRIES_TTL)
-    if cached is not None:
-        return cached
-    try:
-        countries = _parse_countries(await _get_json(RESTCOUNTRIES_URL))
-    except (httpx.HTTPError, ValueError) as e:
-        logger.warning(f"[Geo] restcountries failed: {e}")
-        countries = []
-    if not countries:
-        raise HTTPException(502, "Список стран недоступен")
-    set_to_cache("geo:countries", countries, expire=COUNTRIES_TTL)
-    return countries
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return _countries()
 
 
 @router.get("/cities", responses={502: {"description": "City search unavailable"}})

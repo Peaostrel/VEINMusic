@@ -32,6 +32,11 @@ test("history time handles UTC offsets, caps duration and stops at heartbeat exp
   assert.equal(listeningElapsed(195, true, value, 200, start + 10000), 200);
   assert.equal(listeningElapsed(10, false, value, 200, start + 10000), 10);
   assert.equal(listeningElapsed(10, true, "invalid", 200, start), 10);
+  // Player position (Plat Music): fractions carry, seeks/pauses show as is
+  assert.equal(listeningElapsed(15, true, value, 200, start + 4500, 90.6), 95);
+  assert.equal(listeningElapsed(15, false, value, 200, start + 60000, 24), 24);
+  assert.equal(listeningElapsed(15, true, value, 200, start + 60000, 190), 200);
+  assert.equal(listeningElapsed(15, true, value, 0, start + 10000, 300), 310);
   assert.equal(freshPlayback(value, start + 44999), true);
   assert.equal(freshPlayback(value, start + 45000), false);
 });
@@ -162,4 +167,25 @@ test("socket retry backs off and policy rejection stops the loop", async () => {
     assert.equal(timers.size, 0);
     stop();
   });
+});
+
+const { coverAt } = await load("../app/lib/coverSize.ts");
+
+test("list covers ask music CDNs for a 2x thumbnail, never a larger one", () => {
+  const y = "https://avatars.yandex.net/get-music-content/1/a.b-2/";
+  assert.equal(coverAt(`${y}400x400`, 40), `${y}100x100`);
+  assert.equal(coverAt(`${y}400x400`, 64), `${y}150x150`);
+  assert.equal(coverAt(`${y}200x200`, 300), `${y}200x200`);
+  const d = "https://cdn-images.dzcdn.net/images/cover/0af3/";
+  assert.equal(
+    coverAt(`${d}1000x1000-000000-80-0-0.jpg`, 48),
+    `${d}120x120-000000-80-0-0.jpg`,
+  );
+  const s = "https://i1.sndcdn.com/artworks-wczEc-NqAYaA-";
+  assert.equal(coverAt(`${s}t500x500.jpg`, 40), `${s}large.jpg`);
+  assert.equal(coverAt(`${s}t500x500.jpg`, 120), `${s}t300x300.jpg`);
+  assert.equal(coverAt(`${s}large.jpg`, 200), `${s}large.jpg`);
+  const other = "https://api.music.vein.guru/uploads/abc.jpg";
+  assert.equal(coverAt(other, 40), other);
+  assert.equal(coverAt(null, 40), null);
 });

@@ -16,6 +16,7 @@ import type {
   TasteMatch,
   UserInfo,
 } from "@/app/lib/types";
+import { coverAt } from "@/app/lib/coverSize";
 
 export interface ProfileStatsSectionProps {
   u: UserInfo;
@@ -71,7 +72,7 @@ function ShowcaseCard({
     >
       {cover ? (
         <img
-          src={cover}
+          src={coverAt(cover, 64)}
           alt=""
           className={`h-16 w-16 shrink-0 object-cover ${shape}`}
         />

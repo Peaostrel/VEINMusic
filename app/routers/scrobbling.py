@@ -27,6 +27,7 @@ from app.routers.common import _can_view_section, _check_privacy_and_owner
 from app.schemas import CommentRequest, ScrobbleData
 from app.services import notifications
 from app.services.cache import delete_from_cache, get_from_cache, set_to_cache
+from app.services.metadata_cleaner import clean_track_metadata
 from app.services.privacy import filter_public_feed, public_feed_user_ids, public_statistics_users
 from app.services.scrobble_processor import format_history_item, process_scrobble
 from app.services.user_preferences import preference_enabled, preferences_dict
@@ -78,7 +79,7 @@ async def add_scrobble(request: Request,
     user_id = int(user.id)
     async with redis_lock(f"scrobble_lock:{user_id}", expire_sec=10):
         try:
-            blocked = await anyio.to_thread.run_sync(_anti_abuse_check, db, user_id)
+            blocked = await anyio.to_thread.run_sync(_anti_abuse_check, db, user_id, data)
             if blocked:
                 return blocked
 
@@ -95,7 +96,18 @@ async def add_scrobble(request: Request,
                 detail="Internal Server Error")
 
 
-def _anti_abuse_check(db: Session, user_id: int) -> dict | None:
+def _changes_playback(last_s: Scrobble, data: ScrobbleData) -> bool:
+    """A pause, resume or another track: players send these right when they
+    happen, often within a second or two of a heartbeat."""
+    if bool(data.is_playing) != bool(last_s.is_playing):
+        return True
+    track = last_s.track
+    title, artist = clean_track_metadata(data.title, data.artist)
+    return track is None or (str(track.title).casefold(), str(track.artist).casefold()) != (
+        title.casefold(), artist.casefold())
+
+
+def _anti_abuse_check(db: Session, user_id: int, data: ScrobbleData | None = None) -> dict | None:
     """Blocking DB checks run before processing a scrobble (in a thread)."""
     # Anti-Cheat: Max 40 scrobbles per hour
     now = datetime.now(UTC)
@@ -110,6 +122,8 @@ def _anti_abuse_check(db: Session, user_id: int) -> dict | None:
 
     # Anti-Spam: Max 1 ping per 2 seconds. `process_scrobble` handles
     # debouncing and fast skipping logic. We just prevent endpoint abuse here.
+    # Changes of the playback are never dropped: a lost pause would leave the
+    # track "playing" (and its time running) until the next report.
     last_s = db.query(Scrobble).execution_options(include_excluded=True).filter(
         Scrobble.user_id == user_id).order_by(
         Scrobble.id.desc()).first()
@@ -117,7 +131,7 @@ def _anti_abuse_check(db: Session, user_id: int) -> dict | None:
         updated_at = last_s.updated_at
         if updated_at.tzinfo is None:
             updated_at = updated_at.replace(tzinfo=UTC)
-        if (now - updated_at).total_seconds() < 2:
+        if (now - updated_at).total_seconds() < 2 and not (data and _changes_playback(last_s, data)):
             return {
                 "status": "rate_limited",
                 "message": "Слишком частые скробблы"}

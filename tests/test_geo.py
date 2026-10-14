@@ -5,13 +5,6 @@ import httpx
 
 from app.routers import geo
 
-RESTCOUNTRIES = [
-    {"name": {"common": "Germany"}, "translations": {"rus": {"common": "Германия"}}, "cca2": "DE", "flag": "🇩🇪"},
-    {"name": {"common": "Austria"}, "cca2": "AT", "flag": "🇦🇹"},
-    {"name": {"common": "Broken"}},  # no code: skipped
-    "junk",
-]
-
 NOMINATIM = [
     {"name": "Москва", "importance": 0.5, "address": {"city": "Москва"}},
     {"name": "Московский район", "importance": 0.9, "address": {"town": "Московский"}},
@@ -20,23 +13,17 @@ NOMINATIM = [
 ]
 
 
-def test_countries_are_parsed_sorted_and_cached(client):
-    fetch = AsyncMock(return_value=RESTCOUNTRIES)
-    with patch.object(geo, "_get_json", fetch):
-        first = client.get("/api/geo/countries").json()
-        second = client.get("/api/geo/countries").json()
-    assert first == second == [
-        {"name": "Austria", "code": "AT", "flag": "🇦🇹"},
-        {"name": "Германия", "code": "DE", "flag": "🇩🇪"},
-    ]
-    fetch.assert_awaited_once()
-
-
-def test_countries_unavailable(client):
-    with patch.object(geo, "_get_json", AsyncMock(side_effect=httpx.ConnectError("down"))):
-        assert client.get("/api/geo/countries").status_code == 502
-    with patch.object(geo, "_get_json", AsyncMock(return_value={"message": "Not Found"})):
-        assert client.get("/api/geo/countries").status_code == 502
+def test_countries_are_bundled_sorted_and_cacheable(client):
+    response = client.get("/api/geo/countries")
+    assert response.status_code == 200
+    assert "max-age" in response.headers["cache-control"]
+    countries = response.json()
+    codes = [c["code"] for c in countries]
+    assert len(codes) == len(set(codes)) >= 249
+    assert {"name": "Грузия", "code": "GE", "flag": "🇬🇪"} in countries
+    assert {"name": "США", "code": "US", "flag": "🇺🇸"} in countries
+    assert all(len(c["code"]) == 2 and c["name"] and c["flag"] for c in countries)
+    assert [c["name"] for c in countries][:2] == ["Австралия", "Австрия"]
 
 
 def test_cities_are_filtered_ranked_and_cached(client):
@@ -79,5 +66,4 @@ def test_get_json_sends_user_agent():
 
 
 def test_parsers_ignore_bad_payloads():
-    assert geo._parse_countries({"x": 1}) == []
     assert geo._parse_cities("nope", "q") == []

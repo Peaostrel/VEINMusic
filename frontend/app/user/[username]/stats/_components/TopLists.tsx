@@ -3,6 +3,7 @@ import { Fragment } from "react";
 import type { DetailedStats } from "@/app/lib/types";
 import { Meter } from "@/components/ui";
 import { getAlbumUrl, getArtistUrl, getTrackUrl } from "./links";
+import { coverAt } from "@/app/lib/coverSize";
 
 /** Comma-separated artists, each linking to a search on the service. */
 function ArtistLinks({
@@ -35,9 +36,10 @@ function ArtistLinks({
 function Cover({ src }: Readonly<{ src: string | null | undefined }>) {
   return src ? (
     <img
-      src={src}
+      src={coverAt(src, 40)}
       referrerPolicy="no-referrer"
       alt=""
+      loading="lazy"
       className="h-10 w-10 shrink-0 rounded object-cover"
     />
   ) : (

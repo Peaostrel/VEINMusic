@@ -3,10 +3,11 @@ linked services with the Yandex live connection state, the showcase and
 user reports."""
 from __future__ import annotations
 
+import json
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Query as SAQuery, Session
@@ -14,7 +15,9 @@ from sqlalchemy.orm import Query as SAQuery, Session
 from app.core.constants import USER_NOT_FOUND
 from app.core.security import get_admin_user
 from app.database import get_db
-from app.models import FeatureFlag, Scrobble, Track, User, UserIntegration
+from app.models import (
+    BlacklistFilter, FeatureFlag, Report, Scrobble, ScrobbleComment, Track, User, UserIntegration,
+)
 from app.services import audit, cache, runtime_settings
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -197,8 +200,6 @@ class ProviderState(BaseModel):
 
 async def _live_status() -> tuple[dict[int, dict[str, Any]], int | None, bool]:
     """(Yandex live state by user id, worker heartbeat in ms, Redis reachable)."""
-    import json
-
     from app.core.redis import get_redis_client
     from app.services.yandex_live import HEARTBEAT_KEY, STATUS_KEY
     try:
@@ -406,52 +407,141 @@ def unlock_showcase(username: str, data: ShowcaseUnlock, db: DB, admin: AdminUse
 REPORT_NOT_FOUND = "Жалоба не найдена"
 
 
-@router.get("/reports")
-def list_reports(
-    db: DB, admin: AdminUser,
-    status: Annotated[str, Query(pattern="^(open|resolved|dismissed|all)$")] = "open",
-    target_type: Annotated[str | None, Query(pattern="^(user|comment)$")] = None,
-    limit: Annotated[int, Query(ge=1, le=100)] = 30,
-    offset: Annotated[int, Query(ge=0)] = 0,
-):
-    """Reports, newest first; `open_count` feeds the tab badge."""
-    from app.models import Report, ScrobbleComment
+def _evidence(text) -> str:
+    """Stands in for the id of a deleted target: what was reported."""
+    import hashlib
+    return hashlib.sha256(str(text).encode()).hexdigest()[:16]
 
-    query = db.query(Report)
-    if status != "all":
-        query = query.filter(Report.status == status)
-    if target_type == "user":
-        query = query.filter(Report.comment_text.is_(None))
-    elif target_type == "comment":
-        query = query.filter(Report.comment_text.isnot(None))
-    total = query.count()
-    rows = query.order_by(Report.id.desc()).offset(offset).limit(limit).all()
 
-    user_ids = {r.reporter_id for r in rows} | {r.target_user_id for r in rows}
-    users = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids))} if user_ids else {}
-    comment_ids = {r.comment_id for r in rows if r.comment_id}
-    live_comments = {c for (c,) in db.query(ScrobbleComment.id).filter(ScrobbleComment.id.in_(comment_ids))} \
-        if comment_ids else set()
-    # How many open reports each target has: several people flagging the same thing matters
-    open_by_target: dict[int, int] = {
-        int(uid): int(n) for uid, n in db.query(Report.target_user_id, func.count(Report.id))
-        .filter(Report.status == "open").group_by(Report.target_user_id)}
+def _report_key(r) -> str:
+    """Reports about the same thing are decided together. A deleted target
+    is told apart by what was reported (or not grouped at all)."""
+    if r.target_type == "track":
+        if r.track_id is not None:
+            return f"track:{r.track_id}"
+        return f"track:gone:{_evidence(r.target_snapshot)}" if r.target_snapshot else f"report:{r.id}"
+    if r.target_type == "comment":
+        if r.comment_id is not None:
+            return f"comment:{r.comment_id}:{r.target_user_id}"
+        return f"comment:gone:{r.target_user_id}:{_evidence(r.comment_text)}" if r.comment_text \
+            else f"report:{r.id}"
+    if r.target_user_id is not None:
+        return f"user:{r.target_user_id}"
+    return f"user:gone:{_evidence(r.target_snapshot)}" if r.target_snapshot else f"report:{r.id}"
 
-    def person(uid):
-        u = users.get(uid)
+
+def _same_target(query, report):
+    """Open reports with the same `_report_key`."""
+    query = query.filter(Report.target_type == report.target_type)
+    if report.target_type == "track":
+        if report.track_id is not None:
+            return query.filter(Report.track_id == report.track_id)
+        evidence = (Report.target_snapshot, report.target_snapshot)
+        query = query.filter(Report.track_id.is_(None))
+    elif report.target_type == "comment":
+        query = query.filter(Report.target_user_id.is_not_distinct_from(report.target_user_id))
+        if report.comment_id is not None:
+            return query.filter(Report.comment_id == report.comment_id)
+        evidence = (Report.comment_text, report.comment_text)
+        query = query.filter(Report.comment_id.is_(None))
+    else:
+        if report.target_user_id is not None:
+            return query.filter(Report.target_user_id == report.target_user_id)
+        evidence = (Report.target_snapshot, report.target_snapshot)
+        query = query.filter(Report.target_user_id.is_(None))
+    column, value = evidence
+    return query.filter(column == value) if value else query.filter(Report.id == report.id)
+
+
+def _rank_by_priority(rows: list) -> list:
+    """Targets reported by more people first, reports about one target
+    together (few reports exist at a time: ranked in Python)."""
+    reporters_by_key: dict[str, set] = {}
+    newest_by_key: dict[str, int] = {}
+    for r in rows:
+        key = _report_key(r)
+        reporters_by_key.setdefault(key, set()).add(r.reporter_id)
+        newest_by_key[key] = max(newest_by_key.get(key, 0), int(r.id))
+    return sorted(rows, key=lambda r: (-len(reporters_by_key[_report_key(r)]),
+                                       -newest_by_key[_report_key(r)], -int(r.id)))
+
+
+def _open_report_counts(db: Session) -> tuple[dict[str, int], dict[int, int]]:
+    """Open reports per target and per reported person: several people
+    flagging the same thing matters."""
+    by_key: dict[str, int] = {}
+    by_user: dict[int, int] = {}
+    for r in db.query(Report).filter(Report.status == "open"):
+        by_key[_report_key(r)] = by_key.get(_report_key(r), 0) + 1
+        if r.target_user_id:
+            by_user[int(r.target_user_id)] = by_user.get(int(r.target_user_id), 0) + 1
+    return by_key, by_user
+
+
+def _reporter_history(db: Session, rows: list) -> dict[int, dict[str, int]]:
+    """A reporter whose reports are mostly dismissed deserves less weight."""
+    reporter_ids = {int(r.reporter_id) for r in rows if r.reporter_id}
+    if not reporter_ids:
+        return {}
+    history: dict[int, dict[str, int]] = {}
+    counts = (db.query(Report.reporter_id, Report.status, func.count(Report.id))
+              .filter(Report.reporter_id.in_(reporter_ids)).group_by(Report.reporter_id, Report.status)
+              .all())
+    for reporter_id, report_status, count in counts:
+        entry = history.setdefault(int(reporter_id), {"total": 0, "dismissed": 0, "resolved": 0})
+        entry["total"] += int(count)
+        if report_status in ("dismissed", "resolved"):
+            entry[report_status] += int(count)
+    return history
+
+
+def _existing_ids(db: Session, column, ids: set) -> set:
+    return {i for (i,) in db.query(column).filter(column.in_(ids))} if ids else set()
+
+
+def _report_snapshot(r) -> dict | None:
+    try:
+        return json.loads(str(r.target_snapshot)) if r.target_snapshot else None
+    except ValueError:
+        return None
+
+
+class _ReportContext:
+    """What the report list needs beyond the rows themselves."""
+
+    def __init__(self, db: Session, rows: list):
+        user_ids = {int(uid) for r in rows for uid in (r.reporter_id, r.target_user_id) if uid}
+        self.users = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids))} if user_ids else {}
+        self.live_comments = _existing_ids(db, ScrobbleComment.id, {r.comment_id for r in rows if r.comment_id})
+        self.live_tracks = _existing_ids(db, Track.id, {r.track_id for r in rows if r.track_id})
+        self.open_by_key, self.open_by_user = _open_report_counts(db)
+        self.history = _reporter_history(db, rows)
+
+    def person(self, uid) -> dict | None:
+        u = self.users.get(uid) if uid else None
         return {"username": u.username, "is_banned": bool(u.is_banned)} if u else None
 
-    return {
-        "total": total,
-        "open_count": db.query(func.count(Report.id)).filter(Report.status == "open").scalar() or 0,
-        "items": [{
+    def item(self, r) -> dict:
+        key = _report_key(r)
+        same_open = self.open_by_key.get(key, 0)
+        snapshot = _report_snapshot(r)
+        return {
             "id": r.id,
-            "type": "comment" if r.comment_text is not None else "user",
-            "reporter": person(r.reporter_id),
-            "target": person(r.target_user_id),
-            "target_open_reports": int(open_by_target.get(int(r.target_user_id), 0)),
+            "type": r.target_type,
+            "target_key": key,
+            "reporter": self.person(r.reporter_id),
+            "reporter_history": self.history.get(int(r.reporter_id)) if r.reporter_id else None,
+            "target": self.person(r.target_user_id),
+            # All open reports about this person (profile and comments)...
+            "target_open_reports": self.open_by_user.get(int(r.target_user_id), 0) if r.target_user_id
+            else same_open,
+            # ...and about this very profile, comment or track
+            "same_open_reports": same_open,
             "comment": {"id": r.comment_id, "text": r.comment_text,
-                        "exists": r.comment_id in live_comments} if r.comment_text is not None else None,
+                        "exists": r.comment_id in self.live_comments} if r.target_type == "comment" else None,
+            "track": {"id": r.track_id, "exists": r.track_id in self.live_tracks, **(snapshot or {})}
+            if r.target_type == "track" else None,
+            "snapshot": snapshot if r.target_type == "user" else None,
             "reason": r.reason,
             "details": r.details,
             "status": r.status,
@@ -459,49 +549,181 @@ def list_reports(
             "resolved_by": r.resolved_by,
             "resolved_at": r.resolved_at.isoformat() if r.resolved_at else None,
             "resolution": r.resolution,
-        } for r in rows],
+        }
+
+
+@router.get("/reports")
+def list_reports(
+    db: DB, admin: AdminUser,
+    status: Annotated[str, Query(pattern="^(open|resolved|dismissed|all)$")] = "open",
+    target_type: Annotated[str | None, Query(pattern="^(user|comment|track)$")] = None,
+    sort: Annotated[str, Query(pattern="^(priority|new)$")] = "priority",
+    limit: Annotated[int, Query(ge=1, le=100)] = 30,
+    offset: Annotated[int, Query(ge=0)] = 0,
+):
+    """Reports; `priority` puts open targets reported by more people first
+    and keeps reports about one target together (the open queue is short;
+    closed ones, a growing history, are always newest first and paginated
+    in the database). `open_count` feeds the tab badge."""
+    query = db.query(Report)
+    if status != "all":
+        query = query.filter(Report.status == status)
+    if target_type:
+        query = query.filter(Report.target_type == target_type)
+    total = query.count()
+    if sort == "priority" and status == "open":
+        rows = _rank_by_priority(query.all())[offset:offset + limit]
+    else:
+        rows = query.order_by(Report.id.desc()).offset(offset).limit(limit).all()
+    context = _ReportContext(db, rows)
+    return {
+        "total": total,
+        "open_count": db.query(func.count(Report.id)).filter(Report.status == "open").scalar() or 0,
+        "items": [context.item(r) for r in rows],
     }
 
 
 class ReportResolve(BaseModel):
     status: str = Field(pattern="^(resolved|dismissed)$")
     resolution: str | None = Field(default=None, max_length=300)
-    # Remove the reported comment together with closing the report
+    # What to do along with closing: remove the comment, ban its author or
+    # the reported profile, or delete the reported track
+    action: str = Field(default="none", pattern="^(none|delete_comment|ban_user|delete_track)$")
+    # With delete_track: refuse future plays by this artist name
+    block_artist: bool = False
+    # Older clients: same as action="delete_comment"
     delete_comment: bool = False
 
 
-@router.post("/reports/{report_id}/resolve", responses={404: {"description": REPORT_NOT_FOUND}})
-def resolve_report(report_id: int, data: ReportResolve, db: DB, admin: AdminUser):
-    """Close a report and every other open report about the same profile or
-    comment, optionally deleting the comment."""
-    from app.models import Report, ScrobbleComment
+def _notify_reporters(db, reports, status: str, label: str, admin) -> list:
+    """Tell everyone who reported it what came of it (never who decided)."""
+    from app.services import notifications
+    # Notifications are cut at 120 characters: the outcome goes first
+    text = "приняты меры, спасибо!" if status == "resolved" else "нарушений не нашли, спасибо!"
+    sent, alerts = set(), []
+    for r in reports:
+        if not r.reporter_id or r.reporter_id in sent:
+            continue
+        sent.add(r.reporter_id)
+        alerts.append(notifications.create(
+            db, recipient_id=int(r.reporter_id), actor_id=int(admin.id), kind=notifications.KIND_SYSTEM,
+            message=f"Жалоба рассмотрена: {text} ({label})"))
+    return [a for a in alerts if a]
+
+
+def _action_fits(action: str, report) -> bool:
+    if action == "delete_comment":
+        return report.target_type == "comment"
+    if action == "delete_track":
+        return report.target_type == "track"
+    if action == "ban_user":
+        return bool(report.target_user_id)
+    return True
+
+
+def _delete_reported_comment(db: Session, admin, report, target_name: str) -> dict[str, Any]:
+    comment = db.query(ScrobbleComment).filter(ScrobbleComment.id == report.comment_id).first() \
+        if report.comment_id else None
+    if comment is None:
+        return {}
+    audit.record(db, admin, "comment.delete", target_name, text=str(comment.content or "")[:200],
+                 report_id=report.id)
+    db.delete(comment)
+    return {"comment_deleted": True}
+
+
+def _ban_reported_user(db: Session, admin, report, target) -> dict[str, Any]:
+    from app.core.security import revoke_all_sessions
+
+    if target is None:
+        return {}
+    if target.role == "admin":
+        raise HTTPException(400, "Нельзя заблокировать администратора")
+    if not target.is_banned:
+        target.is_banned = True
+        revoke_all_sessions(target)
+        audit.record(db, admin, "user.ban", str(target.username), report_id=report.id)
+    return {"user_banned": True}
+
+
+def _block_artist(db: Session, admin, report, artist: str) -> dict[str, Any]:
+    artist = artist.strip()
+    if not artist:
+        return {}
+    exists = db.query(BlacklistFilter.id).filter(
+        BlacklistFilter.filter_type == "artist",
+        func.lower(BlacklistFilter.pattern) == artist.lower()).first()
+    if not exists:
+        db.add(BlacklistFilter(pattern=artist, filter_type="artist",
+                               reason=f"Жалоба #{report.id}", is_active=True))
+        audit.record(db, admin, "blacklist.create", artist, type="artist", report_id=report.id)
+    return {"artist_blocked": True}
+
+
+def _delete_reported_track(db: Session, admin, report, block_artist: bool) -> dict[str, Any]:
+    done: dict[str, Any] = {}
+    track = db.query(Track).filter(Track.id == report.track_id).first() if report.track_id else None
+    if track is not None:
+        artist = str(track.artist or "")
+        plays = db.query(Scrobble).filter(Scrobble.track_id == track.id).delete()
+        audit.record(db, admin, "catalog.delete_track", f"#{track.id}",
+                     track=f"{track.artist} — {track.title}", scrobbles=plays, report_id=report.id)
+        db.delete(track)
+        done["track_deleted"] = True
+    else:
+        artist = str(json.loads(str(report.target_snapshot or "{}")).get("artist") or "")
+    if block_artist:
+        done.update(_block_artist(db, admin, report, artist))
+    return done
+
+
+def _close_reports(db: Session, report, data: ReportResolve, admin) -> dict:
+    """The report and every other open one about the same target, by id."""
+    closing = {r.id: r for r in _same_target(db.query(Report).filter(Report.status == "open"), report)}
+    closing[report.id] = report
+    now = datetime.now(UTC)
+    for r in closing.values():
+        r.status = data.status
+        r.resolved_by = str(admin.username)[:64]
+        r.resolved_at = now
+        r.resolution = data.resolution
+    return closing
+
+
+@router.post("/reports/{report_id}/resolve",
+             responses={404: {"description": REPORT_NOT_FOUND},
+                        400: {"description": "Action does not fit the report"}})
+def resolve_report(report_id: int, data: ReportResolve, background_tasks: BackgroundTasks, db: DB,
+                   admin: AdminUser):
+    """Close a report and every other open report about the same profile,
+    comment or track, optionally acting on it, and tell the reporters."""
+    from app.routers.reports import _target_label
+    from app.services import notifications
 
     report = db.query(Report).filter(Report.id == report_id).first()
     if not report:
         raise HTTPException(404, REPORT_NOT_FOUND)
-    same = db.query(Report).filter(Report.status == "open", Report.target_user_id == report.target_user_id)
-    same = same.filter(Report.comment_id == report.comment_id) if report.comment_id \
-        else same.filter(Report.comment_text.is_(None))
-    closing = {r.id: r for r in same}
-    closing[report.id] = report
-    now = datetime.now(UTC)
-    for r in closing.values():
-        r.status = data.status  # type: ignore[assignment]
-        r.resolved_by = str(admin.username)[:64]  # type: ignore[assignment]
-        r.resolved_at = now  # type: ignore[assignment]
-        r.resolution = data.resolution  # type: ignore[assignment]
-    target = db.query(User.username).filter(User.id == report.target_user_id).scalar()
-    deleted = False
-    if data.delete_comment and report.comment_id:
-        comment = db.query(ScrobbleComment).filter(ScrobbleComment.id == report.comment_id).first()
-        if comment:
-            audit.record(db, admin, "comment.delete", target, text=str(comment.content or "")[:200],
-                         report_id=report.id)
-            db.delete(comment)
-            deleted = True
-    audit.record(db, admin, "report.resolve", target, status=data.status, reports=sorted(closing),
-                 resolution=data.resolution, comment_deleted=deleted)
+    action = "delete_comment" if data.delete_comment and data.action == "none" else data.action
+    if not _action_fits(action, report):
+        raise HTTPException(400, "Это действие не подходит к жалобе")
+    label = _target_label(report, db)
+    closing = _close_reports(db, report, data, admin)
+    target = db.query(User).filter(User.id == report.target_user_id).first() if report.target_user_id else None
+    target_name = str(target.username) if target else label
+    done: dict[str, Any] = {}
+    if action == "delete_comment":
+        done = _delete_reported_comment(db, admin, report, target_name)
+    elif action == "ban_user":
+        done = _ban_reported_user(db, admin, report, target)
+    elif action == "delete_track":
+        done = _delete_reported_track(db, admin, report, data.block_artist)
+    audit.record(db, admin, "report.resolve", target_name, status=data.status, reports=sorted(closing),
+                 resolution=data.resolution, measure=action)
+    alerts = _notify_reporters(db, closing.values(), data.status, label, admin)
     db.commit()
-    if deleted:
+    for alert in alerts:
+        notifications.schedule_push(background_tasks, alert)
+    if done:
         cache.clear_all()
-    return {"status": "ok", "closed": len(closing), "comment_deleted": deleted}
+    return {"status": "ok", "closed": len(closing), "comment_deleted": bool(done.get("comment_deleted")),
+            **done}

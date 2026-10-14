@@ -26,6 +26,9 @@ test.describe("Device linking (/link)", () => {
     await page.getByLabel("Код устройства").fill(user_code.replace("-", ""));
     await page.getByRole("button", { name: "Продолжить" }).click();
     await expect(page.getByText("E2E Extension")).toBeVisible();
+    await expect(
+      page.getByText(/Подтверждайте только код, который сами получили/),
+    ).toBeVisible();
     await page.getByRole("button", { name: "Разрешить" }).click();
     await expect(page.getByText("Устройство подключено")).toBeVisible();
 

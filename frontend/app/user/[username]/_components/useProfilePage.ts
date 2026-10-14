@@ -281,6 +281,8 @@ export function useProfilePage() {
       }
     };
     const refresh = () => {
+      // A background tab waits: it refreshes when shown again
+      if (document.visibilityState === "hidden") return;
       void refreshLiveData();
     };
     const timer = setInterval(refresh, 15_000);

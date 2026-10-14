@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Disc3 } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
 import { EmptyState, Loading, PageHeader } from "@/components/ui";
+import { coverAt } from "@/app/lib/coverSize";
 
 interface ArtistTrack {
   id: number;
@@ -21,10 +22,20 @@ interface ArtistData {
   tracks: ArtistTrack[];
 }
 
+/** Client-side params of non-ASCII names arrive percent-encoded
+ * ("%D0%94…"); encoding them again made every Cyrillic artist "not found". */
+function routeName(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value; // a literal "%" in an already decoded name
+  }
+}
+
 export default function ArtistPage({
   params,
 }: Readonly<{ params: Promise<{ name: string }> }>) {
-  const { name } = use(params);
+  const name = routeName(use(params).name);
   const [data, setData] = useState<ArtistData | null>(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -37,16 +48,18 @@ export default function ArtistPage({
   if (loading) return <Loading label="Загружаем артиста…" />;
   if (!data)
     return (
-      <EmptyState title="Артист не найден">
-        В каталоге VEIN пока нет такого артиста.
-      </EmptyState>
+      <main className="mx-auto w-full max-w-[920px] px-4 py-8 sm:px-8 lg:py-10">
+        <EmptyState title="Артист не найден">
+          В каталоге VEIN пока нет такого артиста.
+        </EmptyState>
+      </main>
     );
   return (
     <main className="mx-auto flex w-full max-w-[920px] flex-col gap-7 px-4 py-8 sm:px-8 lg:py-10">
       <div className="flex items-center gap-5">
         {data.cover_url ? (
           <img
-            src={data.cover_url}
+            src={coverAt(data.cover_url, 96)}
             alt=""
             className="h-24 w-24 rounded-xl object-cover"
           />
@@ -73,8 +86,9 @@ export default function ArtistPage({
               <span className="font-mono text-xs text-fg-3">{index + 1}</span>
               {track.cover_url ? (
                 <img
-                  src={track.cover_url}
+                  src={coverAt(track.cover_url, 44)}
                   alt=""
+                  loading="lazy"
                   className="h-11 w-11 rounded object-cover"
                 />
               ) : (

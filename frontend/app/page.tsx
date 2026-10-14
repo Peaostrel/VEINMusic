@@ -22,6 +22,7 @@ import {
   PlayingBars,
   Segmented,
 } from "@/components/ui";
+import { coverAt } from "@/app/lib/coverSize";
 
 const FEED_POLL_MS = 15000;
 const WEEKDAYS = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
@@ -74,9 +75,14 @@ function sourceIsHidden(source: string, hiddenSources: string[]): boolean {
 }
 
 function Cover({ src }: Readonly<{ src?: string }>) {
-  const url = sanitizeImageUrl(src);
+  const url = sanitizeImageUrl(coverAt(src, 48));
   return url ? (
-    <img src={url} alt="" className="h-12 w-12 rounded-lg object-cover" />
+    <img
+      src={url}
+      alt=""
+      loading="lazy"
+      className="h-12 w-12 rounded-lg object-cover"
+    />
   ) : (
     <span className="block h-12 w-12 rounded-lg bg-surface-2" />
   );
@@ -461,18 +467,21 @@ export default function Home() {
 
   // Before localStorage is read (and on the server) render both: the
   // html[data-auth] flag set in <head> shows the right one without a flash.
-  if (!checked)
+  // The landing keeps its place in the tree once the session is read, so a
+  // guest's landing is not mounted (and its data loaded) twice.
+  if (!checked || !username)
     return (
       <>
-        <div className="guest-only">
+        <div className={checked ? undefined : "guest-only"}>
           <About />
         </div>
-        <div className="auth-only mx-auto w-full max-w-[1180px] px-4 py-10 sm:px-8 lg:px-12">
-          <SkeletonRows />
-        </div>
+        {!checked && (
+          <div className="auth-only mx-auto w-full max-w-[1180px] px-4 py-10 sm:px-8 lg:px-12">
+            <SkeletonRows />
+          </div>
+        )}
       </>
     );
-  if (!username) return <About />;
 
   const currentFeed = (
     activeFeed === "global" ? globalHistory : friendsHistory

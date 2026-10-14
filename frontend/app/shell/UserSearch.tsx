@@ -7,6 +7,7 @@ import { API_URL } from "@/app/lib/api";
 import { Avatar } from "@/components/ui";
 import { VerifiedBadge } from "@/components/UserBadges";
 import type { NavUser } from "./types";
+import { coverAt } from "@/app/lib/coverSize";
 
 interface SearchTrack {
   id: number;
@@ -223,7 +224,11 @@ function SearchSection({
 
 function SearchCover({ src }: Readonly<{ src?: string | null }>) {
   return src ? (
-    <img src={src} alt="" className="h-[30px] w-[30px] rounded object-cover" />
+    <img
+      src={coverAt(src, 30)}
+      alt=""
+      className="h-[30px] w-[30px] rounded object-cover"
+    />
   ) : (
     <span className="h-[30px] w-[30px] rounded bg-line" />
   );

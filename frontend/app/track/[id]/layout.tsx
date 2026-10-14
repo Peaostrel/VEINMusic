@@ -21,6 +21,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     description,
     alternates: { canonical: path },
     openGraph: openGraph(title, description, path, "music.song"),
+    ...(t.indexable === false ? { robots: NO_INDEX } : {}),
   };
 }
 

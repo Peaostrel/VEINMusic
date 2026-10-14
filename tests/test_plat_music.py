@@ -79,11 +79,15 @@ def test_progress_pause_and_repeated_reports_do_not_duplicate_play(client, db, p
     db.expire_all()
     row = db.query(Scrobble).one()
     assert row.is_playing is False
-    assert row.listened_sec == before_pause
+    # The pause is reported when it happens: the 15 s before it were played
+    assert row.listened_sec == before_pause + 15
+    paused = row.listened_sec
+    row.updated_at = datetime.now(UTC) - timedelta(seconds=15)
+    db.commit()
     client.post("/api/scrobble", json=payload(progress=30, playing=False), headers=auth)
     db.expire_all()
     assert db.query(Scrobble).count() == 1
-    assert db.query(Scrobble).one().listened_sec == before_pause
+    assert db.query(Scrobble).one().listened_sec == paused
 
 
 @pytest.mark.parametrize("section,settings,status", [
@@ -138,3 +142,154 @@ def test_live_partner_play_counts_after_threshold(client, db, plat_account):
     assert row.listened_sec >= 153
     assert row.xp_earned > 0
     assert client.get("/api/me/connection-check?source=plat", headers=owner).json()["counted"] is True
+
+
+# --- Playback as the Plat Music player reports it -------------------------
+# The player sends a report 0.8 s after a track change or play/pause and a
+# heartbeat every 15 s while playing; seeking, "previous" (restart) and
+# repeat-one are only visible through the position in the next heartbeat.
+
+def _plat(token, title="Partner Track", progress=0, playing=True, duration=180):
+    data = payload(progress=progress, playing=playing)
+    data.update(title=title, duration=duration)
+    return {"json": data, "headers": {"X-API-Key": token}}
+
+
+def _wait(db, seconds):
+    """The time since the latest report (instead of sleeping)."""
+    row = db.query(Scrobble).order_by(Scrobble.id.desc()).first()
+    row.updated_at = row.updated_at.replace(tzinfo=row.updated_at.tzinfo or UTC) - timedelta(seconds=seconds)
+    row.played_at = row.played_at.replace(tzinfo=row.played_at.tzinfo or UTC) - timedelta(seconds=seconds)
+    db.commit()
+    db.expire_all()
+
+
+def _live(client, user):
+    return client.get(f"/api/history/{user.username}", headers={"Accept": "application/json"}).json()["history"][0]
+
+
+def _position(item):
+    """Where the VEIN timer stands now (what the profile shows)."""
+    from datetime import datetime as dt
+    shown = dt.fromisoformat(item["updated_at"])
+    age = (datetime.now(UTC) - shown).total_seconds() if item["is_playing"] else 0
+    return item["position_sec"] + age
+
+
+def test_pause_and_resume_right_after_a_heartbeat_are_kept(client, db, plat_account):
+    user, _, token, _ = plat_account
+    client.post("/api/scrobble", **_plat(token))
+    _wait(db, 15)
+    assert client.post("/api/scrobble", **_plat(token, progress=15)).json()["status"] == "ok"
+    _wait(db, 1.3)
+    assert client.post("/api/scrobble", **_plat(token, progress=16.3, playing=False)).json()["status"] == "ok"
+    assert db.query(Scrobble).one().is_playing is False
+    _wait(db, 0.9)
+    assert client.post("/api/scrobble", **_plat(token, progress=16.3)).json()["status"] == "ok"
+    assert db.query(Scrobble).one().is_playing is True
+
+
+def test_pause_credits_the_stretch_since_the_heartbeat_and_shows_player_time(client, db, plat_account):
+    user, _, token, _ = plat_account
+    client.post("/api/scrobble", **_plat(token))
+    _wait(db, 15)
+    client.post("/api/scrobble", **_plat(token, progress=15))
+    _wait(db, 9)
+    client.post("/api/scrobble", **_plat(token, progress=24, playing=False))
+    row = db.query(Scrobble).one()
+    assert 24 <= row.listened_sec <= 25
+    item = _live(client, user)
+    assert item["is_playing"] is False
+    assert item["position_sec"] == 24
+    _wait(db, 300)  # a long pause neither moves the timer nor adds listening
+    client.post("/api/scrobble", **_plat(token, progress=24))
+    db.expire_all()
+    assert db.query(Scrobble).one().listened_sec == row.listened_sec
+    assert 24 <= _position(_live(client, user)) < 25
+
+
+def test_timer_follows_resumed_and_seeked_position(client, db, plat_account):
+    user, _, token, _ = plat_account
+    client.post("/api/scrobble", **_plat(token, progress=90.4))  # restored after a reload
+    assert 90 <= _position(_live(client, user)) < 91
+    _wait(db, 15)
+    client.post("/api/scrobble", **_plat(token, progress=150))  # seek forward
+    row = db.query(Scrobble).one()
+    assert 15 <= row.listened_sec <= 16  # listening, not the jump
+    assert 150 <= _position(_live(client, user)) < 151
+    _wait(db, 15)
+    client.post("/api/scrobble", **_plat(token, progress=40))  # seek back
+    assert 40 <= _position(_live(client, user)) < 41
+    db.expire_all()
+    assert db.query(Scrobble).count() == 1
+    assert 30 <= db.query(Scrobble).one().listened_sec <= 31
+
+
+def test_track_change_credits_previous_track_and_is_not_dropped(client, db, plat_account):
+    _, _, token, _ = plat_account
+    client.post("/api/scrobble", **_plat(token, title="First"))
+    for progress in range(15, 151, 15):
+        _wait(db, 15)
+        client.post("/api/scrobble", **_plat(token, title="First", progress=progress))
+    _wait(db, 0.9)  # a skip right after the heartbeat
+    assert client.post("/api/scrobble", **_plat(token, title="Second")).json()["status"] == "ok"
+    first, second = db.query(Scrobble).order_by(Scrobble.id).all()
+    assert 150 <= first.listened_sec <= 151
+    assert first.is_playing is False
+    assert second.track.title == "Second"
+    assert second.is_playing is True
+    for progress in (15, 30, 45, 60, 75, 90, 105, 120, 135, 150):
+        _wait(db, 15)
+        client.post("/api/scrobble", **_plat(token, title="Second", progress=progress))
+    _wait(db, 7)  # the track ends, the next one starts
+    client.post("/api/scrobble", **_plat(token, title="Third"))
+    db.expire_all()
+    second = db.query(Scrobble).filter(Scrobble.id == second.id).one()
+    assert 157 <= second.listened_sec <= 158
+    assert second.xp_earned > 0  # crossed 85 % only with the final stretch
+
+
+def test_repeat_one_restart_counts_a_new_play(client, db, plat_account):
+    _, _, token, _ = plat_account
+    client.post("/api/scrobble", **_plat(token, duration=172))
+    for progress in range(15, 166, 15):
+        _wait(db, 15)
+        client.post("/api/scrobble", **_plat(token, progress=progress, duration=172))
+    _wait(db, 15)  # ended at 172 s and started over: 8 s into the repeat
+    client.post("/api/scrobble", **_plat(token, progress=8, duration=172))
+    first, repeat = db.query(Scrobble).order_by(Scrobble.id).all()
+    assert first.listened_sec == 172
+    assert first.is_playing is False
+    assert repeat.is_playing is True
+    assert repeat.listened_sec == 8  # the start of the repeat already played
+    # a seek back in the middle of a track is not a new play
+    _wait(db, 15)
+    client.post("/api/scrobble", **_plat(token, progress=23, duration=172))
+    _wait(db, 15)
+    client.post("/api/scrobble", **_plat(token, progress=3, duration=172))
+    assert db.query(Scrobble).count() == 2
+
+
+def test_back_to_back_repeats_of_a_short_track_each_count(client, db, plat_account):
+    _, _, token, _ = plat_account
+    client.post("/api/scrobble", **_plat(token, duration=50))
+    # Heartbeats every 15 s on repeat-one: each restart is only seen in the
+    # next heartbeat, 5-10 s into the new play
+    for progress in (15, 30, 45, 10,  # play 1 ends at 50 s
+                     25, 40, 5,  # play 2
+                     20, 35, 50, 15):  # play 3 (a late heartbeat at the very end)
+        _wait(db, 15)
+        client.post("/api/scrobble", **_plat(token, progress=progress, duration=50))
+    plays = db.query(Scrobble).order_by(Scrobble.id).all()
+    assert len(plays) == 4
+    assert [p.listened_sec for p in plays[:3]] == [50, 50, 50]
+    assert all(p.xp_earned > 0 for p in plays[:3])
+
+
+def test_non_finite_position_is_rejected(client, plat_account):
+    _, _, token, _ = plat_account
+    request = _plat(token)
+    body = json.dumps(request["json"]).replace('"progress_sec": 0', '"progress_sec": NaN')
+    response = client.post("/api/scrobble", content=body,
+                           headers={**request["headers"], "Content-Type": "application/json"})
+    assert response.status_code == 422

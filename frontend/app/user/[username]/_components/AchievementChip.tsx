@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { renderDescriptionWithLinks } from "@/app/lib/achievementText";
 import type { AchievementInfo } from "@/app/lib/types";
+import { coverAt } from "@/app/lib/coverSize";
 
 const CARD_WIDTH = 320;
 const SCREEN_GAP = 16;
@@ -32,8 +33,9 @@ function targetUrl(a: AchievementInfo): string | null {
 function Cover({ a, size }: Readonly<{ a: AchievementInfo; size: string }>) {
   return a.target_image ? (
     <img
-      src={a.target_image}
+      src={coverAt(a.target_image, 56)}
       alt=""
+      loading="lazy"
       className={`${size} shrink-0 rounded-md object-cover`}
     />
   ) : (

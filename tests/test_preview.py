@@ -123,6 +123,7 @@ def test_artist_and_track_previews_count_public_plays_only(client, db):
         "tracks": 1,
         "top_track": "Звезда",
         "has_cover": True,
+        "indexable": True,
     }
     detail = client.get(f"/api/preview/track/{track.id}").json()
     assert detail["plays"] == 2

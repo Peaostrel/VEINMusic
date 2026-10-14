@@ -64,7 +64,9 @@ export default function AppShell({
       <div className="shell-main flex flex-1 flex-col">
         <OfflineBanner />
         <GlobalAnnouncementBanner />
-        <main id="main" className="flex-1">
+        {/* At least a screen tall: the footer starts below the fold instead of
+            jumping down when the page's data arrives (layout shift) */}
+        <main id="main" className="min-h-dvh flex-1">
           {children}
         </main>
         <Footer />
