@@ -315,6 +315,8 @@ export interface HistoryEntry {
   relative_time: string;
   duration: number;
   listened_sec: number;
+  /** Player-reported position at `updated_at` (Plat Music), else null */
+  position_sec?: number | null;
   is_playing: boolean;
   updated_at: string;
   is_imported: boolean;

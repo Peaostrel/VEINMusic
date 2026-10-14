@@ -4,6 +4,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -237,6 +238,9 @@ class Scrobble(Base):
     # player event confirms it; the stretch played since then is shown here
     # while the track plays, but does not count yet
     pending_sec = Column(Integer, nullable=False, default=0, server_default="0")
+    # Players that report their own position (Plat Music): the position at
+    # `updated_at`, so the shown time matches the player after seeks/resumes
+    position_sec = Column(Float, nullable=True)
     is_playing = Column(Boolean, default=True)
     updated_at = Column(
         DateTime(

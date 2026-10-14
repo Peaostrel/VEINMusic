@@ -46,11 +46,13 @@ export function ArtistLinks({
 
 export const LiveTimer = ({
   listenedSec,
+  positionSec,
   isPlaying,
   updatedAt,
   duration,
 }: Readonly<{
   listenedSec: number;
+  positionSec?: number | null;
   isPlaying: boolean;
   updatedAt: string;
   duration: number;
@@ -64,6 +66,7 @@ export const LiveTimer = ({
     updatedAt,
     duration,
     now,
+    positionSec,
   );
   return <span className="font-mono">{mmss(elapsed)}</span>;
 };
@@ -88,6 +91,7 @@ function PlayState({
         {stateLabel}
         <LiveTimer
           listenedSec={item.listened_sec}
+          positionSec={item.position_sec}
           isPlaying={item.is_playing}
           updatedAt={item.updated_at}
           duration={item.duration}

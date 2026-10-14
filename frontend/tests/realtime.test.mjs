@@ -32,6 +32,11 @@ test("history time handles UTC offsets, caps duration and stops at heartbeat exp
   assert.equal(listeningElapsed(195, true, value, 200, start + 10000), 200);
   assert.equal(listeningElapsed(10, false, value, 200, start + 10000), 10);
   assert.equal(listeningElapsed(10, true, "invalid", 200, start), 10);
+  // Player position (Plat Music): fractions carry, seeks/pauses show as is
+  assert.equal(listeningElapsed(15, true, value, 200, start + 4500, 90.6), 95);
+  assert.equal(listeningElapsed(15, false, value, 200, start + 60000, 24), 24);
+  assert.equal(listeningElapsed(15, true, value, 200, start + 60000, 190), 200);
+  assert.equal(listeningElapsed(15, true, value, 0, start + 10000, 300), 310);
   assert.equal(freshPlayback(value, start + 44999), true);
   assert.equal(freshPlayback(value, start + 45000), false);
 });
