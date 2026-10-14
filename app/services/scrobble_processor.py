@@ -675,10 +675,13 @@ def _position_change(db: Session, user: User, track: Track, source: str, last_sc
     return None, _restarted(last_scrobble, now, l_updated_at, progress_sec)
 
 
-def _restart_split(last_scrobble, now, l_updated_at, progress_sec: float) -> tuple[int, float]:
+def _restart_split(last_scrobble, now, l_updated_at, progress_sec: float,
+                   restarted: bool) -> tuple[int, float]:
     """A detected restart splits the time since the previous report:
     (seconds of the repeat already played, the player position; the rest,
     which ended the previous play). Zero unless playback ran without a gap."""
+    if not restarted:
+        return 0, 0.0
     elapsed = (now - l_updated_at).total_seconds()
     if not last_scrobble.is_playing or not 0 < elapsed < LIVE_GAP_SEC:
         return 0, 0.0
@@ -724,13 +727,11 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
         result["status"] = "confirmed_duplicate"
         return result
     positional = source in POSITION_SOURCES and credit_sec is None
-    restarted = False
-    replayed, uncredited = 0, 0.0
+    restarted, replayed, uncredited = False, 0, 0.0
     if positional:
         result["counted"], restarted = _position_change(
             db, user, track, source, last_scrobble, now, l_updated_at, progress_sec)
-    if restarted:
-        replayed, uncredited = _restart_split(last_scrobble, now, l_updated_at, progress_sec)
+        replayed, uncredited = _restart_split(last_scrobble, now, l_updated_at, progress_sec, restarted)
     is_new, early_return = _determine_is_new(
         db, track, last_scrobble, now, l_updated_at, progress_sec, restarted, uncredited)
     if early_return:
