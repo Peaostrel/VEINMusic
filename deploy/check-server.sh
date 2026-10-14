@@ -33,9 +33,12 @@ ss -tulpnH 2>/dev/null | awk '$5 !~ /^(127\.|\[::1\]|::1)/ {print $1, $5, $7}' |
 
 section "Docker published ports"
 if have docker; then
-    docker ps --format '{{.Names}}: {{.Ports}}' 2>/dev/null | grep -E '0\.0\.0\.0|\[::\]|:::' \
-        || echo "none on all interfaces"
-    echo "(Docker publishes ports past ufw: only 80/443 of caddy should be listed)"
+    # Only mappings to the host ("->"); a bare "2019/tcp" is internal
+    docker ps --format '{{.Names}} {{.Ports}}' 2>/dev/null | while read -r name ports; do
+        published=$(tr ',' '\n' <<< "$ports" | grep -- '->' | grep -E '0\.0\.0\.0|\[::\]|:::' | xargs)
+        [[ -n "$published" ]] && echo "$name: $published"
+    done
+    echo "(Docker publishes ports past ufw: only 80 and 443 of caddy should be here)"
 fi
 
 section "Firewall (ufw)"
