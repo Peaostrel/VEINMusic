@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import EmailSettings from "../components/EmailSettings";
 import BrowserSessions from "../components/BrowserSessions";
 import TwoFactorAuth from "../components/TwoFactorAuth";
 import StatusText from "@/components/StatusText";
@@ -188,6 +189,7 @@ export default function SecurityTab() {
   return (
     <div className="space-y-6">
       <h2 className="text-lg font-semibold text-fg">Безопасность и данные</h2>
+      <EmailSettings />
       {message && <StatusText text={message} />}
 
       <TwoFactorAuth />

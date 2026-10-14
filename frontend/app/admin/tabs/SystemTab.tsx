@@ -1,5 +1,6 @@
 "use client";
 
+import EmailManager from "../components/EmailManager";
 import { Cpu, Download, HardDrive, Radio, RefreshCw } from "lucide-react";
 import type { LastfmJob, SystemStatus, TogetherRoom } from "../types";
 import {
@@ -300,6 +301,7 @@ function RoomsPanel() {
 export default function SystemTab() {
   return (
     <div className="space-y-6">
+      <EmailManager />
       <StatusPanel />
       <ImportJobsPanel />
       <RoomsPanel />

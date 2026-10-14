@@ -15,6 +15,8 @@ from app.core.security import get_current_user, verify_password
 from app.database import get_db
 from app.models import (
     Achievement,
+    EmailAccount,
+    EmailOutbox,
     ApiKey,
     DeviceAuthorization,
     ExternalSyncConfig,
@@ -80,7 +82,10 @@ def build_account_export(user: User, db: Session, include_history: bool = True) 
         "social_links", "theme", "is_private", "hidden_artists", "sync_privacy", "favorite_artist",
         "favorite_track", "favorite_album", "avatar_frame",
     ]
+    email_account = db.get(EmailAccount, user.id)
     return {
+        "email_settings": {"email": email_account.email, "pending_email": email_account.pending_email,
+                           "security_alerts": email_account.security_alerts, "messages_enabled": email_account.messages_enabled} if email_account else None,
         "format": "veinmusic",
         "version": 1,
         "exported_at": datetime.now(UTC).isoformat(),
@@ -174,7 +179,7 @@ def delete_account(request: Request, payload: AccountDeleteRequest, response: Re
     user_id = current_user.id
     # Rows without an ORM cascade from User are removed explicitly so this also
     # works on databases where foreign keys are not enforced (SQLite).
-    owned_models: tuple[Any, ...] = (ApiKey, Webhook, ExternalSyncConfig, PushSubscription,
+    owned_models: tuple[Any, ...] = (EmailOutbox, EmailAccount, ApiKey, Webhook, ExternalSyncConfig, PushSubscription,
                                      DeviceAuthorization, LastfmImportJob)
     for model in owned_models:
         db.query(model).filter(model.user_id == user_id).delete(synchronize_session=False)
