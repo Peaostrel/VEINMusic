@@ -9,20 +9,24 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
+import ipaddress
 import os
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from slowapi.util import get_remote_address
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.rate_limit import credential_key, limiter
-from app.core.security import get_current_user, hash_developer_key
+from app.core.security import SECRET_KEY, get_current_user, hash_developer_key
 from app.database import get_db
 from app.models import ApiKey, DeviceAuthorization, User
+from app.services import notifications
 
 router = APIRouter(prefix="/api/devices", tags=["devices"])
 
@@ -61,6 +65,18 @@ def _new_user_code() -> str:
     return f"{raw[:4]}-{raw[4:]}"
 
 
+def _network_key(request: Request) -> str | None:
+    """Keyed hash of the client's network: IPv4 /24, IPv6 /56 (a home or
+    mobile connection keeps it while its exact address changes)."""
+    try:
+        ip = ipaddress.ip_address(get_remote_address(request))
+    except ValueError:
+        return None
+    prefix = 24 if ip.version == 4 else 56
+    network = ipaddress.ip_network(f"{ip}/{prefix}", strict=False)
+    return hmac.new(SECRET_KEY.encode(), str(network).encode(), hashlib.sha256).hexdigest()
+
+
 def _as_aware(dt: datetime) -> datetime:
     return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
 
@@ -81,6 +97,7 @@ def create_device_code(request: Request, payload: DeviceCodeRequest,
             user_code=_new_user_code(),
             client_name=payload.client_name.strip() or "VEIN Music Extension",
             status="pending",
+            requester_network=_network_key(request),
             expires_at=datetime.now(UTC) + CODE_TTL,
         )
         db.add(auth)
@@ -156,15 +173,21 @@ def get_device_code(user_code: str, request: Request,
         DeviceAuthorization.user_code == _normalize_user_code(user_code)).first()
     if not auth or auth.status != "pending" or _is_expired(auth):
         raise HTTPException(404, CODE_NOT_FOUND)
+    requested_from = auth.requester_network
     return {"user_code": auth.user_code, "client_name": auth.client_name,
-            "expires_at": _as_aware(auth.expires_at).isoformat()}  # type: ignore[arg-type]
+            "created_at": _as_aware(auth.created_at).isoformat() if auth.created_at else None,  # type: ignore[arg-type]
+            "expires_at": _as_aware(auth.expires_at).isoformat(),  # type: ignore[arg-type]
+            # None: unknown (codes from before this check)
+            "same_network": None if not requested_from else hmac.compare_digest(
+                str(requested_from), _network_key(request) or "")}
 
 
 @router.post("/approve", responses={404: {"description": "Unknown or expired code"}})
 @limiter.limit("10/minute", key_func=credential_key)
 def approve_device(payload: DeviceApproveRequest, request: Request,
                    db: Annotated[Session, Depends(get_db)],
-                   current_user: Annotated[User, Depends(get_current_user)]):
+                   current_user: Annotated[User, Depends(get_current_user)],
+                   background_tasks: BackgroundTasks):
     auth = db.query(DeviceAuthorization).filter(
         DeviceAuthorization.user_code == _normalize_user_code(payload.user_code)).first()
     if not auth or auth.status != "pending" or _is_expired(auth):
@@ -177,5 +200,15 @@ def approve_device(payload: DeviceApproveRequest, request: Request,
     if decided != 1:
         db.rollback()
         raise HTTPException(404, CODE_NOT_FOUND)
+    alert = None
+    if payload.approve:
+        # A code someone tricked the user into approving shows up here (and
+        # as a push) instead of going unnoticed
+        alert = notifications.create(
+            db, recipient_id=int(current_user.id), actor_id=int(current_user.id),
+            kind=notifications.KIND_SECURITY,
+            message=f"Устройство «{auth.client_name}» получило доступ к прослушиваниям. "
+                    "Не вы? Отзовите его ключ в настройках безопасности")
     db.commit()
+    notifications.schedule_push(background_tasks, alert)
     return {"status": status}

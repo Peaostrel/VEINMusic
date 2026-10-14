@@ -37,6 +37,9 @@ export interface DeviceCodeInfo {
   user_code: string;
   client_name: string;
   expires_at: string;
+  created_at?: string | null;
+  /** Requested from the approver's own network; null when unknown */
+  same_network?: boolean | null;
 }
 
 export interface VapidKeyResponse {

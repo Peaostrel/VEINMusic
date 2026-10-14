@@ -1,5 +1,6 @@
 import functools
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any, TypedDict, Unpack
 from urllib.parse import urlparse
@@ -740,7 +741,21 @@ def _integration_paused(db, integrations, source_name):
     return False
 
 
-def _scrobble_filter_reason(db, user, title, artist, source, duration):
+# Links in a title or artist are spam (the shared catalog and the public feed
+# would advertise them), never music metadata: only explicit link markers,
+# so names like "Dr.Dre" or "Love.com" pass
+_LINK_IN_METADATA = re.compile(
+    r"(?:https?://|\bwww\.|\b(?:t|telegram)\.me/|\bdiscord\.(?:gg|com/invite)/|\b(?:bit\.ly|vk\.cc|clck\.ru)/)",
+    re.IGNORECASE)
+
+
+def _has_link(*values: str | None) -> bool:
+    return any(value and _LINK_IN_METADATA.search(value) for value in values)
+
+
+def _scrobble_filter_reason(db, user, title, artist, source, duration, album=""):
+    if _has_link(title, artist, album):
+        return "link_ignored"
     preferences = get_preferences(user.profile)
     listening = preferences.listening
     integrations = preferences.integrations
@@ -779,7 +794,7 @@ async def _process_scrobble(
         duration: int,
         album: str = "",
         **credit_options: Unpack[ScrobbleCreditOptions]):
-    reason = _scrobble_filter_reason(db, user, title, artist, source, duration)
+    reason = _scrobble_filter_reason(db, user, title, artist, source, duration, album)
     if reason:
         return reason
     listening = get_preferences(user.profile).listening

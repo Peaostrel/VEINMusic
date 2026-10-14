@@ -624,6 +624,10 @@ class DeviceAuthorization(Base):
     client_name = Column(String, nullable=False, default="VEIN Music Extension")
     status = Column(String, nullable=False, default="pending")  # pending, approved, denied, consumed
     user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=True, index=True)
+    # Keyed hash of the network (/24, /56) the code was requested from: the
+    # approval page warns when it differs from the approver's (a code sent
+    # in a message by someone else). Never the address itself.
+    requester_network = Column(String(64), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     expires_at = Column(DateTime(timezone=True), nullable=False)
 

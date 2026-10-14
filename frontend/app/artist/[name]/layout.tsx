@@ -20,6 +20,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     description,
     alternates: { canonical: `/artist/${encodeURIComponent(a.name)}` },
     openGraph: openGraph(a.name, description, path),
+    ...(a.indexable === false ? { robots: NO_INDEX } : {}),
   };
 }
 

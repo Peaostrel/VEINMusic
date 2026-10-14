@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import AppShell from "./shell/AppShell";
 import PWARegistration from "../components/PWARegistration";
@@ -49,11 +50,13 @@ export const metadata: Metadata = {
 const authFlagScript = `try{var u=localStorage.getItem("username");if(u&&!["null","undefined","false","[]","{}"].includes(u.trim().toLowerCase()))document.documentElement.dataset.auth="1"}catch(e){}`;
 const preferencesScript = `try{var p=JSON.parse(localStorage.getItem("vein_preferences")||"{}");var a=p.appearance||{};var m=a.color_mode||"dark";if(m==="system")m=matchMedia("(prefers-color-scheme: light)").matches?"light":"dark";var r=document.documentElement;r.dataset.colorMode=m;r.dataset.density=a.density||"comfortable";r.dataset.fontScale=a.font_scale||"normal";r.dataset.reduceMotion=a.reduce_motion?"1":"0";r.dataset.highContrast=a.high_contrast?"1":"0";r.dataset.backgroundBlur=a.background_blur===false?"0":"1"}catch(e){}`;
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   readonly children: React.ReactNode;
 }) {
+  // Per-request nonce from proxy.ts (CSP without 'unsafe-inline')
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html
       lang="ru"
@@ -61,8 +64,14 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: authFlagScript }} />
-        <script dangerouslySetInnerHTML={{ __html: preferencesScript }} />
+        <script
+          nonce={nonce}
+          dangerouslySetInnerHTML={{ __html: authFlagScript }}
+        />
+        <script
+          nonce={nonce}
+          dangerouslySetInnerHTML={{ __html: preferencesScript }}
+        />
       </head>
       <body
         suppressHydrationWarning

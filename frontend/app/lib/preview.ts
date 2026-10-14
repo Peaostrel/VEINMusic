@@ -42,6 +42,8 @@ export interface ArtistPreview {
   tracks: number;
   top_track: string | null;
   has_cover: boolean;
+  /** false: nobody has a counted play yet (not offered to search engines) */
+  indexable?: boolean;
 }
 
 export interface TrackPreview {
@@ -51,6 +53,8 @@ export interface TrackPreview {
   album: string | null;
   plays: number;
   has_cover: boolean;
+  /** false: nobody has a counted play yet (not offered to search engines) */
+  indexable?: boolean;
 }
 
 export interface SitemapData {
