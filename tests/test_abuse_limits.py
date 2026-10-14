@@ -277,7 +277,12 @@ def test_upload_limit_is_per_account_not_per_ip(client):
     client.cookies.clear()
     second, _ = _register(client, "uploader2")
     client.cookies.clear()
-    png = b"\x89PNG\r\n\x1a\n" + b"\0" * 32
+    import io
+
+    from PIL import Image
+    buffer = io.BytesIO()
+    Image.new("RGB", (4, 4)).save(buffer, "PNG")  # uploads are decoded now
+    png = buffer.getvalue()
 
     def reset_counters():
         # Redis may be deliberately unreachable in tests; the limiter then

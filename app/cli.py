@@ -2,6 +2,7 @@
 
     python -m app.cli set-role <username> <admin|moderator|user>
     python -m app.cli refresh-showcase [username]
+    python -m app.cli shrink-uploads [--dry-run]
 
 In Docker: docker compose exec backend python -m app.cli set-role alice admin
 """
@@ -58,6 +59,23 @@ def refresh_showcase(username: str | None = None) -> list[tuple[str, list[str]]]
         db.close()
 
 
+def shrink_uploads(dry_run: bool = False) -> int:
+    from app.routers.media import UPLOADS_DIR
+    from app.services.images import shrink_stored_uploads
+
+    db = SessionLocal()
+    try:
+        report = shrink_stored_uploads(db, UPLOADS_DIR, dry_run)
+    finally:
+        db.close()
+    for name, before, after in report:
+        print(f"{name}: {before // 1024} KB -> {after // 1024} KB")
+    saved = sum(before - after for _, before, after in report)
+    verb = "would save" if dry_run else "saved"
+    print(f"{len(report)} files, {verb} {saved // 1024} KB")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.cli", description="VEIN Music operator commands")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -66,7 +84,13 @@ def main(argv: list[str] | None = None) -> int:
     role_cmd.add_argument("role", choices=ROLES)
     showcase_cmd = commands.add_parser("refresh-showcase", help="look showcase favorites up again")
     showcase_cmd.add_argument("username", nargs="?")
+    shrink_cmd = commands.add_parser(
+        "shrink-uploads", help="fit avatars and banners uploaded at full size (once)")
+    shrink_cmd.add_argument("--dry-run", action="store_true", help="only report")
     args = parser.parse_args(argv)
+
+    if args.command == "shrink-uploads":
+        return shrink_uploads(args.dry_run)
 
     if args.command == "refresh-showcase":
         for name, changed in refresh_showcase(args.username):
