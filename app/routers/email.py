@@ -1,7 +1,7 @@
 """Private email settings, single-use verification and password recovery."""
 import secrets
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field, field_validator
@@ -19,9 +19,13 @@ DB = Annotated[Session, Depends(get_db)]
 Owner = Annotated[User, Depends(get_current_user)]
 Admin = Annotated[User, Depends(get_admin_user)]
 INVALID_LINK = "Ссылка недействительна или устарела"
-ERRORS = {400: {"description": "Invalid input or expired token"}, 403: {"description": "Forbidden"},
-          409: {"description": "Address already linked"}, 429: {"description": "Rate limit"},
-          503: {"description": "Email delivery not configured"}}
+ERRORS: dict[int | str, dict[str, Any]] = {
+    400: {"description": "Invalid input or expired token"},
+    403: {"description": "Forbidden"},
+    409: {"description": "Address already linked"},
+    429: {"description": "Rate limit"},
+    503: {"description": "Email delivery not configured"},
+}
 
 
 class Address(BaseModel):
@@ -121,10 +125,10 @@ def bind(request: Request, data: Bind, db: DB, user: Owner):
     if db.query(EmailAccount.user_id).filter(EmailAccount.email == data.email).first():
         raise HTTPException(409, "Этот адрес уже привязан")
     raw = secrets.token_urlsafe(32)
-    row.pending_email = data.email
+    row.pending_email = data.email  # type: ignore[assignment]
     row.verify_hash = mail.digest(raw)
     row.verify_stamp = mail.digest(str(user.hashed_password))
-    row.verify_expires = datetime.now(UTC) + timedelta(minutes=30)
+    row.verify_expires = datetime.now(UTC) + timedelta(minutes=30)  # type: ignore[assignment]
     cancel(db, user.id, "verify")
     mail.queue(db, user.id, "verify", data.email, "Подтвердите почту VEIN Music",
                f"Подтвердите привязку почты к аккаунту {user.username}. Ссылка действует 30 минут.\n"
@@ -166,8 +170,8 @@ def preferences(data: Preferences, db: DB, user: Owner):
     row = db.get(EmailAccount, user.id)
     if not row or not row.email:
         raise HTTPException(400, "Сначала подтвердите почту")
-    row.security_alerts = data.security_alerts
-    row.messages_enabled = data.messages_enabled
+    row.security_alerts = data.security_alerts  # type: ignore[assignment]
+    row.messages_enabled = data.messages_enabled  # type: ignore[assignment]
     db.commit()
     return {"message": "Настройки сохранены"}
 
@@ -191,7 +195,7 @@ def forgot(request: Request, data: Address, db: DB):
     if row and user and not user.is_banned and budget(db, user.id, "reset"):
         raw = secrets.token_urlsafe(32)
         row.reset_hash = mail.digest(raw)
-        row.reset_expires = datetime.now(UTC) + timedelta(minutes=30)
+        row.reset_expires = datetime.now(UTC) + timedelta(minutes=30)  # type: ignore[assignment]
         row.password_stamp = mail.digest(str(user.hashed_password))
         cancel(db, user.id, "reset")
         mail.queue(db, user.id, "reset", row.email, "Восстановление пароля VEIN Music",
@@ -211,7 +215,7 @@ def reset(request: Request, data: Reset, db: DB):
     if not user or user.is_banned or row.password_stamp != mail.digest(str(user.hashed_password)):
         raise HTTPException(400, INVALID_LINK)
     second_factor(db, user, data.otp_code)
-    user.hashed_password = get_password_hash(data.password)
+    user.hashed_password = get_password_hash(data.password)  # type: ignore[assignment]
     revoke_all_sessions(user)
     row.reset_hash = row.reset_expires = row.password_stamp = None
     cancel(db, row.user_id, "reset")
