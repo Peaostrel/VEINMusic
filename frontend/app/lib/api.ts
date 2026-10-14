@@ -81,6 +81,24 @@ export async function apiJson<T>(path: string, init: ApiInit = {}): Promise<T> {
   return (await res.json()) as T;
 }
 
+async function socketUrl(path: string, authed: boolean): Promise<string> {
+  let url = wsUrl(path);
+  if (!authed) return url;
+  try {
+    const { ticket } = await apiJson<{ ticket: string }>("/auth/ws-ticket", {
+      method: "POST",
+      json: {},
+    });
+    url += `${url.includes("?") ? "&" : "?"}ticket=${encodeURIComponent(ticket)}`;
+  } catch (error) {
+    // Only a signed-out user becomes a guest. Temporary failures must retry
+    // authentication rather than silently dropping the user's identity.
+    if (!(error instanceof ApiError) || ![401, 403].includes(error.status))
+      throw error;
+  }
+  return url;
+}
+
 /**
  * Opens a WebSocket to the API. Signed-in pages pass `authed`: the socket
  * then carries a one-minute ticket, because not every browser sends the
@@ -113,18 +131,7 @@ export function openSocket(
       return;
     connecting = true;
     try {
-      let url = wsUrl(path);
-      if (authed) {
-        try {
-          const { ticket } = await apiJson<{ ticket: string }>(
-            "/auth/ws-ticket",
-            { method: "POST", json: {} },
-          );
-          url += `${url.includes("?") ? "&" : "?"}ticket=${encodeURIComponent(ticket)}`;
-        } catch {
-          // Signed out or offline: connect as a guest
-        }
-      }
+      const url = await socketUrl(path, authed);
       if (cancelled) return;
       ws = new WebSocket(url);
       setup(ws);

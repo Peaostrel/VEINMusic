@@ -8,7 +8,7 @@ import {
   PlatformDistribution,
 } from "@/components/StatsCharts";
 import { Loading, PageHeader, Segmented, inputOnCard } from "@/components/ui";
-import { API_URL } from "@/app/lib/api";
+import { API_URL, ApiError } from "@/app/lib/api";
 import { isValidUser } from "@/app/lib/theme";
 import type { DetailedStats } from "@/app/lib/types";
 import { storedPreferences } from "@/app/lib/preferences";
@@ -125,6 +125,7 @@ export default function DetailedStatsPage() {
     setLoading(true);
     setError("");
     let refreshing = false;
+    let hasSnapshot = false;
     const query = new URLSearchParams({ period });
     if (period === "custom") {
       query.set("date_from", dateFrom);
@@ -142,7 +143,8 @@ export default function DetailedStatsPage() {
         .then(async (res) => {
           if (!res.ok) {
             const body = await errorBody(res);
-            throw new Error(
+            throw new ApiError(
+              res.status,
               res.status === 403
                 ? "Это приватный профиль"
                 : body?.detail || "Не удалось загрузить статистику",
@@ -152,6 +154,7 @@ export default function DetailedStatsPage() {
         })
         .then((data) => {
           if (!active) return;
+          hasSnapshot = true;
           setError("");
           if (
             period === "30d" &&
@@ -168,6 +171,11 @@ export default function DetailedStatsPage() {
         })
         .catch((requestError: unknown) => {
           if (!active) return;
+          if (
+            hasSnapshot &&
+            (!(requestError instanceof ApiError) || requestError.status >= 500)
+          )
+            return;
           setError(
             requestError instanceof Error
               ? requestError.message

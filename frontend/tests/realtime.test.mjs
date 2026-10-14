@@ -45,6 +45,7 @@ async function fakeBrowser(run) {
   const sockets = [];
   const tickets = [];
   let timerId = 0;
+  let failTicket = false;
   class Socket extends EventTarget {
     static CLOSING = 2;
     readyState = 0;
@@ -72,6 +73,10 @@ async function fakeBrowser(run) {
   };
   globalThis.clearTimeout = (id) => timers.delete(id);
   globalThis.fetch = async () => {
+    if (failTicket) {
+      failTicket = false;
+      throw new TypeError("offline");
+    }
     const ticket = `ticket-${tickets.length + 1}`;
     tickets.push(ticket);
     return new Response(JSON.stringify({ ticket }));
@@ -87,7 +92,16 @@ async function fakeBrowser(run) {
     return timer.ms;
   };
   try {
-    await run({ sockets, tickets, timers, flush, retry });
+    await run({
+      sockets,
+      tickets,
+      timers,
+      flush,
+      retry,
+      failNextTicket: () => {
+        failTicket = true;
+      },
+    });
   } finally {
     for (const key of keys) globalThis[key] = originals[key];
   }
@@ -118,6 +132,22 @@ test("socket reconnect uses a fresh ticket, preserves handlers and cleans up", a
     await flush();
     assert.equal(sockets.length, 2);
   });
+});
+
+test("temporary ticket failure retries authentication instead of becoming a guest", async () => {
+  await fakeBrowser(
+    async ({ sockets, tickets, timers, flush, retry, failNextTicket }) => {
+      failNextTicket();
+      const stop = openSocket("/ws/listener", () => {}, { authed: true });
+      await flush();
+      assert.equal(sockets.length, 0);
+      assert.equal(timers.size, 1);
+      await retry();
+      assert.equal(tickets.length, 1);
+      assert.match(sockets[0].url, /ticket=ticket-1$/);
+      stop();
+    },
+  );
 });
 
 test("socket retry backs off and policy rejection stops the loop", async () => {
