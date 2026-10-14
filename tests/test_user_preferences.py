@@ -340,6 +340,8 @@ def test_current_track_progress_is_owner_only_and_source_respects_privacy(client
     own = client.get("/api/current-track/progress_privacy").json()
     assert own["listened_sec"] == 100
     assert own["duration"] == 200
+    assert 100 <= own["display_listened_sec"] < 102
+    assert 43 < own["playback_remaining_sec"] <= 45
     data = _preferences(client, token)
     data["privacy"]["show_listening_source"] = False
     assert _save_preferences(client, token, data).status_code == 200
@@ -349,3 +351,37 @@ def test_current_track_progress_is_owner_only_and_source_respects_privacy(client
     assert public["source"] == ""
     assert public["listened_sec"] is None
     assert public["duration"] is None
+    assert public["display_listened_sec"] is None
+    assert public["playback_remaining_sec"] is None
+
+
+def test_current_track_estimates_progress_without_crediting_or_refreshing_heartbeat(client, db):
+    _register(client, "live_progress")
+    user = db.query(User).filter_by(username="live_progress").one()
+    track = Track(title="Live song", artist="Artist", duration=200)
+    db.add(track)
+    db.flush()
+    heartbeat = datetime.now(UTC) - timedelta(seconds=12)
+    listen = Scrobble(user_id=user.id, track_id=track.id, source="plat",
+                      played_at=heartbeat, updated_at=heartbeat,
+                      listened_sec=160, pending_sec=5, is_playing=True)
+    db.add(listen)
+    db.commit()
+    for _ in range(2):
+        data = client.get("/api/current-track/live_progress").json()
+        assert 177 <= data["display_listened_sec"] < 180
+        assert 30 < data["playback_remaining_sec"] <= 33
+        assert data["listened_sec"] == 160
+    db.refresh(listen)
+    assert listen.listened_sec == 160
+    assert listen.pending_sec == 5
+    listen.listened_sec = 199
+    db.commit()
+    assert client.get("/api/current-track/live_progress").json()["display_listened_sec"] == 200
+    listen.updated_at = datetime.now(UTC) - timedelta(seconds=46)
+    db.commit()
+    assert client.get("/api/current-track/live_progress").json() == {"playing": False}
+    listen.updated_at = datetime.now(UTC)
+    listen.is_playing = False
+    db.commit()
+    assert client.get("/api/current-track/live_progress").json() == {"playing": False}

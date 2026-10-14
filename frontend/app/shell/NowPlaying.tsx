@@ -17,10 +17,12 @@ interface CurrentTrack {
   duration?: number | null;
   listened_sec?: number | null;
   excluded?: boolean | null;
+  display_listened_sec?: number | null;
+  playback_remaining_sec?: number | null;
+  receivedAt?: number;
 }
 
-// Track switches arrive over the WebSocket; polling only catches up if the
-// socket is down
+// WebSocket events refresh immediately; polling also reconciles heartbeat data.
 const POLL_MS = 60_000;
 
 /** "Now playing" card for the sidebar; quiet line when nothing plays. */
@@ -30,20 +32,29 @@ export default function NowPlaying({
 }: Readonly<{ username: string; variant?: "sidebar" | "mobile" | "profile" }>) {
   const mobileRef = useRef<HTMLDetailsElement>(null);
   const [track, setTrack] = useState<CurrentTrack | null>(null);
+  const [clock, setClock] = useState(0);
+  const requestSequence = useRef(0);
 
   const load = useCallback(async () => {
+    const sequence = ++requestSequence.current;
     try {
       const res = await fetch(
         `${API_URL}/api/current-track/${encodeURIComponent(username)}`,
-        { credentials: "include" },
+        { credentials: "include", cache: "no-store" },
       );
-      if (res.ok) setTrack(await res.json());
+      if (res.ok) {
+        const data: CurrentTrack = await res.json();
+        if (sequence === requestSequence.current)
+          setTrack({ ...data, receivedAt: performance.now() });
+      }
     } catch {
       // keep the last state
     }
   }, [username]);
 
   useVisiblePolling(load, track?.playing ? 10_000 : POLL_MS);
+  const tick = useCallback(() => setClock(performance.now()), []);
+  useVisiblePolling(tick, 1_000, !!track?.playing);
   useEffect(() => {
     if (variant !== "mobile") return;
     const element = mobileRef.current;
@@ -81,7 +92,9 @@ export default function NowPlaying({
     [username, load],
   );
 
-  if (!track?.playing) {
+  const elapsed = Math.max(0, (clock - (track?.receivedAt ?? clock)) / 1_000);
+  const remaining = track?.playback_remaining_sec ?? 45;
+  if (!track?.playing || elapsed >= remaining) {
     if (variant !== "sidebar") return null;
     return (
       <p className="rounded-lg border border-dashed border-line px-3 py-2.5 text-xs text-fg-3">
@@ -92,9 +105,20 @@ export default function NowPlaying({
   const cover = sanitizeImageUrl(track.cover_url);
   const progress =
     track.duration && track.listened_sec != null
-      ? Math.min(100, Math.round((track.listened_sec / track.duration) * 100))
+      ? Math.min(
+          100,
+          Math.floor(
+            ((Math.max(0, track.display_listened_sec ?? track.listened_sec) +
+              elapsed) /
+              track.duration) *
+              100,
+          ),
+        )
       : null;
-  const credited = progress !== null && progress >= 85;
+  const credited =
+    !!track.duration &&
+    track.listened_sec != null &&
+    track.listened_sec * 100 >= track.duration * 85;
   let creditLabel = `${progress}% · зачёт от 85%`;
   if (credited) creditLabel = "Прослушивание засчитано";
   if (track.excluded) creditLabel = "Исключено из статистики";

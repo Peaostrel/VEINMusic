@@ -811,10 +811,20 @@ def get_listening_calendar(
 def _playback_details(user, scrobble, track, is_owner):
     show_source = is_owner or preference_enabled(user.profile, "privacy", "show_listening_source")
     details = {"source": scrobble.source if show_source else "",
-               "duration": None, "listened_sec": None, "excluded": None}
+               "duration": None, "listened_sec": None, "excluded": None,
+               "display_listened_sec": None, "playback_remaining_sec": None}
     if is_owner:
+        last_seen = scrobble.updated_at or scrobble.played_at
+        if last_seen.tzinfo is None:
+            last_seen = last_seen.replace(tzinfo=UTC)
+        elapsed = max(0, (datetime.now(UTC) - last_seen).total_seconds())
+        duration = int(track.duration or 180)
+        # This estimate is presentation-only; credit remains server-confirmed.
+        shown = int(scrobble.listened_sec or 0) + int(scrobble.pending_sec or 0) + elapsed
         details.update(duration=int(track.duration or 180), listened_sec=int(scrobble.listened_sec or 0),
-                       excluded=bool(scrobble.excluded_from_stats))
+                       excluded=bool(scrobble.excluded_from_stats),
+                       display_listened_sec=min(duration, max(0, shown)),
+                       playback_remaining_sec=max(0, ACTIVE_PLAYBACK_WINDOW_SEC - elapsed))
     return details
 
 
