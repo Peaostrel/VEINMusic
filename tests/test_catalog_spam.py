@@ -55,8 +55,10 @@ def test_only_counted_music_is_offered_to_search_engines(client, db, listener):
     sitemap = client.get("/api/preview/sitemap").json()
     artists = set(sitemap["artists"])
     tracks = {item["id"] for item in sitemap["tracks"]}
-    assert "Real Artist" in artists and "Spam Artist" not in artists
-    assert real.id in tracks and fake.id not in tracks
+    assert "Real Artist" in artists
+    assert "Spam Artist" not in artists
+    assert real.id in tracks
+    assert fake.id not in tracks
     # Pages stay viewable, but are marked not to index
     assert client.get("/api/preview/artist/Spam Artist").json()["indexable"] is False
     assert client.get(f"/api/preview/track/{fake.id}").json()["indexable"] is False

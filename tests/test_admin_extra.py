@@ -522,12 +522,15 @@ def test_track_reports_alert_admins_once_and_delete_with_artist_block(admin_clie
                              json={"status": "resolved", "action": "ban_user"}).status_code == 400
     done = admin_client.post(f"/api/admin/reports/{item['id']}/resolve", json={
         "status": "resolved", "action": "delete_track", "block_artist": True}).json()
-    assert done["closed"] == 2 and done["track_deleted"] and done["artist_blocked"]
+    assert done["closed"] == 2
+    assert done["track_deleted"]
+    assert done["artist_blocked"]
     assert _session(lambda s: s.get(Track, track_id)) is None
     assert _session(lambda s: s.query(BlacklistFilter).filter_by(pattern="Spam Artist", filter_type="artist").count()) == 1
     # The report stays readable after the track is gone
     closed = admin_client.get("/api/admin/reports?status=resolved&target_type=track").json()["items"][0]
-    assert closed["track"]["exists"] is False and closed["track"]["title"] == "Казино бонус"
+    assert closed["track"]["exists"] is False
+    assert closed["track"]["title"] == "Казино бонус"
     # Both reporters learn the outcome, not who decided
     for reporter in ("other", "target"):
         assert ("system", "Ваша жалоба на трек «Spam Artist — Казино бонус» рассмотрена: "
@@ -573,7 +576,8 @@ def test_priority_puts_targets_with_more_reporters_first(admin_client):
     by_priority = [r["type"] for r in admin_client.get("/api/admin/reports").json()["items"]]
     assert by_priority == ["comment", "comment", "user"]
     newest_first = [r["type"] for r in admin_client.get("/api/admin/reports?sort=new").json()["items"]]
-    assert newest_first[0] == "comment" and newest_first[-1] == "user"
+    assert newest_first[0] == "comment"
+    assert newest_first[-1] == "user"
 
 
 def test_dismissed_reports_count_against_the_reporter(admin_client):

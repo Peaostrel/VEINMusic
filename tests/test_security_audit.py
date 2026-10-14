@@ -35,16 +35,19 @@ def test_account_settings_are_not_shown_to_other_visitors(client, db):
     db.commit()
     public = client.get("/api/user/private_bits").json()
     assert public["hidden_artists"] == ""
-    assert public["lastfm_username"] is None and public["last_sync"] is None
+    assert public["lastfm_username"] is None
+    assert public["last_sync"] is None
     assert public["sync_privacy"] is None
-    assert not public["spotify_linked"] and not public["yandex_linked"]
+    assert not public["spotify_linked"]
+    assert not public["yandex_linked"]
 
     token = create_session_token(str(user.id), str(user.hashed_password), int(user.session_version))
     own = client.get("/api/user/private_bits", headers={"X-API-Key": token}).json()
     assert own["hidden_artists"] == "Guilty Pleasure"
     assert own["lastfm_username"] == "secret_fm"
     assert own["sync_privacy"] == "followers"
-    assert own["spotify_linked"] and own["yandex_linked"]
+    assert own["spotify_linked"]
+    assert own["yandex_linked"]
 
 
 def test_public_api_description_omits_admin_endpoints_in_production(client, monkeypatch):

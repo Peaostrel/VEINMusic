@@ -11,15 +11,16 @@ const DEEZER =
 const DEEZER_SIZES = [56, 120, 250, 500, 1000];
 const SOUNDCLOUD =
   /^(https:\/\/i\d*\.sndcdn\.com\/[\w-]+?-)(t500x500|t300x300|large|crop|original)(\.\w+)$/;
+const SOUNDCLOUD_LARGEST: [number, string] = [500, "t500x500"];
 const SOUNDCLOUD_SIZES: [number, string][] = [
   [100, "large"],
   [300, "t300x300"],
   [400, "crop"],
-  [500, "t500x500"],
+  SOUNDCLOUD_LARGEST,
 ];
 
 function pick(sizes: number[], wanted: number, current: number): number {
-  const size = sizes.find((s) => s >= wanted) ?? sizes[sizes.length - 1];
+  const size = sizes.find((s) => s >= wanted) ?? Math.max(...sizes);
   return Math.min(size, current);
 }
 
@@ -50,8 +51,7 @@ export function coverAt(
   if (m && m[2] !== "original") {
     const current = SOUNDCLOUD_SIZES.find(([, name]) => name === m?.[2]);
     const [px, name] =
-      SOUNDCLOUD_SIZES.find(([size]) => size >= wanted) ??
-      SOUNDCLOUD_SIZES[SOUNDCLOUD_SIZES.length - 1];
+      SOUNDCLOUD_SIZES.find(([size]) => size >= wanted) ?? SOUNDCLOUD_LARGEST;
     if (current && px < current[0]) return `${m[1]}${name}${m[3]}`;
   }
   return url;

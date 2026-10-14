@@ -638,6 +638,56 @@ def _set_position(db: Session, scrobble, now, progress_sec: float) -> None:
     db.commit()
 
 
+_COLLECTOR_LABELS = {'client': 'клиент', 'cloud': 'облако', 'live': 'живое подключение'}
+
+
+def _locked_last_scrobble(db: Session, user_id: int):
+    """The user's latest scrobble and its `updated_at` (aware), after locking
+    the user row: serializes writes from independent clients on PostgreSQL.
+    Never sum two clocks for the same play: secondary sources only confirm
+    provenance."""
+    db.query(User.id).filter(User.id == user_id).with_for_update().first()
+    last_scrobble = db.query(Scrobble).execution_options(include_excluded=True).filter(
+        Scrobble.user_id == user_id).order_by(
+        Scrobble.id.desc()).first()
+    if last_scrobble is None:
+        return None, None
+    updated_at = last_scrobble.updated_at
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=UTC)
+    return last_scrobble, updated_at
+
+
+def _position_change(db: Session, user: User, track: Track, source: str, last_scrobble, now,
+                     l_updated_at, progress_sec: float) -> tuple[dict[str, Any] | None, bool]:
+    """(play counted for the previous track, whether the same track restarted)
+    for a source that reports the player's position."""
+    if last_scrobble is None or l_updated_at is None:
+        return None, False
+    if last_scrobble.track_id != track.id:
+        if last_scrobble.source != source:
+            return None, False
+        return _end_previous_play(db, user, last_scrobble, now, l_updated_at), False
+    return None, _restarted(last_scrobble, now, l_updated_at, progress_sec)
+
+
+def _start_scrobble(db: Session, user_id: int, track: Track, source: str, source_label: str,
+                    source_id: str, is_playing: bool, now) -> Scrobble:
+    scrobble = Scrobble(
+        user_id=user_id,
+        track_id=track.id,
+        source=source,
+        confirmed_sources=[source_label],
+        credit_source=source_id,
+        played_at=now,
+        listened_sec=0,
+        is_playing=is_playing,
+        updated_at=now)
+    db.add(scrobble)
+    db.commit()
+    return scrobble
+
+
 def _record_scrobble(db: Session, user: User, track: Track, source: str,
                      progress_sec: float, is_playing: bool, credit_sec: int | None = None,
                      pending_sec: int = 0, collector: str = "client") -> dict[str, Any]:
@@ -645,67 +695,42 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
 
     Returns plain data only, so nothing touches expired ORM objects (and the
     DB) from the event loop afterwards."""
-    username = str(user.username)
     user_id = int(user.id)
     now = datetime.now(UTC)
     source_id = f"{source}:{collector}"
-    collector_labels = {'client': 'клиент', 'cloud': 'облако', 'live': 'живое подключение'}
-    source_label = f"{source} · {collector_labels.get(collector, 'клиент')}"
-    # Serialize writes from independent clients on PostgreSQL. Never sum two
-    # clocks for the same play: secondary sources only confirm provenance.
-    db.query(User.id).filter(User.id == user_id).with_for_update().first()
-    last_scrobble = db.query(Scrobble).execution_options(include_excluded=True).filter(
-        Scrobble.user_id == user_id).order_by(
-        Scrobble.id.desc()).first()
+    source_label = f"{source} · {_COLLECTOR_LABELS.get(collector, 'клиент')}"
+    last_scrobble, l_updated_at = _locked_last_scrobble(db, user_id)
 
-    if last_scrobble:
-        l_updated_at = last_scrobble.updated_at.replace(
-            tzinfo=UTC) if last_scrobble.updated_at.tzinfo is None else last_scrobble.updated_at
-    else:
-        l_updated_at = None
-
-    result: dict[str, Any] = {"status": "ok", "username": username, "user_id": user_id,
+    result: dict[str, Any] = {"status": "ok", "username": str(user.username), "user_id": user_id,
                               "new_item": None, "counted": None, "state_change": None}
     was_playing = bool(last_scrobble.is_playing) if last_scrobble else None
-    if last_scrobble and last_scrobble.track_id == track.id:
-        if _confirm_scrobble_source(db, last_scrobble, source_label, source_id, l_updated_at, now):
-            result["status"] = "confirmed_duplicate"
-            return result
+    if (last_scrobble and last_scrobble.track_id == track.id
+            and _confirm_scrobble_source(db, last_scrobble, source_label, source_id, l_updated_at, now)):
+        result["status"] = "confirmed_duplicate"
+        return result
     positional = source in POSITION_SOURCES and credit_sec is None
     restarted = False
-    if positional and last_scrobble is not None and l_updated_at is not None:
-        if last_scrobble.track_id != track.id and last_scrobble.source == source:
-            result["counted"] = _end_previous_play(db, user, last_scrobble, now, l_updated_at)
-        elif last_scrobble.track_id == track.id:
-            restarted = _restarted(last_scrobble, now, l_updated_at, progress_sec)
+    if positional:
+        result["counted"], restarted = _position_change(
+            db, user, track, source, last_scrobble, now, l_updated_at, progress_sec)
     is_new, early_return = _determine_is_new(
         db, track, last_scrobble, now, l_updated_at, progress_sec, restarted)
     if early_return:
         result["status"] = early_return
         return result
 
+    current = last_scrobble
     if is_new:
         if restarted and last_scrobble is not None:
             result["counted"] = _end_previous_play(db, user, last_scrobble, now, l_updated_at)
-        new_s = Scrobble(
-            user_id=user_id,
-            track_id=track.id,
-            source=source,
-            confirmed_sources=[source_label],
-            credit_source=source_id,
-            played_at=now,
-            listened_sec=0,
-            is_playing=is_playing,
-            updated_at=now)
-        db.add(new_s)
-        db.commit()
-        result["new_item"] = format_history_item(new_s, track)
+        current = _start_scrobble(db, user_id, track, source, source_label, source_id, is_playing, now)
+        result["new_item"] = format_history_item(current, track)
     elif last_scrobble is not None and _update_scrobble_progress(
             db, user, track, last_scrobble, now, l_updated_at, is_playing, credit_sec, pending_sec,
             until_now=positional):
         result["counted"] = _counted_scrobble_payload(last_scrobble, track)
     if positional:
-        _set_position(db, new_s if is_new else last_scrobble, now, progress_sec)
+        _set_position(db, current, now, progress_sec)
     if not is_new and last_scrobble is not None and was_playing != bool(is_playing):
         # Pause / resume: pages update the "now playing" mark at once
         result["state_change"] = {"id": int(last_scrobble.id), "is_playing": bool(is_playing)}

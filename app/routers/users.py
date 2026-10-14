@@ -96,6 +96,52 @@ def _showcase_fields(profile, visible):
     return fields
 
 
+def _visible_location(user: User, request: Request, db: Session, is_owner: bool) -> str | None:
+    if not _can_view_section(user, request, db, "location"):
+        return None
+    location = user.profile.location
+    privacy = preferences_dict(user.profile).get("privacy", {})
+    if location and not is_owner and privacy.get("location_precision") == "country":
+        return location.rsplit(",", 1)[-1].strip()
+    return location
+
+
+def _owner_fields(user: User, is_owner: bool) -> dict:
+    """Account settings and connected services are the owner's business."""
+    if not is_owner:
+        return {"hidden_artists": "", "sync_privacy": None, "spotify_linked": False,
+                "yandex_linked": False, "soundcloud_linked": False, "lastfm_username": None,
+                "last_sync": None, "has_api_key": False}
+    integration = user.integration
+    return {
+        "hidden_artists": user.profile.hidden_artists,
+        "sync_privacy": user.profile.sync_privacy or "all",
+        "spotify_linked": bool(integration.spotify_refresh_token),
+        "yandex_linked": bool(integration.yandex_token),
+        "soundcloud_linked": bool(integration.soundcloud_refresh_token),
+        "lastfm_username": integration.lastfm_username,
+        "last_sync": integration.last_sync,
+        "has_api_key": bool(user.api_key)}
+
+
+def _earned_achievements(user: User, db: Session) -> list[dict]:
+    rows = db.query(Achievement, UserAchievement).join(
+        UserAchievement, Achievement.id == UserAchievement.achievement_id).filter(
+        UserAchievement.user_id == user.id).all()
+    return [{
+        "id": a.id,
+        "name": a.name,
+        "description": render_achievement_description(a),
+        "icon": a.icon,
+        "target_image": a.target_image,
+        "reward_xp": a.reward_xp,
+        "rule_type": a.rule_type,
+        "rule_target": a.rule_target,
+        "rule_meta": a.rule_meta,
+        "is_displayed": ua.is_displayed,
+        "earned_at": ua.earned_at} for a, ua in rows]
+
+
 @router.get("/api/user/{username}",
             responses={404: {"description": "User not found"}})
 def get_user_info(username: str, request: Request,
@@ -116,65 +162,33 @@ def get_user_info(username: str, request: Request,
             "can_view_private": False,
             "role": role}
 
-    ach_data = db.query(
-        Achievement,
-        UserAchievement).join(
-        UserAchievement,
-        Achievement.id == UserAchievement.achievement_id).filter(
-            UserAchievement.user_id == user.id).all()
     lvl, rnk, _, _ = get_user_level_info(user, db)
     can_showcase = _can_view_section(user, request, db, "showcase")
-    can_location = _can_view_section(user, request, db, "location")
     can_social = _can_view_section(user, request, db, "social_links")
-    location = user.profile.location if can_location else None
-    privacy = preferences_dict(user.profile).get("privacy", {})
-    if location and not is_owner and privacy.get("location_precision") == "country":
-        location = location.rsplit(",", 1)[-1].strip()
     return {
         "username": user.username,
         "display_name": user.profile.display_name or user.username,
         "bio": user.profile.bio or "Этот пользователь пока ничего о себе не рассказал.",
         "avatar_url": user.profile.avatar_url,
         "cover_url": user.profile.cover_url,
-        "location": location,
+        "location": _visible_location(user, request, db, is_owner),
         "favorite_genre": user.profile.favorite_genre,
         "equipment": user.profile.equipment,
         "social_links": (user.profile.social_links or "[]") if can_social else "[]",
         "theme": user.profile.theme or "classic",
         "is_private": user.profile.is_private,
         "can_view_private": is_owner,
-        # Account settings and connected services are the owner's business
-        "hidden_artists": user.profile.hidden_artists if is_owner else "",
-        "sync_privacy": (user.profile.sync_privacy or "all") if is_owner else None,
         "is_verified": user.integration.is_verified,
         **_showcase_fields(user.profile, can_showcase),
         "avatar_frame": user.profile.avatar_frame,
         "level": lvl,
         "rank": rnk,
-        "spotify_linked": is_owner and bool(user.integration.spotify_refresh_token),
-        "yandex_linked": is_owner and bool(user.integration.yandex_token),
-        "soundcloud_linked": is_owner and bool(user.integration.soundcloud_refresh_token),
-        "lastfm_username": user.integration.lastfm_username if is_owner else None,
         "has_imported_lastfm": user.integration.has_imported_lastfm,
-        "last_sync": user.integration.last_sync if is_owner else None,
         "role": role,
-        "achievements": [
-            {
-                "id": a.id,
-                "name": a.name,
-                "description": render_achievement_description(a),
-                "icon": a.icon,
-                "target_image": a.target_image,
-                "reward_xp": a.reward_xp,
-                "rule_type": a.rule_type,
-                "rule_target": a.rule_target,
-                "rule_meta": a.rule_meta,
-                "is_displayed": ua.is_displayed,
-                "earned_at": ua.earned_at} for a,
-            ua in ach_data],
+        "achievements": _earned_achievements(user, db),
         "streak": get_active_streak(user),
         "preferences": public_preferences(user.profile),
-        "has_api_key": bool(user.api_key) if is_owner else False}
+        **_owner_fields(user, is_owner)}
 
 
 # --- /api/notifications/{username} ---

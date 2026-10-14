@@ -33,11 +33,13 @@ def _code(client):
 def test_approval_page_compares_networks(client, db, owner, from_ip, approver_ip, same):
     code = _code(client)
     stored = db.query(DeviceAuthorization).one()
-    assert stored.requester_network and "203.0.113" not in stored.requester_network
+    assert stored.requester_network
+    assert "203.0.113" not in stored.requester_network
     from_ip["ip"] = approver_ip
     info = client.get(f"/api/devices/code/{code['user_code']}", headers=owner[1]).json()
     assert info["same_network"] is same
-    assert info["client_name"] == "Plat Music" and info["created_at"]
+    assert info["client_name"] == "Plat Music"
+    assert info["created_at"]
 
 
 def test_ipv6_compares_by_56_prefix(client, owner, from_ip):

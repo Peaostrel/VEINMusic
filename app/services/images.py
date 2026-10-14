@@ -91,17 +91,8 @@ def shrink_image(content: bytes, kind: str = "image") -> tuple[bytes, str]:
     return encoded, _FORMATS[fmt]
 
 
-def shrink_stored_uploads(db, uploads_dir: str, dry_run: bool = False) -> list[tuple[str, int, int]]:
-    """Fit avatars and banners uploaded before uploads were downscaled.
-
-    Files are rewritten in place under the same name and format, so the
-    stored URLs keep working (browsers that cached the old file simply keep
-    the larger copy). Returns [(file name, bytes before, bytes after)] for
-    the files that got smaller.
-    """
-    import os
-    import tempfile
-
+def _upload_kinds(db) -> dict[str, str]:
+    """Uploaded file name -> the size class it is used with."""
     from app.models import UserProfile
     from app.services.uploads_cleanup import _UPLOAD_REF_RE
 
@@ -112,31 +103,60 @@ def shrink_stored_uploads(db, uploads_dir: str, dry_run: bool = False) -> list[t
                 # A file used as both keeps the larger (banner) size
                 if kinds.get(name) != "banner":
                     kinds[name] = kind
+    return kinds
+
+
+def _shrunk_upload(path: str, name: str, kind: str) -> tuple[bytes, bytes] | None:
+    """(original, smaller) when re-encoding the file saves bytes in the same format."""
+    with open(path, "rb") as file:
+        content = file.read()
+    try:
+        smaller, ext = shrink_image(content, kind)
+    except InvalidImage as exc:
+        logger.warning("[Uploads] %s left as is: %s", name, exc)
+        return None
+    if ext != name.rsplit(".", 1)[1] or len(smaller) >= len(content):
+        return None
+    return content, smaller
+
+
+def _replace_file(path: str, content: bytes) -> None:
+    """Atomic: a request never sees half a file."""
+    import os
+    import tempfile
+
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".shrink-")
+    try:
+        with os.fdopen(fd, "wb") as file:
+            file.write(content)
+        os.chmod(tmp, os.stat(path).st_mode & 0o777)
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
+
+
+def shrink_stored_uploads(db, uploads_dir: str, dry_run: bool = False) -> list[tuple[str, int, int]]:
+    """Fit avatars and banners uploaded before uploads were downscaled.
+
+    Files are rewritten in place under the same name and format, so the
+    stored URLs keep working (browsers that cached the old file simply keep
+    the larger copy). Returns [(file name, bytes before, bytes after)] for
+    the files that got smaller.
+    """
+    import os
+
     report = []
-    for name, kind in sorted(kinds.items()):
+    for name, kind in sorted(_upload_kinds(db).items()):
         path = os.path.join(uploads_dir, name)
         if not os.path.isfile(path):
             continue
-        with open(path, "rb") as file:
-            content = file.read()
-        try:
-            smaller, ext = shrink_image(content, kind)
-        except InvalidImage as exc:
-            logger.warning("[Uploads] %s left as is: %s", name, exc)
+        shrunk = _shrunk_upload(path, name, kind)
+        if shrunk is None:
             continue
-        if ext != name.rsplit(".", 1)[1] or len(smaller) >= len(content):
-            continue
-        report.append((name, len(content), len(smaller)))
-        if dry_run:
-            continue
-        fd, tmp = tempfile.mkstemp(dir=uploads_dir, prefix=".shrink-")
-        try:
-            with os.fdopen(fd, "wb") as file:
-                file.write(smaller)
-            os.chmod(tmp, os.stat(path).st_mode & 0o777)
-            os.replace(tmp, path)  # atomic: a request never sees half a file
-        except BaseException:
-            if os.path.exists(tmp):
-                os.remove(tmp)
-            raise
+        original, smaller = shrunk
+        report.append((name, len(original), len(smaller)))
+        if not dry_run:
+            _replace_file(path, smaller)
     return report

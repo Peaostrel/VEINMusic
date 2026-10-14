@@ -70,18 +70,23 @@ def _target_label(report: Report, db: Session) -> str:
     return f"комментарий @{username}" if report.target_type == "comment" else f"профиль @{username}"
 
 
+def _same_target(query, target_type: str, track_id, comment_id, target_user_id):
+    """Narrow a Report query to the same target."""
+    query = query.filter(Report.target_type == target_type)
+    if target_type == "track":
+        return query.filter(Report.track_id == track_id)
+    if target_type == "comment":
+        return query.filter(Report.comment_id == comment_id)
+    return query.filter(Report.target_user_id == target_user_id)
+
+
 def _alert_moderators(db: Session, report: Report) -> list:
     """The first open report about a target pings the admins (later ones on
     the same target would only repeat it)."""
     from app.services.notifications import KIND_MODERATION
-    same = db.query(Report.id).filter(Report.status == "open", Report.id != report.id,
-                                      Report.target_type == report.target_type)
-    if report.target_type == "track":
-        same = same.filter(Report.track_id == report.track_id)
-    elif report.target_type == "comment":
-        same = same.filter(Report.comment_id == report.comment_id)
-    else:
-        same = same.filter(Report.target_user_id == report.target_user_id)
+    same = db.query(Report.id).filter(Report.status == "open", Report.id != report.id)
+    same = _same_target(same, str(report.target_type), report.track_id, report.comment_id,
+                        report.target_user_id)
     if same.first():
         return []
     message = f"Новая жалоба: {_target_label(report, db)}, {REASON_LABELS[str(report.reason)]}"
@@ -94,6 +99,36 @@ def _alert_moderators(db: Session, report: Report) -> list:
     return [a for a in alerts if a]
 
 
+def _profile_snapshot(target: User) -> str:
+    profile = target.profile
+    if not profile:
+        return _snapshot(display_name=None, bio=None, avatar_url=None, cover_url=None, location=None)
+    return _snapshot(display_name=profile.display_name, bio=profile.bio,
+                     avatar_url=profile.avatar_url, cover_url=profile.cover_url,
+                     location=profile.location)
+
+
+def _resolve_target(db: Session, data: ReportCreate) -> dict:
+    """The Report fields that point at the target (404 when it is gone)."""
+    if data.target_type == "comment":
+        comment = db.query(ScrobbleComment).filter(ScrobbleComment.id == data.comment_id).first()
+        if not comment:
+            raise HTTPException(404, "Комментарий не найден")
+        return {"target_user_id": int(comment.user_id), "comment_id": comment.id,
+                "comment_text": str(comment.content or "")[:500]}
+    if data.target_type == "track":
+        track = db.query(Track).filter(Track.id == data.track_id).first()
+        if not track:
+            raise HTTPException(404, "Трек не найден")
+        return {"track_id": track.id,
+                "target_snapshot": _snapshot(title=track.title, artist=track.artist,
+                                             album=track.album)}
+    target = db.query(User).filter(User.username == data.username).first()
+    if not target:
+        raise HTTPException(404, USER_NOT_FOUND)
+    return {"target_user_id": int(target.id), "target_snapshot": _profile_snapshot(target)}
+
+
 @router.post("", responses={400: {"description": "Reporting yourself"},
                             404: {"description": "Target not found"}})
 @limiter.limit("10/hour")
@@ -104,57 +139,25 @@ def create_report(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
 ):
-    comment = track = None
-    target_id: int | None = None
-    snapshot = None
-    if data.target_type == "comment":
-        comment = db.query(ScrobbleComment).filter(ScrobbleComment.id == data.comment_id).first()
-        if not comment:
-            raise HTTPException(404, "Комментарий не найден")
-        target_id = int(comment.user_id)
-    elif data.target_type == "track":
-        track = db.query(Track).filter(Track.id == data.track_id).first()
-        if not track:
-            raise HTTPException(404, "Трек не найден")
-        snapshot = _snapshot(title=track.title, artist=track.artist, album=track.album)
-    else:
-        target = db.query(User).filter(User.username == data.username).first()
-        if not target:
-            raise HTTPException(404, USER_NOT_FOUND)
-        target_id = int(target.id)
-        profile = target.profile
-        snapshot = _snapshot(
-            display_name=profile.display_name if profile else None,
-            bio=profile.bio if profile else None,
-            avatar_url=profile.avatar_url if profile else None,
-            cover_url=profile.cover_url if profile else None,
-            location=profile.location if profile else None)
-    if target_id == user.id:
+    target = _resolve_target(db, data)
+    if target.get("target_user_id") == user.id:
         raise HTTPException(400, "Нельзя пожаловаться на себя")
 
     # One open report per reporter and target is enough
-    duplicate = db.query(Report.id).filter(Report.reporter_id == user.id, Report.status == "open",
-                                           Report.target_type == data.target_type)
-    if track is not None:
-        duplicate = duplicate.filter(Report.track_id == track.id)
-    elif comment is not None:
-        duplicate = duplicate.filter(Report.comment_id == comment.id)
-    else:
-        duplicate = duplicate.filter(Report.target_user_id == target_id)
+    duplicate = db.query(Report.id).filter(Report.reporter_id == user.id, Report.status == "open")
+    duplicate = _same_target(duplicate, data.target_type, target.get("track_id"),
+                             target.get("comment_id"), target.get("target_user_id"))
     if duplicate.first():
         return {"status": "already_reported"}
 
+    details = data.details.strip() if data.details else ""
     report = Report(
         reporter_id=user.id,
         target_type=data.target_type,
-        target_user_id=target_id,
-        comment_id=comment.id if comment else None,
-        track_id=track.id if track else None,
-        comment_text=str(comment.content or "")[:500] if comment else None,
-        target_snapshot=snapshot,
         reason=data.reason,
-        details=sanitize_text(data.details.strip()) if data.details and data.details.strip() else None,
+        details=sanitize_text(details) if details else None,
         status="open",
+        **target,
     )
     db.add(report)
     db.flush()

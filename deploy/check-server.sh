@@ -8,8 +8,16 @@ set -uo pipefail
 
 [[ "$(id -u)" -eq 0 ]] || { echo "Run as root (sudo)" >&2; exit 1; }
 
-section() { printf '\n===== %s =====\n' "$1"; }
-have() { command -v "$1" >/dev/null 2>&1; }
+section() {
+    local title="$1"
+    printf '\n===== %s =====\n' "$title"
+    return 0
+}
+have() {
+    local name="$1"
+    command -v "$name" >/dev/null 2>&1
+    return $?
+}
 
 section "System"
 . /etc/os-release 2>/dev/null && echo "$PRETTY_NAME, kernel $(uname -r)"
@@ -76,7 +84,10 @@ fi
 
 section "SSH logins (7 days)"
 since="7 days ago"
-logs() { journalctl -q -u ssh -u sshd --since "$since" 2>/dev/null; }
+logs() {
+    journalctl -q -u ssh -u sshd --since "$since" 2>/dev/null
+    return 0
+}
 echo "failed password attempts: $(logs | grep -c 'Failed password')"
 echo "invalid user attempts: $(logs | grep -c 'Invalid user')"
 echo "top attacking addresses:"

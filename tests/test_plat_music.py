@@ -236,7 +236,8 @@ def test_track_change_credits_previous_track_and_is_not_dropped(client, db, plat
     first, second = db.query(Scrobble).order_by(Scrobble.id).all()
     assert 150 <= first.listened_sec <= 151
     assert first.is_playing is False
-    assert second.track.title == "Second" and second.is_playing is True
+    assert second.track.title == "Second"
+    assert second.is_playing is True
     for progress in (15, 30, 45, 60, 75, 90, 105, 120, 135, 150):
         _wait(db, 15)
         client.post("/api/scrobble", **_plat(token, title="Second", progress=progress))
@@ -257,8 +258,10 @@ def test_repeat_one_restart_counts_a_new_play(client, db, plat_account):
     _wait(db, 15)  # ended at 172 s and started over: 8 s into the repeat
     client.post("/api/scrobble", **_plat(token, progress=8, duration=172))
     first, repeat = db.query(Scrobble).order_by(Scrobble.id).all()
-    assert first.listened_sec == 172 and first.is_playing is False
-    assert repeat.is_playing is True and repeat.listened_sec == 0
+    assert first.listened_sec == 172
+    assert first.is_playing is False
+    assert repeat.is_playing is True
+    assert repeat.listened_sec == 0
     # a seek back in the middle of a track is not a new play
     _wait(db, 15)
     client.post("/api/scrobble", **_plat(token, progress=23, duration=172))

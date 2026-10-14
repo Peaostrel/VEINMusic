@@ -167,6 +167,10 @@ function LinkDevice() {
       )
     : null;
   const needsConfirmation = info?.same_network !== true;
+  let requested = "";
+  if (requestedAgo === 0) requested = " · запрошен только что";
+  else if (requestedAgo !== null)
+    requested = ` · запрошен ${requestedAgo} мин назад`;
 
   const errorLine = error && (
     <p role="alert" className="text-[13px] text-danger">
@@ -242,8 +246,7 @@ function LinkDevice() {
                 </span>
                 <span className="font-mono text-xs text-fg-3">
                   код {info.user_code}
-                  {requestedAgo !== null &&
-                    ` · запрошен ${requestedAgo ? `${requestedAgo} мин назад` : "только что"}`}
+                  {requested}
                   {` · до ${expires}`}
                 </span>
               </span>
