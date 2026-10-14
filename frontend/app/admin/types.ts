@@ -379,11 +379,37 @@ export interface IntegrationPage extends Paged<IntegrationRow> {
 
 export interface AdminReport {
   id: number;
-  type: "user" | "comment";
+  type: "user" | "comment" | "track";
+  /** Reports with the same key are about the same thing and decided together */
+  target_key: string;
   reporter: { username: string; is_banned: boolean } | null;
+  /** The reporter's past reports: many dismissed ones weigh less */
+  reporter_history: {
+    total: number;
+    dismissed: number;
+    resolved: number;
+  } | null;
   target: { username: string; is_banned: boolean } | null;
+  /** Open reports about the person (profile and comments) */
   target_open_reports: number;
+  /** Open reports about this very profile, comment or track */
+  same_open_reports: number;
   comment: { id: number | null; text: string | null; exists: boolean } | null;
+  track: {
+    id: number | null;
+    exists: boolean;
+    title?: string | null;
+    artist?: string | null;
+    album?: string | null;
+  } | null;
+  /** The profile as it was when reported */
+  snapshot: {
+    display_name?: string | null;
+    bio?: string | null;
+    avatar_url?: string | null;
+    cover_url?: string | null;
+    location?: string | null;
+  } | null;
   reason: string;
   details: string | null;
   status: "open" | "resolved" | "dismissed";

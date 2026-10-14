@@ -468,3 +468,124 @@ def test_admin_resolves_reports(admin_client):
 
     _login(admin_client, "other")
     assert admin_client.get("/api/admin/reports").status_code == 403
+
+
+# --- reports: tracks, snapshots, actions, feedback -------------------------------
+
+def _notes(username):
+    from app.models import Notification
+
+    def run(s):
+        user = s.query(User).filter(User.username == username).one()
+        return [(n.kind, n.message) for n in s.query(Notification).filter(Notification.user_id == user.id)]
+    return _session(run)
+
+
+def _track(title="Казино бонус", artist="Spam Artist"):
+    from app.models import Scrobble, Track
+
+    def run(s):
+        track = Track(title=title, artist=artist, duration=100)
+        s.add(track)
+        s.flush()
+        user = s.query(User).filter(User.username == "target").one()
+        s.add(Scrobble(user_id=user.id, track_id=track.id, source="api", listened_sec=100))
+        s.commit()
+        return track.id
+    return _session(run)
+
+
+def test_track_reports_alert_admins_once_and_delete_with_artist_block(admin_client):
+    from app.models import BlacklistFilter, Track
+
+    track_id = _track()
+    for reporter in ("other", "target"):
+        _login(admin_client, reporter)
+        assert admin_client.post("/api/reports", json={
+            "target_type": "track", "track_id": track_id, "reason": "spam"}).json()["status"] == "ok"
+    _login(admin_client, "other")
+    # A reason that makes no sense for a track
+    assert admin_client.post("/api/reports", json={
+        "target_type": "track", "track_id": track_id, "reason": "impersonation"}).status_code == 422
+
+    alerts = [m for kind, m in _notes("boss") if kind == "moderation"]
+    assert alerts == ["Новая жалоба: трек «Spam Artist — Казино бонус», спам или реклама"]
+
+    _login(admin_client, "boss")
+    page = admin_client.get("/api/admin/reports?target_type=track").json()
+    item = page["items"][0]
+    assert item["track"] == {"id": track_id, "exists": True, "title": "Казино бонус",
+                             "artist": "Spam Artist", "album": None}
+    assert item["same_open_reports"] == 2
+    # A ban needs a person; tracks have none
+    assert admin_client.post(f"/api/admin/reports/{item['id']}/resolve",
+                             json={"status": "resolved", "action": "ban_user"}).status_code == 400
+    done = admin_client.post(f"/api/admin/reports/{item['id']}/resolve", json={
+        "status": "resolved", "action": "delete_track", "block_artist": True}).json()
+    assert done["closed"] == 2 and done["track_deleted"] and done["artist_blocked"]
+    assert _session(lambda s: s.get(Track, track_id)) is None
+    assert _session(lambda s: s.query(BlacklistFilter).filter_by(pattern="Spam Artist", filter_type="artist").count()) == 1
+    # The report stays readable after the track is gone
+    closed = admin_client.get("/api/admin/reports?status=resolved&target_type=track").json()["items"][0]
+    assert closed["track"]["exists"] is False and closed["track"]["title"] == "Казино бонус"
+    # Both reporters learn the outcome, not who decided
+    for reporter in ("other", "target"):
+        assert ("system", "Ваша жалоба на трек «Spam Artist — Казино бонус» рассмотрена: "
+                "приняты меры. Спасибо, что помогаете!") in _notes(reporter)
+        assert all("boss" not in (m or "") for _, m in _notes(reporter))
+
+
+def test_profile_report_keeps_a_snapshot_and_can_ban(admin_client):
+    from app.models import UserProfile
+
+    def bio(text):
+        def run(s):
+            user = s.query(User).filter(User.username == "target").one()
+            s.query(UserProfile).filter(UserProfile.user_id == user.id).update({"bio": text})
+            s.commit()
+        _session(run)
+
+    bio("оскорбительный текст")
+    _login(admin_client, "other")
+    admin_client.post("/api/reports", json={"target_type": "user", "username": "target", "reason": "abuse"})
+    bio("всё прилично")  # edited before a moderator looked
+
+    _login(admin_client, "boss")
+    item = admin_client.get("/api/admin/reports").json()["items"][0]
+    assert item["snapshot"]["bio"] == "оскорбительный текст"
+    assert item["reporter_history"] == {"total": 1, "dismissed": 0, "resolved": 0}
+    done = admin_client.post(f"/api/admin/reports/{item['id']}/resolve",
+                             json={"status": "resolved", "action": "ban_user"}).json()
+    assert done["user_banned"] is True
+    assert _session(lambda s: s.query(User).filter(User.username == "target").one().is_banned)
+    assert "user.ban" in {e["action"] for e in admin_client.get("/api/admin/audit").json()["items"]}
+
+
+def test_priority_puts_targets_with_more_reporters_first(admin_client):
+    comment_id = _comment_by("target")
+    _login(admin_client, "boss")
+    admin_client.post("/api/reports", json={"target_type": "user", "username": "other", "reason": "spam"})
+    for reporter in ("other", "boss"):
+        _login(admin_client, reporter)
+        admin_client.post("/api/reports", json={"target_type": "comment", "comment_id": comment_id,
+                                                "reason": "abuse"})
+    _login(admin_client, "boss")
+    by_priority = [r["type"] for r in admin_client.get("/api/admin/reports").json()["items"]]
+    assert by_priority == ["comment", "comment", "user"]
+    newest_first = [r["type"] for r in admin_client.get("/api/admin/reports?sort=new").json()["items"]]
+    assert newest_first[0] == "comment" and newest_first[-1] == "user"
+
+
+def test_dismissed_reports_count_against_the_reporter(admin_client):
+    _login(admin_client, "other")
+    admin_client.post("/api/reports", json={"target_type": "user", "username": "target", "reason": "spam"})
+    _login(admin_client, "boss")
+    first = admin_client.get("/api/admin/reports").json()["items"][0]
+    admin_client.post(f"/api/admin/reports/{first['id']}/resolve", json={"status": "dismissed"})
+    assert ("system", "Ваша жалоба на профиль @target рассмотрена: нарушений не нашли. "
+            "Спасибо за внимательность!") in _notes("other")
+    _login(admin_client, "other")
+    admin_client.post("/api/reports", json={"target_type": "user", "username": "target", "reason": "abuse"})
+    _login(admin_client, "boss")
+    item = admin_client.get("/api/admin/reports").json()["items"][0]
+    assert item["reporter_history"] == {"total": 2, "dismissed": 1, "resolved": 0}

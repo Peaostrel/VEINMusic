@@ -8,7 +8,8 @@ import { btn } from "@/components/ui";
 
 export type ReportTarget =
   | { type: "user"; username: string }
-  | { type: "comment"; commentId: number; author: string; text: string | null };
+  | { type: "comment"; commentId: number; author: string; text: string | null }
+  | { type: "track"; trackId: number; title: string; artist: string };
 
 const REASONS = [
   { id: "spam", label: "Спам или реклама" },
@@ -19,7 +20,27 @@ const REASONS = [
   { id: "other", label: "Другое" },
 ] as const;
 
-/** Sends a report on a profile or a comment to the moderators. */
+// Same as REASONS_BY_TARGET on the API (app/routers/reports.py)
+const REASONS_BY_TARGET: Record<ReportTarget["type"], readonly string[]> = {
+  user: REASONS.map((r) => r.id),
+  comment: ["spam", "abuse", "inappropriate", "other"],
+  track: ["spam", "inappropriate", "other"],
+};
+
+const TRACK_LABELS: Record<string, string> = {
+  spam: "Спам или реклама в названии",
+  inappropriate: "Оскорбительное или неприемлемое название",
+};
+
+function dialogTitle(target: ReportTarget): string {
+  if (target.type === "comment")
+    return `Жалоба на комментарий @${target.author}`;
+  if (target.type === "track")
+    return `Жалоба на трек «${target.artist} — ${target.title}»`;
+  return `Жалоба на профиль @${target.username}`;
+}
+
+/** Sends a report on a profile, a comment or a track to the moderators. */
 export default function ReportDialog({
   target,
   onClose,
@@ -27,11 +48,14 @@ export default function ReportDialog({
   const [reason, setReason] = useState<string>("");
   const [details, setDetails] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "done">("idle");
+  const [repeated, setRepeated] = useState(false);
   const [error, setError] = useState("");
-  const reasons =
-    target.type === "comment"
-      ? REASONS.filter((r) => r.id !== "cheating" && r.id !== "impersonation")
-      : REASONS;
+  const reasons = REASONS.filter((r) =>
+    REASONS_BY_TARGET[target.type].includes(r.id),
+  ).map((r) => ({
+    ...r,
+    label: (target.type === "track" && TRACK_LABELS[r.id]) || r.label,
+  }));
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,17 +63,18 @@ export default function ReportDialog({
     setState("sending");
     setError("");
     try {
-      await apiJson("/api/reports", {
+      const result = await apiJson<{ status: string }>("/api/reports", {
         method: "POST",
         json: {
           target_type: target.type,
-          ...(target.type === "user"
-            ? { username: target.username }
-            : { comment_id: target.commentId }),
+          ...(target.type === "user" && { username: target.username }),
+          ...(target.type === "comment" && { comment_id: target.commentId }),
+          ...(target.type === "track" && { track_id: target.trackId }),
           reason,
           details: details.trim() || null,
         },
       });
+      setRepeated(result.status === "already_reported");
       setState("done");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось отправить");
@@ -57,10 +82,7 @@ export default function ReportDialog({
     }
   };
 
-  const title =
-    target.type === "user"
-      ? `Жалоба на профиль @${target.username}`
-      : `Жалоба на комментарий @${target.author}`;
+  const title = dialogTitle(target);
 
   return (
     <Dialog label={title} onClose={onClose}>
@@ -83,8 +105,10 @@ export default function ReportDialog({
         {state === "done" ? (
           <div className="space-y-4">
             <p className="text-sm text-fg-2">
-              Спасибо, жалоба отправлена модераторам. Мы посмотрим её в
-              ближайшее время.
+              {repeated
+                ? "Вы уже жаловались на это, жалоба ждёт модераторов."
+                : "Спасибо, жалоба отправлена модераторам."}{" "}
+              Когда её рассмотрят, придёт уведомление.
             </p>
             <button
               type="button"

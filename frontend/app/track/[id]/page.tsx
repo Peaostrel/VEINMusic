@@ -3,7 +3,8 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import SaveForLater from "@/components/SaveForLater";
-import { ExternalLink, Music2 } from "lucide-react";
+import ReportDialog from "@/components/ReportDialog";
+import { ExternalLink, Flag, Music2 } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
 import { EmptyState, Loading, btn } from "@/components/ui";
 import { sourceLabel } from "@/utils/formatters";
@@ -32,6 +33,9 @@ export default function TrackPage({
   const { id } = use(params);
   const [data, setData] = useState<TrackData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [signedIn, setSignedIn] = useState(false);
+  const [reporting, setReporting] = useState(false);
+  useEffect(() => setSignedIn(Boolean(localStorage.getItem("username"))), []);
   useEffect(() => {
     fetch(`${API_URL}/api/music/track/${encodeURIComponent(id)}`)
       .then((response) => (response.ok ? response.json() : null))
@@ -94,16 +98,39 @@ export default function TrackPage({
             </div>
           </dl>
           <SaveForLater trackId={data.id} />
-          {data.track_url && (
-            <a
-              href={data.track_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`${btn.secondary} ${btn.md} mt-6 self-start`}
-            >
-              <ExternalLink className="h-4 w-4" />
-              Открыть в сервисе
-            </a>
+          <div className="mt-6 flex flex-wrap items-center gap-2">
+            {data.track_url && (
+              <a
+                href={data.track_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`${btn.secondary} ${btn.md}`}
+              >
+                <ExternalLink className="h-4 w-4" />
+                Открыть в сервисе
+              </a>
+            )}
+            {signedIn && (
+              <button
+                type="button"
+                onClick={() => setReporting(true)}
+                className={`${btn.ghost} ${btn.md} hover:text-danger`}
+              >
+                <Flag className="h-4 w-4" aria-hidden="true" />
+                Пожаловаться
+              </button>
+            )}
+          </div>
+          {reporting && (
+            <ReportDialog
+              target={{
+                type: "track",
+                trackId: data.id,
+                title: data.title,
+                artist: data.artist,
+              }}
+              onClose={() => setReporting(false)}
+            />
           )}
         </div>
       </section>

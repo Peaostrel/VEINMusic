@@ -431,11 +431,17 @@ class Report(Base):
     __tablename__ = "reports"
     id = Column(Integer, primary_key=True, index=True)
     reporter_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete=ON_DELETE_SET_NULL), nullable=True, index=True)
+    # user, comment or track (catalog entries have no owner)
+    target_type = Column(String(16), nullable=False, default="user", server_default="user")
     # The reported profile, or the author of the reported comment
-    target_user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=False, index=True)
+    target_user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=True, index=True)
     comment_id = Column(Integer, ForeignKey("scrobble_comments.id", ondelete=ON_DELETE_SET_NULL), nullable=True, index=True)
+    track_id = Column(Integer, ForeignKey(FK_TRACKS_ID, ondelete=ON_DELETE_SET_NULL), nullable=True, index=True)
     # Kept so the report stays readable after the comment is deleted
     comment_text = Column(String(500), nullable=True)
+    # JSON: what the profile or track looked like when reported (it can be
+    # edited or deleted before a moderator looks)
+    target_snapshot = Column(String(2000), nullable=True)
     reason = Column(String(32), nullable=False)
     details = Column(String(500), nullable=True)
     status = Column(String(16), nullable=False, default="open", index=True)  # open, resolved, dismissed

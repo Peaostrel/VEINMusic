@@ -15,26 +15,34 @@ import type {
   SystemAnalytics,
 } from "./types";
 
-export type AdminTab =
-  | "overview"
-  | "users"
-  | "moderation"
-  | "antifraud"
-  | "catalog"
-  | "gamification"
-  | "announcements"
-  | "system"
-  | "audit"
-  | "reports"
-  | "scrobbles"
-  | "integrations"
-  | "logs"
-  | "security";
+const ADMIN_TABS = [
+  "overview",
+  "users",
+  "moderation",
+  "antifraud",
+  "catalog",
+  "gamification",
+  "announcements",
+  "system",
+  "audit",
+  "reports",
+  "scrobbles",
+  "integrations",
+  "logs",
+  "security",
+] as const;
+export type AdminTab = (typeof ADMIN_TABS)[number];
 
 /** All state, data loading and actions of the admin panel. */
 export function useAdminPanel() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
+  // Links such as a report notification open a tab: /admin?tab=reports
+  useEffect(() => {
+    const tab = new URLSearchParams(location.search).get("tab");
+    if (tab && (ADMIN_TABS as readonly string[]).includes(tab))
+      setActiveTab(tab as AdminTab);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [errorStatus, setErrorStatus] = useState<number | null>(null);
