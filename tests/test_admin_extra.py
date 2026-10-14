@@ -533,8 +533,8 @@ def test_track_reports_alert_admins_once_and_delete_with_artist_block(admin_clie
     assert closed["track"]["title"] == "Казино бонус"
     # Both reporters learn the outcome, not who decided
     for reporter in ("other", "target"):
-        assert ("system", "Ваша жалоба на трек «Spam Artist — Казино бонус» рассмотрена: "
-                "приняты меры. Спасибо, что помогаете!") in _notes(reporter)
+        assert ("system", "Жалоба рассмотрена: приняты меры, спасибо! "
+                "(трек «Spam Artist — Казино бонус»)") in _notes(reporter)
         assert all("boss" not in (m or "") for _, m in _notes(reporter))
 
 
@@ -586,10 +586,68 @@ def test_dismissed_reports_count_against_the_reporter(admin_client):
     _login(admin_client, "boss")
     first = admin_client.get("/api/admin/reports").json()["items"][0]
     admin_client.post(f"/api/admin/reports/{first['id']}/resolve", json={"status": "dismissed"})
-    assert ("system", "Ваша жалоба на профиль @target рассмотрена: нарушений не нашли. "
-            "Спасибо за внимательность!") in _notes("other")
+    assert ("system", "Жалоба рассмотрена: нарушений не нашли, спасибо! (профиль @target)") in _notes("other")
     _login(admin_client, "other")
     admin_client.post("/api/reports", json={"target_type": "user", "username": "target", "reason": "abuse"})
     _login(admin_client, "boss")
     item = admin_client.get("/api/admin/reports").json()["items"][0]
     assert item["reporter_history"] == {"total": 2, "dismissed": 1, "resolved": 0}
+
+
+def test_reports_about_deleted_targets_stay_apart(admin_client):
+    from app.models import Report, ScrobbleComment
+
+    first, second = _comment_by("target", "первый"), _comment_by("target", "второй")
+    _login(admin_client, "other")
+    for comment_id in (first, second):
+        admin_client.post("/api/reports", json={"target_type": "comment", "comment_id": comment_id,
+                                                "reason": "abuse"})
+    admin_client.post("/api/reports", json={"target_type": "user", "username": "target", "reason": "spam"})
+
+    def delete_targets(s):  # what ON DELETE SET NULL does when the comments and account go
+        s.query(ScrobbleComment).filter(ScrobbleComment.id.in_((first, second))).delete()
+        s.query(Report).update({Report.comment_id: None, Report.target_user_id: None})
+        s.commit()
+    _session(delete_targets)
+
+    _login(admin_client, "boss")
+    items = admin_client.get("/api/admin/reports").json()["items"]
+    assert len({r["target_key"] for r in items}) == 3
+    profile = next(r for r in items if r["type"] == "user")
+    assert profile["snapshot"]["username"] == "target"
+    comment = next(r for r in items if r["type"] == "comment")
+    done = admin_client.post(f"/api/admin/reports/{comment['id']}/resolve", json={"status": "dismissed"}).json()
+    assert done["closed"] == 1
+    admin_client.post(f"/api/admin/reports/{profile['id']}/resolve", json={"status": "dismissed"})
+    assert ("system", "Жалоба рассмотрена: нарушений не нашли, спасибо! (профиль @target)") in _notes("other")
+
+
+def test_report_survives_the_reported_account():
+    from app.models import Report
+
+    (fk,) = Report.__table__.c.target_user_id.foreign_keys
+    assert fk.ondelete == "SET NULL"
+
+
+def test_long_track_names_keep_the_outcome_in_the_notification(admin_client):
+    track_id = _track(title="Очень длинное название " * 10, artist="Исполнитель " * 10)
+    _login(admin_client, "other")
+    admin_client.post("/api/reports", json={"target_type": "track", "track_id": track_id, "reason": "spam"})
+    _login(admin_client, "boss")
+    item = admin_client.get("/api/admin/reports").json()["items"][0]
+    admin_client.post(f"/api/admin/reports/{item['id']}/resolve", json={"status": "resolved"})
+    (message,) = [m for kind, m in _notes("other") if kind == "system"]
+    assert message.startswith("Жалоба рассмотрена: приняты меры")
+    assert len(message) <= 120
+
+
+def test_closed_reports_are_paginated_newest_first(admin_client):
+    _login(admin_client, "other")
+    for name in ("target", "boss"):
+        admin_client.post("/api/reports", json={"target_type": "user", "username": name, "reason": "spam"})
+    _login(admin_client, "boss")
+    for item in admin_client.get("/api/admin/reports").json()["items"]:
+        admin_client.post(f"/api/admin/reports/{item['id']}/resolve", json={"status": "dismissed"})
+    page = admin_client.get("/api/admin/reports?status=dismissed&sort=priority&limit=1").json()
+    assert page["total"] == 2
+    assert [r["target"]["username"] for r in page["items"]] == ["boss"]

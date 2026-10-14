@@ -48,11 +48,19 @@ type Action = "none" | "delete_comment" | "ban_user" | "delete_track";
 function Person({
   p,
   onOpenUser,
+  formerName,
 }: Readonly<{
   p: AdminReport["target"];
   onOpenUser: (username: string) => void;
+  /** The name from the snapshot, for a deleted account */
+  formerName?: string | null;
 }>) {
-  if (!p) return <span className="text-fg-3">удалён</span>;
+  if (!p)
+    return (
+      <span className="text-fg-3">
+        {formerName ? `@${formerName} (удалён)` : "удалён"}
+      </span>
+    );
   return (
     <button
       type="button"
@@ -186,7 +194,13 @@ function ReportGroup({
         <span className="font-medium uppercase tracking-wide text-fg-3">
           {TYPE_LABELS[r.type]}
         </span>
-        {r.type !== "track" && <Person p={r.target} onOpenUser={onOpenUser} />}
+        {r.type !== "track" && (
+          <Person
+            p={r.target}
+            onOpenUser={onOpenUser}
+            formerName={r.snapshot?.username}
+          />
+        )}
         {reports.length > 1 && (
           <span className="rounded border border-danger-line px-1.5 text-[11px] font-medium text-danger">
             жалоб: {reports.length} от {reporters}{" "}
@@ -394,12 +408,16 @@ export default function ReportsTab({
           <label>
             <span className={labelClass}>Порядок</span>
             <select
-              value={sort}
+              value={status === "open" ? sort : "new"}
+              disabled={status !== "open"}
+              title={
+                status === "open" ? undefined : "Закрытые жалобы идут от новых"
+              }
               onChange={(e) => {
                 setSort(e.target.value as "priority" | "new");
                 setOffset(0);
               }}
-              className={inputClass}
+              className={`${inputClass} disabled:opacity-60`}
             >
               <option value="priority">Сначала важные</option>
               <option value="new">Сначала новые</option>

@@ -423,9 +423,13 @@ def _determine_is_new(db: Session,
                       now,
                       l_updated_at,
                       progress_sec: float,
-                      restarted: bool = False) -> tuple[bool,
-                                                        str | None]:
-    """Determine if a new scrobble should be created. Returns (is_new, early_return_status)."""
+                      restarted: bool = False,
+                      uncredited_sec: float = 0) -> tuple[bool,
+                                                          str | None]:
+    """Determine if a new scrobble should be created. Returns (is_new, early_return_status).
+
+    `uncredited_sec`: listening since the previous report that ended the
+    previous play (a detected restart), not added to it yet."""
     if not last_scrobble or last_scrobble.track_id != track.id:
         if last_scrobble and last_scrobble.is_playing and (
                 now - l_updated_at).total_seconds() < 1.0:
@@ -441,7 +445,7 @@ def _determine_is_new(db: Session,
     # listened to most of the track before the progress reset.
     if progress_sec < 5 or restarted:
         track_dur = getattr(track, 'duration', 180) or 180
-        if (last_scrobble.listened_sec or 0) > (track_dur * 0.8):
+        if (last_scrobble.listened_sec or 0) + uncredited_sec > (track_dur * 0.8):
             return True, None
 
     return False, None
@@ -671,16 +675,27 @@ def _position_change(db: Session, user: User, track: Track, source: str, last_sc
     return None, _restarted(last_scrobble, now, l_updated_at, progress_sec)
 
 
+def _restart_split(last_scrobble, now, l_updated_at, progress_sec: float) -> tuple[int, float]:
+    """A detected restart splits the time since the previous report:
+    (seconds of the repeat already played, the player position; the rest,
+    which ended the previous play). Zero unless playback ran without a gap."""
+    elapsed = (now - l_updated_at).total_seconds()
+    if not last_scrobble.is_playing or not 0 < elapsed < LIVE_GAP_SEC:
+        return 0, 0.0
+    replayed = int(min(max(progress_sec, 0.0), elapsed))
+    return replayed, elapsed - replayed
+
+
 def _start_scrobble(db: Session, user_id: int, track: Track, source: str, source_label: str,
-                    source_id: str, is_playing: bool, now) -> Scrobble:
+                    source_id: str, is_playing: bool, now, listened_sec: int = 0) -> Scrobble:
     scrobble = Scrobble(
         user_id=user_id,
         track_id=track.id,
         source=source,
         confirmed_sources=[source_label],
         credit_source=source_id,
-        played_at=now,
-        listened_sec=0,
+        played_at=now - timedelta(seconds=listened_sec),
+        listened_sec=listened_sec,
         is_playing=is_playing,
         updated_at=now)
     db.add(scrobble)
@@ -710,11 +725,14 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
         return result
     positional = source in POSITION_SOURCES and credit_sec is None
     restarted = False
+    replayed, uncredited = 0, 0.0
     if positional:
         result["counted"], restarted = _position_change(
             db, user, track, source, last_scrobble, now, l_updated_at, progress_sec)
+    if restarted:
+        replayed, uncredited = _restart_split(last_scrobble, now, l_updated_at, progress_sec)
     is_new, early_return = _determine_is_new(
-        db, track, last_scrobble, now, l_updated_at, progress_sec, restarted)
+        db, track, last_scrobble, now, l_updated_at, progress_sec, restarted, uncredited)
     if early_return:
         result["status"] = early_return
         return result
@@ -722,8 +740,11 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
     current = last_scrobble
     if is_new:
         if restarted and last_scrobble is not None:
-            result["counted"] = _end_previous_play(db, user, last_scrobble, now, l_updated_at)
-        current = _start_scrobble(db, user_id, track, source, source_label, source_id, is_playing, now)
+            # The previous play ended where the repeat began
+            result["counted"] = _end_previous_play(
+                db, user, last_scrobble, now - timedelta(seconds=replayed), l_updated_at)
+        current = _start_scrobble(db, user_id, track, source, source_label, source_id, is_playing, now,
+                                  replayed)
         result["new_item"] = format_history_item(current, track)
     elif last_scrobble is not None and _update_scrobble_progress(
             db, user, track, last_scrobble, now, l_updated_at, is_playing, credit_sec, pending_sec,

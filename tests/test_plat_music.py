@@ -261,10 +261,35 @@ def test_repeat_one_restart_counts_a_new_play(client, db, plat_account):
     assert first.listened_sec == 172
     assert first.is_playing is False
     assert repeat.is_playing is True
-    assert repeat.listened_sec == 0
+    assert repeat.listened_sec == 8  # the start of the repeat already played
     # a seek back in the middle of a track is not a new play
     _wait(db, 15)
     client.post("/api/scrobble", **_plat(token, progress=23, duration=172))
     _wait(db, 15)
     client.post("/api/scrobble", **_plat(token, progress=3, duration=172))
     assert db.query(Scrobble).count() == 2
+
+
+def test_back_to_back_repeats_of_a_short_track_each_count(client, db, plat_account):
+    _, _, token, _ = plat_account
+    client.post("/api/scrobble", **_plat(token, duration=50))
+    # Heartbeats every 15 s on repeat-one: each restart is only seen in the
+    # next heartbeat, 5-10 s into the new play
+    for progress in (15, 30, 45, 10,  # play 1 ends at 50 s
+                     25, 40, 5,  # play 2
+                     20, 35, 50, 15):  # play 3 (a late heartbeat at the very end)
+        _wait(db, 15)
+        client.post("/api/scrobble", **_plat(token, progress=progress, duration=50))
+    plays = db.query(Scrobble).order_by(Scrobble.id).all()
+    assert len(plays) == 4
+    assert [p.listened_sec for p in plays[:3]] == [50, 50, 50]
+    assert all(p.xp_earned > 0 for p in plays[:3])
+
+
+def test_non_finite_position_is_rejected(client, plat_account):
+    _, _, token, _ = plat_account
+    request = _plat(token)
+    body = json.dumps(request["json"]).replace('"progress_sec": 0', '"progress_sec": NaN')
+    response = client.post("/api/scrobble", content=body,
+                           headers={**request["headers"], "Content-Type": "application/json"})
+    assert response.status_code == 422

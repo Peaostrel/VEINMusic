@@ -57,7 +57,8 @@ def _encode(image: Image.Image, fmt: str, icc: bytes | None) -> bytes:
 
 def shrink_image(content: bytes, kind: str = "image") -> tuple[bytes, str]:
     """Return (bytes, extension). The format is kept (JPEG stays JPEG, so
-    stored URLs and served types stay valid); animated GIFs are kept as is.
+    stored URLs and served types stay valid); animations (GIF, WebP, APNG)
+    are kept as is.
 
     Raises InvalidImage for anything Pillow can't decode as JPEG, PNG,
     WebP or GIF, or that is too large in pixels.
@@ -70,9 +71,10 @@ def shrink_image(content: bytes, kind: str = "image") -> tuple[bytes, str]:
             raise InvalidImage(f"unsupported format {fmt!r}")
         if image.width * image.height > MAX_PIXELS:
             raise InvalidImage("too many pixels")
-        if fmt == "GIF":
-            image.verify()  # animation is kept: only check it decodes
-            return content, "gif"
+        if fmt == "GIF" or getattr(image, "is_animated", False):
+            # Animation (GIF, animated WebP or APNG) is kept: only check it decodes
+            image.verify()
+            return content, _FORMATS[fmt]
         image.load()
         original_size, had_exif = image.size, bool(image.getexif())
         icc = image.info.get("icc_profile")

@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 import asyncio
 import logging
+import math
 import os
 import re
 import secrets
@@ -9,7 +10,10 @@ from contextlib import asynccontextmanager
 
 import anyio
 from fastapi import FastAPI, WebSocket
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
@@ -126,6 +130,18 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="VEIN Music API", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+
+
+def _finite(value: float) -> float | None:
+    return value if math.isfinite(value) else None
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_error(request, exc: RequestValidationError):
+    """FastAPI's own 422, except that a NaN or infinity echoed back from the
+    request (JSON has no such numbers) no longer turns it into a 500."""
+    errors = jsonable_encoder(exc.errors(), custom_encoder={float: _finite})
+    return JSONResponse(status_code=422, content={"detail": errors})
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 allowed_origins = [FRONTEND_URL, "https://music.vein.guru"]

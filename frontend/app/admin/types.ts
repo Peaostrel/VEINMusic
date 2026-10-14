@@ -404,6 +404,7 @@ export interface AdminReport {
   } | null;
   /** The profile as it was when reported */
   snapshot: {
+    username?: string | null;
     display_name?: string | null;
     bio?: string | null;
     avatar_url?: string | null;

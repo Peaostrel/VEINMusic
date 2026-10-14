@@ -62,12 +62,29 @@ def _snapshot(**fields) -> str:
                       ensure_ascii=False)[:2000]
 
 
-def _target_label(report: Report, db: Session) -> str:
-    if report.target_type == "track":
+def _snapshot_data(report: Report) -> dict:
+    try:
         data = json.loads(str(report.target_snapshot or "{}"))
-        return f"трек «{data.get('artist')} — {data.get('title')}»"
-    username = db.query(User.username).filter(User.id == report.target_user_id).scalar()
-    return f"комментарий @{username}" if report.target_type == "comment" else f"профиль @{username}"
+    except ValueError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _shorten(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[:limit - 1].rstrip() + "…"
+
+
+def _target_label(report: Report, db: Session) -> str:
+    """Short enough for a notification (cut at 120 characters)."""
+    data = _snapshot_data(report)
+    if report.target_type == "track":
+        name = f"{data.get('artist')} — {data.get('title')}"
+        return f"трек «{_shorten(name, 50)}»"
+    username = db.query(User.username).filter(User.id == report.target_user_id).scalar() \
+        if report.target_user_id else None
+    known = username or data.get("username")
+    who = f"@{known}" if known else "удалённого пользователя"
+    return f"комментарий {who}" if report.target_type == "comment" else f"профиль {who}"
 
 
 def _same_target(query, target_type: str, track_id, comment_id, target_user_id):
@@ -102,8 +119,9 @@ def _alert_moderators(db: Session, report: Report) -> list:
 def _profile_snapshot(target: User) -> str:
     profile = target.profile
     if not profile:
-        return _snapshot(display_name=None, bio=None, avatar_url=None, cover_url=None, location=None)
-    return _snapshot(display_name=profile.display_name, bio=profile.bio,
+        return _snapshot(username=target.username, display_name=None, bio=None, avatar_url=None,
+                         cover_url=None, location=None)
+    return _snapshot(username=target.username, display_name=profile.display_name, bio=profile.bio,
                      avatar_url=profile.avatar_url, cover_url=profile.cover_url,
                      location=profile.location)
 

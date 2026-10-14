@@ -407,25 +407,50 @@ def unlock_showcase(username: str, data: ShowcaseUnlock, db: DB, admin: AdminUse
 REPORT_NOT_FOUND = "Жалоба не найдена"
 
 
+def _evidence(text) -> str:
+    """Stands in for the id of a deleted target: what was reported."""
+    import hashlib
+    return hashlib.sha256(str(text).encode()).hexdigest()[:16]
+
+
 def _report_key(r) -> str:
-    """Reports about the same thing are decided together."""
+    """Reports about the same thing are decided together. A deleted target
+    is told apart by what was reported (or not grouped at all)."""
     if r.target_type == "track":
-        return f"track:{r.track_id}"
+        if r.track_id is not None:
+            return f"track:{r.track_id}"
+        return f"track:gone:{_evidence(r.target_snapshot)}" if r.target_snapshot else f"report:{r.id}"
     if r.target_type == "comment":
-        return f"comment:{r.comment_id}:{r.target_user_id}"
-    return f"user:{r.target_user_id}"
+        if r.comment_id is not None:
+            return f"comment:{r.comment_id}:{r.target_user_id}"
+        return f"comment:gone:{r.target_user_id}:{_evidence(r.comment_text)}" if r.comment_text \
+            else f"report:{r.id}"
+    if r.target_user_id is not None:
+        return f"user:{r.target_user_id}"
+    return f"user:gone:{_evidence(r.target_snapshot)}" if r.target_snapshot else f"report:{r.id}"
 
 
 def _same_target(query, report):
+    """Open reports with the same `_report_key`."""
     query = query.filter(Report.target_type == report.target_type)
     if report.target_type == "track":
-        if report.track_id is None:  # the track was deleted: match what was reported
-            return query.filter(Report.track_id.is_(None), Report.target_snapshot == report.target_snapshot)
-        return query.filter(Report.track_id == report.track_id)
-    if report.target_type == "comment":
-        return query.filter(Report.target_user_id == report.target_user_id,
-                            Report.comment_id.is_not_distinct_from(report.comment_id))
-    return query.filter(Report.target_user_id == report.target_user_id)
+        if report.track_id is not None:
+            return query.filter(Report.track_id == report.track_id)
+        evidence = (Report.target_snapshot, report.target_snapshot)
+        query = query.filter(Report.track_id.is_(None))
+    elif report.target_type == "comment":
+        query = query.filter(Report.target_user_id.is_not_distinct_from(report.target_user_id))
+        if report.comment_id is not None:
+            return query.filter(Report.comment_id == report.comment_id)
+        evidence = (Report.comment_text, report.comment_text)
+        query = query.filter(Report.comment_id.is_(None))
+    else:
+        if report.target_user_id is not None:
+            return query.filter(Report.target_user_id == report.target_user_id)
+        evidence = (Report.target_snapshot, report.target_snapshot)
+        query = query.filter(Report.target_user_id.is_(None))
+    column, value = evidence
+    return query.filter(column == value) if value else query.filter(Report.id == report.id)
 
 
 def _rank_by_priority(rows: list) -> list:
@@ -536,15 +561,17 @@ def list_reports(
     limit: Annotated[int, Query(ge=1, le=100)] = 30,
     offset: Annotated[int, Query(ge=0)] = 0,
 ):
-    """Reports; `priority` puts targets reported by more people first and
-    keeps reports about one target together. `open_count` feeds the tab badge."""
+    """Reports; `priority` puts open targets reported by more people first
+    and keeps reports about one target together (the open queue is short;
+    closed ones, a growing history, are always newest first and paginated
+    in the database). `open_count` feeds the tab badge."""
     query = db.query(Report)
     if status != "all":
         query = query.filter(Report.status == status)
     if target_type:
         query = query.filter(Report.target_type == target_type)
     total = query.count()
-    if sort == "priority":
+    if sort == "priority" and status == "open":
         rows = _rank_by_priority(query.all())[offset:offset + limit]
     else:
         rows = query.order_by(Report.id.desc()).offset(offset).limit(limit).all()
@@ -571,8 +598,8 @@ class ReportResolve(BaseModel):
 def _notify_reporters(db, reports, status: str, label: str, admin) -> list:
     """Tell everyone who reported it what came of it (never who decided)."""
     from app.services import notifications
-    text = ("приняты меры. Спасибо, что помогаете!" if status == "resolved"
-            else "нарушений не нашли. Спасибо за внимательность!")
+    # Notifications are cut at 120 characters: the outcome goes first
+    text = "приняты меры, спасибо!" if status == "resolved" else "нарушений не нашли, спасибо!"
     sent, alerts = set(), []
     for r in reports:
         if not r.reporter_id or r.reporter_id in sent:
@@ -580,7 +607,7 @@ def _notify_reporters(db, reports, status: str, label: str, admin) -> list:
         sent.add(r.reporter_id)
         alerts.append(notifications.create(
             db, recipient_id=int(r.reporter_id), actor_id=int(admin.id), kind=notifications.KIND_SYSTEM,
-            message=f"Ваша жалоба на {label} рассмотрена: {text}"))
+            message=f"Жалоба рассмотрена: {text} ({label})"))
     return [a for a in alerts if a]
 
 

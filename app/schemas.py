@@ -1,4 +1,5 @@
 
+import math
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
@@ -43,6 +44,8 @@ def _clamp_position(value: Any) -> Any:
     """Like `_clamp_seconds`, keeping the fraction: a player position
     (audio currentTime) shown live must not lag up to a second behind."""
     if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if not math.isfinite(value):
+            raise ValueError("position must be a finite number")  # NaN would break JSON output
         return round(float(min(max(value, 0), 86400)), 3)
     return value
 

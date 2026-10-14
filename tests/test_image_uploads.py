@@ -87,6 +87,17 @@ def test_animated_gif_is_kept_as_is(uploader):
     assert stored == buffer.getvalue()
 
 
+@pytest.mark.parametrize(("fmt", "name", "mime"), [("WEBP", "a.webp", "image/webp"),
+                                                   ("PNG", "a.png", "image/png")])
+def test_animated_webp_and_apng_keep_every_frame(uploader, fmt, name, mime):
+    frames = [Image.new("RGB", (1200, 1200), color) for color in ("red", "blue")]
+    buffer = io.BytesIO()
+    frames[0].save(buffer, fmt, save_all=True, append_images=frames[1:], duration=100)
+    _, stored = uploader(buffer.getvalue(), "avatar", name, mime)
+    assert stored == buffer.getvalue()
+    assert Image.open(io.BytesIO(stored)).n_frames == 2
+
+
 @pytest.mark.parametrize("content", [
     b"\xFF\xD8\xFF" + b"\0" * 64,  # a JPEG signature over garbage
     b"not an image at all",

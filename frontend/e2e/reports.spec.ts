@@ -46,5 +46,5 @@ test("a reported track reaches the admin, is removed and the reporter learns it"
   const notes = await (
     await page.request.get(`${API_URL}/api/me/notifications`)
   ).json();
-  expect(JSON.stringify(notes)).toContain("рассмотрена: приняты меры");
+  expect(JSON.stringify(notes)).toContain("Жалоба рассмотрена: приняты меры");
 });
