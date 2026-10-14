@@ -190,6 +190,23 @@ app.include_router(geo.router)
 app.include_router(preview.router)
 
 
+_full_openapi = app.openapi
+
+
+def _public_openapi() -> dict:
+    """The public API description, without the admin panel's endpoints in
+    production: they stay protected, but there is no reason to hand out a
+    map of them. Development keeps the full schema."""
+    schema = _full_openapi()
+    if os.getenv("ENVIRONMENT") != "production":
+        return schema
+    return {**schema, "paths": {path: item for path, item in schema["paths"].items()
+                                if not path.startswith("/api/admin")}}
+
+
+app.openapi = _public_openapi  # type: ignore[method-assign]
+
+
 @app.get("/health", tags=["health"], responses={503: {"description": "A dependency is down"}})
 async def health():
     """Liveness/readiness probe: checks the database and (optionally) Redis."""

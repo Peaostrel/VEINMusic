@@ -67,7 +67,11 @@ function findNextLink(node: string, lastIndex: number): ParsedLink | null {
 
     if (endBracket + 1 < node.length && node[endBracket + 1] === "(") {
       const endParenthesis = node.indexOf(")", endBracket + 2);
-      if (endParenthesis !== -1) {
+      // Only web links: "[x](javascript:…)" stays plain text
+      const isWebLink = /^https?:\/\//i.test(
+        node.substring(endBracket + 2, endParenthesis).trim(),
+      );
+      if (endParenthesis !== -1 && isWebLink) {
         return {
           startBracket,
           endBracket,

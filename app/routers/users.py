@@ -143,22 +143,20 @@ def get_user_info(username: str, request: Request,
         "theme": user.profile.theme or "classic",
         "is_private": user.profile.is_private,
         "can_view_private": is_owner,
-        "hidden_artists": user.profile.hidden_artists,
-        "sync_privacy": user.profile.sync_privacy or "all",
+        # Account settings and connected services are the owner's business
+        "hidden_artists": user.profile.hidden_artists if is_owner else "",
+        "sync_privacy": (user.profile.sync_privacy or "all") if is_owner else None,
         "is_verified": user.integration.is_verified,
         **_showcase_fields(user.profile, can_showcase),
         "avatar_frame": user.profile.avatar_frame,
         "level": lvl,
         "rank": rnk,
-        "spotify_linked": bool(
-            user.integration.spotify_refresh_token),
-        "yandex_linked": bool(
-            user.integration.yandex_token),
-        "soundcloud_linked": bool(
-            user.integration.soundcloud_refresh_token),
-        "lastfm_username": user.integration.lastfm_username,
+        "spotify_linked": is_owner and bool(user.integration.spotify_refresh_token),
+        "yandex_linked": is_owner and bool(user.integration.yandex_token),
+        "soundcloud_linked": is_owner and bool(user.integration.soundcloud_refresh_token),
+        "lastfm_username": user.integration.lastfm_username if is_owner else None,
         "has_imported_lastfm": user.integration.has_imported_lastfm,
-        "last_sync": user.integration.last_sync,
+        "last_sync": user.integration.last_sync if is_owner else None,
         "role": role,
         "achievements": [
             {

@@ -17,15 +17,26 @@ SECRET_KEY = os.getenv(
     "super-secret-vein-key-change-it-in-production")
 
 
+# bcrypt only reads the first 72 bytes. bcrypt < 5 cut longer passwords
+# silently; 5.x raises instead, which turned a long (e.g. 37+ Cyrillic
+# letters) password into a server error at sign-up and locked out accounts
+# created with one before. Cutting it here keeps the old hashes valid.
+BCRYPT_MAX_BYTES = 72
+
+
+def _bcrypt_input(password: str) -> bytes:
+    return password.encode('utf-8')[:BCRYPT_MAX_BYTES]
+
+
 def get_password_hash(password: str) -> str:
     return bcrypt.hashpw(
-        password.encode('utf-8'),
+        _bcrypt_input(password),
         bcrypt.gensalt()).decode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(
-        plain_password.encode('utf-8'),
+        _bcrypt_input(plain_password),
         hashed_password.encode('utf-8'))
 
 
