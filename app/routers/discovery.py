@@ -16,6 +16,7 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 from app.core.constants import USER_AGENT_MOZILLA, YANDEX_MUSIC_DOMAIN
+from app.core.cover_urls import public_cover_url
 from app.core.rate_limit import HEAVY_READ_LIMIT, OUTBOUND_LIMIT, limiter
 from app.core.security import get_current_user
 from app.database import get_db
@@ -111,7 +112,8 @@ def get_recommendations(
         LIMIT 10
     """).bindparams(bindparam("twins", expanding=True))
     recs = db.execute(sql, {"twins": twin_names, "my_id": user.id}).fetchall()
-    data = [{"artist": r[0], "cover_url": r[1],
+    # Raw SQL skips the TrackCoverURL column type: proxy partner artwork here
+    data = [{"artist": r[0], "cover_url": public_cover_url(r[1]),
              "reason": "Слушают ваши вкусовые близнецы"} for r in recs]
     return data
 

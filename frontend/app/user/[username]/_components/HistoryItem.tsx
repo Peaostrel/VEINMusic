@@ -12,6 +12,7 @@ import {
   listeningElapsed,
   playbackTimestamp,
 } from "@/app/lib/playback";
+import { coverAt } from "@/app/lib/coverSize";
 
 const mmss = (sec: number) =>
   `${Math.floor(sec / 60)
@@ -129,7 +130,12 @@ export function HistoryItem({
   return (
     <li className="grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3.5 border-b border-line-soft py-2.5 sm:grid-cols-[40px_minmax(0,1fr)_90px_auto]">
       {cover ? (
-        <img src={cover} alt="" className="h-10 w-10 rounded object-cover" />
+        <img
+          src={coverAt(cover, 40)}
+          alt=""
+          loading="lazy"
+          className="h-10 w-10 rounded object-cover"
+        />
       ) : (
         <span className="h-10 w-10 rounded bg-surface-2" />
       )}

@@ -17,6 +17,7 @@ import {
   PlayingBars,
   Segmented,
 } from "@/components/ui";
+import { coverAt } from "@/app/lib/coverSize";
 
 interface FeedItem {
   id: number;
@@ -141,8 +142,9 @@ export default function GlobalFeed() {
               >
                 {cover ? (
                   <img
-                    src={cover}
+                    src={coverAt(cover, 48)}
                     alt=""
+                    loading="lazy"
                     className="h-12 w-12 rounded-lg object-cover"
                   />
                 ) : (

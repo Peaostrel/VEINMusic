@@ -7,6 +7,7 @@ import { playbackTimestamp } from "@/app/lib/playback";
 import type { ProfileViewProps } from "./useProfilePage";
 import type { ProfileSection } from "@/app/lib/types";
 import { useNow } from "./hooks";
+import { coverAt } from "@/app/lib/coverSize";
 
 function Cover({
   src,
@@ -17,8 +18,9 @@ function Cover({
   const shape = round ? "rounded-full" : "rounded";
   return src ? (
     <img
-      src={getSafeUrl(src)}
+      src={getSafeUrl(coverAt(src, size))}
       alt=""
+      loading="lazy"
       className={`shrink-0 object-cover ${shape}`}
       style={style}
     />
@@ -80,8 +82,9 @@ export function ProfileMainGrid({ data, recs, wrapped, u }: ProfileViewProps) {
                   >
                     {r.cover_url ? (
                       <img
-                        src={getSafeUrl(r.cover_url)}
+                        src={getSafeUrl(coverAt(r.cover_url, 126))}
                         alt=""
+                        loading="lazy"
                         className="aspect-square w-full rounded-lg object-cover"
                       />
                     ) : (

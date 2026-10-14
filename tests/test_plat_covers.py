@@ -63,3 +63,21 @@ def test_proxy_never_accepts_arbitrary_urls_or_paths(client, monkeypatch, path):
                                   "https://plat-music.ru/private/avatar.jpg"])
 def test_other_urls_are_preserved(value):
     assert public_cover_url(value) == value
+
+
+def test_recommendations_proxy_partner_artwork(client, db, monkeypatch):
+    """The raw SQL behind recommendations bypasses the column type."""
+    from app.models import Scrobble, User, UserIntegration, UserProfile
+    monkeypatch.setenv("API_BASE_URL", "https://api.music.vein.guru")
+    me, twin = (User(username=name, hashed_password="x", profile=UserProfile(),
+                     integration=UserIntegration()) for name in ("cover_me", "cover_twin"))
+    track = Track(title="Partner artwork", artist="Partner Artist", cover_url=UPSTREAM, duration=180)
+    db.add_all([me, twin, track])
+    db.flush()
+    db.add(Scrobble(user_id=twin.id, track_id=track.id, source="plat", listened_sec=180))
+    db.commit()
+    monkeypatch.setattr("app.routers.discovery.get_taste_twins",
+                        lambda username, db: [{"username": "cover_twin"}])
+    recs = client.get("/api/recommendations", params={"username": "cover_me"}).json()
+    assert recs == [{"artist": "Partner Artist", "cover_url": "https://api.music.vein.guru" + PROXY_PATH,
+                     "reason": "Слушают ваши вкусовые близнецы"}]

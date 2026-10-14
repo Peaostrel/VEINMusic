@@ -26,6 +26,7 @@ import { FollowModal } from "./_components/FollowModal";
 import { CompatibilityModal } from "./_components/CompatibilityModal";
 import { ProfileMainGrid } from "./_components/ProfileMainGrid";
 import { useProfilePage } from "./_components/useProfilePage";
+import { coverAt } from "@/app/lib/coverSize";
 
 function StatusScreen({
   title,
@@ -187,7 +188,11 @@ export default function Profile() {
         hasBanner
       />
 
-      <NowPlaying username={String(username)} variant="profile" />
+      <NowPlaying
+        username={String(username)}
+        variant="profile"
+        live={isMyProfile}
+      />
 
       <ProfileStatsSection
         u={u}
@@ -216,7 +221,7 @@ export default function Profile() {
                   >
                     {cover ? (
                       <img
-                        src={cover}
+                        src={coverAt(cover, 48)}
                         alt=""
                         className="h-12 w-12 shrink-0 rounded-lg object-cover"
                       />

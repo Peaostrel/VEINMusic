@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { CalendarClock, Sparkles, Search, Music2 } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
 import { btn, input, EmptyState, Loading, PageHeader } from "@/components/ui";
@@ -23,6 +24,15 @@ interface Memories {
 }
 
 export default function LibraryPage() {
+  const router = useRouter();
+  // Guests saw two red "failed to load" errors; send them to sign in instead
+  const [guest, setGuest] = useState(false);
+  useEffect(() => {
+    if (!localStorage.getItem("username")) {
+      setGuest(true);
+      router.replace("/auth");
+    }
+  }, [router]);
   const [query, setQuery] = useState("");
   const [saved, setSaved] = useState<MemoryTrack[]>([]);
   const [savedError, setSavedError] = useState("");
@@ -31,6 +41,7 @@ export default function LibraryPage() {
   const [data, setData] = useState<Memories | null>(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
+    if (!localStorage.getItem("username")) return;
     const controller = new AbortController();
     fetch(`${API_URL}/api/me/listen-later?limit=4`, {
       credentials: "include",
@@ -53,6 +64,7 @@ export default function LibraryPage() {
     return () => controller.abort();
   }, []);
   useEffect(() => {
+    if (!localStorage.getItem("username")) return;
     const controller = new AbortController();
     setLoading(true);
     setError("");
@@ -79,6 +91,7 @@ export default function LibraryPage() {
       });
     return () => controller.abort();
   }, [date]);
+  if (guest) return <Loading label="Открываем вход…" />;
   return (
     <main className="mx-auto flex w-full max-w-[1000px] flex-col gap-8 px-4 py-8 sm:px-8 lg:py-10">
       <PageHeader

@@ -7,6 +7,7 @@ import { Avatar, EmptyState, Loading, Meter, btn } from "@/components/ui";
 import type { AchievementInfo } from "@/app/lib/types";
 import { renderDescriptionWithLinks } from "@/app/lib/achievementText";
 import { AchievementTrackProgress } from "./_components/AchievementTrackProgress";
+import { coverAt } from "@/app/lib/coverSize";
 
 /** GET /api/achievements/all/{username} */
 interface AchievementsResponse {
@@ -134,7 +135,8 @@ export default function AchievementsPage() {
                 >
                   {a.target_image ? (
                     <img
-                      src={a.target_image}
+                      src={coverAt(a.target_image, 44)}
+                      loading="lazy"
                       className="h-full w-full object-cover"
                       alt=""
                       onError={(e) => {

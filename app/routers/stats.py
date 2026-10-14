@@ -10,8 +10,9 @@ from fastapi import (
     HTTPException,
     Request,
 )
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.constants import ACTIVE_PLAYBACK_WINDOW_SEC, ORDER_PLAYS_DESC
 from app.core.rate_limit import HEAVY_READ_LIMIT, limiter
@@ -36,7 +37,7 @@ from app.services.privacy import (
     audience_cache_key, filter_public_feed, public_feed_user_ids,
     public_statistics_users, visible_statistics_users,
 )
-from app.services.user_preferences import preference_enabled, preferences_dict
+from app.services.user_preferences import preference_enabled
 from app.services.user_stats import (
     get_active_streak,
     get_user_level_info,
@@ -243,7 +244,8 @@ def get_wrapped_stats(
         "period": period_label,
         "top_artist": top_artist[0] if top_artist else "Нет данных",
         "total_minutes": int(total_min // 60),
-        "status": "Legendary" if total_min > 5000 else "Active",
+        # total_min holds seconds: the badge is for 5000+ minutes
+        "status": "Легенда" if total_min // 60 > 5000 else "Активный слушатель",
         "total_scrobbles": totals["scrobbles"],
         "unique_artists": totals["artists"],
         "unique_tracks": totals["tracks"],
@@ -256,38 +258,25 @@ def get_wrapped_stats(
 
 
 # --- /api/feed/global ---
+GLOBAL_FEED_CACHE_KEY = "global_feed"
+# The same for every visitor (home page and feed): built at most every few
+# seconds. Privacy and bans are rechecked on every read by filter_public_feed.
+GLOBAL_FEED_TTL = 5
+
+
 @router.get("/api/feed/global")
 def get_global_feed(db: Annotated[Session, Depends(get_db)]):
-    # Latest scrobbles from public users
-    scrobbles = db.query(Scrobble).join(User).join(UserProfile).filter(
-        UserProfile.is_private.is_(False), User.is_banned.isnot(True),
-        User.id.in_(public_feed_user_ids(db))).order_by(
-        Scrobble.id.desc()).limit(100).all()
-    visible = [
-        scrobble for scrobble in scrobbles
-        if preference_enabled(scrobble.user.profile, "feed", "share_scrobbles")
-    ]
-    feed = []
-    for scrobble in visible:
-        item = format_history_item(scrobble, scrobble.track)
-        current_track_public = (
-            preferences_dict(scrobble.user.profile)["privacy"]["current_track"]
-            == "all"
-        )
-        show_online = preference_enabled(
-            scrobble.user.profile, "profile", "show_online_status"
-        )
-        if item["is_playing"] and (not current_track_public or not show_online):
-            continue
-        if not preference_enabled(
-                scrobble.user.profile, "privacy", "show_listening_source"):
-            item["source"] = ""
-        item["can_like"] = preference_enabled(
-            scrobble.user.profile, "feed", "allow_likes")
-        item["can_comment"] = preference_enabled(
-            scrobble.user.profile, "feed", "allow_comments")
-        feed.append(item)
-    return {"feed": filter_public_feed(feed, db)[:20]}
+    cached = get_from_cache(GLOBAL_FEED_CACHE_KEY, ttl=GLOBAL_FEED_TTL)
+    if cached is None:
+        # Latest scrobbles from public users; tracks in the same query
+        scrobbles = db.query(Scrobble).options(joinedload(Scrobble.track)).join(User).join(
+            UserProfile).filter(
+            UserProfile.is_private.is_(False), User.is_banned.isnot(True),
+            User.id.in_(public_feed_user_ids(db))).order_by(
+            Scrobble.id.desc()).limit(100).all()
+        cached = jsonable_encoder([format_history_item(s, s.track) for s in scrobbles])
+        set_to_cache(GLOBAL_FEED_CACHE_KEY, cached, expire=60)
+    return {"feed": filter_public_feed(cached, db)[:20]}
 
 
 def _get_activity_stats(
@@ -423,6 +412,34 @@ def get_detailed_stats(username: str,
             user, period, date_from, date_to)
     except InvalidStatsPeriod as exc:
         raise HTTPException(422, str(exc)) from exc
+    # ~17 queries: reused until the user's listening changes (or briefly,
+    # for catalog edits and the moving edge of relative periods)
+    location = user.profile.location if user.profile else ""
+    key = (f"detailed_stats:{user.id}:{period}:{date_from}:{date_to}:"
+           f"{location}:{_listening_version(db, int(user.id))}")
+    cached = get_from_cache(key, ttl=DETAILED_STATS_TTL)
+    if cached is not None:
+        return cached
+    result = jsonable_encoder(_detailed_stats(
+        db, user, period, period_start, period_end, period_label))
+    set_to_cache(key, result, expire=DETAILED_STATS_TTL)
+    return result
+
+
+DETAILED_STATS_TTL = 120
+
+
+def _listening_version(db: Session, user_id: int) -> str:
+    """Changes with any new, advanced, counted, excluded, restored, deleted
+    or re-linked scrobble of the user (one indexed aggregate)."""
+    row = db.query(
+        func.count(Scrobble.id), func.max(Scrobble.id), func.max(Scrobble.updated_at),
+        func.coalesce(func.sum(Scrobble.listened_sec), 0), func.coalesce(func.sum(Scrobble.track_id), 0),
+    ).filter(Scrobble.user_id == user_id).one()
+    return ":".join(str(value) for value in row)
+
+
+def _detailed_stats(db: Session, user: User, period: str, period_start, period_end, period_label):
     base_filter = _counted_filter(int(user.id), period_start, period_end)
 
     # 1. General Stats

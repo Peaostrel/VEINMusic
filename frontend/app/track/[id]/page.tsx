@@ -42,9 +42,11 @@ export default function TrackPage({
   if (loading) return <Loading label="Загружаем трек…" />;
   if (!data)
     return (
-      <EmptyState title="Трек не найден">
-        Возможно, запись была объединена с другой.
-      </EmptyState>
+      <main className="mx-auto w-full max-w-[820px] px-4 py-10 sm:px-8">
+        <EmptyState title="Трек не найден">
+          Возможно, запись была объединена с другой.
+        </EmptyState>
+      </main>
     );
   return (
     <main className="mx-auto flex w-full max-w-[820px] flex-col gap-7 px-4 py-10 sm:px-8">
