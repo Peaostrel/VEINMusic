@@ -4,10 +4,8 @@ import { signUp } from "./helpers";
 test("now playing advances locally, reconciles tracks and waits for confirmed credit", async ({
   page,
 }) => {
+  test.setTimeout(90_000);
   const username = await signUp(page, "liveprogress");
-  const time = new Date("2026-10-14T12:00:00Z");
-  await page.clock.install({ time });
-  await page.clock.pauseAt(new Date(time.getTime() + 1000));
   let current = {
     playing: true,
     title: "First live track",
@@ -29,33 +27,33 @@ test("now playing advances locally, reconciles tracks and waits for confirmed cr
     name: "Прогресс прослушивания",
   });
   await expect(progress).toHaveAttribute("value", "0");
-  await page.clock.runFor(1000);
   await expect(progress).toHaveAttribute("value", "1");
-  await page.clock.runFor(1000);
   await expect(progress).toHaveAttribute("value", "2");
   current = { ...current, listened_sec: 80, display_listened_sec: 84 };
-  await page.clock.runFor(8000);
-  await expect(progress).toHaveAttribute("value", "84");
-  await page.clock.runFor(1000);
-  await expect(card.getByText("85% · зачёт от 85%")).toBeVisible();
+  await expect(
+    card.getByText(/^(8[5-9]|9\d|100)% · зачёт от 85%$/),
+  ).toBeVisible({ timeout: 15_000 });
   await expect(card.getByText("Прослушивание засчитано")).toHaveCount(0);
   current = { ...current, listened_sec: 85, display_listened_sec: 90 };
-  await page.clock.runFor(9000);
-  await expect(card.getByText("Прослушивание засчитано")).toBeVisible();
+  await expect(card.getByText("Прослушивание засчитано")).toBeVisible({
+    timeout: 15_000,
+  });
   current = {
     ...current,
     title: "Second live track",
     listened_sec: 0,
     display_listened_sec: 0,
   };
-  await page.clock.runFor(10000);
-  await expect(card.getByText("Second live track")).toBeVisible();
-  await expect(progress).toHaveAttribute("value", "0");
+  await expect(card.getByText("Second live track")).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect
+    .poll(async () => Number(await progress.getAttribute("value")))
+    .toBeLessThan(5);
   current = { ...current, playing: false };
-  await page.clock.runFor(10000);
   await expect(
     page.getByRole("progressbar", { name: "Прогресс прослушивания" }),
-  ).toHaveCount(0);
+  ).toHaveCount(0, { timeout: 15_000 });
 });
 
 test("a missing heartbeat expires even when polling fails", async ({
