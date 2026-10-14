@@ -142,6 +142,8 @@ export function useProfilePage() {
 
   useEffect(() => {
     if (!username) return;
+    let active = true;
+    let refreshing = false;
 
     const fetchAllData = async () => {
       try {
@@ -215,6 +217,7 @@ export function useProfilePage() {
               }),
           ]);
 
+        if (!active) return;
         setData({
           history: hRes.history || [],
           stats: sRes || {},
@@ -232,12 +235,57 @@ export function useProfilePage() {
         if (uRes) setError("");
         else setError("User not found");
       } catch (err) {
+        if (!active) return;
         console.error("Ошибка загрузки профиля:", err);
         setError("Ошибка подключения к серверу");
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
+
+    const refreshLiveData = async () => {
+      if (!active || refreshing || document.visibilityState !== "visible")
+        return;
+      refreshing = true;
+      try {
+        const responses = await Promise.all(
+          ["history", "stats", "user"].map((path) =>
+            fetch(
+              `${API_URL}/api/${path}/${encodeURIComponent(String(username))}`,
+              {
+                credentials: "include",
+                cache: "no-store",
+              },
+            ),
+          ),
+        );
+        if (responses.some((res) => res.status === 403 || res.status === 404)) {
+          await fetchAllData();
+          return;
+        }
+        if (responses.some((res) => !res.ok)) return;
+        const [history, stats, user] = await Promise.all(
+          responses.map((res) => res.json()),
+        );
+        if (active)
+          setData((prev) => ({
+            ...prev,
+            history: history.history || [],
+            stats,
+            user,
+          }));
+      } catch {
+        // Preserve the last snapshot while disconnected.
+      } finally {
+        refreshing = false;
+      }
+    };
+    const refresh = () => {
+      void refreshLiveData();
+    };
+    const timer = setInterval(refresh, 15_000);
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("online", refresh);
 
     const checkNotifications = () => {
       void fetchAndShowNotifications(
@@ -252,34 +300,49 @@ export function useProfilePage() {
     checkNotifications();
 
     // Live updates: the server only opens a user's own channel
-    if (!isMyProfile) return;
-    return openSocket(
-      `/ws/${username}`,
-      (ws) => {
-        wsRef.current = ws;
-        ws.onmessage = (event) => {
-          const msg = JSON.parse(event.data);
-          if (msg.type === "NEW_SCROBBLE") {
-            handleNewScrobble(msg.track);
-            checkNotifications();
-          } else if (msg.type === "PLAYBACK_STATE") {
-            handlePlaybackState(msg.id, msg.is_playing);
-          } else if (msg.type === "SYNC_INVITE") {
-            if (
-              confirm(
-                `Пользователь ${msg.from} хочет слушать музыку вместе! Перейти к нему?`,
-              )
-            ) {
-              router.push(`/user/${msg.from}`);
-            }
-          } else if (msg.type === "IMPORT_FINISHED") {
-            alert(msg.message);
-            void fetchAllData();
-          }
-        };
-      },
-      { authed: true },
-    );
+    const closeSocket = isMyProfile
+      ? openSocket(
+          `/ws/${username}`,
+          (ws) => {
+            wsRef.current = ws;
+            ws.onopen = refresh;
+            ws.onmessage = (event) => {
+              try {
+                const msg = JSON.parse(event.data);
+                if (msg.type === "NEW_SCROBBLE") {
+                  handleNewScrobble(msg.track);
+                  refresh();
+                  checkNotifications();
+                } else if (msg.type === "PLAYBACK_STATE") {
+                  handlePlaybackState(msg.id, msg.is_playing);
+                  refresh();
+                } else if (msg.type === "SYNC_INVITE") {
+                  if (
+                    confirm(
+                      `Пользователь ${msg.from} хочет слушать музыку вместе! Перейти к нему?`,
+                    )
+                  ) {
+                    router.push(`/user/${msg.from}`);
+                  }
+                } else if (msg.type === "IMPORT_FINISHED") {
+                  alert(msg.message);
+                  void fetchAllData();
+                }
+              } catch {
+                // Ignore malformed messages; polling can still reconcile state.
+              }
+            };
+          },
+          { authed: true },
+        )
+      : undefined;
+    return () => {
+      active = false;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("online", refresh);
+      closeSocket?.();
+    };
   }, [username, isMyProfile, router]);
 
   // Таймеры для уведомлений теперь создаются индивидуально при их добавлении

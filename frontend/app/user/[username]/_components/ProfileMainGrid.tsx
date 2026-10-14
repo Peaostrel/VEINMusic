@@ -3,6 +3,7 @@
 import { Meter } from "@/components/ui";
 import { getSafeUrl, getTrackUrl } from "./profileUtils";
 import { ArtistLinks, HistoryItem } from "./HistoryItem";
+import { playbackTimestamp } from "@/app/lib/playback";
 import type { ProfileViewProps } from "./useProfilePage";
 import type { ProfileSection } from "@/app/lib/types";
 import { useNow } from "./hooks";
@@ -118,7 +119,7 @@ export function ProfileMainGrid({ data, recs, wrapped, u }: ProfileViewProps) {
                     idx === 0 &&
                     (item.is_playing ||
                       (now !== null &&
-                        now - Date.parse(item.updated_at + "Z") <
+                        now - playbackTimestamp(item.updated_at) <
                           15 * 60 * 1000));
                   return (
                     <HistoryItem

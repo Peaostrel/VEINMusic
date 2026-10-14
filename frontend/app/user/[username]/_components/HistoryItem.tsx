@@ -1,11 +1,17 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useCallback, useState } from "react";
 import Link from "next/link";
 import { sourceLabel } from "@/utils/formatters";
 import { PlayingBars } from "@/components/ui";
 import { getSafeUrl } from "./profileUtils";
 import type { HistoryEntry } from "@/app/lib/types";
+import { useVisiblePolling } from "@/app/lib/usePolling";
+import {
+  freshPlayback,
+  listeningElapsed,
+  playbackTimestamp,
+} from "@/app/lib/playback";
 
 const mmss = (sec: number) =>
   `${Math.floor(sec / 60)
@@ -42,26 +48,23 @@ export const LiveTimer = ({
   listenedSec,
   isPlaying,
   updatedAt,
+  duration,
 }: Readonly<{
   listenedSec: number;
   isPlaying: boolean;
   updatedAt: string;
+  duration: number;
 }>) => {
-  const [elapsed, setElapsed] = useState(listenedSec);
-
-  useEffect(() => {
-    setElapsed(listenedSec);
-    if (!isPlaying) return;
-
-    const updateTime = new Date(updatedAt + "Z").getTime();
-    const interval = setInterval(() => {
-      const diff = Math.floor((Date.now() - updateTime) / 1000);
-      setElapsed(listenedSec + Math.max(0, diff));
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [listenedSec, isPlaying, updatedAt]);
-
+  const [now, setNow] = useState(0);
+  const tick = useCallback(() => setNow(Date.now()), []);
+  useVisiblePolling(tick, 1000, isPlaying);
+  const elapsed = listeningElapsed(
+    listenedSec,
+    isPlaying,
+    updatedAt,
+    duration,
+    now,
+  );
   return <span className="font-mono">{mmss(elapsed)}</span>;
 };
 
@@ -69,25 +72,36 @@ function PlayState({
   item,
   isNowPlaying,
 }: Readonly<{ item: HistoryEntry; isNowPlaying: boolean }>) {
+  const [now, setNow] = useState(0);
+  const tick = useCallback(() => setNow(Date.now()), []);
+  useVisiblePolling(tick, 1000, isNowPlaying && item.is_playing);
+  const fresh = freshPlayback(item.updated_at, now);
+  const active = item.is_playing && fresh;
+  let stateLabel = "пауза";
+  if (item.is_playing) stateLabel = active ? "сейчас" : "нет связи";
   if (isNowPlaying) {
     return (
       <span
-        className={`flex items-center gap-2 font-mono text-[11px] ${item.is_playing ? "text-accent" : "text-fg-3"}`}
+        className={`flex items-center gap-2 font-mono text-[11px] ${active ? "text-accent" : "text-fg-3"}`}
       >
-        {item.is_playing && <PlayingBars />}
-        {item.is_playing ? "сейчас" : "пауза"}
+        {active && <PlayingBars />}
+        {stateLabel}
         <LiveTimer
           listenedSec={item.listened_sec}
           isPlaying={item.is_playing}
           updatedAt={item.updated_at}
+          duration={item.duration}
         />
       </span>
     );
   }
-  const timeStr = new Date(item.time + "Z").toLocaleTimeString("ru-RU", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const timeStr = new Date(playbackTimestamp(item.time)).toLocaleTimeString(
+    "ru-RU",
+    {
+      hour: "2-digit",
+      minute: "2-digit",
+    },
+  );
   let note: string | null = null;
   if (item.is_imported) note = "импорт";
   else if (item.listened_sec > 0) note = mmss(item.listened_sec);

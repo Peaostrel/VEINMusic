@@ -124,54 +124,71 @@ export default function DetailedStatsPage() {
     let active = true;
     setLoading(true);
     setError("");
+    let refreshing = false;
     const query = new URLSearchParams({ period });
     if (period === "custom") {
       query.set("date_from", dateFrom);
       query.set("date_to", dateTo);
     }
-    fetch(`${API_URL}/api/detailed-stats/${username}?${query}`, {
-      credentials: "include",
-      cache: "no-store",
-      signal: controller.signal,
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const body = await errorBody(res);
-          throw new Error(
-            res.status === 403
-              ? "Это приватный профиль"
-              : body?.detail || "Не удалось загрузить статистику",
+    const refresh = () => {
+      if (!active || refreshing || document.visibilityState !== "visible")
+        return;
+      refreshing = true;
+      void fetch(`${API_URL}/api/detailed-stats/${username}?${query}`, {
+        credentials: "include",
+        cache: "no-store",
+        signal: controller.signal,
+      })
+        .then(async (res) => {
+          if (!res.ok) {
+            const body = await errorBody(res);
+            throw new Error(
+              res.status === 403
+                ? "Это приватный профиль"
+                : body?.detail || "Не удалось загрузить статистику",
+            );
+          }
+          return (await res.json()) as DetailedStats;
+        })
+        .then((data) => {
+          if (!active) return;
+          setError("");
+          if (
+            period === "30d" &&
+            data.total_scrobbles === 0 &&
+            !hasCheckedFallback
+          ) {
+            // Nothing in the last 30 days on the first load: show all time
+            setHasCheckedFallback(true);
+            setPeriod("all");
+          } else {
+            setStats(data);
+            setLoading(false);
+          }
+        })
+        .catch((requestError: unknown) => {
+          if (!active) return;
+          setError(
+            requestError instanceof Error
+              ? requestError.message
+              : "Не удалось загрузить статистику",
           );
-        }
-        return (await res.json()) as DetailedStats;
-      })
-      .then((data) => {
-        if (!active) return;
-        if (
-          period === "30d" &&
-          data.total_scrobbles === 0 &&
-          !hasCheckedFallback
-        ) {
-          // Nothing in the last 30 days on the first load: show all time
-          setHasCheckedFallback(true);
-          setPeriod("all");
-        } else {
-          setStats(data);
           setLoading(false);
-        }
-      })
-      .catch((requestError: unknown) => {
-        if (!active) return;
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : "Не удалось загрузить статистику",
-        );
-        setLoading(false);
-      });
+        })
+        .finally(() => {
+          refreshing = false;
+        });
+    };
+    refresh();
+    const timer = setInterval(refresh, 30_000);
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("online", refresh);
     return () => {
       active = false;
       controller.abort();
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("online", refresh);
     };
   }, [username, period, dateFrom, dateTo, hasCheckedFallback]);
 
