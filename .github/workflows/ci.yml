@@ -65,7 +65,7 @@ jobs:
 
       - name: Validate release scripts and proxy configuration
         run: |
-          bash -n deploy/deploy.sh deploy/blue-green.sh deploy/rollback.sh deploy/cloudflare.sh
+          bash -n deploy/deploy.sh deploy/blue-green.sh deploy/rollback.sh deploy/cloudflare.sh deploy/check-server.sh deploy/harden-ssh.sh
           docker run --rm \
             -e SITE_DOMAIN=music.example.org -e API_DOMAIN=api.example.org -e ACME_EMAIL=admin@example.org \
             -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \

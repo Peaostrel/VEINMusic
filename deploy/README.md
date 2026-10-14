@@ -10,6 +10,8 @@ GitHub Container Registry, Caddy с автоматическим HTTPS, нару
 | `Caddyfile` | HTTPS-сертификаты и проксирование сайта и API (вместе с WebSocket) |
 | `.env.example` | Настройки; `deploy.sh` создаёт из него `.env` и генерирует секреты |
 | `setup-server.sh` | Разовая подготовка Ubuntu: обновления, swap, Docker, фаервол, fail2ban |
+| `check-server.sh` | Проверка безопасности сервера без изменений: порты, SSH, fail2ban, входы, обновления |
+| `harden-ssh.sh` | Вход по SSH только по ключу и строгий fail2ban (см. `docs/security-setup.md`) |
 | `deploy.sh` | Первый запуск и обновления |
 | `install-auto-update.sh` | Таймер автодеплоя: `auto-update.sh` раз в 5 минут |
 
