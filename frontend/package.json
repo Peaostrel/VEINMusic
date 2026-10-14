@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:e2e": "playwright test",
+    "test:realtime": "node --test tests/realtime.test.mjs",
     "format:check": "prettier --check .",
     "format:write": "prettier --write .",
     "type-check": "tsc --noEmit"

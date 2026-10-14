@@ -66,14 +66,11 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
     const setup = (ws: WebSocket) => {
       socketRef.current = ws;
 
-      ws.onopen = () => {
-        setConnected(true);
-      };
-
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
           if (data.type === "ROOM_STATE") {
+            setConnected(true);
             setListeners(data.listeners || []);
             setHost(data.host || "");
             setMe(data.you || "");
@@ -121,12 +118,13 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
 
   // Smooth progress bar calculation
   useEffect(() => {
+    if (!connected) return;
     const interval = setInterval(() => {
       if (track.is_playing) {
         const nowSec = Date.now() / 1000;
-        const elapsed = nowSec - (track.updated_at || nowSec);
+        const elapsed = Math.max(0, nowSec - (track.updated_at || nowSec));
         const calc = Math.min(
-          (track.progress_sec || 0) + elapsed,
+          Math.max(0, track.progress_sec || 0) + elapsed,
           track.duration || 180,
         );
         setCurrentProgress(calc);
@@ -135,7 +133,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
       }
     }, 500);
     return () => clearInterval(interval);
-  }, [track]);
+  }, [track, connected]);
 
   // Scroll only the chat box: scrollIntoView also scrolled the page, so on
   // phones opening a room jumped past the player down to the chat
@@ -146,7 +144,8 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
 
   const handleSendChat = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || !socketRef.current) return;
+    if (!chatInput.trim() || socketRef.current?.readyState !== WebSocket.OPEN)
+      return;
 
     socketRef.current.send(
       JSON.stringify({
@@ -160,7 +159,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
   const isHost = !!me && me === host;
 
   const handleTogglePlay = () => {
-    if (!socketRef.current || !isHost) return;
+    if (socketRef.current?.readyState !== WebSocket.OPEN || !isHost) return;
     const nextPlay = !track.is_playing;
     socketRef.current.send(
       JSON.stringify({
@@ -248,9 +247,9 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
                   {[8, 16, 22, 14, 10, 18, 12].map((h, idx) => (
                     <span
                       key={idx}
-                      className={`w-1 rounded-full bg-accent ${track.is_playing ? "eq-bar" : ""}`}
+                      className={`w-1 rounded-full bg-accent ${track.is_playing && connected ? "eq-bar" : ""}`}
                       style={{
-                        height: track.is_playing ? h : 3,
+                        height: track.is_playing && connected ? h : 3,
                         animationDelay: `${idx * 0.12}s`,
                       }}
                     />
@@ -271,7 +270,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
               <button
                 type="button"
                 onClick={handleTogglePlay}
-                disabled={!isHost}
+                disabled={!isHost || !connected}
                 aria-label={track.is_playing ? "Пауза" : "Играть"}
                 className={`flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full transition-colors ${
                   isHost

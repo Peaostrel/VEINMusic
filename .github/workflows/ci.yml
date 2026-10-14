@@ -197,6 +197,10 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
+      - name: Test realtime recovery and playback clocks
+        working-directory: frontend
+        run: npm run test:realtime
+
       - name: Test Browser Extension
         run: node --test music-extension/tests/*.test.cjs
 
