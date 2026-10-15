@@ -757,7 +757,30 @@ def test_pause_and_resume_are_broadcast(db):
         asyncio.run(sp.process_scrobble(db, user, "Song", "Band", "", "", "yandex", 10, False, 200))
     messages = [c.args[1] for c in broadcast.await_args_list]
     assert [m["type"] for m in messages] == ["NEW_SCROBBLE", "PLAYBACK_STATE"]
-    assert messages[1] == {"type": "PLAYBACK_STATE", "id": s.id, "is_playing": False}
+    assert messages[1]["id"] == s.id
+    assert messages[1]["is_playing"] is False
+    assert messages[1]["track"]["is_playing"] is False
+    assert datetime.fromisoformat(messages[1]["track"]["updated_at"]).tzinfo is not None
+
+
+def test_background_metadata_does_not_overwrite_duration_from_a_new_heartbeat(db):
+    from app.database import SessionLocal
+    track = _track(db, duration=0, track_url="https://plat-music.ru/track/42")
+
+    async def slow_duration(_url):
+        # A player supplies the real length while the lookup is in flight.
+        with SessionLocal() as other:
+            other.get(Track, track.id).duration = 240
+            other.commit()
+        return 180
+
+    with patch.object(sp, "get_track_duration", side_effect=slow_duration), \
+            patch.object(sp, "get_track_genre", new=AsyncMock(return_value=None)), \
+            patch.object(sp, "get_fallback_genre", new=AsyncMock(return_value="Rock")):
+        asyncio.run(sp.enrich_track_metadata(track.id))
+    db.refresh(track)
+    assert track.duration == 240
+    assert track.genre == "Rock"
 
 
 def test_enrich_album_through_yandex_api_with_token():

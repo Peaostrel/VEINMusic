@@ -829,7 +829,8 @@ def _playback_details(user, scrobble, track, is_owner):
     show_source = is_owner or preference_enabled(user.profile, "privacy", "show_listening_source")
     details = {"source": scrobble.source if show_source else "",
                "duration": None, "listened_sec": None, "excluded": None,
-               "display_listened_sec": None, "playback_remaining_sec": None}
+               "display_listened_sec": None, "display_position_sec": None,
+               "playback_remaining_sec": None}
     if is_owner:
         last_seen = scrobble.updated_at or scrobble.played_at
         if last_seen.tzinfo is None:
@@ -837,10 +838,13 @@ def _playback_details(user, scrobble, track, is_owner):
         elapsed = max(0, (datetime.now(UTC) - last_seen).total_seconds())
         duration = int(track.duration or 180)
         # This estimate is presentation-only; credit remains server-confirmed.
-        shown = int(scrobble.listened_sec or 0) + int(scrobble.pending_sec or 0) + elapsed
+        advance = elapsed if scrobble.is_playing else 0
+        shown = int(scrobble.listened_sec or 0) + int(scrobble.pending_sec or 0) + advance
+        position = scrobble.position_sec
         details.update(duration=int(track.duration or 180), listened_sec=int(scrobble.listened_sec or 0),
                        excluded=bool(scrobble.excluded_from_stats),
                        display_listened_sec=min(duration, max(0, shown)),
+                       display_position_sec=min(duration, max(0, position + advance)) if position is not None else None,
                        playback_remaining_sec=max(0, ACTIVE_PLAYBACK_WINDOW_SEC - elapsed))
     return details
 
@@ -871,10 +875,14 @@ def get_current_track(username: str, request: Request, db: Annotated[Session, De
         last_seen = last_seen.replace(tzinfo=UTC)
     is_active = s.is_playing and (datetime.now(UTC) - last_seen).total_seconds() < ACTIVE_PLAYBACK_WINDOW_SEC
 
-    if is_active:
+    # Keep the owner's explicit player pause visible, including short plays.
+    # An absent heartbeat is not a pause and must still expire normally.
+    is_paused = is_owner and not s.is_playing and s.position_sec is not None
+    if is_active or is_paused:
         lvl, rank, _, _ = get_user_level_info(user, db)
         return {
-            "playing": True,
+            "playing": bool(is_active),
+            **({"paused": True} if is_paused else {}),
             "title": t.title,
             "artist": t.artist,
             "cover_url": t.cover_url,

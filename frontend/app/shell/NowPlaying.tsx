@@ -4,13 +4,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { API_URL, openSocket } from "@/app/lib/api";
 import { useVisiblePolling } from "@/app/lib/usePolling";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
-import { Music2 } from "lucide-react";
+import { Music2, Pause } from "lucide-react";
+import { playbackTime, playbackTimestamp } from "@/app/lib/playback";
 import { sourceLabel } from "@/utils/formatters";
 import { PlayingBars } from "@/components/ui";
 import { coverAt } from "@/app/lib/coverSize";
 
 interface CurrentTrack {
   playing: boolean;
+  paused?: boolean;
   title?: string;
   artist?: string;
   cover_url?: string | null;
@@ -19,12 +21,13 @@ interface CurrentTrack {
   listened_sec?: number | null;
   excluded?: boolean | null;
   display_listened_sec?: number | null;
+  display_position_sec?: number | null;
   playback_remaining_sec?: number | null;
   receivedAt?: number;
 }
 
 // WebSocket events refresh immediately; polling also reconciles heartbeat data.
-const POLL_MS = 60_000;
+const POLL_MS = 10_000;
 
 /** "Now playing" card for the sidebar; quiet line when nothing plays. */
 export default function NowPlaying({
@@ -60,7 +63,7 @@ export default function NowPlaying({
     }
   }, [username]);
 
-  useVisiblePolling(load, track?.playing ? 10_000 : POLL_MS);
+  useVisiblePolling(load, POLL_MS);
   const tick = useCallback(() => setClock(performance.now()), []);
   useVisiblePolling(tick, 1_000, !!track?.playing);
   useEffect(() => {
@@ -86,14 +89,39 @@ export default function NowPlaying({
         ? openSocket(
             `/ws/${encodeURIComponent(username)}`,
             (ws) => {
+              ws.onopen = () => void load();
               ws.onmessage = (event) => {
                 try {
                   const msg = JSON.parse(event.data);
                   if (
                     msg.type === "NEW_SCROBBLE" ||
                     msg.type === "PLAYBACK_STATE"
-                  )
-                    void load();
+                  ) {
+                    if (!msg.track) {
+                      void load();
+                      return;
+                    }
+                    // A late HTTP response must not undo a pause or skip.
+                    requestSequence.current++;
+                    const item = msg.track;
+                    const age = Math.max(
+                      0,
+                      (Date.now() - playbackTimestamp(item.updated_at)) / 1000,
+                    );
+                    const advance = item.is_playing ? Math.min(age, 45) : 0;
+                    setTrack({
+                      ...item,
+                      playing: item.is_playing && age < 45,
+                      paused: !item.is_playing,
+                      display_listened_sec: item.listened_sec + advance,
+                      display_position_sec:
+                        item.position_sec == null
+                          ? null
+                          : item.position_sec + advance,
+                      playback_remaining_sec: Math.max(0, 45 - age),
+                      receivedAt: performance.now(),
+                    });
+                  }
                 } catch {
                   // not JSON
                 }
@@ -105,9 +133,14 @@ export default function NowPlaying({
     [username, load, live],
   );
 
-  const elapsed = Math.max(0, (clock - (track?.receivedAt ?? clock)) / 1_000);
+  const elapsed = track?.playing
+    ? Math.max(0, (clock - (track.receivedAt ?? clock)) / 1_000)
+    : 0;
   const remaining = track?.playback_remaining_sec ?? 45;
-  if (!track?.playing || elapsed >= remaining) {
+  if (
+    (!track?.playing && !track?.paused) ||
+    (track?.playing && elapsed >= remaining)
+  ) {
     if (variant !== "sidebar") return null;
     return (
       <p className="rounded-lg border border-dashed border-line px-3 py-2.5 text-xs text-fg-3">
@@ -139,6 +172,17 @@ export default function NowPlaying({
     <div className="space-y-2">
       {track.source && (
         <p className="text-xs text-fg-2">{sourceLabel(track.source)}</p>
+      )}
+      {track.display_position_sec != null && (
+        <p className="font-mono text-xs text-fg-2">
+          {playbackTime(
+            Math.min(
+              track.duration ?? Infinity,
+              track.display_position_sec + elapsed,
+            ),
+          )}
+          {track.duration ? ` / ${playbackTime(track.duration)}` : ""}
+        </p>
       )}
       {progress !== null && (
         <>
@@ -172,7 +216,11 @@ export default function NowPlaying({
         </span>
         <span className="block truncate text-xs text-fg-2">{track.artist}</span>
       </span>
-      <PlayingBars />
+      {track.paused ? (
+        <Pause className="h-4 w-4 text-fg-3" aria-label="Пауза" />
+      ) : (
+        <PlayingBars />
+      )}
     </span>
   );
   if (variant === "mobile")
@@ -197,7 +245,9 @@ export default function NowPlaying({
       aria-label="Сейчас играет"
       className="flex flex-col gap-3 rounded-xl border border-accent/20 bg-accent-soft p-4"
     >
-      <p className="text-xs font-medium text-accent">Сейчас играет</p>
+      <p className="text-xs font-medium text-accent">
+        {track.paused ? "На паузе" : "Сейчас играет"}
+      </p>
       {identity}
       {details}
     </section>

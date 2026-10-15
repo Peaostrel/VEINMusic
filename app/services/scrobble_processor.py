@@ -329,8 +329,13 @@ def _track_enrichment_needs(track: Track) -> tuple[str | None, bool, bool]:
 
 
 def _set_track_fields(db: Session, track: Track, fields: dict[str, Any]) -> None:
+    # A heartbeat may have supplied the actual duration while an optional
+    # network lookup was in flight. Fill only fields that are still missing.
     for name, value in fields.items():
-        setattr(track, name, value)
+        column = getattr(Track, name)
+        empty = 0 if name == "duration" else ""
+        db.query(Track).filter(Track.id == track.id, or_(column.is_(None), column == empty)).update(
+            {name: value}, synchronize_session=False)
     db.commit()
 
 
@@ -348,6 +353,10 @@ async def _get_or_create_track(
         _find_or_create_track, db, title, artist, cover_url, track_url, duration, album, user_id)
     if not may_enrich or not enrich:
         return track
+    return await _enrich_track_metadata(db, track)
+
+
+async def _enrich_track_metadata(db: Session, track: Track) -> Track:
 
     # Network lookups stay on the event loop; DB writes go to a thread
     url, need_duration, need_genre = await _run_db(_track_enrichment_needs, track)
@@ -362,6 +371,20 @@ async def _get_or_create_track(
     if fields:
         await _run_db(_set_track_fields, db, track, fields)
     return track
+
+
+async def enrich_track_metadata(track_id: int) -> None:
+    """Optional lookups use their own session, never the live request/lock."""
+    from app.database import SessionLocal
+    db = SessionLocal()
+    try:
+        track = await _run_db(db.get, Track, track_id)
+        if track is not None:
+            await _enrich_track_metadata(db, track)
+    except Exception:
+        logger.exception("Background track enrichment failed")
+    finally:
+        await _run_db(db.close)
 
 
 def _check_favorite(track: Track, user: User) -> bool:
@@ -424,14 +447,15 @@ def _determine_is_new(db: Session,
                       l_updated_at,
                       progress_sec: float,
                       restarted: bool = False,
-                      uncredited_sec: float = 0) -> tuple[bool,
+                      uncredited_sec: float = 0,
+                      playback_event: bool = False) -> tuple[bool,
                                                           str | None]:
     """Determine if a new scrobble should be created. Returns (is_new, early_return_status).
 
     `uncredited_sec`: listening since the previous report that ended the
     previous play (a detected restart), not added to it yet."""
     if not last_scrobble or last_scrobble.track_id != track.id:
-        if last_scrobble and last_scrobble.is_playing and (
+        if not playback_event and last_scrobble and last_scrobble.is_playing and (
                 now - l_updated_at).total_seconds() < 1.0:
             return False, "ignored_spam_protection"
 
@@ -733,7 +757,8 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
             db, user, track, source, last_scrobble, now, l_updated_at, progress_sec)
         replayed, uncredited = _restart_split(last_scrobble, now, l_updated_at, progress_sec, restarted)
     is_new, early_return = _determine_is_new(
-        db, track, last_scrobble, now, l_updated_at, progress_sec, restarted, uncredited)
+        db, track, last_scrobble, now, l_updated_at, progress_sec, restarted, uncredited,
+        playback_event=positional)
     if early_return:
         result["status"] = early_return
         return result
@@ -746,16 +771,21 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
                 db, user, last_scrobble, now - timedelta(seconds=replayed), l_updated_at)
         current = _start_scrobble(db, user_id, track, source, source_label, source_id, is_playing, now,
                                   replayed)
-        result["new_item"] = format_history_item(current, track)
     elif last_scrobble is not None and _update_scrobble_progress(
             db, user, track, last_scrobble, now, l_updated_at, is_playing, credit_sec, pending_sec,
             until_now=positional):
         result["counted"] = _counted_scrobble_payload(last_scrobble, track)
     if positional:
         _set_position(db, current, now, progress_sec)
-    if not is_new and last_scrobble is not None and was_playing != bool(is_playing):
-        # Pause / resume: pages update the "now playing" mark at once
-        result["state_change"] = {"id": int(last_scrobble.id), "is_playing": bool(is_playing)}
+    if is_new:
+        # Publish only after storing the position: the first frame must not
+        # temporarily show credited listening (often zero) as player time.
+        result["new_item"] = format_history_item(current, track)
+    elif current is not None and (positional or was_playing != bool(is_playing)):
+        # Position, timestamp and listening must travel together, including
+        # heartbeats/seeks. A bare play/pause flag reuses a stale timer anchor.
+        result["state_change"] = {"id": int(current.id), "is_playing": bool(is_playing),
+                                  "track": format_history_item(current, track)}
     return result
 
 
@@ -850,7 +880,7 @@ async def _process_scrobble(
 
     track = await _get_or_create_track(
         db, title, artist, cover_url, track_url, duration, album,
-        enrich=listening.auto_metadata, user_id=int(user.id))
+        enrich=listening.auto_metadata and source not in POSITION_SOURCES, user_id=int(user.id))
     result = await _run_db(_record_scrobble, db, user, track, source, progress_sec, is_playing,
                            credit_options.get("credit_sec"), credit_options.get("pending_sec", 0),
                            credit_options.get("collector", "client"))
@@ -865,6 +895,11 @@ async def _process_scrobble(
             "type": "PLAYBACK_STATE", **result["state_change"]})
     if result["counted"] is not None:
         await _dispatch_counted_scrobble(result["user_id"], result["counted"])
+    if result["new_item"] is not None and source in POSITION_SOURCES and listening.auto_metadata:
+        # Genre/length lookups can take seconds; playback is already visible
+        # and the next play/pause event must not wait behind those requests.
+        from app.core.redis import enqueue_background_task
+        await enqueue_background_task('enrich_track_metadata', int(track.id))
     return result["status"]
 
 

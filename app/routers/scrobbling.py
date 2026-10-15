@@ -158,6 +158,9 @@ def get_history(username: str,
     # (updated_at within the last 45 seconds and is_playing is True)
     now = datetime.now(UTC)
     active_threshold = now - timedelta(seconds=ACTIVE_PLAYBACK_WINDOW_SEC)
+    _, is_owner = _check_privacy_and_owner(user, request, db)
+    latest_id = db.query(func.max(Scrobble.id)).filter(
+        Scrobble.user_id == user.id).scalar_subquery()
 
     scrobbles = db.query(
         Scrobble,
@@ -165,6 +168,9 @@ def get_history(username: str,
         Scrobble.user_id == user.id,
         (Scrobble.listened_sec >= 15) | (
             Scrobble.is_playing.is_(True) & (Scrobble.updated_at >= active_threshold)
+        ) | (
+            (Scrobble.id == latest_id) & is_owner & Scrobble.is_playing.is_(False)
+            & Scrobble.position_sec.isnot(None)
         )
     ).order_by(
             Scrobble.id.desc()).limit(10).all()
@@ -175,7 +181,6 @@ def get_history(username: str,
     history = [
         format_history_item(s, t, counters=counters) for s, t in scrobbles
     ]
-    _, is_owner = _check_privacy_and_owner(user, request, db)
     can_see_live = _can_view_section(user, request, db, "current_track")
     show_online = preference_enabled(
         user.profile, "profile", "show_online_status"
