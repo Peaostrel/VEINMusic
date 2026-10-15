@@ -448,8 +448,7 @@ def _determine_is_new(db: Session,
                       progress_sec: float,
                       restarted: bool = False,
                       uncredited_sec: float = 0,
-                      playback_event: bool = False) -> tuple[bool,
-                                                          str | None]:
+                      playback_event: bool = False) -> tuple[bool, str | None]:
     """Determine if a new scrobble should be created. Returns (is_new, early_return_status).
 
     `uncredited_sec`: listening since the previous report that ended the
