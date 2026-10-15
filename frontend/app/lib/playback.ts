@@ -1,5 +1,32 @@
 const PLAYBACK_WINDOW_MS = 45_000;
 
+export function playbackTime(seconds: number): string {
+  const total = Math.floor(Math.max(0, seconds));
+  return `${Math.floor(total / 60)
+    .toString()
+    .padStart(2, "0")}:${(total % 60).toString().padStart(2, "0")}`;
+}
+
+/** Apply one complete player snapshot; older deliveries cannot revive a
+ * previous track or roll the same track back to an earlier pause/position. */
+export function applyPlaybackUpdate<
+  T extends { id: number; updated_at: string; is_playing: boolean },
+>(history: T[], track: T): T[] {
+  if (history[0]?.id > track.id) return history;
+  const previous = history.find((item) => item.id === track.id);
+  if (
+    previous &&
+    playbackTimestamp(previous.updated_at) > playbackTimestamp(track.updated_at)
+  )
+    return history;
+  return [
+    { ...previous, ...track },
+    ...history
+      .filter((item) => item.id !== track.id)
+      .map((item) => (item.is_playing ? { ...item, is_playing: false } : item)),
+  ].slice(0, 50);
+}
+
 export function playbackTimestamp(value: string): number {
   return Date.parse(
     value.replace(" ", "T") +

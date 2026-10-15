@@ -5,6 +5,7 @@ import type { getRankInfo, getNextRankInfo } from "@/app/lib/ranks";
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { API_URL, openSocket } from "@/app/lib/api";
+import { applyPlaybackUpdate } from "@/app/lib/playback";
 import { useCountries } from "@/app/lib/geo";
 import { useProfileTheme } from "./hooks";
 import { fetchAndShowNotifications } from "./notifications";
@@ -115,13 +116,12 @@ export function useProfilePage() {
   const [wrapped, setWrapped] = useState<WrappedStats | null>(null);
   const [mood, setMood] = useState<MoodInfo | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const playbackRevision = useRef(0);
 
   const handleNewScrobble = (track: HistoryEntry) => {
+    playbackRevision.current++;
     setData((prev) => {
-      const newHistory = [
-        track,
-        ...prev.history.filter((h) => h.id !== track.id),
-      ].slice(0, 50);
+      const newHistory = applyPlaybackUpdate(prev.history, track);
       return { ...prev, history: newHistory };
     });
   };
@@ -146,6 +146,7 @@ export function useProfilePage() {
     let refreshing = false;
 
     const fetchAllData = async () => {
+      const revision = playbackRevision.current;
       try {
         const viewer = localStorage.getItem("username") || "null";
         const ts = Date.now();
@@ -218,8 +219,11 @@ export function useProfilePage() {
           ]);
 
         if (!active) return;
-        setData({
-          history: hRes.history || [],
+        setData((prev) => ({
+          history:
+            revision === playbackRevision.current
+              ? hRes.history || []
+              : prev.history,
           stats: sRes || {},
           user: uRes || null,
           taste: tRes,
@@ -228,7 +232,7 @@ export function useProfilePage() {
             following: 0,
             is_following: false,
           },
-        });
+        }));
         setRecs(rRes);
         setWrapped(wRes);
         setMood(mRes);
@@ -247,6 +251,7 @@ export function useProfilePage() {
       if (!active || refreshing || document.visibilityState !== "visible")
         return;
       refreshing = true;
+      const revision = playbackRevision.current;
       try {
         const responses = await Promise.all(
           ["history", "stats", "user"].map((path) =>
@@ -270,7 +275,10 @@ export function useProfilePage() {
         if (active)
           setData((prev) => ({
             ...prev,
-            history: history.history || [],
+            history:
+              revision === playbackRevision.current
+                ? history.history || []
+                : prev.history,
             stats,
             user,
           }));
@@ -278,6 +286,8 @@ export function useProfilePage() {
         // Preserve the last snapshot while disconnected.
       } finally {
         refreshing = false;
+        if (active && revision !== playbackRevision.current)
+          void refreshLiveData();
       }
     };
     const refresh = () => {
@@ -316,7 +326,11 @@ export function useProfilePage() {
                   refresh();
                   checkNotifications();
                 } else if (msg.type === "PLAYBACK_STATE") {
-                  handlePlaybackState(msg.id, msg.is_playing);
+                  if (msg.track) handleNewScrobble(msg.track);
+                  else {
+                    playbackRevision.current++;
+                    handlePlaybackState(msg.id, msg.is_playing);
+                  }
                   refresh();
                 } else if (msg.type === "SYNC_INVITE") {
                   if (

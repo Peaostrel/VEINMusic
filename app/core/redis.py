@@ -154,6 +154,11 @@ async def _run_broadcast_push_job(title: str, body: str, url: str, user_ids=None
         logging.exception("Broadcast push failed")
 
 
+async def _run_track_enrichment_job(track_id: int) -> None:
+    from app.services.scrobble_processor import enrich_track_metadata
+    await enrich_track_metadata(track_id)
+
+
 # In-process fallbacks for async jobs when the arq worker is unavailable
 _ASYNC_JOB_FALLBACKS: dict[str, Callable[..., Coroutine[Any, Any, None]]] = {
     'async_dispatch_webhook': _run_webhook_job,
@@ -161,6 +166,7 @@ _ASYNC_JOB_FALLBACKS: dict[str, Callable[..., Coroutine[Any, Any, None]]] = {
     'import_lastfm': _run_lastfm_import_job,
     'send_social_push': _run_social_push_job,
     'broadcast_push': _run_broadcast_push_job,
+    'enrich_track_metadata': _run_track_enrichment_job,
 }
 
 

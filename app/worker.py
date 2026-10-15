@@ -72,6 +72,11 @@ async def import_lastfm(ctx: dict[str, Any], job_id: int) -> None:
     await run_import_job(job_id)
 
 
+async def enrich_track_metadata(ctx: dict[str, Any], track_id: int) -> None:
+    from app.services.scrobble_processor import enrich_track_metadata as enrich
+    await enrich(track_id)
+
+
 async def send_social_push(ctx: dict[str, Any], notification_id: int) -> None:
     """ARQ job: deliver a like/comment/follow notification as Web Push."""
     from app.services.notifications import send_social_push as deliver
@@ -169,6 +174,7 @@ class WorkerSettings:
         check_achievements,
         async_dispatch_webhook,
         async_export_scrobble,
+        enrich_track_metadata,
         import_lastfm,
         send_social_push,
         broadcast_push,

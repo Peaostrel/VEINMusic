@@ -16,9 +16,72 @@ async function load(path) {
   );
 }
 const { openSocket } = await load("../app/lib/api.ts");
-const { listeningElapsed, freshPlayback, playbackTimestamp } = await load(
-  "../app/lib/playback.ts",
-);
+const {
+  listeningElapsed,
+  freshPlayback,
+  playbackTimestamp,
+  applyPlaybackUpdate,
+  playbackTime,
+} = await load("../app/lib/playback.ts");
+
+test("playback snapshots freeze pauses, re-anchor resumes and reject older tracks", () => {
+  const start = "2026-10-15T12:00:00Z";
+  const first = {
+    id: 1,
+    updated_at: start,
+    is_playing: true,
+    position_sec: 120,
+    listened_sec: 15,
+    likes_count: 2,
+  };
+  const pause = {
+    ...first,
+    updated_at: "2026-10-15T12:00:05Z",
+    is_playing: false,
+    position_sec: 125,
+  };
+  let history = applyPlaybackUpdate([first], pause);
+  assert.equal(
+    listeningElapsed(
+      15,
+      false,
+      pause.updated_at,
+      200,
+      Date.parse(start) + 300000,
+      history[0].position_sec,
+    ),
+    125,
+  );
+  const resume = {
+    ...pause,
+    updated_at: "2026-10-15T12:05:00Z",
+    is_playing: true,
+  };
+  history = applyPlaybackUpdate(history, resume);
+  assert.equal(
+    listeningElapsed(
+      15,
+      true,
+      resume.updated_at,
+      200,
+      Date.parse(resume.updated_at) + 2000,
+      history[0].position_sec,
+    ),
+    127,
+  );
+  assert.deepEqual(applyPlaybackUpdate(history, pause), history);
+  const second = {
+    ...first,
+    id: 2,
+    position_sec: 0,
+    updated_at: "2026-10-15T12:05:03Z",
+  };
+  history = applyPlaybackUpdate(history, second);
+  assert.equal(history[0].id, 2);
+  assert.equal(history[1].is_playing, false);
+  assert.deepEqual(applyPlaybackUpdate(history, resume), history);
+  assert.equal(playbackTime(125.9), "02:05");
+});
 
 test("history time handles UTC offsets, caps duration and stops at heartbeat expiry", () => {
   const value = "2026-10-14 12:00:00+00:00";

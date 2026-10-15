@@ -2,6 +2,7 @@
 import json
 import secrets
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -174,6 +175,87 @@ def _position(item):
     shown = dt.fromisoformat(item["updated_at"])
     age = (datetime.now(UTC) - shown).total_seconds() if item["is_playing"] else 0
     return item["position_sec"] + age
+
+
+def test_live_events_carry_position_and_a_fresh_anchor(client, db, plat_account):
+    _, _, token, _ = plat_account
+    with patch("app.services.scrobble_processor.manager.broadcast_to_user", new_callable=AsyncMock) as broadcast:
+        assert client.post("/api/scrobble", **_plat(token, progress=90.4)).json()["status"] == "ok"
+        start = broadcast.await_args.args[1]
+        assert start["type"] == "NEW_SCROBBLE"
+        assert start["track"]["position_sec"] == pytest.approx(90.4, abs=0.1)
+        _wait(db, 15)
+        client.post("/api/scrobble", **_plat(token, progress=140.5))
+        heartbeat = broadcast.await_args.args[1]
+        assert heartbeat["type"] == "PLAYBACK_STATE"
+        assert heartbeat["track"]["position_sec"] == pytest.approx(140.5, abs=1)
+        _wait(db, 3)
+        client.post("/api/scrobble", **_plat(token, progress=143.5, playing=False))
+        pause = broadcast.await_args.args[1]["track"]
+        assert pause["position_sec"] == 143.5
+        assert pause["is_playing"] is False
+        _wait(db, 300)
+        client.post("/api/scrobble", **_plat(token, progress=143.5))
+        resume = broadcast.await_args.args[1]["track"]
+        assert resume["position_sec"] == 143.5
+        assert resume["is_playing"] is True
+        assert resume["updated_at"] != pause["updated_at"]
+        assert resume["listened_sec"] == pause["listened_sec"]
+
+
+def test_short_pause_remains_visible_to_owner_and_resumes(client, db, plat_account):
+    user, _, token, owner = plat_account
+    client.post("/api/scrobble", **_plat(token))
+    _wait(db, 3)
+    client.post("/api/scrobble", **_plat(token, progress=3, playing=False))
+    for _ in range(2):
+        current = client.get(f"/api/current-track/{user.username}", headers=owner).json()
+        assert current["playing"] is False
+        assert current["paused"] is True
+        assert current["display_position_sec"] == 3
+        history = client.get(f"/api/history/{user.username}", headers=owner).json()["history"]
+        assert history[0]["position_sec"] == 3
+        assert history[0]["is_playing"] is False
+    # Paused player state is not newly exposed to visitors.
+    assert client.get(f"/api/current-track/{user.username}").json() == {"playing": False}
+    _wait(db, 60)
+    client.post("/api/scrobble", **_plat(token, progress=3))
+    current = client.get(f"/api/current-track/{user.username}", headers=owner).json()
+    assert current["playing"] is True
+    assert 3 <= current["display_position_sec"] < 4
+
+
+def test_player_position_and_credited_progress_remain_separate(client, db, plat_account):
+    user, _, token, owner = plat_account
+    client.post("/api/scrobble", **_plat(token, progress=120))
+    current = client.get(f"/api/current-track/{user.username}", headers=owner).json()
+    assert 120 <= current["display_position_sec"] < 121
+    assert current["listened_sec"] == 0
+    assert current["display_listened_sec"] < 1
+
+
+def test_plat_switch_after_another_collector_is_not_discarded(client, db, plat_account):
+    _, _, token, _ = plat_account
+    first = _plat(token, title="Desktop track")
+    first["json"]["source"] = "desktop"
+    client.post("/api/scrobble", **first)
+    assert client.post("/api/scrobble", **_plat(token, title="Plat track")).json()["status"] == "ok"
+    assert db.query(Scrobble).order_by(Scrobble.id.desc()).first().track.title == "Plat track"
+
+
+def test_plat_metadata_is_queued_after_playback_instead_of_blocking_it(client, db, plat_account):
+    user, _, token, _ = plat_account
+    user.profile.preferences = json.dumps({"listening": {"auto_metadata": True}})
+    db.commit()
+    lookup = AsyncMock(side_effect=AssertionError("Network lookup blocked playback"))
+    with patch("app.services.scrobble_processor.get_fallback_genre", lookup), \
+            patch("app.core.redis.enqueue_background_task", new_callable=AsyncMock) as queue:
+        response = client.post("/api/scrobble", **_plat(token, progress=42))
+        assert response.json()["status"] == "ok"
+        lookup.assert_not_awaited()
+        row = db.query(Scrobble).one()
+        assert row.position_sec == 42
+        assert any(call.args == ("enrich_track_metadata", row.track_id) for call in queue.await_args_list)
 
 
 def test_pause_and_resume_right_after_a_heartbeat_are_kept(client, db, plat_account):
