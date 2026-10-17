@@ -5,7 +5,11 @@ import { API_URL, openSocket } from "@/app/lib/api";
 import { useVisiblePolling } from "@/app/lib/usePolling";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { Music2, Pause } from "lucide-react";
-import { playbackTime, playbackTimestamp } from "@/app/lib/playback";
+import {
+  playbackProgress,
+  playbackTime,
+  playbackTimestamp,
+} from "@/app/lib/playback";
 import { sourceLabel } from "@/utils/formatters";
 import { PlayingBars } from "@/components/ui";
 import { coverAt } from "@/app/lib/coverSize";
@@ -149,18 +153,12 @@ export default function NowPlaying({
     );
   }
   const cover = sanitizeImageUrl(track.cover_url);
-  const progress =
-    track.duration && track.listened_sec != null
-      ? Math.min(
-          100,
-          Math.floor(
-            ((Math.max(0, track.display_listened_sec ?? track.listened_sec) +
-              elapsed) /
-              track.duration) *
-              100,
-          ),
-        )
-      : null;
+  const progress = playbackProgress(
+    track.duration,
+    track.display_listened_sec ?? track.listened_sec,
+    elapsed,
+    track.display_position_sec,
+  );
   const credited =
     !!track.duration &&
     track.listened_sec != null &&
