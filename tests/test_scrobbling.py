@@ -132,7 +132,7 @@ def test_many_recent_plays_do_not_disable_playback_intake(auth_client, db, test_
         "source": "yandex",
         "progress_sec": 120,
         "duration": 120,
-        "is_playing": False
+        "is_playing": True
     }
     resp = auth_client.post("/api/scrobble", json=payload)
     assert resp.status_code == 200

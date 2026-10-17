@@ -111,3 +111,18 @@ def test_spotify_without_artwork_and_with_explicit_pause_is_recorded():
         asyncio.run(cloud.sync_spotify_status(user, AsyncMock(), process))
     assert process.await_args.args[2:5] == ("Paused track", "Artist", None)
     assert process.await_args.args[8] is False
+
+
+def test_inactive_other_service_cannot_replace_fresh_playback(client, db, listener):
+    user, headers = listener
+    client.post('/api/scrobble', headers=headers, json=report('Active', 'plat'))
+    old_pause = {**report('Old selection', 'spotify'), 'is_playing': False, 'progress_sec': 80}
+    assert client.post('/api/scrobble', headers=headers, json=old_pause).json()['status'] == 'ignored_inactive'
+    current = client.get(f'/api/current-track/{user.username}', headers=headers).json()
+    assert current['playing'] is True
+    assert current['title'] == 'Active'
+    assert db.query(Scrobble).count() == 1
+    # Pausing the actual current track is still processed immediately.
+    actual_pause = {**report('Active', 'plat'), 'is_playing': False, 'progress_sec': 1}
+    assert client.post('/api/scrobble', headers=headers, json=actual_pause).json()['status'] == 'ok'
+    assert db.query(Scrobble).one().is_playing is False

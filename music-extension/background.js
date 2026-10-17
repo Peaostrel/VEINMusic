@@ -65,7 +65,7 @@ const LIVE_SNAPSHOT_TTL_MS = 35_000;
 const ACCEPTED_STATUSES = new Set(['ok', 'confirmed_duplicate']);
 const SKIPPED_STATUSES = new Set([
     'integration_paused', 'source_ignored', 'artist_ignored', 'track_ignored',
-    'short_track_ignored', 'private_session', 'blacklisted', 'link_ignored'
+    'short_track_ignored', 'private_session', 'blacklisted', 'link_ignored', 'ignored_inactive'
 ]);
 const DELIVERY_MESSAGES = {
     ok: 'Событие принято. Зачёт прослушивания зависит от реально прослушанного времени.',
@@ -81,6 +81,7 @@ const DELIVERY_MESSAGES = {
     rate_limited: 'Сервер просит подождать. Передача повторится автоматически.',
     ignored_spam_protection: 'Смена трека отложена сервером. Передача повторится автоматически.',
     flagged: 'Сервер ограничил приём. Проверьте диагностику интеграции в VEIN.',
+    ignored_inactive: 'Остановленная вкладка пропущена: в другом плеере сейчас играет музыка.',
     auth_required: 'Ключ недействителен или не имеет доступа. Подключите расширение заново.',
     invalid_payload: 'Сервис передал неполные данные трека. Обновите расширение и страницу плеера.',
     network_error: 'Нет связи с VEIN. Текущее состояние будет отправлено повторно.',
@@ -223,8 +224,8 @@ async function deliverLiveSnapshot(event) {
         scheduleRetry();
     } else if (outcome.kind === 'accepted' || outcome.kind === 'skipped') {
         await mutateOfflineQueue((queue) => queue.filter((item) =>
-            item.accountKey !== event.accountKey || item.payload?.source !== event.payload.source ||
-            item.queuedAt > event.observedAt));
+            item.accountKey !== event.accountKey || item.queuedAt > event.observedAt ||
+            (outcome.kind === 'skipped' && item.payload?.source !== event.payload.source)));
     }
 }
 

@@ -742,6 +742,13 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
 
     result: dict[str, Any] = {"status": "ok", "username": str(user.username), "user_id": user_id,
                               "new_item": None, "counted": None, "state_change": None}
+    if (last_scrobble and last_scrobble.track_id != track.id and last_scrobble.is_playing
+            and not is_playing and l_updated_at is not None
+            and (now - l_updated_at).total_seconds() < ACTIVE_PLAYBACK_WINDOW_SEC):
+        # Another tab/provider can still expose its old paused selection.
+        # It must not replace the user's fresh, actually playing track.
+        result["status"] = "ignored_inactive"
+        return result
     was_playing = bool(last_scrobble.is_playing) if last_scrobble else None
     if (last_scrobble and last_scrobble.track_id == track.id
             and _confirm_scrobble_source(db, last_scrobble, source_label, source_id, l_updated_at, now)):

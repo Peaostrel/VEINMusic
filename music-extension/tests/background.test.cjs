@@ -326,3 +326,31 @@ test('an invalid queued payload does not block following valid playback', async 
     assert.equal(requests, 2);
     assert.deepEqual(state.offline_scrobbles, []);
 });
+
+test('a current live event invalidates older retries from other services too', async () => {
+    const sent = [];
+    const {context, state, onMessage} = harness([], async (_, options) => {
+        sent.push(JSON.parse(options.body).title);
+        return {ok: true};
+    });
+    await vm.runInContext('addToOfflineQueue({source: "spotify", title: "Old other service"}, "test-key")', context);
+    onMessage({type: 'SCROBBLE', data: {...payload, title: 'Current'}}, musicSender);
+    await tick();
+    await vm.runInContext('queueMutation', context);
+    await vm.runInContext('flushOfflineQueue()', context);
+    assert.deepEqual(sent, ['Current']);
+    assert.deepEqual(state.offline_scrobbles, []);
+});
+
+test('filtering one service does not discard pending playback from another', async () => {
+    const {context, state, onMessage} = harness([], async (_, options) => ({
+        ok: true, json: async () => ({status: JSON.parse(options.body).source === 'yandex' ? 'source_ignored' : 'ok'})
+    }));
+    await vm.runInContext('addToOfflineQueue({source: "spotify", title: "Allowed"}, "test-key")', context);
+    onMessage({type: 'SCROBBLE', data: payload}, musicSender);
+    await tick();
+    await vm.runInContext('queueMutation', context);
+    assert.deepEqual(state.offline_scrobbles.map(item => item.payload.title), ['Allowed']);
+    await vm.runInContext('flushOfflineQueue()', context);
+    assert.deepEqual(state.offline_scrobbles, []);
+});
