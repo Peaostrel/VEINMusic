@@ -788,9 +788,11 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
         # Publish only after storing the position: the first frame must not
         # temporarily show credited listening (often zero) as player time.
         result["new_item"] = format_history_item(current, track)
-    elif current is not None and (positional or was_playing != bool(is_playing)):
+    elif current is not None and (
+            positional or result["counted"] is not None or was_playing != bool(is_playing)):
         # Position, timestamp and listening must travel together, including
-        # heartbeats/seeks. A bare play/pause flag reuses a stale timer anchor.
+        # heartbeats/seeks and the heartbeat that crosses the counted
+        # threshold. A bare play/pause flag reuses a stale timer anchor.
         result["state_change"] = {"id": int(current.id), "is_playing": bool(is_playing),
                                   "track": format_history_item(current, track)}
     return result
