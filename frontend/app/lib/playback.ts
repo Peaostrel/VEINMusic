@@ -7,6 +7,22 @@ export function playbackTime(seconds: number): string {
     .padStart(2, "0")}:${(total % 60).toString().padStart(2, "0")}`;
 }
 
+/** Percentage shown by the player card. A player-reported position must win
+ * over credited listening time so a late first report does not start at 0%. */
+export function playbackProgress(
+  duration: number | null | undefined,
+  listenedSec: number | null | undefined,
+  elapsed: number,
+  positionSec?: number | null,
+): number | null {
+  if (!duration || listenedSec == null) return null;
+  const base = positionSec ?? listenedSec;
+  return Math.min(
+    100,
+    Math.floor((Math.max(0, base + Math.max(0, elapsed)) / duration) * 100),
+  );
+}
+
 /** Apply one complete player snapshot; older deliveries cannot revive a
  * previous track or roll the same track back to an earlier pause/position. */
 export function applyPlaybackUpdate<

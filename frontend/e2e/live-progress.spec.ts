@@ -14,6 +14,7 @@ test("now playing advances locally, reconciles tracks and waits for confirmed cr
     duration: 100,
     listened_sec: 0,
     display_listened_sec: 0,
+    display_position_sec: 10,
     playback_remaining_sec: 45,
   };
   await page.route(`**/api/current-track/${username}`, (route) =>
@@ -26,15 +27,25 @@ test("now playing advances locally, reconciles tracks and waits for confirmed cr
   const progress = card.getByRole("progressbar", {
     name: "Прогресс прослушивания",
   });
-  await expect(progress).toHaveAttribute("value", "0");
-  await expect(progress).toHaveAttribute("value", "1");
-  await expect(progress).toHaveAttribute("value", "2");
-  current = { ...current, listened_sec: 80, display_listened_sec: 84 };
+  await expect(progress).toHaveAttribute("value", "10");
+  await expect(progress).toHaveAttribute("value", "11");
+  await expect(progress).toHaveAttribute("value", "12");
+  current = {
+    ...current,
+    listened_sec: 80,
+    display_listened_sec: 84,
+    display_position_sec: 84,
+  };
   await expect(
     card.getByText(/^(8[5-9]|9\d|100)% · зачёт от 85%$/),
   ).toBeVisible({ timeout: 15_000 });
   await expect(card.getByText("Прослушивание засчитано")).toHaveCount(0);
-  current = { ...current, listened_sec: 85, display_listened_sec: 90 };
+  current = {
+    ...current,
+    listened_sec: 85,
+    display_listened_sec: 90,
+    display_position_sec: 90,
+  };
   await expect(card.getByText("Прослушивание засчитано")).toBeVisible({
     timeout: 15_000,
   });
@@ -43,6 +54,7 @@ test("now playing advances locally, reconciles tracks and waits for confirmed cr
     title: "Second live track",
     listened_sec: 0,
     display_listened_sec: 0,
+    display_position_sec: 0,
   };
   await expect(card.getByText("Second live track")).toBeVisible({
     timeout: 15_000,

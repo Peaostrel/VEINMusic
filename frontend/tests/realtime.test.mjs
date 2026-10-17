@@ -21,6 +21,7 @@ const {
   freshPlayback,
   playbackTimestamp,
   applyPlaybackUpdate,
+  playbackProgress,
   playbackTime,
 } = await load("../app/lib/playback.ts");
 
@@ -102,6 +103,14 @@ test("history time handles UTC offsets, caps duration and stops at heartbeat exp
   assert.equal(listeningElapsed(15, true, value, 0, start + 10000, 300), 310);
   assert.equal(freshPlayback(value, start + 44999), true);
   assert.equal(freshPlayback(value, start + 45000), false);
+});
+
+test("player progress uses the reported position when the first report is late", () => {
+  assert.equal(playbackProgress(200, 0, 0, 10), 5);
+  assert.equal(playbackProgress(200, 0, 2, 10), 6);
+  assert.equal(playbackProgress(200, 12, 0), 6);
+  assert.equal(playbackProgress(200, 0, 0, 250), 100);
+  assert.equal(playbackProgress(0, 0, 0, 10), null);
 });
 
 async function fakeBrowser(run) {
