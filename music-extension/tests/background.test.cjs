@@ -342,3 +342,24 @@ test('filtering one service does not discard pending playback from another', asy
     await vm.runInContext('flushOfflineQueue()', context);
     assert.deepEqual(state.offline_scrobbles, []);
 });
+
+
+test('a seek bypasses the heartbeat throttle without sending ordinary progress ticks', async () => {
+    const sent = [];
+    const {context} = harness([], async (_url, options) => { sent.push(JSON.parse(options.body)); return {ok: true}; });
+    context.livePayload = {...payload};
+    await vm.runInContext('sendScrobble(livePayload)', context);
+    context.livePayload.progress_sec += 1;
+    await vm.runInContext('sendScrobble(livePayload)', context);
+    assert.equal(sent.length, 1);
+    context.livePayload.progress_sec = 90;
+    await vm.runInContext('sendScrobble(livePayload)', context);
+    assert.equal(sent.length, 2);
+    assert.equal(sent.at(-1).progress_sec, 90);
+    context.livePayload.is_playing = false;
+    await vm.runInContext('sendScrobble(livePayload)', context);
+    assert.equal(sent.at(-1).is_playing, false);
+    context.livePayload.is_playing = true;
+    await vm.runInContext('sendScrobble(livePayload)', context);
+    assert.equal(sent.at(-1).is_playing, true);
+});

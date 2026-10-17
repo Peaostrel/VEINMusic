@@ -1,3 +1,13 @@
+## 1.5.2
+
+Playback events (pause, resume, seek and media changes) are captured immediately.
+DOM changes trigger a batched refresh; a 250 ms safety poll covers players that
+expose no events. Normal progress heartbeats stay limited to once per 5 seconds.
+The extension sends an explicit `player_position` flag only with a known player
+clock; API support is required to show that clock separately from listening credit.
+Live positional reports take priority over fresh cloud state for the same track.
+No permissions or data collection categories were added.
+
 Проверенный пакет браузерного расширения **VEINMusic 1.5.1**.
 
 Скачать архивы ниже можно без регистрации на GitHub.
