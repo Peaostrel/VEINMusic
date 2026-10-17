@@ -241,7 +241,7 @@ async function sendScrobble(payload) {
         while (pendingLive) {
             const event = pendingLive;
             pendingLive = null;
-            await deliverExclusive(() => deliverLiveSnapshot(event));
+            await deliverExclusive(() => deliverLiveSnapshot(event)); // NOSONAR: deliberate ordering; parallel requests can restore an obsolete track.
         }
     } catch (error) { console.warn('[VEIN] Ошибка отправки состояния:', error); }
     finally { sendingLive = false; }

@@ -265,13 +265,14 @@ test('only the latest failed state for a service is retained', async () => {
     assert.deepEqual(state.offline_scrobbles.map(x => x.payload.title), ['Other', 'New']);
 });
 
-test('a successful current state removes an older retry for the same source', async () => {
+for (const source of ['yandex', 'spotify']) {
+    test(`a successful current state removes older ${source} retries`, async () => {
     const sent = [];
     const {context, state, onMessage} = harness([], async (_, options) => {
         sent.push(JSON.parse(options.body).title);
         return {ok: true};
     });
-    await vm.runInContext('addToOfflineQueue({source: "yandex", title: "Old"}, "test-key")', context);
+    await vm.runInContext(`addToOfflineQueue({source: ${JSON.stringify(source)}, title: "Old"}, "test-key")`, context);
     onMessage({type: 'SCROBBLE', data: {...payload, title: 'Current'}}, musicSender);
     await tick();
     await vm.runInContext('queueMutation', context);
@@ -279,6 +280,8 @@ test('a successful current state removes an older retry for the same source', as
     assert.deepEqual(sent, ['Current']);
     assert.deepEqual(state.offline_scrobbles, []);
 });
+
+}
 
 test('a queued request and live switch are serialized in playback order', async () => {
     const sent = [];
@@ -324,21 +327,6 @@ test('an invalid queued payload does not block following valid playback', async 
     const {context, state} = harness(['bad', 'valid'], async () => (++requests === 1 ? {ok: false, status: 422} : {ok: true}));
     await vm.runInContext('flushOfflineQueue()', context);
     assert.equal(requests, 2);
-    assert.deepEqual(state.offline_scrobbles, []);
-});
-
-test('a current live event invalidates older retries from other services too', async () => {
-    const sent = [];
-    const {context, state, onMessage} = harness([], async (_, options) => {
-        sent.push(JSON.parse(options.body).title);
-        return {ok: true};
-    });
-    await vm.runInContext('addToOfflineQueue({source: "spotify", title: "Old other service"}, "test-key")', context);
-    onMessage({type: 'SCROBBLE', data: {...payload, title: 'Current'}}, musicSender);
-    await tick();
-    await vm.runInContext('queueMutation', context);
-    await vm.runInContext('flushOfflineQueue()', context);
-    assert.deepEqual(sent, ['Current']);
     assert.deepEqual(state.offline_scrobbles, []);
 });
 

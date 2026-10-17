@@ -443,8 +443,6 @@ def _should_clean_previous_scrobble(last_scrobble) -> bool:
 def _determine_is_new(db: Session,
                       track: Track,
                       last_scrobble,
-                      now,
-                      l_updated_at,
                       progress_sec: float,
                       restarted: bool = False,
                       uncredited_sec: float = 0) -> tuple[bool, str | None]:
@@ -761,7 +759,7 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
             db, user, track, source, last_scrobble, now, l_updated_at, progress_sec)
         replayed, uncredited = _restart_split(last_scrobble, now, l_updated_at, progress_sec, restarted)
     is_new, early_return = _determine_is_new(
-        db, track, last_scrobble, now, l_updated_at, progress_sec, restarted, uncredited)
+        db, track, last_scrobble, progress_sec, restarted, uncredited)
     if early_return:
         result["status"] = early_return
         return result

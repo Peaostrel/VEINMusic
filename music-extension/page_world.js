@@ -194,6 +194,10 @@ function getVkMetadata() {
     };
 }
 
+function getMediaTimes(media) {
+    return [Math.floor(media.currentTime), Number.isFinite(media.duration) ? Math.floor(media.duration) : 0];
+}
+
 function getMediaProgress(sessionPlaying, source) {
     if (source === 'soundcloud') {
         const soundCloudProgress = getSoundCloudProgress();
@@ -209,14 +213,12 @@ function getMediaProgress(sessionPlaying, source) {
 
     if (activeMedia) {
         isPlaying = true;
-        progressSec = Math.floor(activeMedia.currentTime);
-        durationSec = Number.isFinite(activeMedia.duration) ? Math.floor(activeMedia.duration) : 0;
+        [progressSec, durationSec] = getMediaTimes(activeMedia);
     } else {
         isPlaying = allMedia.length > 0 ? false : sessionPlaying;
         const pausedMedia = allMedia.filter(m => m.currentTime > 0).sort((a, b) => b.currentTime - a.currentTime)[0];
         if (pausedMedia) {
-            progressSec = Math.floor(pausedMedia.currentTime);
-            durationSec = Number.isFinite(pausedMedia.duration) ? Math.floor(pausedMedia.duration) : 0;
+            [progressSec, durationSec] = getMediaTimes(pausedMedia);
         }
     }
     

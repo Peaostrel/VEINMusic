@@ -224,23 +224,23 @@ def test_determine_is_new(db):
     t1, t2 = _track(db, title="One"), _track(db, title="Two")
     now = datetime.now(UTC)
 
-    assert sp._determine_is_new(db, t1, None, now, None, 0) == (True, None)
+    assert sp._determine_is_new(db, t1, None, 0) == (True, None)
 
     playing = Scrobble(user_id=user.id, track_id=t1.id, source="yandex", is_playing=True,
                        listened_sec=100, played_at=now, updated_at=now)
     db.add(playing)
     db.commit()
     # A real track switch immediately after a heartbeat must not be lost.
-    assert sp._determine_is_new(db, t2, playing, now, now, 0) == (True, None)
+    assert sp._determine_is_new(db, t2, playing, 0) == (True, None)
     # Same track restarted after most of it was heard: a new play (loop)
     playing.listened_sec = 190
-    assert sp._determine_is_new(db, t1, playing, now, now - timedelta(seconds=5), 2) == (True, None)
-    assert sp._determine_is_new(db, t1, playing, now, now - timedelta(seconds=5), 60) == (False, None)
+    assert sp._determine_is_new(db, t1, playing, 2) == (True, None)
+    assert sp._determine_is_new(db, t1, playing, 60) == (False, None)
 
     # A skipped track (a few seconds) is removed when the next one starts
     playing.listened_sec = 3
     db.commit()
-    assert sp._determine_is_new(db, t2, playing, now, now - timedelta(seconds=10), 0) == (True, None)
+    assert sp._determine_is_new(db, t2, playing, 0) == (True, None)
     assert db.query(Scrobble).count() == 0
 
 
