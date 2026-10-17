@@ -1,6 +1,34 @@
 import { test, expect } from "@playwright/test";
 import { API_URL, signUp, scrobble } from "./helpers";
 
+test("account level refreshes from live playback without reloading", async ({
+  page,
+}) => {
+  await page.addInitScript(() => localStorage.setItem("username", "alice"));
+  let level = 2;
+  await page.route("**/api/user/alice", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        username: "alice",
+        display_name: "Alice",
+        avatar_url: null,
+        level,
+      }),
+    });
+  });
+
+  await page.goto("/about");
+  await expect(page.getByText("ур. 2", { exact: true })).toBeVisible();
+
+  level = 3;
+  await page.evaluate(() =>
+    window.dispatchEvent(new Event("account_data_update")),
+  );
+
+  await expect(page.getByText("ур. 3", { exact: true })).toBeVisible();
+});
+
 test("library prioritizes search and keeps management in a keyboard-accessible menu", async ({
   page,
 }, testInfo) => {

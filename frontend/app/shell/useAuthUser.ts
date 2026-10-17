@@ -61,15 +61,18 @@ export function useAuthUser(pathname: string | null) {
       setProfile(null);
       return;
     }
-    const load = () => {
-      fetch(`${API_URL}/api/user/${encodeURIComponent(username)}`, {
+    let timer: ReturnType<typeof setInterval> | undefined;
+    let cancelled = false;
+    const load = (refreshPreferences = false) => {
+      return fetch(`${API_URL}/api/user/${encodeURIComponent(username)}`, {
         credentials: "include",
+        cache: "no-store",
       })
         .then((res) => (res.ok ? res.json() : null))
         .then((data: NavUser | null) => {
-          if (!data) return;
+          if (!data || cancelled) return;
           setProfile(data);
-          syncPreferences(data.preferences);
+          if (refreshPreferences) syncPreferences(data.preferences);
           // Apply the saved theme on first load only; don't override a theme
           // picked during this session.
           if (data.theme && !localStorage.getItem("site_theme")) {
@@ -79,10 +82,37 @@ export function useAuthUser(pathname: string | null) {
         })
         .catch(() => {});
     };
-    load();
-    globalThis.addEventListener("profile_update", load);
-    return () => globalThis.removeEventListener("profile_update", load);
-  }, [username]);
+    const refreshAll = () => void load(true);
+    const refreshProfile = () => void load();
+    const startPolling = () => {
+      timer ??= setInterval(() => void load(), 15_000);
+    };
+    const stopPolling = () => {
+      if (timer !== undefined) clearInterval(timer);
+      timer = undefined;
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void load();
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    };
+
+    refreshAll();
+    if (document.visibilityState === "visible") startPolling();
+    globalThis.addEventListener("profile_update", refreshAll);
+    globalThis.addEventListener("account_data_update", refreshProfile);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelled = true;
+      stopPolling();
+      globalThis.removeEventListener("profile_update", refreshAll);
+      globalThis.removeEventListener("account_data_update", refreshProfile);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [username, pathname]);
 
   useEffect(() => {
     const media = globalThis.matchMedia("(prefers-color-scheme: light)");
