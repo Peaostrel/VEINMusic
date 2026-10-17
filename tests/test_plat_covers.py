@@ -6,7 +6,8 @@ from sqlalchemy import text
 
 from app.core.cover_urls import public_cover_url
 from app.core.safe_http import UnsafeURLError
-from app.models import Track
+from app.models import Achievement, Track, User
+from app.services.achievements import _format_achievement_data
 
 COVER_PATH = "albums/e243422d-6c75-4aa6-a2f8-ab6879e027e9.jpg"
 UPSTREAM = f"https://plat-music.ru/api/media/covers/{COVER_PATH}?w=512"
@@ -23,6 +24,18 @@ def test_existing_track_and_scalar_queries_return_proxy_without_changing_sql(db,
     assert db.query(Track).one().cover_url == "https://api.music.vein.guru" + PROXY_PATH
     assert db.query(Track.cover_url).scalar() == "https://api.music.vein.guru" + PROXY_PATH
     assert db.execute(text("SELECT cover_url FROM tracks")).scalar() == UPSTREAM
+
+
+def test_achievement_returns_partner_artwork_through_proxy(db, monkeypatch):
+    monkeypatch.setenv("API_BASE_URL", "https://api.music.vein.guru")
+    user = User(username="achievement_cover", hashed_password="x")
+    achievement = Achievement(
+        name="Partner track", description="Listen", icon="🏆",
+        rule_type="manual", rule_value=1, target_image=UPSTREAM, reward_xp=50)
+    db.add_all([user, achievement])
+    db.commit()
+    result = _format_achievement_data(db, user, achievement, None, 1)
+    assert result["target_image"] == "https://api.music.vein.guru" + PROXY_PATH
 
 
 def test_proxy_serves_webp_without_partner_security_headers(client, monkeypatch):
@@ -58,9 +71,13 @@ def test_proxy_never_accepts_arbitrary_urls_or_paths(client, monkeypatch, path):
     download.assert_not_called()
 
 
-@pytest.mark.parametrize("value", [None, "", "https://avatars.yandex.net/a.jpg",
-                                  "https://plat-music.ru.evil.test/api/media/covers/" + COVER_PATH,
-                                  "https://plat-music.ru/private/avatar.jpg"])
+@pytest.mark.parametrize("value", [
+    None,
+    "",
+    "https://avatars.yandex.net/a.jpg",
+    "https://plat-music.ru.evil.test/api/media/covers/" + COVER_PATH,
+    "https://plat-music.ru/private/avatar.jpg",
+])
 def test_other_urls_are_preserved(value):
     assert public_cover_url(value) == value
 
