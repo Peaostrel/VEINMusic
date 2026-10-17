@@ -101,6 +101,7 @@ export default function NowPlaying({
                     msg.type === "NEW_SCROBBLE" ||
                     msg.type === "PLAYBACK_STATE"
                   ) {
+                    globalThis.dispatchEvent(new Event("account_data_update"));
                     if (!msg.track) {
                       void load();
                       return;
