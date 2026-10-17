@@ -1,5 +1,6 @@
 # Build stage: installs every dependency and compiles the app
-FROM public.ecr.aws/docker/library/node:20-alpine AS build
+ARG BASE_IMAGE=public.ecr.aws/docker/library/node:20-alpine
+FROM ${BASE_IMAGE} AS build
 WORKDIR /app
 
 COPY frontend/package*.json ./
@@ -19,7 +20,7 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
 RUN npm run build
 
 # Runtime stage: only the standalone server, static assets and public files
-FROM public.ecr.aws/docker/library/node:20-alpine
+FROM ${BASE_IMAGE}
 WORKDIR /app
 
 ENV NODE_ENV=production \

@@ -1,4 +1,5 @@
-FROM public.ecr.aws/docker/library/python:3.11-slim
+ARG BASE_IMAGE=public.ecr.aws/docker/library/python:3.11-slim
+FROM ${BASE_IMAGE}
 
 WORKDIR /app
 
