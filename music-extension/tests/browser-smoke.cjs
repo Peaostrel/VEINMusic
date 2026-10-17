@@ -25,7 +25,7 @@ const {chromium} = require('playwright');
     let context;
     try {
         context = await chromium.launchPersistentContext(profile, {
-            channel: 'chromium', headless: false,
+            channel: 'chromium', headless: process.env.VEIN_SMOKE_HEADLESS === '1',
             args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`]
         });
         let worker = context.serviceWorkers()[0];
@@ -52,7 +52,7 @@ const {chromium} = require('playwright');
         await music.goto('https://music.youtube.com/watch?v=fixture&private=secret');
         await music.evaluate(() => {
             const video = document.querySelector('video');
-            Object.defineProperties(video, {paused: {get: () => false}, duration: {get: () => 180}, currentTime: {get: () => 32}});
+            Object.defineProperties(video, {paused: {get: () => globalThis.fixturePaused ?? false}, duration: {get: () => 180}, currentTime: {get: () => globalThis.fixturePosition ?? 32}});
         });
         await music.waitForFunction(() => globalThis.__VEIN_LOADED === true);
         await new Promise((resolve, reject) => {
@@ -73,6 +73,29 @@ const {chromium} = require('playwright');
         assert.equal(play.body.progress_sec, 32);
         assert.equal(play.body.track_url, 'https://music.youtube.com/watch?v=fixture');
         await popup.waitForFunction(() => document.querySelector('#delivery-status').innerText.includes('Событие принято'));
+        assert.equal(play.body.player_position, true);
+        async function playbackEvent(name, paused, position) {
+            const before = calls.filter(x => x.url === '/api/scrobble').length;
+            const started = Date.now();
+            await music.evaluate(({name, paused, position}) => {
+                globalThis.fixturePaused = paused;
+                globalThis.fixturePosition = position;
+                document.querySelector('video').dispatchEvent(new Event(name));
+            }, {name, paused, position});
+            await popup.waitForFunction(() => chrome.storage.local.get('last_delivery').then(x => x.last_delivery?.at >= 0));
+            while (calls.filter(x => x.url === '/api/scrobble').length === before) {
+                assert.ok(Date.now() - started < 2000, `${name} must arrive within 2s in the local fixture`);
+                await new Promise(resolve => setTimeout(resolve, 10));
+            }
+            const latest = calls.filter(x => x.url === '/api/scrobble').at(-1).body;
+            assert.equal(latest.is_playing, !paused);
+            assert.equal(latest.progress_sec, position);
+            console.log(`${name} delivered in ${Date.now() - started}ms`);
+        }
+        await playbackEvent('pause', true, 32);
+        await playbackEvent('playing', false, 32);
+        await playbackEvent('seeked', false, 120);
+
         // A successful HTTP transport is not a successful listening event.
         scrobbleStatus = 'integration_paused';
         await music.evaluate(() => { document.querySelector('.title').innerText = 'Filtered fixture'; });

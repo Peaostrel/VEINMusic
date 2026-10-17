@@ -201,16 +201,19 @@ async function flushOfflineQueue() {
 }
 
 const SCROBBLE_MIN_INTERVAL_MS = 5000;
-let lastScrobbleSent = { key: '', playing: false, at: 0 };
+let lastScrobbleSent = { key: '', playing: false, at: 0, position: 0 };
 
 function shouldSendScrobble(payload) {
     if (!payload || typeof payload !== 'object') return false;
     const key = `${payload.source}|${payload.artist}|${payload.title}`;
     const playing = Boolean(payload.is_playing);
     const now = Date.now();
-    const changed = key !== lastScrobbleSent.key || playing !== lastScrobbleSent.playing;
+    const expectedPosition = lastScrobbleSent.position +
+        (lastScrobbleSent.playing ? (now - lastScrobbleSent.at) / 1000 : 0);
+    const sought = Math.abs(payload.progress_sec - expectedPosition) > 2;
+    const changed = key !== lastScrobbleSent.key || playing !== lastScrobbleSent.playing || sought;
     if (!changed && now - lastScrobbleSent.at < SCROBBLE_MIN_INTERVAL_MS) return false;
-    lastScrobbleSent = { key, playing, at: now };
+    lastScrobbleSent = { key, playing, at: now, position: payload.progress_sec };
     return true;
 }
 
@@ -287,6 +290,7 @@ function safeTrackPayload(data, source) {
         album: typeof data.album === 'string' ? data.album.slice(0, 500) : '',
         source, track_url: trackUrl, cover_url: coverUrl,
         progress_sec: Math.floor(data.progress_sec), duration: Math.floor(data.duration),
+        player_position: data.player_position === true,
         is_playing: data.is_playing === true
     };
 }
@@ -330,7 +334,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     // 3. Отправляем трек на сервер или сохраняем в оффлайн-очередь.
-    // Вкладка присылает состояние каждые 800 мс; серверу достаточно сигнала
+    // Вкладка присылает события плеера сразу; серверу достаточно сигнала
     // раз в несколько секунд (он учитывает паузы между сигналами до 35 с),
     // поэтому одинаковые сигналы чаще раза в 5 секунд не отправляем.
     if (request.type === 'SCROBBLE') {

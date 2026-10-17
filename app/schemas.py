@@ -79,6 +79,7 @@ class ScrobbleData(BaseModel):
     track_url: OptionalUrl = None
     album: OptionalTrackText = None
     source: Annotated[str, _truncate(32), BeforeValidator(normalize_source)]
+    player_position: bool = False
     progress_sec: Position = 0
     is_playing: bool | None = True
     duration: Seconds = 0

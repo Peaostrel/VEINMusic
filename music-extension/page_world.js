@@ -15,7 +15,8 @@ if (!globalThis.__VEIN_AUDIO_HOOK) {
     
     const originalPlay = HTMLMediaElement.prototype.play;
     HTMLMediaElement.prototype.play = function() {
-        globalThis.__vein_audio_elements.add(this); 
+        globalThis.__vein_audio_elements.add(this);
+        watchMedia(this);
         return originalPlay.apply(this, arguments);
     };
 }
@@ -105,9 +106,9 @@ function getYouTubeMusicMeta() {
     const artistLink = bylineEl?.querySelector('a');
     const coverEl = playerBar.querySelector('img.image, .thumbnail img, img');
 
-    const trackTitle = (sessionMeta?.trackTitle || titleEl?.textContent || '').trim();
+    const trackTitle = (titleEl?.textContent || sessionMeta?.trackTitle || '').trim();
     const byline = (artistLink?.textContent || bylineEl?.textContent || '').trim();
-    const trackArtist = (sessionMeta?.trackArtist || byline.split('•')[0] || '').trim();
+    const trackArtist = (byline.split('•')[0] || sessionMeta?.trackArtist || '').trim();
     if (!trackTitle || !trackArtist) return null;
 
     const combined = `${trackTitle} ${trackArtist}`.toLowerCase();
@@ -160,10 +161,10 @@ function getSoundCloudProgress() {
     const label = (playButton?.getAttribute('aria-label') || playButton?.getAttribute('title') || '').toLowerCase();
     const progressSec = Math.max(Number(timeline?.getAttribute('aria-valuenow')) || 0, 0);
     const durationSec = Math.max(Number(timeline?.getAttribute('aria-valuemax')) || 0, 0);
-    const isPlaying = label.startsWith('pause') || Boolean(
+    const isPlaying = label.startsWith('pause') || (!label.startsWith('play') && Boolean(
         badge && !badge.classList.contains('paused') && progressSec > 0
-    );
-    return { isPlaying, progressSec: Math.floor(progressSec), durationSec: Math.floor(durationSec) };
+    ));
+    return { isPlaying, progressSec: Math.floor(progressSec), durationSec: Math.floor(durationSec), positionKnown: Boolean(timeline) };
 }
 
 function getVkMetadata() {
@@ -203,8 +204,12 @@ function getMediaProgress(sessionPlaying, source) {
         const soundCloudProgress = getSoundCloudProgress();
         if (soundCloudProgress) return soundCloudProgress;
     }
-    const allMedia = Array.from(globalThis.__vein_audio_elements || []).concat(Array.from(document.querySelectorAll('audio, video')))
+    const allMedia = [...new Set([...globalThis.__vein_audio_elements, ...document.querySelectorAll('audio, video')])]
         .filter(media => media.duration > 0 || media.currentTime > 0);
+    if (recentMedia && allMedia.includes(recentMedia)) {
+        const [progressSec, durationSec] = getMediaTimes(recentMedia);
+        return {isPlaying: !recentMedia.paused && !recentMedia.ended, progressSec, durationSec, positionKnown: true};
+    }
     const activeMedia = allMedia.filter(m => !m.paused && m.duration > 0).sort((a, b) => b.currentTime - a.currentTime)[0];
     
     let isPlaying = false;
@@ -222,18 +227,20 @@ function getMediaProgress(sessionPlaying, source) {
         }
     }
     
+    let positionKnown = allMedia.length > 0;
     try {
         if (globalThis.externalAPI) {
             isPlaying = globalThis.externalAPI.isPlaying();
             const progressObj = globalThis.externalAPI.getProgress();
             if (progressObj) {
+                positionKnown = true;
                 progressSec = Math.floor(progressObj.position || 0);
                 durationSec = Math.floor(progressObj.duration || 0);
             }
         }
     } catch(e) {}
 
-    return { isPlaying, progressSec, durationSec };
+    return { isPlaying, progressSec, durationSec, positionKnown };
 }
 
 function getMediaSessionMeta(source) {
@@ -288,12 +295,11 @@ function getTrackMetadataForSource(source) {
         return getYouTubeMusicMeta();
     }
 
+    if (source === 'yandex') {
+        return getYandexMeta() || getMediaSessionMeta(source);
+    }
     let meta = getMediaSessionMeta(source);
     if (meta) return meta;
-    
-    if (source === 'yandex') {
-        return getYandexMeta();
-    }
     
     if (source === 'vk') {
         return getVkMetaForWorld();
@@ -303,7 +309,7 @@ function getTrackMetadataForSource(source) {
 }
 
 let lastPlaybackReport = null;
-setInterval(() => {
+function reportPlayback() {
     try {
         const source = getPlatformSource(globalThis.location.hostname);
         if (!source) return;
@@ -315,16 +321,16 @@ setInterval(() => {
 
         if (trackTitle) {
             const sessionPlaying = navigator.mediaSession?.playbackState === 'playing';
-            const { isPlaying, progressSec, durationSec } = getMediaProgress(sessionPlaying, source);
+            const { isPlaying, progressSec, durationSec, positionKnown } = getMediaProgress(sessionPlaying, source);
             // SoundCloud populates the mini-player as soon as a track is selected.
             // Do not create a zero-second scrobble until playback has actually begun.
-            if (!isPlaying && progressSec <= 0) return;
+            if (!isPlaying && progressSec <= 0 && !lastPlaybackReport?.playing) return;
             const key = `${source}|${trackArtist}|${trackTitle}`;
             // Inactive tabs retain old MediaSession metadata. Report a pause
             // once after observed playback, never keep replacing the active
             // track in another tab with an old paused selection.
-            if (!isPlaying && (lastPlaybackReport?.key !== key || !lastPlaybackReport.playing)) return;
-            lastPlaybackReport = {key, playing: isPlaying};
+            if (!isPlaying && (lastPlaybackReport?.key !== key || (!lastPlaybackReport.playing && lastPlaybackReport.position === progressSec))) return;
+            lastPlaybackReport = {key, playing: isPlaying, position: progressSec};
             globalThis.postMessage({
                 type: 'VEIN_SCROBBLE',
                 payload: {
@@ -334,6 +340,7 @@ setInterval(() => {
                     cover_url: trackCover,
                     track_url: trackUrl,
                     source: source,
+                    player_position: positionKnown,
                     progress_sec: progressSec,
                     is_playing: isPlaying,
                     duration: durationSec
@@ -343,4 +350,42 @@ setInterval(() => {
     } catch (e) {
         console.error("[VEIN MAIN] ❌ Ошибка:", e);
     }
-}, 800);
+}
+
+// Media events do not wait for a polling timer, including in background tabs.
+const watchedMedia = new WeakSet();
+let recentMedia = null;
+function onMediaEvent(event) {
+    recentMedia = event.target;
+    reportPlayback();
+}
+function watchMedia(media) {
+    if (watchedMedia.has(media) || !media.addEventListener) return;
+    watchedMedia.add(media);
+    for (const name of ['playing', 'pause', 'ended', 'seeked', 'loadedmetadata', 'timeupdate']) {
+        media.addEventListener(name, onMediaEvent);
+    }
+}
+function scanMedia() {
+    for (const media of document.querySelectorAll('audio, video')) watchMedia(media);
+}
+for (const name of ['playing', 'pause', 'ended', 'seeked', 'loadedmetadata', 'timeupdate']) {
+    document.addEventListener(name, onMediaEvent, true);
+}
+// Track labels and custom-player controls often update without media events.
+let reportScheduled = false;
+const observer = new MutationObserver(() => {
+    if (reportScheduled) return;
+    reportScheduled = true;
+    queueMicrotask(() => {
+        reportScheduled = false;
+        scanMedia();
+        reportPlayback();
+    });
+});
+observer.observe(document, {subtree: true, childList: true, characterData: true,
+    attributes: true, attributeFilter: ['class', 'aria-label', 'aria-valuenow', 'aria-valuemax', 'title', 'src']});
+scanMedia();
+// Safety net for closed players/MediaSession-only changes. Network heartbeats
+// are separately limited; local observation must remain responsive.
+setInterval(reportPlayback, 250);
