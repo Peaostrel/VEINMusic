@@ -763,6 +763,27 @@ def test_pause_and_resume_are_broadcast(db):
     assert datetime.fromisoformat(messages[1]["track"]["updated_at"]).tzinfo is not None
 
 
+def test_counted_threshold_is_broadcast_without_a_playback_state_change(db):
+    user = _user(db, "counted_live_listener")
+    with patch.object(sp.manager, "broadcast_to_user", new=AsyncMock()) as broadcast:
+        asyncio.run(sp.process_scrobble(db, user, "Counted", "Band", "", "", "yandex", 0,
+                                        True, 200))
+        scrobble = db.query(Scrobble).filter(Scrobble.user_id == user.id).one()
+        scrobble.listened_sec = 169
+        scrobble.updated_at = datetime.now(UTC) - timedelta(seconds=2)
+        db.commit()
+
+        asyncio.run(sp.process_scrobble(db, user, "Counted", "Band", "", "", "yandex", 171,
+                                        True, 200))
+
+    messages = [call.args[1] for call in broadcast.await_args_list]
+    assert [message["type"] for message in messages] == ["NEW_SCROBBLE", "PLAYBACK_STATE"]
+    counted = messages[1]["track"]
+    assert counted["is_playing"] is True
+    assert counted["listened_sec"] >= 170
+    assert counted["listened_sec"] * 100 >= counted["duration"] * 85
+
+
 def test_background_metadata_does_not_overwrite_duration_from_a_new_heartbeat(db):
     from app.database import SessionLocal
     track = _track(db, duration=0, track_url="https://plat-music.ru/track/42")
