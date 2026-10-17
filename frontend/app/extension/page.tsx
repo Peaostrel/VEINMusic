@@ -11,12 +11,13 @@ export const metadata: Metadata = {
   alternates: { canonical: "/extension" },
 };
 
-// Read at request time so the approved AMO listing can be enabled without a rebuild.
+// Read at request time so deployments can override the published AMO listing.
 export const dynamic = "force-dynamic";
 
 function firefoxListing(): string | null {
-  const value = process.env.FIREFOX_ADDON_URL;
-  if (!value) return null;
+  const value =
+    process.env.FIREFOX_ADDON_URL?.trim() ||
+    "https://addons.mozilla.org/en-US/firefox/addon/vein-music-tracker/";
   try {
     const url = new URL(value);
     return url.protocol === "https:" &&
