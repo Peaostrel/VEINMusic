@@ -85,7 +85,7 @@ async def add_scrobble(request: Request,
                 await anyio.to_thread.run_sync(record_health, db, user_id, data.source, blocked["status"])
                 return blocked
 
-            res = await process_scrobble(db, user, data.title, data.artist, data.cover_url or "", data.track_url or "", data.source, data.progress_sec or 0, bool(data.is_playing), data.duration or 0, data.album or "")
+            res = await process_scrobble(db, user, data.title, data.artist, data.cover_url or "", data.track_url or "", data.source, data.progress_sec or 0, bool(data.is_playing), data.duration or 0, data.album or "", player_position=data.player_position)
 
             from app.core.redis import enqueue_background_task
             await enqueue_background_task('check_achievements', user_id, background_tasks=background_tasks)
@@ -103,6 +103,14 @@ def _changes_playback(last_s: Scrobble, data: ScrobbleData) -> bool:
     happen, often within a second or two of a heartbeat."""
     if bool(data.is_playing) != bool(last_s.is_playing):
         return True
+    if data.player_position and last_s.position_sec is not None:
+        updated = last_s.updated_at
+        if updated.tzinfo is None:
+            updated = updated.replace(tzinfo=UTC)
+        elapsed = max((datetime.now(UTC) - updated).total_seconds(), 0)
+        expected = last_s.position_sec + (elapsed if last_s.is_playing else 0)
+        if abs(data.progress_sec - expected) > 2:
+            return True
     track = last_s.track
     title, artist = clean_track_metadata(data.title, data.artist)
     return track is None or (str(track.title).casefold(), str(track.artist).casefold()) != (

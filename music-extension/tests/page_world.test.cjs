@@ -26,15 +26,21 @@ function element({ text = '', title = '', href = '', src = '', attributes = {}, 
 function runPageWorld({ nodes, hostname, href, media = [] }) {
     let intervalHandler;
     const messages = [];
+    const events = new Map();
+    let mutate;
+    const microtasks = [];
     class HTMLMediaElement {}
     HTMLMediaElement.prototype.play = function play() {};
     const context = vm.createContext({
         console: { log() {}, debug() {}, error() {} },
         document: {
+            addEventListener: (name, handler) => events.set(name, handler),
             querySelector: (selector) => nodes[selector] || null,
             querySelectorAll: (selector) => selector === 'audio, video' ? media : []
         },
         getComputedStyle: (node) => node.style,
+        MutationObserver: class { constructor(callback) { mutate = callback; } observe() {} },
+        queueMicrotask: (handler) => microtasks.push(handler),
         HTMLMediaElement,
         location: { hostname, href },
         navigator: { mediaSession: null },
@@ -43,7 +49,9 @@ function runPageWorld({ nodes, hostname, href, media = [] }) {
     });
     context.top = context;
     vm.runInContext(source, context);
-    return { context, messages, runInterval: () => intervalHandler() };
+    return { context, messages, runInterval: () => intervalHandler(),
+        emit: (name, target) => events.get(name)({target}),
+        mutate: () => { mutate(); while (microtasks.length) microtasks.shift()(); } };
 }
 
 function harness({ playing = true, progress = 42 } = {}) {
@@ -103,6 +111,7 @@ test('emits a complete SoundCloud scrobble payload', () => {
         cover_url: 'https://i1.sndcdn.com/artworks-test-t500x500.jpg',
         track_url: 'https://soundcloud.com/test-artist/test-song',
         source: 'soundcloud',
+        player_position: true,
         progress_sec: 42,
         is_playing: true,
         duration: 192
@@ -163,6 +172,7 @@ test('reads and emits the current YouTube Music track', () => {
         cover_url: 'https://lh3.googleusercontent.com/test=w500-h500',
         track_url: 'https://music.youtube.com/watch?v=abc123',
         source: 'youtube_music',
+        player_position: true,
         progress_sec: 37,
         is_playing: true,
         duration: 201
@@ -234,4 +244,40 @@ test('a streaming player with infinite duration emits valid unknown length', () 
     assert.equal(messages.length, 1);
     assert.equal(messages[0].payload.duration, 0);
     assert.equal(messages[0].payload.progress_sec, 20);
+});
+
+
+test('media pause, resume and seek are reported without advancing the polling timer', () => {
+    const media = {paused: false, currentTime: 24, duration: 180};
+    const page = runPageWorld({nodes: {}, hostname: 'open.spotify.com', href: 'https://open.spotify.com/', media: [media]});
+    page.context.navigator.mediaSession = {metadata: {title: 'Song', artist: 'Artist'}, playbackState: 'playing'};
+    page.emit('playing', media);
+    media.paused = true;
+    page.emit('pause', media);
+    assert.equal(page.messages.at(-1).payload.is_playing, false);
+    assert.equal(page.messages.at(-1).payload.progress_sec, 24);
+    media.paused = false;
+    page.emit('playing', media);
+    assert.equal(page.messages.at(-1).payload.is_playing, true);
+    media.currentTime = 95;
+    page.emit('seeked', media);
+    assert.equal(page.messages.at(-1).payload.progress_sec, 95);
+    page.context.navigator.mediaSession.metadata = {title: 'Next', artist: 'Artist'};
+    media.currentTime = 0;
+    page.mutate();
+    assert.equal(page.messages.at(-1).payload.title, 'Next');
+    assert.equal(page.messages.at(-1).payload.progress_sec, 0);
+});
+
+test('a newly active media element at zero wins over the old long position', () => {
+    const old = {paused: true, currentTime: 160, duration: 180};
+    const fresh = {paused: false, currentTime: 0, duration: 180};
+    const page = runPageWorld({nodes: {}, hostname: 'open.spotify.com', href: 'https://open.spotify.com/', media: [old, fresh]});
+    page.context.navigator.mediaSession = {metadata: {title: 'Next', artist: 'Artist'}, playbackState: 'playing'};
+    page.emit('playing', fresh);
+    assert.equal(page.messages.at(-1).payload.progress_sec, 0);
+    fresh.paused = true;
+    page.emit('pause', fresh);
+    assert.equal(page.messages.at(-1).payload.is_playing, false);
+    assert.equal(page.messages.at(-1).payload.progress_sec, 0);
 });

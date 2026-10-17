@@ -29,6 +29,7 @@ class ScrobbleCreditOptions(TypedDict, total=False):
     credit_sec: int | None
     pending_sec: int
     collector: str
+    player_position: bool
 
 
 YANDEX_MUSIC_HOST = "music.yandex.ru"
@@ -603,13 +604,16 @@ async def _dispatch_counted_scrobble(user_id: int, counted: dict[str, Any]) -> N
         counted["timestamp"])
 
 
-def _confirm_scrobble_source(db, last_scrobble, source_label, source_id, l_updated_at, now):
+def _confirm_scrobble_source(db, last_scrobble, source_label, source_id, l_updated_at, now,
+                             player_position: bool = False):
     sources = list(last_scrobble.confirmed_sources or [last_scrobble.source])
     if source_label not in sources:
         sources.append(source_label)
     last_scrobble.confirmed_sources = sources[:20]  # type: ignore[assignment]
     primary = last_scrobble.credit_source or f"{last_scrobble.source}:client"
-    if primary != source_id and l_updated_at is not None and (now - l_updated_at).total_seconds() < 40:
+    live_over_cloud = player_position and primary.endswith(":cloud")
+    if (primary != source_id and not live_over_cloud and l_updated_at is not None
+            and (now - l_updated_at).total_seconds() < 40):
         db.commit()
         return True
     last_scrobble.credit_source = source_id  # type: ignore[assignment]
@@ -727,7 +731,8 @@ def _start_scrobble(db: Session, user_id: int, track: Track, source: str, source
 
 def _record_scrobble(db: Session, user: User, track: Track, source: str,
                      progress_sec: float, is_playing: bool, credit_sec: int | None = None,
-                     pending_sec: int = 0, collector: str = "client") -> dict[str, Any]:
+                     pending_sec: int = 0, collector: str = "client",
+                     player_position: bool = False) -> dict[str, Any]:
     """Create or advance the user's current scrobble (blocking DB work).
 
     Returns plain data only, so nothing touches expired ORM objects (and the
@@ -749,10 +754,11 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
         return result
     was_playing = bool(last_scrobble.is_playing) if last_scrobble else None
     if (last_scrobble and last_scrobble.track_id == track.id
-            and _confirm_scrobble_source(db, last_scrobble, source_label, source_id, l_updated_at, now)):
+            and _confirm_scrobble_source(db, last_scrobble, source_label, source_id, l_updated_at, now,
+                                         player_position)):
         result["status"] = "confirmed_duplicate"
         return result
-    positional = source in POSITION_SOURCES and credit_sec is None
+    positional = (source in POSITION_SOURCES or player_position) and credit_sec is None
     restarted, replayed, uncredited = False, 0, 0.0
     if positional:
         result["counted"], restarted = _position_change(
@@ -884,7 +890,7 @@ async def _process_scrobble(
         enrich=False, user_id=int(user.id))
     result = await _run_db(_record_scrobble, db, user, track, source, progress_sec, is_playing,
                            credit_options.get("credit_sec"), credit_options.get("pending_sec", 0),
-                           credit_options.get("collector", "client"))
+                           credit_options.get("collector", "client"), credit_options.get("player_position", False))
 
     if result["new_item"] is not None:
         await manager.broadcast_to_user(result["username"], {

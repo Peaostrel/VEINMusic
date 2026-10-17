@@ -35,8 +35,8 @@ def test_many_skipped_tracks_do_not_disable_any_provider(client, db, listener, s
     db.flush()
     before = datetime.now(UTC) - timedelta(minutes=2)
     db.add_all([Scrobble(user_id=user.id, track_id=track.id, source=source,
-                        played_at=before, updated_at=before, listened_sec=20,
-                        is_playing=False) for _ in range(45)])
+                           played_at=before, updated_at=before, listened_sec=20,
+                           is_playing=False) for _ in range(45)])
     db.commit()
     assert client.post("/api/scrobble", headers=headers, json=report(source=source)).json()["status"] == "ok"
     # A switch immediately after a heartbeat is also valid for every source.
@@ -126,3 +126,47 @@ def test_inactive_other_service_cannot_replace_fresh_playback(client, db, listen
     actual_pause = {**report('Active', 'plat'), 'is_playing': False, 'progress_sec': 1}
     assert client.post('/api/scrobble', headers=headers, json=actual_pause).json()['status'] == 'ok'
     assert db.query(Scrobble).one().is_playing is False
+
+
+@pytest.mark.parametrize("source", ["yandex", "spotify", "youtube_music", "soundcloud", "apple_music", "vk"])
+def test_extension_position_pause_resume_and_seek_are_live(client, db, listener, source):
+    user, headers = listener
+    payload = {**report(source=source), "player_position": True, "progress_sec": 42}
+    assert client.post("/api/scrobble", headers=headers, json=payload).json()["status"] == "ok"
+    row = db.query(Scrobble).one()
+    assert row.position_sec == 42
+    assert row.listened_sec == 0  # Player position never grants listening credit.
+    for position, playing in [(42, False), (42, True), (120, True), (15, True), (15, False)]:
+        update = {**payload, "progress_sec": position, "is_playing": playing}
+        assert client.post("/api/scrobble", headers=headers, json=update).json()["status"] == "ok"
+        db.refresh(row)
+        assert abs(row.position_sec - position) < 1
+        assert row.is_playing is playing
+        current = client.get(f"/api/current-track/{user.username}", headers=headers).json()
+        assert current["playing"] is playing
+        assert abs(current["display_position_sec"] - position) < 1
+        assert row.listened_sec < 5
+
+
+def test_live_extension_takes_over_fresh_cloud_state_and_broadcasts_position(client, db, listener):
+    user, headers = listener
+    payload = {**report(source="spotify"), "progress_sec": 42, "player_position": True}
+    assert client.post("/api/scrobble", headers=headers, json=payload).json()["status"] == "ok"
+    row = db.query(Scrobble).one()
+    row.credit_source = "spotify:cloud"
+    db.commit()
+    with patch("app.services.scrobble_processor.manager.broadcast_to_user", new_callable=AsyncMock) as broadcast:
+        response = client.post("/api/scrobble", headers=headers, json={**payload, "is_playing": False})
+    assert response.json()["status"] == "ok"
+    db.refresh(row)
+    assert row.credit_source == "spotify:client"
+    event = broadcast.await_args.args[1]
+    assert event["type"] == "PLAYBACK_STATE"
+    assert event["track"]["position_sec"] == 42
+    assert event["track"]["is_playing"] is False
+
+
+def test_polled_client_does_not_claim_an_exact_player_position(client, db, listener):
+    _, headers = listener
+    assert client.post("/api/scrobble", headers=headers, json={**report(), "progress_sec": 42}).json()["status"] == "ok"
+    assert db.query(Scrobble).one().position_sec is None
