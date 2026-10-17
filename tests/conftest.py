@@ -1,6 +1,7 @@
 import os
 import sys
 import pytest
+import httpx
 
 # Setup system path to import app correctly
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -39,6 +40,36 @@ from app.database import Base, get_db, engine, SessionLocal  # noqa: E402, F401
 from fastapi.testclient import TestClient  # noqa: E402
 from app.core.rate_limit import limiter  # noqa: E402
 limiter.enabled = False
+
+
+@pytest.fixture(autouse=True)
+def isolated_provider_http(monkeypatch):
+    """Unmocked provider/metadata requests must never leave the test process.
+
+    Explicit MockTransport fixtures retain their responses. Background
+    enrichment now applies to every source, so it also needs this boundary.
+    """
+    original = httpx.AsyncClient
+
+    class IsolatedTransport(httpx.AsyncBaseTransport):
+        def __init__(self):
+            self.local = httpx.AsyncHTTPTransport()
+
+        async def handle_async_request(self, request):
+            if request.url.host not in {"localhost", "127.0.0.1", "::1"}:
+                raise httpx.ConnectError("External HTTP is disabled in tests; use MockTransport", request=request)
+            return await self.local.handle_async_request(request)
+
+        async def aclose(self):
+            await self.local.aclose()
+
+    class IsolatedClient(original):
+        def __init__(self, *args, **kwargs):
+            if "transport" not in kwargs:
+                kwargs["transport"] = IsolatedTransport()
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", IsolatedClient)
 
 
 @pytest.fixture(scope="session", autouse=True)

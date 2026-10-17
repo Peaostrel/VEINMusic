@@ -215,7 +215,9 @@ def test_excluded_listens_cannot_bypass_abuse_limits(client, db, people):
                         listened_sec=0, xp_earned=1, excluded_from_stats=True) for _ in range(71)])
     db.commit()
     assert db.query(Scrobble).count() == 0
-    assert _anti_abuse_check(db, people[0].id)["status"] == "flagged"
+    # Intake remains live; exclusions still cannot hide farming from the
+    # antifraud scanner or turn it into legitimate rewarded listening.
+    assert _anti_abuse_check(db, people[0].id) is None
     assert _check_hourly_velocity(people[0].id, db, now - timedelta(hours=1))[0] == 45
     assert _check_micro_tracks(people[0].id, db)[0] == 40
 

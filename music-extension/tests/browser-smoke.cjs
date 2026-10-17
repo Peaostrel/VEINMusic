@@ -11,13 +11,14 @@ const {chromium} = require('playwright');
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'vein-extension-'));
     const extension = path.resolve('dist/extension-smoke/chromium');
     const calls = [];
+    let scrobbleStatus = 'ok';
     const server = http.createServer((req, res) => {
         let body = '';
         req.on('data', chunk => { body += chunk; });
         req.on('end', () => {
             calls.push({url: req.url, method: req.method, authorization: req.headers.authorization, body: body ? JSON.parse(body) : null});
             res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({status: 'ok'}));
+            res.end(JSON.stringify({status: req.url === '/api/scrobble' ? scrobbleStatus : 'ok'}));
         });
     });
     await new Promise(resolve => server.listen(8000, '127.0.0.1', resolve));
@@ -71,6 +72,14 @@ const {chromium} = require('playwright');
         assert.equal(play.body.artist, 'Fixture Artist');
         assert.equal(play.body.progress_sec, 32);
         assert.equal(play.body.track_url, 'https://music.youtube.com/watch?v=fixture');
+        await popup.waitForFunction(() => document.querySelector('#delivery-status').innerText.includes('Событие принято'));
+        // A successful HTTP transport is not a successful listening event.
+        scrobbleStatus = 'integration_paused';
+        await music.evaluate(() => { document.querySelector('.title').innerText = 'Filtered fixture'; });
+        await popup.waitForFunction(() => document.querySelector('#delivery-status').innerText.includes('выключен'));
+        scrobbleStatus = 'ok';
+        await music.evaluate(() => { document.querySelector('.title').innerText = 'Resumed fixture'; });
+        await popup.waitForFunction(() => document.querySelector('#delivery-status').innerText.includes('Событие принято'));
         await popup.locator('#logout-btn').click();
         await popup.waitForFunction(() => !document.querySelector('#tracking-enabled').checked);
         const count = calls.length;

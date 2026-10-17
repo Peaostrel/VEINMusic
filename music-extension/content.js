@@ -9,8 +9,10 @@
 // with a strict CSP. No script tag or public extension resource is needed.
 let trackingEnabled = false;
 let lastMainMessageAt = 0;
+let lastFallbackReport = null;
 function updateTrackingState(settings) {
     trackingEnabled = settings.trackingEnabled === true && Boolean(settings.apiKey);
+    if (!trackingEnabled) lastFallbackReport = null;
 }
 chrome.storage.local.get(['trackingEnabled', 'apiKey'], updateTrackingState);
 chrome.storage.onChanged.addListener((_changes, area) => {
@@ -102,6 +104,9 @@ setInterval(() => {
         
         if (meta?.title) {
             const { isPlaying, progressSec, durationSec } = getPlaybackStatus();
+            const key = `${meta.artist}|${meta.title}`;
+            if (!isPlaying && (lastFallbackReport?.key !== key || !lastFallbackReport.playing)) return;
+            lastFallbackReport = {key, playing: isPlaying};
 
             chrome.runtime.sendMessage({ 
                 type: 'SCROBBLE', 

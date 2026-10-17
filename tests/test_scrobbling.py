@@ -108,7 +108,7 @@ def test_auto_achievements_flow(auth_client, db, test_user):
         "Божество"]
 
 
-def test_anti_cheat_triggered(auth_client, db, test_user):
+def test_many_recent_plays_do_not_disable_playback_intake(auth_client, db, test_user):
     track = Track(title="Cheat", artist="Cheater", duration=120)
     db.add(track)
     db.commit()
@@ -132,12 +132,15 @@ def test_anti_cheat_triggered(auth_client, db, test_user):
         "source": "yandex",
         "progress_sec": 120,
         "duration": 120,
-        "is_playing": False
+        "is_playing": True
     }
     resp = auth_client.post("/api/scrobble", json=payload)
     assert resp.status_code == 200
-    assert resp.json()["status"] == "flagged"
-    assert "Anti-Cheat" in resp.json()["message"]
+    assert resp.json()["status"] == "ok"
+    latest = db.query(Scrobble).order_by(Scrobble.id.desc()).first()
+    assert latest.track.title == "Cheat 2"
+    assert latest.listened_sec == 0  # a reported position does not grant XP
+    assert latest.xp_earned == 0
 
 
 def test_history_privacy(client, db, test_user):

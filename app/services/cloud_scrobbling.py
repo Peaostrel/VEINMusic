@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
@@ -74,23 +75,22 @@ async def sync_spotify_status(user: User, db: Session, process_func):
                 record_health(db, int(user.id), "spotify", "provider_error")
             if resp.status_code == 200:
                 data = resp.json()
-                if data and data.get("is_playing"):
+                if data:
                     item = data.get("item")
                     if not item:
                         return
                     title = item.get("name")
                     artist = ", ".join([a["name"]
                                        for a in item.get("artists", [])])
-                    cover = item.get(
-                        "album", {}).get(
-                        "images", [
-                            {}])[0].get("url")
+                    images = item.get("album", {}).get("images") or [{}]
+                    cover = images[0].get("url")
                     track_url = item.get("external_urls", {}).get("spotify")
                     duration = int(item.get("duration_ms", 0) / 1000)
                     progress = int(data.get("progress_ms", 0) / 1000)
                     album = item.get("album", {}).get("name")
 
-                    await process_func(db, user, title, artist, cover, track_url, "spotify", progress, True, duration, album, collector="cloud")
+                    await process_func(db, user, title, artist, cover, track_url, "spotify", progress,
+                                       bool(data.get("is_playing")), duration, album, collector="cloud")
         except Exception as e:
             record_health(db, int(user.id), "spotify", "network_error")
             logger.warning(f"Spotify sync error: {e}")
@@ -588,20 +588,26 @@ async def poll_user(user_id: int, process_func):
         spotify_enabled = runtime_settings.is_feature_enabled("integration_spotify", local_db)
         yandex_enabled = runtime_settings.is_feature_enabled("integration_yandex", local_db)
         soundcloud_enabled = runtime_settings.is_feature_enabled("integration_soundcloud", local_db)
-        async with redis_lock(f"scrobble_lock:{user_id}", expire_sec=30):
-            if (spotify_enabled and integrations.spotify_enabled
-                    and u.integration.spotify_refresh_token):
-                await sync_spotify_status(u, local_db, process_func)
 
-            # A user with an open live Ynison connection is reported by it
-            from app.services.yandex_live import connected as live_users
-            if (yandex_enabled and integrations.yandex_enabled
-                    and u.integration.yandex_token and user_id not in live_users):
-                await sync_yandex_status(u, local_db, process_func)
+        async def record(*args, **kwargs):
+            # Slow provider requests must not lock out the browser/Plat.
+            # Serialize only the actual write for this account.
+            async with redis_lock(f"scrobble_lock:{user_id}", expire_sec=30):
+                return await process_func(*args, **kwargs)
 
-            if (soundcloud_enabled and integrations.soundcloud_enabled
-                    and u.integration.soundcloud_refresh_token):
-                await sync_soundcloud_status(u, local_db, process_func)
+        if (spotify_enabled and integrations.spotify_enabled
+                and u.integration.spotify_refresh_token):
+            await sync_spotify_status(u, local_db, record)
+
+        # A user with an open live Ynison connection is reported by it
+        from app.services.yandex_live import connected as live_users
+        if (yandex_enabled and integrations.yandex_enabled
+                and u.integration.yandex_token and user_id not in live_users):
+            await sync_yandex_status(u, local_db, record)
+
+        if (soundcloud_enabled and integrations.soundcloud_enabled
+                and u.integration.soundcloud_refresh_token):
+            await sync_soundcloud_status(u, local_db, record)
 
         u.integration.last_sync = datetime.now(UTC)
         local_db.commit()
@@ -637,7 +643,7 @@ def _load_pollable_user_ids() -> list[int]:
         db.close()
 
 
-async def poll_once(process_func) -> None:
+async def poll_once(process_func, enqueue_user=None) -> None:
     """Poll all linked accounts once.
 
     Guarded by a Redis lock so that only one process (API worker or arq
@@ -646,9 +652,10 @@ async def poll_once(process_func) -> None:
 
     lock_acquired = True
     client = None
+    lock_token = secrets.token_hex(16)
     try:
         client = get_redis_client()
-        lock_acquired = bool(await client.set(POLL_LOCK_KEY, "1", nx=True, ex=POLL_LOCK_TTL))
+        lock_acquired = bool(await client.set(POLL_LOCK_KEY, lock_token, nx=True, ex=POLL_LOCK_TTL))
     except Exception:
         client = None  # Redis unavailable: single-process fallback
     if not lock_acquired:
@@ -656,6 +663,13 @@ async def poll_once(process_func) -> None:
 
     try:
         user_ids = await asyncio.to_thread(_load_pollable_user_ids)
+
+        if enqueue_user is not None:
+            # ARQ's scheduler must finish quickly. Previously the 25-second
+            # cron timeout cancelled every remaining account in a slow batch.
+            for user_id in user_ids:
+                await enqueue_user(user_id)
+            return
 
         if user_ids:
             # Bound concurrency so polling never exhausts the DB pool
@@ -669,7 +683,12 @@ async def poll_once(process_func) -> None:
     finally:
         if client is not None:
             try:
-                await client.delete(POLL_LOCK_KEY)
+                # The lease may have expired during a fallback batch. Never
+                # remove a newer poller's lock.
+                await client.eval(
+                    "if redis.call('get', KEYS[1]) == ARGV[1] then "
+                    "return redis.call('del', KEYS[1]) else return 0 end",
+                    1, POLL_LOCK_KEY, lock_token)
             except Exception:
                 logger.debug("Failed to release cloud poll lock", exc_info=True)
 

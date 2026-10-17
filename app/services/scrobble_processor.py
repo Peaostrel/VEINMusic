@@ -443,21 +443,16 @@ def _should_clean_previous_scrobble(last_scrobble) -> bool:
 def _determine_is_new(db: Session,
                       track: Track,
                       last_scrobble,
-                      now,
-                      l_updated_at,
                       progress_sec: float,
                       restarted: bool = False,
-                      uncredited_sec: float = 0,
-                      playback_event: bool = False) -> tuple[bool, str | None]:
+                      uncredited_sec: float = 0) -> tuple[bool, str | None]:
     """Determine if a new scrobble should be created. Returns (is_new, early_return_status).
 
     `uncredited_sec`: listening since the previous report that ended the
     previous play (a detected restart), not added to it yet."""
     if not last_scrobble or last_scrobble.track_id != track.id:
-        if not playback_event and last_scrobble and last_scrobble.is_playing and (
-                now - l_updated_at).total_seconds() < 1.0:
-            return False, "ignored_spam_protection"
-
+        # A real switch may follow a heartbeat immediately. Endpoint rate
+        # limits bound request volume; a per-track debounce loses that switch.
         if _should_clean_previous_scrobble(last_scrobble):
             db.delete(last_scrobble)
             db.commit()
@@ -722,6 +717,7 @@ def _start_scrobble(db: Session, user_id: int, track: Track, source: str, source
         credit_source=source_id,
         played_at=now - timedelta(seconds=listened_sec),
         listened_sec=listened_sec,
+        xp_earned=0,
         is_playing=is_playing,
         updated_at=now)
     db.add(scrobble)
@@ -744,6 +740,13 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
 
     result: dict[str, Any] = {"status": "ok", "username": str(user.username), "user_id": user_id,
                               "new_item": None, "counted": None, "state_change": None}
+    if (last_scrobble and last_scrobble.track_id != track.id and last_scrobble.is_playing
+            and not is_playing and l_updated_at is not None
+            and (now - l_updated_at).total_seconds() < ACTIVE_PLAYBACK_WINDOW_SEC):
+        # Another tab/provider can still expose its old paused selection.
+        # It must not replace the user's fresh, actually playing track.
+        result["status"] = "ignored_inactive"
+        return result
     was_playing = bool(last_scrobble.is_playing) if last_scrobble else None
     if (last_scrobble and last_scrobble.track_id == track.id
             and _confirm_scrobble_source(db, last_scrobble, source_label, source_id, l_updated_at, now)):
@@ -756,8 +759,7 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
             db, user, track, source, last_scrobble, now, l_updated_at, progress_sec)
         replayed, uncredited = _restart_split(last_scrobble, now, l_updated_at, progress_sec, restarted)
     is_new, early_return = _determine_is_new(
-        db, track, last_scrobble, now, l_updated_at, progress_sec, restarted, uncredited,
-        playback_event=positional)
+        db, track, last_scrobble, progress_sec, restarted, uncredited)
     if early_return:
         result["status"] = early_return
         return result
@@ -879,7 +881,7 @@ async def _process_scrobble(
 
     track = await _get_or_create_track(
         db, title, artist, cover_url, track_url, duration, album,
-        enrich=listening.auto_metadata and source not in POSITION_SOURCES, user_id=int(user.id))
+        enrich=False, user_id=int(user.id))
     result = await _run_db(_record_scrobble, db, user, track, source, progress_sec, is_playing,
                            credit_options.get("credit_sec"), credit_options.get("pending_sec", 0),
                            credit_options.get("collector", "client"))
@@ -894,7 +896,7 @@ async def _process_scrobble(
             "type": "PLAYBACK_STATE", **result["state_change"]})
     if result["counted"] is not None:
         await _dispatch_counted_scrobble(result["user_id"], result["counted"])
-    if result["new_item"] is not None and source in POSITION_SOURCES and listening.auto_metadata:
+    if result["new_item"] is not None and listening.auto_metadata:
         # Genre/length lookups can take seconds; playback is already visible
         # and the next play/pause event must not wait behind those requests.
         from app.core.redis import enqueue_background_task

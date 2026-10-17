@@ -32,7 +32,11 @@ function harness(items, fetch) {
         } }
     };
     const context = vm.createContext({
-        chrome, fetch, console: { log() {}, warn() {} }, navigator: { userAgent: 'Chrome' },
+        chrome, fetch: async (...args) => {
+            const response = await fetch(...args);
+            if (response.ok && !response.json) return {...response, json: async () => ({status: 'ok'})};
+            return response;
+        }, console: { log() {}, warn() {} }, navigator: { userAgent: 'Chrome' },
         Date, URL, setTimeout, clearTimeout, AbortSignal, crypto: require('node:crypto').webcrypto
     });
     vm.runInContext(pairing, context);
@@ -218,4 +222,123 @@ test('an approved pairing response cannot reconnect after cancellation', async (
     complete({ok: true, json: async () => ({status: 'approved', api_key: 'unexpected-key', username: 'alice'})});
     assert.equal(await poll, 'none');
     assert.equal(state.apiKey, undefined);
+});
+
+for (const status of ['rate_limited', 'ignored_spam_protection', 'flagged']) {
+    test(`HTTP 200 with ${status} is not acknowledged as a saved scrobble`, async () => {
+        const {context, state, onMessage} = harness([], async () => ({ok: true, status: 200, json: async () => ({status})}));
+        onMessage({type: 'SCROBBLE', data: payload}, musicSender);
+        await tick();
+        await vm.runInContext('queueMutation', context);
+        assert.equal(state.offline_scrobbles.length, 1);
+        assert.equal(state.last_delivery.status, status);
+        assert.doesNotMatch(state.last_delivery.message, /Событие принято/);
+        await vm.runInContext('flushOfflineQueue()', context);
+        assert.equal(state.offline_scrobbles.length, 1);
+    });
+}
+
+for (const status of ['private_session', 'integration_paused', 'artist_ignored']) {
+    test(`explains deliberate ${status} filtering without endlessly replaying it`, async () => {
+        const {state, onMessage} = harness([], async () => ({ok: true, status: 200, json: async () => ({status})}));
+        onMessage({type: 'SCROBBLE', data: payload}, musicSender);
+        await tick();
+        assert.deepEqual(state.offline_scrobbles, []);
+        assert.equal(state.last_delivery.status, status);
+    });
+}
+
+test('an expired key is visible instead of being reported as connected playback', async () => {
+    const {state, onMessage} = harness([], async () => ({ok: false, status: 401}));
+    onMessage({type: 'SCROBBLE', data: payload}, musicSender);
+    await tick();
+    assert.equal(state.last_delivery.status, 'auth_required');
+    assert.match(state.last_delivery.message, /заново/);
+    assert.deepEqual(state.offline_scrobbles, []);
+});
+
+test('only the latest failed state for a service is retained', async () => {
+    const {context, state} = harness([], async () => ({ok: true}));
+    await vm.runInContext('addToOfflineQueue({source: "yandex", title: "Old"}, "test-key")', context);
+    await vm.runInContext('addToOfflineQueue({source: "spotify", title: "Other"}, "test-key")', context);
+    await vm.runInContext('addToOfflineQueue({source: "yandex", title: "New"}, "test-key")', context);
+    assert.deepEqual(state.offline_scrobbles.map(x => x.payload.title), ['Other', 'New']);
+});
+
+for (const source of ['yandex', 'spotify']) {
+    test(`a successful current state removes older ${source} retries`, async () => {
+    const sent = [];
+    const {context, state, onMessage} = harness([], async (_, options) => {
+        sent.push(JSON.parse(options.body).title);
+        return {ok: true};
+    });
+    await vm.runInContext(`addToOfflineQueue({source: ${JSON.stringify(source)}, title: "Old"}, "test-key")`, context);
+    onMessage({type: 'SCROBBLE', data: {...payload, title: 'Current'}}, musicSender);
+    await tick();
+    await vm.runInContext('queueMutation', context);
+    await vm.runInContext('flushOfflineQueue()', context);
+    assert.deepEqual(sent, ['Current']);
+    assert.deepEqual(state.offline_scrobbles, []);
+});
+
+}
+
+test('a queued request and live switch are serialized in playback order', async () => {
+    const sent = [];
+    let complete;
+    const {context, state, onMessage} = harness([], async (_, options) => {
+        const title = JSON.parse(options.body).title;
+        sent.push(title);
+        if (title === 'Old') await new Promise(resolve => complete = resolve);
+        return {ok: true};
+    });
+    await vm.runInContext('addToOfflineQueue({source: "yandex", title: "Old"}, "test-key")', context);
+    const flushing = vm.runInContext('flushOfflineQueue()', context);
+    await tick();
+    onMessage({type: 'SCROBBLE', data: {...payload, title: 'Current'}}, musicSender);
+    await tick();
+    assert.deepEqual(sent, ['Old']);
+    complete();
+    await flushing;
+    await tick();
+    assert.deepEqual(sent, ['Old', 'Current']);
+    assert.deepEqual(state.offline_scrobbles, []);
+});
+
+test('a malformed HTTP 200 response is kept for retry', async () => {
+    const {state, onMessage} = harness([], async () => ({ok: true, json: async () => {throw new Error('Invalid JSON');}}));
+    onMessage({type: 'SCROBBLE', data: payload}, musicSender);
+    await tick();
+    assert.equal(state.last_delivery.status, 'invalid_response');
+    assert.equal(state.offline_scrobbles.length, 1);
+});
+
+test('old live snapshots are never reintroduced as current playback', async () => {
+    let requests = 0;
+    const {context, state} = harness(['old'], async () => {requests++;return {ok: true};});
+    state.offline_scrobbles[0].queuedAt = Date.now() - 40000;
+    await vm.runInContext('flushOfflineQueue()', context);
+    assert.equal(requests, 0);
+    assert.deepEqual(state.offline_scrobbles, []);
+});
+
+test('an invalid queued payload does not block following valid playback', async () => {
+    let requests = 0;
+    const {context, state} = harness(['bad', 'valid'], async () => (++requests === 1 ? {ok: false, status: 422} : {ok: true}));
+    await vm.runInContext('flushOfflineQueue()', context);
+    assert.equal(requests, 2);
+    assert.deepEqual(state.offline_scrobbles, []);
+});
+
+test('filtering one service does not discard pending playback from another', async () => {
+    const {context, state, onMessage} = harness([], async (_, options) => ({
+        ok: true, json: async () => ({status: JSON.parse(options.body).source === 'yandex' ? 'source_ignored' : 'ok'})
+    }));
+    await vm.runInContext('addToOfflineQueue({source: "spotify", title: "Allowed"}, "test-key")', context);
+    onMessage({type: 'SCROBBLE', data: payload}, musicSender);
+    await tick();
+    await vm.runInContext('queueMutation', context);
+    assert.deepEqual(state.offline_scrobbles.map(item => item.payload.title), ['Allowed']);
+    await vm.runInContext('flushOfflineQueue()', context);
+    assert.deepEqual(state.offline_scrobbles, []);
 });
