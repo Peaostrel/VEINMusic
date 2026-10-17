@@ -81,6 +81,8 @@ async def add_scrobble(request: Request,
         try:
             blocked = await anyio.to_thread.run_sync(_anti_abuse_check, db, user_id, data)
             if blocked:
+                from app.services.source_health import record_health
+                await anyio.to_thread.run_sync(record_health, db, user_id, data.source, blocked["status"])
                 return blocked
 
             res = await process_scrobble(db, user, data.title, data.artist, data.cover_url or "", data.track_url or "", data.source, data.progress_sec or 0, bool(data.is_playing), data.duration or 0, data.album or "")
@@ -109,17 +111,12 @@ def _changes_playback(last_s: Scrobble, data: ScrobbleData) -> bool:
 
 def _anti_abuse_check(db: Session, user_id: int, data: ScrobbleData | None = None) -> dict | None:
     """Blocking DB checks run before processing a scrobble (in a thread)."""
-    # Anti-Cheat: Max 40 scrobbles per hour
+    # Recording playback is not a reward. A normal session with skips/short
+    # songs can exceed 40 rows, and blocking all further heartbeats also lost
+    # pauses and unrelated providers. XP requires confirmed elapsed listening;
+    # velocity remains visible to the separate antifraud scanner. Request
+    # volume is bounded by the per-account endpoint limiter above.
     now = datetime.now(UTC)
-    hour_ago = now - timedelta(hours=1)
-    scrobbles_h = db.query(Scrobble).execution_options(include_excluded=True).filter(
-        Scrobble.user_id == user_id,
-        Scrobble.played_at >= hour_ago).count()
-    if scrobbles_h > 40:
-        return {
-            "status": "flagged",
-            "message": "Слишком много прослушиваний за час (Anti-Cheat)"}
-
     # Anti-Spam: Max 1 ping per 2 seconds. `process_scrobble` handles
     # debouncing and fast skipping logic. We just prevent endpoint abuse here.
     # Changes of the playback are never dropped: a lost pause would leave the

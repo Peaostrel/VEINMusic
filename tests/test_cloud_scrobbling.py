@@ -330,8 +330,8 @@ def test_poll_once_respects_lock():
     load.assert_not_called()
 
     redis.set = AsyncMock(return_value=True)
-    redis.delete = AsyncMock(side_effect=RuntimeError("gone"))
+    redis.eval = AsyncMock(side_effect=RuntimeError("gone"))
     with patch("app.core.redis.get_redis_client", return_value=redis), \
             patch.object(cs, "_load_pollable_user_ids", return_value=[]):
         asyncio.run(cs.poll_once(AsyncMock()))
-    redis.delete.assert_awaited_once()
+    redis.eval.assert_awaited_once()

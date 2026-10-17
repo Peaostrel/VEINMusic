@@ -6,7 +6,7 @@ import logging
 import os
 from typing import Any, ClassVar, Optional
 
-from arq import cron
+from arq import cron, func
 from arq.connections import RedisSettings
 
 from app.core.observability import setup_observability
@@ -119,8 +119,20 @@ async def cloud_poll(ctx: dict[str, Any]) -> None:
     """arq cron job: poll Spotify, Yandex and SoundCloud for new playback."""
     from app.services.cloud_scrobbling import poll_once
     from app.services.scrobble_processor import process_scrobble
-    await poll_once(process_scrobble)
+
+    async def enqueue_user(user_id: int) -> None:
+        # A stable job ID deduplicates queued/running jobs across schedulers.
+        # poll_cloud_user keeps no result, so the next tick can queue it again.
+        await ctx["redis"].enqueue_job(
+            "poll_cloud_user", user_id, _job_id=f"cloud_poll_user:{user_id}")
+    await poll_once(process_scrobble, enqueue_user=enqueue_user)
     await _mark_cron_run(ctx, "cloud_poll")
+
+
+async def poll_cloud_user(ctx: dict[str, Any], user_id: int) -> None:
+    from app.services.cloud_scrobbling import poll_user
+    from app.services.scrobble_processor import process_scrobble
+    await poll_user(user_id, process_scrobble)
 
 
 async def recap_notifications(ctx: dict[str, Any]) -> None:
@@ -175,6 +187,7 @@ class WorkerSettings:
         async_dispatch_webhook,
         async_export_scrobble,
         enrich_track_metadata,
+        func(poll_cloud_user, timeout=60, keep_result=0),
         import_lastfm,
         send_social_push,
         broadcast_push,

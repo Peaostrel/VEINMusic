@@ -232,4 +232,4 @@ def test_worker_and_fallback_social_push_jobs():
         deliver.assert_awaited_once_with(5)
     with patch("app.services.notifications.send_social_push", new=AsyncMock(side_effect=RuntimeError("x"))):
         asyncio.run(redis_module._run_social_push_job(5))  # logged, not raised
-    assert "send_social_push" in {f.__name__ for f in worker.WorkerSettings.functions}
+    assert "send_social_push" in {getattr(f, "name", None) or f.__name__ for f in worker.WorkerSettings.functions}

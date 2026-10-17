@@ -59,77 +59,144 @@ function mutateOfflineQueue(update) {
     return operation;
 }
 
-function addToOfflineQueue(scrobbleData, accountKey) {
+// The endpoint accepts live state, not historical imports. Replaying a days-old
+// heartbeat as "now playing" both revives the wrong track and credits no play.
+const LIVE_SNAPSHOT_TTL_MS = 35_000;
+const ACCEPTED_STATUSES = new Set(['ok', 'confirmed_duplicate']);
+const SKIPPED_STATUSES = new Set([
+    'integration_paused', 'source_ignored', 'artist_ignored', 'track_ignored',
+    'short_track_ignored', 'private_session', 'blacklisted', 'link_ignored'
+]);
+const DELIVERY_MESSAGES = {
+    ok: 'Событие принято. Зачёт прослушивания зависит от реально прослушанного времени.',
+    confirmed_duplicate: 'Событие принято: этот трек уже отслеживается другим подключением.',
+    integration_paused: 'Приём этого сервиса выключен в настройках VEIN.',
+    source_ignored: 'Этот сервис исключён из записи в настройках VEIN.',
+    artist_ignored: 'Исполнитель исключён из записи в настройках VEIN.',
+    track_ignored: 'Трек исключён из записи в настройках VEIN.',
+    short_track_ignored: 'Короткие треки исключены в настройках VEIN.',
+    private_session: 'В VEIN включена приватная сессия: запись приостановлена.',
+    blacklisted: 'Событие отклонено правилами VEIN.',
+    link_ignored: 'В названии или исполнителе обнаружена ссылка.',
+    rate_limited: 'Сервер просит подождать. Передача повторится автоматически.',
+    ignored_spam_protection: 'Смена трека отложена сервером. Передача повторится автоматически.',
+    flagged: 'Сервер ограничил приём. Проверьте диагностику интеграции в VEIN.',
+    auth_required: 'Ключ недействителен или не имеет доступа. Подключите расширение заново.',
+    invalid_payload: 'Сервис передал неполные данные трека. Обновите расширение и страницу плеера.',
+    network_error: 'Нет связи с VEIN. Текущее состояние будет отправлено повторно.',
+    server_error: 'VEIN временно недоступен. Передача повторится автоматически.',
+    invalid_response: 'Сервер не подтвердил приём события. Передача повторится автоматически.'
+};
+
+function freshSnapshot(item, settings) {
+    return settings.trackingEnabled === true && item.accountKey === settings.apiKey &&
+        Number.isFinite(item.queuedAt) && Date.now() - item.queuedAt < LIVE_SNAPSHOT_TTL_MS;
+}
+
+function addToOfflineQueue(scrobbleData, accountKey, observedAt = Date.now()) {
     return mutateOfflineQueue((queue, settings) => {
         if (!accountKey || settings.apiKey !== accountKey || settings.trackingEnabled !== true) return queue;
-        if (queue.length >= 500) return queue;
-        return [...queue, { id: crypto.randomUUID(), accountKey, payload: scrobbleData, queuedAt: Date.now() }];
+        const current = queue.filter((item) => freshSnapshot(item, settings) &&
+            (!scrobbleData.source || item.payload?.source !== scrobbleData.source));
+        if (current.length >= 500 || Date.now() - observedAt >= LIVE_SNAPSHOT_TTL_MS) return current;
+        return [...current, { id: crypto.randomUUID(), accountKey, payload: scrobbleData, queuedAt: observedAt }];
     });
 }
 
-function bufferScrobble(scrobbleData, accountKey) {
-    addToOfflineQueue(scrobbleData, accountKey).catch((error) => {
+function bufferScrobble(scrobbleData, accountKey, observedAt) {
+    return addToOfflineQueue(scrobbleData, accountKey, observedAt).catch((error) => {
         console.warn('[VEIN] Прослушивание не удалось сохранить для повторной отправки:', error);
     });
 }
 
-// Serialize cleanup behind any queue write already in progress, including
-// writes that began before the popup removed credentials or paused tracking.
+// Serialize cleanup behind any queue write already in progress.
 chrome.storage.onChanged?.addListener((changes, area) => {
     if (area !== 'local' || (!changes.apiKey && !changes.trackingEnabled)) return;
-    void mutateOfflineQueue((queue, settings) => queue.filter((item) =>
-        settings.trackingEnabled === true && item.accountKey === settings.apiKey));
+    void mutateOfflineQueue((queue, settings) => queue.filter((item) => freshSnapshot(item, settings)));
 });
+
+// Live requests and retries share one lane: an older retry cannot finish
+// after a newer live update and switch the server back to the previous song.
+let deliveryChain = Promise.resolve();
+let retryTimer = null;
+function scheduleRetry() {
+    if (retryTimer !== null) return;
+    retryTimer = setTimeout(() => {
+        retryTimer = null;
+        void flushOfflineQueue();
+    }, 3000);
+    retryTimer?.unref?.(); // Node test timers must not keep the process alive.
+}
+
+function deliverExclusive(action) {
+    const operation = deliveryChain.then(action);
+    deliveryChain = operation.catch((error) => console.warn('[VEIN] Ошибка передачи:', error));
+    return operation;
+}
+
+function httpOutcome(status) {
+    if (status === 401 || status === 403) return {kind: 'auth', status: 'auth_required'};
+    if (status === 400 || status === 422) return {kind: 'discard', status: 'invalid_payload'};
+    return {kind: 'retry', status: status === 429 ? 'rate_limited' : 'server_error'};
+}
+
+async function submitScrobble(apiBase, apiKey, payload) {
+    let response;
+    try {
+        response = await fetch(`${apiBase}/api/scrobble`, {
+            method: 'POST', signal: AbortSignal.timeout(15000),
+            headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}`},
+            body: JSON.stringify(payload)
+        });
+    } catch {
+        return {kind: 'retry', status: 'network_error'};
+    }
+    if (!response.ok) return {...httpOutcome(response.status), httpStatus: response.status};
+    let data;
+    try { data = await response.json(); }
+    catch { return {kind: 'retry', status: 'invalid_response', httpStatus: response.status}; }
+    const status = data?.status;
+    if (ACCEPTED_STATUSES.has(status)) return {kind: 'accepted', status, httpStatus: response.status};
+    if (SKIPPED_STATUSES.has(status)) return {kind: 'skipped', status, httpStatus: response.status};
+    return {kind: 'retry', status: Object.hasOwn(DELIVERY_MESSAGES, status) ? status : 'invalid_response', httpStatus: response.status};
+}
+
+async function rememberDelivery(outcome, source, accountKey) {
+    const settings = await storageGet(['apiKey', 'trackingEnabled']);
+    if (settings.apiKey !== accountKey || settings.trackingEnabled !== true) return;
+    await storageSet({last_delivery: {
+        status: outcome.status, message: DELIVERY_MESSAGES[outcome.status],
+        httpStatus: outcome.httpStatus ?? null, source: source || '', at: Date.now()
+    }});
+}
+
+async function flushQueuedSnapshots() {
+    await mutateOfflineQueue((queue, settings) => queue.filter((item) => freshSnapshot(item, settings)));
+    const settings = await storageGet(['apiUrl', 'apiKey', 'offline_scrobbles', 'trackingEnabled']);
+    const queue = settings.offline_scrobbles || [];
+    if (!settings.apiKey || settings.trackingEnabled !== true) return;
+    const sent = new Set();
+    for (const item of queue) {
+        const current = await storageGet(['apiKey', 'trackingEnabled']);
+        if (!freshSnapshot(item, current)) continue;
+        const outcome = await submitScrobble(veinApiBase(settings), settings.apiKey, item.payload);
+        await rememberDelivery(outcome, item.payload?.source, settings.apiKey);
+        if (outcome.kind === 'retry') {
+            scheduleRetry();
+            break;
+        }
+        if (outcome.kind === 'auth') break;
+        sent.add(item.id);
+    }
+    if (sent.size) await mutateOfflineQueue((current) => current.filter((item) => !sent.has(item.id)));
+}
 
 async function flushOfflineQueue() {
     if (flushInProgress) return;
     flushInProgress = true;
-    try {
-        await queueMutation;
-        await mutateOfflineQueue((queue, settings) => queue.filter((item) =>
-            settings.trackingEnabled === true && item.accountKey === settings.apiKey &&
-            Date.now() - item.queuedAt < 7 * 24 * 60 * 60 * 1000));
-        const res = await storageGet(['apiUrl', 'apiKey', 'offline_scrobbles', 'trackingEnabled']);
-        const queue = Array.isArray(res.offline_scrobbles) ? res.offline_scrobbles : [];
-        if (queue.length === 0 || !res.apiKey || res.trackingEnabled !== true) return;
-
-        const API_BASE = veinApiBase(res);
-        const sent = new Set();
-        for (const item of queue) {
-            try {
-                const current = await storageGet(['apiKey', 'trackingEnabled']);
-                if (current.apiKey !== res.apiKey || current.trackingEnabled !== true) break;
-                const response = await fetch(`${API_BASE}/api/scrobble`, {
-                    method: 'POST',
-                    signal: AbortSignal.timeout(15000),
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${res.apiKey}`
-                    },
-                    body: JSON.stringify(item.payload)
-                });
-                if (!response.ok) {
-                    console.warn(`[VEIN] Оффлайн-очередь остановлена: сервер ответил ${response.status}.`);
-                    break;
-                }
-                sent.add(item.id);
-            } catch (error) {
-                console.warn('[VEIN] Оффлайн-очередь остановлена из-за ошибки сети:', error);
-                break;
-            }
-        }
-
-        if (sent.size > 0) {
-            // Only remove the sent prefix. New items appended while the network
-            // requests were in flight remain in the queue.
-            await mutateOfflineQueue((current) => current.filter((item) => !sent.has(item.id)));
-            console.log(`[VEIN] Успешно синхронизировано ${sent.size} оффлайн-скробблов.`);
-        }
-    } catch (error) {
-        console.warn('[VEIN] Не удалось синхронизировать оффлайн-очередь:', error);
-    } finally {
-        flushInProgress = false;
-    }
+    try { await deliverExclusive(flushQueuedSnapshots); }
+    catch (error) { console.warn('[VEIN] Не удалось синхронизировать очередь:', error); }
+    finally { flushInProgress = false; }
 }
 
 const SCROBBLE_MIN_INTERVAL_MS = 5000;
@@ -146,32 +213,37 @@ function shouldSendScrobble(payload) {
     return true;
 }
 
-async function sendScrobble(payload) {
-    let accountKey;
-    try {
-        const settings = await storageGet(['apiUrl', 'apiKey', 'trackingEnabled']);
-        if (!settings.apiKey || settings.trackingEnabled !== true || !shouldSendScrobble(payload)) return;
-        accountKey = settings.apiKey;
-        const response = await fetch(`${veinApiBase(settings)}/api/scrobble`, {
-            method: 'POST',
-            signal: AbortSignal.timeout(15000),
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${settings.apiKey}`
-            },
-            body: JSON.stringify(payload)
-        });
-        if (!response.ok) {
-            console.warn(`[VEIN] Сервер ответил ${response.status}, сохраняем в оффлайн-очередь.`);
-            bufferScrobble(payload, accountKey);
-            return;
-        }
-        console.log('[VEIN] Состояние воспроизведения отправлено.');
-        await flushOfflineQueue();
-    } catch (error) {
-        console.warn('[VEIN] Не удалось отправить прослушивание, сохраняем в оффлайн-очередь:', error);
-        bufferScrobble(payload, accountKey);
+async function deliverLiveSnapshot(event) {
+    const settings = await storageGet(['apiKey', 'trackingEnabled']);
+    if (!freshSnapshot({accountKey: event.accountKey, queuedAt: event.observedAt}, settings)) return;
+    const outcome = await submitScrobble(event.apiBase, event.accountKey, event.payload);
+    await rememberDelivery(outcome, event.payload.source, event.accountKey);
+    if (outcome.kind === 'retry') {
+        await bufferScrobble(event.payload, event.accountKey, event.observedAt);
+        scheduleRetry();
+    } else if (outcome.kind === 'accepted' || outcome.kind === 'skipped') {
+        await mutateOfflineQueue((queue) => queue.filter((item) =>
+            item.accountKey !== event.accountKey || item.payload?.source !== event.payload.source ||
+            item.queuedAt > event.observedAt));
     }
+}
+
+let pendingLive = null;
+let sendingLive = false;
+async function sendScrobble(payload) {
+    const settings = await storageGet(['apiUrl', 'apiKey', 'trackingEnabled']);
+    if (!settings.apiKey || settings.trackingEnabled !== true || !shouldSendScrobble(payload)) return;
+    pendingLive = {payload, accountKey: settings.apiKey, apiBase: veinApiBase(settings), observedAt: Date.now()};
+    if (sendingLive) return;
+    sendingLive = true;
+    try {
+        while (pendingLive) {
+            const event = pendingLive;
+            pendingLive = null;
+            await deliverExclusive(() => deliverLiveSnapshot(event));
+        }
+    } catch (error) { console.warn('[VEIN] Ошибка отправки состояния:', error); }
+    finally { sendingLive = false; }
 }
 
 function messageSenderUrl(sender) {
@@ -249,7 +321,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     // 2. Стираем ключи, если вышли
     if (request.type === 'LOGOUT' && isTrusted) {
-        chrome.storage.local.remove(['username', 'apiKey', 'pairing', 'offline_scrobbles', 'trackingEnabled'], () => {
+        chrome.storage.local.remove(['username', 'apiKey', 'pairing', 'offline_scrobbles', 'trackingEnabled', 'last_delivery'], () => {
             const error = chrome.runtime.lastError;
             if (error) console.warn('[VEIN] Не удалось удалить ключи:', error.message);
             else console.log('[VEIN] Ключи стерты по запросу с сайта.');
@@ -263,6 +335,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === 'SCROBBLE') {
         const source = platformForUrl(senderUrl);
         const payload = source && safeTrackPayload(request.data, source);
-        if (payload) void sendScrobble(payload);
+        if (payload) void sendScrobble(payload).catch((error) => console.warn('[VEIN] Ошибка приёма состояния:', error));
     }
 });

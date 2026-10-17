@@ -35,7 +35,9 @@ def test_poll_once_polls_and_releases_lock():
          patch.object(cloud_scrobbling, "poll_user", new=AsyncMock()) as poll_user:
         asyncio.run(cloud_scrobbling.poll_once(AsyncMock()))
     assert poll_user.await_count == 2
-    fake_redis.delete.assert_awaited_once_with(cloud_scrobbling.POLL_LOCK_KEY)
+    fake_redis.eval.assert_awaited_once()
+    token = fake_redis.set.await_args.args[1]
+    assert fake_redis.eval.await_args.args[1:] == (1, cloud_scrobbling.POLL_LOCK_KEY, token)
 
 
 def test_together_room_is_removed_after_everyone_leaves(client):

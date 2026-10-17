@@ -199,7 +199,8 @@ function getMediaProgress(sessionPlaying, source) {
         const soundCloudProgress = getSoundCloudProgress();
         if (soundCloudProgress) return soundCloudProgress;
     }
-    const allMedia = Array.from(globalThis.__vein_audio_elements || []).concat(Array.from(document.querySelectorAll('audio, video')));
+    const allMedia = Array.from(globalThis.__vein_audio_elements || []).concat(Array.from(document.querySelectorAll('audio, video')))
+        .filter(media => media.duration > 0 || media.currentTime > 0);
     const activeMedia = allMedia.filter(m => !m.paused && m.duration > 0).sort((a, b) => b.currentTime - a.currentTime)[0];
     
     let isPlaying = false;
@@ -209,13 +210,13 @@ function getMediaProgress(sessionPlaying, source) {
     if (activeMedia) {
         isPlaying = true;
         progressSec = Math.floor(activeMedia.currentTime);
-        durationSec = Math.floor(activeMedia.duration) || 0;
+        durationSec = Number.isFinite(activeMedia.duration) ? Math.floor(activeMedia.duration) : 0;
     } else {
         isPlaying = allMedia.length > 0 ? false : sessionPlaying;
         const pausedMedia = allMedia.filter(m => m.currentTime > 0).sort((a, b) => b.currentTime - a.currentTime)[0];
         if (pausedMedia) {
             progressSec = Math.floor(pausedMedia.currentTime);
-            durationSec = Math.floor(pausedMedia.duration) || 0;
+            durationSec = Number.isFinite(pausedMedia.duration) ? Math.floor(pausedMedia.duration) : 0;
         }
     }
     
@@ -299,6 +300,7 @@ function getTrackMetadataForSource(source) {
     return null;
 }
 
+let lastPlaybackReport = null;
 setInterval(() => {
     try {
         const source = getPlatformSource(globalThis.location.hostname);
@@ -315,6 +317,12 @@ setInterval(() => {
             // SoundCloud populates the mini-player as soon as a track is selected.
             // Do not create a zero-second scrobble until playback has actually begun.
             if (!isPlaying && progressSec <= 0) return;
+            const key = `${source}|${trackArtist}|${trackTitle}`;
+            // Inactive tabs retain old MediaSession metadata. Report a pause
+            // once after observed playback, never keep replacing the active
+            // track in another tab with an old paused selection.
+            if (!isPlaying && (lastPlaybackReport?.key !== key || !lastPlaybackReport.playing)) return;
+            lastPlaybackReport = {key, playing: isPlaying};
             globalThis.postMessage({
                 type: 'VEIN_SCROBBLE',
                 payload: {

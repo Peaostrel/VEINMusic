@@ -194,3 +194,44 @@ test('does not report an unplayed MediaSession selection', () => {
     runInterval();
     assert.equal(messages.length, 0);
 });
+
+test('a paused old tab reports its pause once and cannot keep replacing another player', () => {
+    const media = {paused: false, currentTime: 24, duration: 180};
+    const {context, messages, runInterval} = runPageWorld({nodes: {}, hostname: 'open.spotify.com', href: 'https://open.spotify.com/', media: [media]});
+    context.navigator.mediaSession = {metadata: {title: 'Song', artist: 'Artist'}, playbackState: 'playing'};
+    runInterval();
+    media.paused = true;
+    context.navigator.mediaSession.playbackState = 'paused';
+    runInterval();
+    runInterval();
+    runInterval();
+    assert.deepEqual(messages.map(message => message.payload.is_playing), [true, false]);
+    media.paused = false;
+    context.navigator.mediaSession.playbackState = 'playing';
+    runInterval();
+    assert.equal(messages.at(-1).payload.is_playing, true);
+});
+
+test('loading an already paused page with an old position does not claim playback', () => {
+    const {context, messages, runInterval} = runPageWorld({nodes: {}, hostname: 'open.spotify.com', href: 'https://open.spotify.com/', media: [{paused: true, currentTime: 80, duration: 180}]});
+    context.navigator.mediaSession = {metadata: {title: 'Old song', artist: 'Artist'}, playbackState: 'paused'};
+    runInterval();
+    assert.equal(messages.length, 0);
+});
+
+test('an uninitialized audio element cannot hide MediaSession playback', () => {
+    const {context, messages, runInterval} = runPageWorld({nodes: {}, hostname: 'open.spotify.com', href: 'https://open.spotify.com/', media: [{paused: true, currentTime: 0, duration: NaN}]});
+    context.navigator.mediaSession = {metadata: {title: 'Playing song', artist: 'Artist'}, playbackState: 'playing'};
+    runInterval();
+    assert.equal(messages.length, 1);
+    assert.equal(messages[0].payload.is_playing, true);
+});
+
+test('a streaming player with infinite duration emits valid unknown length', () => {
+    const {context, messages, runInterval} = runPageWorld({nodes: {}, hostname: 'music.apple.com', href: 'https://music.apple.com/', media: [{paused: false, currentTime: 20, duration: Infinity}]});
+    context.navigator.mediaSession = {metadata: {title: 'Stream song', artist: 'Artist'}, playbackState: 'playing'};
+    runInterval();
+    assert.equal(messages.length, 1);
+    assert.equal(messages[0].payload.duration, 0);
+    assert.equal(messages[0].payload.progress_sec, 20);
+});

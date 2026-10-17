@@ -17,11 +17,12 @@ document.addEventListener('DOMContentLoaded', () => {
         $('pair-box').style.display = connected ? 'none' : 'block';
         $('username-display').innerText = data.username || '';
         $('tracking-status').innerText = data.trackingEnabled === true ?
-            'Прослушивания передаются в ваш аккаунт.' : 'Передача прослушиваний приостановлена.';
+            'Передача включена.' : 'Передача прослушиваний приостановлена.';
+        $('delivery-status').innerText = data.last_delivery?.message || 'Включите трек в музыкальной вкладке. Здесь появится результат приёма.';
     }
 
     function refreshState() {
-        chrome.storage.local.get(['apiKey', 'username', 'trackingEnabled'], showState);
+        chrome.storage.local.get(['apiKey', 'username', 'trackingEnabled', 'last_delivery'], showState);
     }
 
     $('tracking-enabled').addEventListener('change', async () => {
@@ -63,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }, intervalSec * 1000);
     }
 
-    chrome.storage.local.get(['username', 'apiKey', 'pairing', 'trackingEnabled'], (data) => {
+    chrome.storage.local.get(['username', 'apiKey', 'pairing', 'trackingEnabled', 'last_delivery'], (data) => {
         showState(data);
         if (!data.apiKey && data.trackingEnabled === true && data.pairing && Date.now() < data.pairing.expires_at) {
             showPairing(data.pairing);
@@ -94,14 +95,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const apiKey = $('api-key-input').value.trim();
         const username = $('username-input').value.trim();
         if (!apiKey || !username) return setPairStatus('Введите ключ и никнейм.', '#ef4444');
-        await veinStorageSet({ apiKey, username, offline_scrobbles: [] });
+        await veinStorageSet({ apiKey, username, offline_scrobbles: [], last_delivery: null });
         $('api-key-input').value = '';
         refreshState();
     });
 
     $('logout-btn').addEventListener('click', async () => {
         clearTimeout(pollTimer);
-        await veinStorageRemove(['username', 'apiKey', 'pairing', 'offline_scrobbles', 'trackingEnabled']);
+        await veinStorageRemove(['username', 'apiKey', 'pairing', 'offline_scrobbles', 'trackingEnabled', 'last_delivery']);
         refreshState();
     });
 
