@@ -23,6 +23,7 @@ from app.core.constants import (
     YANDEX_AVATARS,
     YANDEX_MUSIC_DOMAIN,
 )
+from app.core.cover_urls import public_cover_url
 from app.database import SessionLocal
 from app.models import (
     Achievement,
@@ -941,7 +942,7 @@ def _format_achievement_data(db: Session, user: User, a: Achievement, ua: UserAc
         "name": a.name,
         "description": render_achievement_description(a),
         "icon": a.icon,
-        "target_image": a.target_image,
+        "target_image": public_cover_url(a.target_image),
         "reward_xp": a.reward_xp,
         "is_earned": bool(ua),
         "earned_at": ua.earned_at if ua else None,

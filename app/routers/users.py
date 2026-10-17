@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.constants import USER_NOT_FOUND
+from app.core.cover_urls import public_cover_url
 from app.core.rate_limit import HEAVY_READ_LIMIT, limiter
 from app.core.security import get_current_user, get_current_user_optional
 from app.database import get_db
@@ -133,7 +134,7 @@ def _earned_achievements(user: User, db: Session) -> list[dict]:
         "name": a.name,
         "description": render_achievement_description(a),
         "icon": a.icon,
-        "target_image": a.target_image,
+        "target_image": public_cover_url(a.target_image),
         "reward_xp": a.reward_xp,
         "rule_type": a.rule_type,
         "rule_target": a.rule_target,
@@ -209,7 +210,7 @@ def get_notifications(username: str,
              "name": a.name,
              "icon": a.icon,
              "reward_xp": a.reward_xp,
-             "target_image": a.target_image} for a,
+             "target_image": public_cover_url(a.target_image)} for a,
             ua in new_achs]
 
 

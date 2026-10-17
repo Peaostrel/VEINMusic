@@ -9,6 +9,9 @@ from app.core.safe_http import UnsafeURLError, pinned_request
 logger = logging.getLogger(__name__)
 
 HTTPS_PREFIX = "https://"
+PLAT_MUSIC_ORIGIN = "https://plat-music.ru"
+PLAT_LINK_RE = re.compile(
+    r"^/(track|album|artist)/([a-f0-9-]{36})/?$", re.IGNORECASE)
 
 
 def is_safe_url(url: str) -> bool:
@@ -64,6 +67,63 @@ def _parse_generic_html(html_text: str) -> tuple[str | None, str | None]:
         if t_tag:
             title = t_tag.group(1).strip()
     return title, img
+
+
+def _plat_title(kind: str, payload: dict) -> str | None:
+    title = payload.get("name") if kind == "artist" else payload.get("title")
+    if not isinstance(title, str) or not title.strip():
+        return None
+    if kind == "track":
+        artists = payload.get("artists") or []
+        artist = artists[0].get("name") if artists and isinstance(artists[0], dict) else None
+    elif kind == "album":
+        artist_data = payload.get("artist") or {}
+        artist = artist_data.get("name") if isinstance(artist_data, dict) else None
+    else:
+        artist = None
+    return f"{artist} — {title}" if artist else title
+
+
+def _plat_image(kind: str, payload: dict) -> str | None:
+    if kind == "track":
+        album = payload.get("album") or {}
+        value = album.get("coverUrl") if isinstance(album, dict) else None
+    elif kind == "album":
+        value = payload.get("coverUrl")
+    else:
+        value = payload.get("avatarUrl")
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return urllib.parse.urljoin(PLAT_MUSIC_ORIGIN, value)
+
+
+async def _parse_plat_meta(url: str) -> tuple[str | None, str | None]:
+    """Read metadata from Plat's public catalogue API.
+
+    Its shared pages are a client-side app and do not expose Open Graph tags
+    to server-side parsers, while the catalogue endpoint contains the artwork.
+    """
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme != "https" or parts.hostname != "plat-music.ru":
+        return None, None
+    match = PLAT_LINK_RE.fullmatch(parts.path)
+    if not match:
+        return None, None
+    kind, item_id = match.groups()
+    endpoint = f"{PLAT_MUSIC_ORIGIN}/api/{kind}s/{item_id}"
+    try:
+        response = await pinned_request(
+            "GET", endpoint, timeout=5.0,
+            headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0",
+                     "X-Plat-Client": "web"})
+        if response.status_code != 200:
+            return None, None
+        payload = response.json()
+        if not isinstance(payload, dict):
+            return None, None
+        return _plat_title(kind, payload), _plat_image(kind, payload)
+    except (ValueError, httpx.RequestError, UnsafeURLError):
+        return None, None
 
 
 async def _parse_yandex_meta(
@@ -219,6 +279,11 @@ async def _resolve_url_metadata(client: httpx.AsyncClient, current_url: str) -> 
         return None, None, None
 
     clean_url = _sanitize_url_for_request(current_url)
+
+    if urllib.parse.urlsplit(clean_url).hostname == "plat-music.ru":
+        title, img = await _parse_plat_meta(clean_url)
+        if title or img:
+            return title, img, None
 
     if "music.yandex.ru" in clean_url:
         title, img = await _parse_yandex_meta(client, clean_url)
