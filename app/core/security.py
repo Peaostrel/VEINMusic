@@ -99,15 +99,17 @@ def _extract_token(request: Request) -> tuple[str | None, bool]:
     if api_key_header:
         return api_key_header.strip(), False
 
-    # 2. Try to get token from cookies
-    token = request.cookies.get("api_key")
-    if token:
-        return token, True
-
-    # 3. Fallback for Bearer auth header
+    # 2. Explicit device credentials must win over an ambient site cookie.
+    # Otherwise a valid extension key is replaced by a stale session, or a
+    # cookie-only CSRF check rejects the extension's request origin.
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         return auth_header.split(" ")[1].strip(), False
+
+    # 3. Site sessions use cookies and retain normal CSRF verification.
+    token = request.cookies.get("api_key")
+    if token:
+        return token, True
 
     # 4. Fallback to body
     if request.method in ["POST", "PUT", "DELETE"]:
