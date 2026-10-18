@@ -1,11 +1,16 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { API_URL } from "@/app/lib/api";
+import { Eye, EyeOff } from "lucide-react";
+import { API_URL, apiJson } from "@/app/lib/api";
 import { Avatar, EmptyState, Loading, Meter, btn } from "@/components/ui";
+import StatusText from "@/components/StatusText";
 import type { AchievementInfo } from "@/app/lib/types";
-import { renderDescriptionWithLinks } from "@/app/lib/achievementText";
+import {
+  formatAchievementDate,
+  renderDescriptionWithLinks,
+} from "@/app/lib/achievementText";
 import { AchievementTrackProgress } from "./_components/AchievementTrackProgress";
 import { coverAt } from "@/app/lib/coverSize";
 
@@ -18,29 +23,106 @@ interface AchievementsResponse {
 }
 
 export default function AchievementsPage() {
-  const username = useParams()?.username;
+  const { username } = useParams<{ username: string }>();
   const [data, setData] = useState<AchievementsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+  const [pending, setPending] = useState<Set<number>>(() => new Set());
+  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!username) return;
-    fetch(`${API_URL}/api/achievements/all/${username}`, {
-      credentials: "include",
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error("Not found or Server Error");
-        return res.json();
-      })
-      .then((d) => {
-        setData(d);
-        setLoading(false);
-      })
-      .catch(() => {
-        setError(true);
-        setLoading(false);
-      });
+    setIsOwner(localStorage.getItem("username") === username);
   }, [username]);
+
+  const load = useCallback(async () => {
+    if (!username) return;
+    try {
+      const res = await fetch(`${API_URL}/api/achievements/all/${username}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error("Not found or Server Error");
+      setData(await res.json());
+      setError(false);
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [username]);
+
+  useEffect(() => {
+    void load();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [load]);
+
+  const toggleDisplayed = async (achievement: AchievementInfo) => {
+    if (!achievement.is_earned || pending.has(achievement.id)) return;
+    const previous = Boolean(achievement.is_displayed);
+    setMessage(null);
+    setPending((current) => new Set(current).add(achievement.id));
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            achievements: current.achievements.map((item) =>
+              item.id === achievement.id
+                ? { ...item, is_displayed: !previous }
+                : item,
+            ),
+          }
+        : current,
+    );
+    try {
+      const result = await apiJson<{ is_displayed: boolean }>(
+        "/api/profile/achievements/toggle",
+        { method: "POST", json: { achievement_id: achievement.id } },
+      );
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              achievements: current.achievements.map((item) =>
+                item.id === achievement.id
+                  ? { ...item, is_displayed: result.is_displayed }
+                  : item,
+              ),
+            }
+          : current,
+      );
+      setMessage(
+        result.is_displayed
+          ? "✅ Достижение добавлено в профиль"
+          : "✅ Достижение скрыто из профиля",
+      );
+      globalThis.dispatchEvent(new Event("profile_update"));
+    } catch {
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              achievements: current.achievements.map((item) =>
+                item.id === achievement.id
+                  ? { ...item, is_displayed: previous }
+                  : item,
+              ),
+            }
+          : current,
+      );
+      setMessage("❌ Не удалось изменить отображение достижения");
+    } finally {
+      setPending((current) => {
+        const next = new Set(current);
+        next.delete(achievement.id);
+        return next;
+      });
+    }
+  };
 
   if (loading) return <Loading label="Загружаем достижения…" />;
 
@@ -110,6 +192,12 @@ export default function AchievementsPage() {
         />
       </section>
 
+      {isOwner && (
+        <div className="-mt-3 flex min-h-5 items-center">
+          <StatusText text={message} />
+        </div>
+      )}
+
       {data.achievements.length === 0 && (
         <EmptyState title="Достижений пока нет">
           Администраторы ещё не завели ни одного достижения.
@@ -158,10 +246,7 @@ export default function AchievementsPage() {
                       className={`shrink-0 font-mono text-[11px] ${a.is_earned ? "text-accent" : "text-fg-3"}`}
                     >
                       {a.is_earned
-                        ? new Date(`${a.earned_at}Z`).toLocaleDateString(
-                            "ru-RU",
-                            { day: "numeric", month: "short", year: "numeric" },
-                          )
+                        ? (formatAchievementDate(a.earned_at) ?? "Получено")
                         : "Заблокировано"}
                     </span>
                   </div>
@@ -197,6 +282,26 @@ export default function AchievementsPage() {
                       />
                     )}
                 </div>
+              )}
+              {isOwner && a.is_earned && (
+                <button
+                  type="button"
+                  className={`${btn.secondary} ${btn.sm} w-full`}
+                  aria-pressed={Boolean(a.is_displayed)}
+                  disabled={pending.has(a.id)}
+                  onClick={() => void toggleDisplayed(a)}
+                >
+                  {a.is_displayed ? (
+                    <EyeOff className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Eye className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  {pending.has(a.id)
+                    ? "Сохраняем…"
+                    : a.is_displayed
+                      ? "Убрать из профиля"
+                      : "Показать в профиле"}
+                </button>
               )}
               <span className="mt-auto font-mono text-[11px] text-fg-3">
                 есть у {a.rarity ?? 0}% слушателей

@@ -209,3 +209,56 @@ test("shows the exact album tracks that remain", async ({ page }) => {
     page.getByText("Для достижения нужно ещё 2 уникальных трека."),
   ).toBeVisible();
 });
+
+test("lets the owner show an earned achievement in the profile", async ({
+  page,
+}) => {
+  await page.addInitScript(() => localStorage.setItem("username", "alice"));
+  await page.route("**/api/achievements/all/alice", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        user: {
+          username: "alice",
+          display_name: "Alice",
+          avatar_url: null,
+        },
+        achievements: [
+          {
+            id: 7,
+            name: "Первое достижение",
+            description: "Уже получено",
+            icon: "🏆",
+            target_image: null,
+            reward_xp: 10,
+            is_earned: true,
+            earned_at: "2026-10-17T12:00:00+00:00",
+            is_displayed: false,
+            rarity: 5,
+          },
+        ],
+        earned_count: 1,
+        total_count: 1,
+      }),
+    });
+  });
+  let requestBody: unknown;
+  await page.route("**/api/profile/achievements/toggle", async (route) => {
+    requestBody = route.request().postDataJSON();
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ status: "ok", is_displayed: true }),
+    });
+  });
+
+  await page.goto("/user/alice/achievements");
+  await expect(page.getByText("Invalid Date")).toHaveCount(0);
+  await expect(page.getByText(/17.*окт.*2026/)).toBeVisible();
+  await page.getByRole("button", { name: "Показать в профиле" }).click();
+
+  await expect(page.getByText("Достижение добавлено в профиль")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Убрать из профиля" }),
+  ).toBeVisible();
+  expect(requestBody).toEqual({ achievement_id: 7 });
+});

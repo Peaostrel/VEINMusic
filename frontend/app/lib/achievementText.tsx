@@ -5,6 +5,23 @@ import type { ReactElement } from "react";
 
 type DescriptionNode = string | ReactElement;
 
+/** Format an earned-at timestamp. The API may return UTC with or without an
+ * explicit zone, depending on the database driver. */
+export function formatAchievementDate(
+  value: string | null | undefined,
+  month: "short" | "long" = "short",
+): string | null {
+  if (!value) return null;
+  const iso = /(Z|[+-]\d\d:?\d\d)$/.test(value) ? value : `${value}Z`;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString("ru-RU", {
+    day: "numeric",
+    month,
+    year: "numeric",
+  });
+}
+
 function parseMarkdownForNode(
   node: DescriptionNode,
   nodeIdx: number,

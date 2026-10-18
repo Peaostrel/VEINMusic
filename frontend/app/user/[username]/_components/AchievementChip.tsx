@@ -2,25 +2,15 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { ExternalLink } from "lucide-react";
-import { renderDescriptionWithLinks } from "@/app/lib/achievementText";
+import {
+  formatAchievementDate,
+  renderDescriptionWithLinks,
+} from "@/app/lib/achievementText";
 import type { AchievementInfo } from "@/app/lib/types";
 import { coverAt } from "@/app/lib/coverSize";
 
 const CARD_WIDTH = 320;
 const SCREEN_GAP = 16;
-
-function earnedDate(value: string | null | undefined): string | null {
-  if (!value) return null;
-  // The API sends UTC, sometimes without a zone suffix
-  const iso = /(Z|[+-]\d\d:?\d\d)$/.test(value) ? value : `${value}Z`;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString("ru-RU", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-}
 
 /** The goal's link (a Yandex Music album, track or artist), if any. */
 function targetUrl(a: AchievementInfo): string | null {
@@ -101,7 +91,7 @@ export function AchievementChip({ a }: Readonly<{ a: AchievementInfo }>) {
     closeTimer.current = window.setTimeout(() => setOpen(false), 150);
   };
 
-  const date = earnedDate(a.earned_at);
+  const date = formatAchievementDate(a.earned_at, "long");
   const url = targetUrl(a);
 
   return (
