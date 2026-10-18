@@ -232,7 +232,7 @@ test("lets the owner show an earned achievement in the profile", async ({
             target_image: null,
             reward_xp: 10,
             is_earned: true,
-            earned_at: "2026-10-17T12:00:00",
+            earned_at: "2026-10-17T12:00:00+00:00",
             is_displayed: false,
             rarity: 5,
           },
@@ -252,6 +252,8 @@ test("lets the owner show an earned achievement in the profile", async ({
   });
 
   await page.goto("/user/alice/achievements");
+  await expect(page.getByText("Invalid Date")).toHaveCount(0);
+  await expect(page.getByText(/17.*окт.*2026/)).toBeVisible();
   await page.getByRole("button", { name: "Показать в профиле" }).click();
 
   await expect(page.getByText("Достижение добавлено в профиль")).toBeVisible();

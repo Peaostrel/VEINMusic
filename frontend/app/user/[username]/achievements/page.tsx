@@ -7,7 +7,10 @@ import { API_URL, apiJson } from "@/app/lib/api";
 import { Avatar, EmptyState, Loading, Meter, btn } from "@/components/ui";
 import StatusText from "@/components/StatusText";
 import type { AchievementInfo } from "@/app/lib/types";
-import { renderDescriptionWithLinks } from "@/app/lib/achievementText";
+import {
+  formatAchievementDate,
+  renderDescriptionWithLinks,
+} from "@/app/lib/achievementText";
 import { AchievementTrackProgress } from "./_components/AchievementTrackProgress";
 import { coverAt } from "@/app/lib/coverSize";
 
@@ -243,10 +246,7 @@ export default function AchievementsPage() {
                       className={`shrink-0 font-mono text-[11px] ${a.is_earned ? "text-accent" : "text-fg-3"}`}
                     >
                       {a.is_earned
-                        ? new Date(`${a.earned_at}Z`).toLocaleDateString(
-                            "ru-RU",
-                            { day: "numeric", month: "short", year: "numeric" },
-                          )
+                        ? (formatAchievementDate(a.earned_at) ?? "Получено")
                         : "Заблокировано"}
                     </span>
                   </div>
