@@ -37,6 +37,38 @@ def test_parse_generic_html_prefers_og_tags():
     assert og_parser._parse_generic_html("<p>nothing</p>") == (None, None)
 
 
+@pytest.mark.parametrize("kind,payload,expected", [
+    ("track", {"title": "Soldier Of Heroin", "artists": [{"name": "LAZZY2WICE"}],
+               "album": {"coverUrl": "/api/media/covers/albums/0bcf761c-d955-48df-8bb0-10367b2cfe93.png"}},
+     ("LAZZY2WICE — Soldier Of Heroin",
+      "https://plat-music.ru/api/media/covers/albums/0bcf761c-d955-48df-8bb0-10367b2cfe93.png")),
+    ("album", {"title": "Album", "artist": {"name": "Artist"},
+               "coverUrl": "/api/media/covers/albums/e243422d-6c75-4aa6-a2f8-ab6879e027e9.jpg"},
+     ("Artist — Album",
+      "https://plat-music.ru/api/media/covers/albums/e243422d-6c75-4aa6-a2f8-ab6879e027e9.jpg")),
+    ("artist", {"name": "Artist", "avatarUrl": "/api/media/artists/avatars/a.jpg"},
+     ("Artist", "https://plat-music.ru/api/media/artists/avatars/a.jpg")),
+])
+def test_parse_plat_meta_uses_catalogue_api(kind, payload, expected):
+    item_id = "069381c2-c0e3-491e-92e8-7a9948ac918b"
+    response = httpx.Response(200, json=payload)
+    with patch.object(og_parser, "pinned_request", new=AsyncMock(return_value=response)) as request:
+        result = asyncio.run(og_parser._parse_plat_meta(
+            f"https://plat-music.ru/{kind}/{item_id}"))
+    assert result == expected
+    request.assert_awaited_once()
+    assert request.await_args.args[1] == f"https://plat-music.ru/api/{kind}s/{item_id}"
+
+
+def test_parse_plat_meta_rejects_lookalike_domains_and_bad_ids():
+    with patch.object(og_parser, "pinned_request", new=AsyncMock()) as request:
+        assert asyncio.run(og_parser._parse_plat_meta(
+            "https://plat-music.ru.evil.test/track/069381c2-c0e3-491e-92e8-7a9948ac918b")) == (None, None)
+        assert asyncio.run(og_parser._parse_plat_meta(
+            "https://plat-music.ru/track/not-an-id")) == (None, None)
+    request.assert_not_awaited()
+
+
 def test_yandex_parsers():
     assert og_parser._parse_yandex_artist({"artist": {"name": "A", "cover": {"uri": "img/%%"}}}) == \
         ("A", "https://img/400x400")
@@ -122,6 +154,15 @@ def test_parse_og_meta_uses_yandex_api_first(safe_urls):
             patch.object(og_parser, "pinned_request", new=AsyncMock()) as fetch:
         assert asyncio.run(og_parser.parse_og_meta("https://music.yandex.ru/album/1")) == ("Y", "img")
         fetch.assert_not_awaited()
+
+
+def test_parse_og_meta_uses_plat_catalogue_instead_of_empty_spa(safe_urls):
+    url = "https://plat-music.ru/track/069381c2-c0e3-491e-92e8-7a9948ac918b"
+    expected = ("LAZZY2WICE — Soldier Of Heroin", "https://plat-music.ru/cover.png")
+    with patch.object(og_parser, "_parse_plat_meta", new=AsyncMock(return_value=expected)), \
+            patch.object(og_parser, "pinned_request", new=AsyncMock()) as page_fetch:
+        assert asyncio.run(og_parser.parse_og_meta(url)) == expected
+        page_fetch.assert_not_awaited()
 
 
 # --- compatibility -----------------------------------------------------------
