@@ -1,6 +1,6 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
@@ -109,7 +109,7 @@ def get_admin_stats(db: Annotated[Session, Depends(get_db)], admin: Annotated[Us
             "artist_targets": _artist_target_values(str(a.rule_target or ""))
             if a.rule_type == "specific_artist" else [],
             "rule_meta": a.rule_meta,
-            "target_image": public_cover_url(a.target_image),
+            "target_image": public_cover_url(cast(str | None, a.target_image)),
             "reward_xp": a.reward_xp,
         }
         for a in achs
