@@ -1,5 +1,6 @@
 "use client";
 
+import { coverAt } from "@/app/lib/coverSize";
 import Link from "next/link";
 import { Music2 } from "lucide-react";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
@@ -369,8 +370,10 @@ export default function DiscoverPage() {
               <div className="flex min-w-0 items-center gap-3">
                 {sanitizeImageUrl(track.cover_url) ? (
                   <img
-                    src={sanitizeImageUrl(track.cover_url)}
+                    src={sanitizeImageUrl(coverAt(track.cover_url, 64))}
                     alt=""
+                    loading="lazy"
+                    decoding="async"
                     className="h-16 w-16 shrink-0 rounded-lg object-cover"
                   />
                 ) : (

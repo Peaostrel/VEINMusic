@@ -4,6 +4,7 @@
  * `generateMetadata`, never in the browser.
  */
 import type { Metadata } from "next";
+import { cache } from "react";
 import { API_URL } from "./api";
 import { formatNumber, plural } from "./plural";
 
@@ -76,6 +77,31 @@ export async function previewJson<T>(path: string): Promise<T | null> {
     return null;
   }
 }
+
+/**
+ * Public JSON of the API (no session), shared by every visitor for
+ * `revalidate` seconds; null when the API is slow, down or says no.
+ */
+export async function publicApiJson<T>(
+  path: string,
+  revalidate: number,
+): Promise<T | null> {
+  try {
+    const res = await fetch(`${SERVER_API_URL}${path}`, {
+      next: { revalidate },
+      signal: AbortSignal.timeout(1500),
+    });
+    return res.ok ? ((await res.json()) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * previewJson remembered for one request, so `generateMetadata` and the
+ * layout's structured data share one call to the API.
+ */
+export const requestPreviewJson = cache(previewJson) as typeof previewJson;
 
 /** The avatar or cover for a preview card as a data URL, or null. */
 export async function previewImage(path: string): Promise<string | null> {

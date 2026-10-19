@@ -1,7 +1,20 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { KeyRound } from "lucide-react";
 import { btn } from "@/components/ui";
+import { openGraph } from "@/app/lib/preview";
 import CodeSamples from "./CodeSamples";
+
+const title = "API для разработчиков";
+const description =
+  "Открытый API VEIN: отправка скробблов по ключу, профили, топ слушателей и подключение устройств по коду.";
+
+export const metadata: Metadata = {
+  title,
+  description,
+  alternates: { canonical: "/developers" },
+  openGraph: openGraph(title, description, "/developers"),
+};
 
 const TOC = [
   ["#auth", "Ключ"],

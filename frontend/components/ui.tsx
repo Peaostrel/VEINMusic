@@ -198,6 +198,7 @@ export function Avatar({
       alt=""
       width={size}
       height={size}
+      decoding="async"
       onError={(e) => {
         const img = e.currentTarget;
         if (img.src !== fallback) img.src = fallback;
