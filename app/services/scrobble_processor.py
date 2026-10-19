@@ -901,7 +901,10 @@ async def _process_scrobble(
         })
     elif result.get("state_change") is not None:
         await manager.broadcast_to_user(result["username"], {
-            "type": "PLAYBACK_STATE", **result["state_change"]})
+            "type": "PLAYBACK_STATE",
+            "counted": result["counted"] is not None,
+            **result["state_change"],
+        })
     if result["counted"] is not None:
         await _dispatch_counted_scrobble(result["user_id"], result["counted"])
     if result["new_item"] is not None and listening.auto_metadata:

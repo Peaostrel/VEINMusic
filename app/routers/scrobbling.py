@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
@@ -28,7 +29,11 @@ from app.schemas import CommentRequest, ScrobbleData
 from app.services import notifications
 from app.services.cache import delete_from_cache, get_from_cache, set_to_cache
 from app.services.metadata_cleaner import clean_track_metadata
-from app.services.privacy import filter_public_feed, public_feed_user_ids, public_statistics_users
+from app.services.privacy import (
+    filter_public_feed,
+    public_feed_user_ids,
+    public_statistics_users,
+)
 from app.services.scrobble_processor import format_history_item, process_scrobble
 from app.services.user_preferences import preference_enabled, preferences_dict
 
@@ -75,6 +80,8 @@ async def add_scrobble(request: Request,
                        current_user: Annotated[User,
                                                Depends(get_current_user)]):
     user = current_user
+    received_at_ms = int(time.time() * 1000)
+    started = time.perf_counter()
 
     user_id = int(user.id)
     async with redis_lock(f"scrobble_lock:{user_id}", expire_sec=10):
@@ -90,7 +97,16 @@ async def add_scrobble(request: Request,
             from app.core.redis import enqueue_background_task
             await enqueue_background_task('check_achievements', user_id, background_tasks=background_tasks)
 
-            return {"status": res}
+            delivery_ms = None
+            if data.client_observed_at_ms is not None:
+                delivery_ms = min(600_000, max(0, received_at_ms - data.client_observed_at_ms))
+            return {"status": res, "diagnostics": {
+                "event_id": data.client_event_id,
+                "client_version": data.client_version,
+                "server_received_at_ms": received_at_ms,
+                "delivery_ms": delivery_ms,
+                "processing_ms": round((time.perf_counter() - started) * 1000, 1),
+            }}
         except Exception:
             logger.exception("Scrobble error")
             raise HTTPException(

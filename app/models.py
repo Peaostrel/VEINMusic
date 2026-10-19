@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     DateTime,
@@ -8,15 +9,14 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
-    JSON,
     String,
     func,
     text,
 )
 from sqlalchemy.orm import relationship
 
-from app.core.crypto import EncryptedString
 from app.core.cover_urls import TrackCoverURL
+from app.core.crypto import EncryptedString
 from app.database import Base
 
 CASCADE_ALL_DELETE = "all, delete"
@@ -295,6 +295,7 @@ class UserAchievement(Base):
             timezone=True), default=lambda: datetime.now(
             UTC))
     is_displayed = Column(Boolean, default=True)
+    display_order = Column(Integer, nullable=True)
     notified = Column(Boolean, default=False)
 
     user = relationship("User", back_populates="achievements")

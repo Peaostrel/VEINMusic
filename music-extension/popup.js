@@ -19,6 +19,14 @@ document.addEventListener('DOMContentLoaded', () => {
         $('tracking-status').innerText = data.trackingEnabled === true ?
             'Передача включена.' : 'Передача прослушиваний приостановлена.';
         $('delivery-status').innerText = data.last_delivery?.message || 'Включите трек в музыкальной вкладке. Здесь появится результат приёма.';
+        const delivery = data.last_delivery;
+        $('delivery-details').innerText = delivery ? [
+            `v${delivery.version || chrome.runtime.getManifest().version}`,
+            delivery.title ? `${delivery.artist} — ${delivery.title}` : '',
+            delivery.position == null ? '' : `${delivery.playing ? 'играет' : 'пауза'}, ${Math.round(delivery.position)} с`,
+            delivery.deliveryMs == null ? '' : `доставка ${delivery.deliveryMs} мс`,
+            delivery.processingMs == null ? '' : `сервер ${delivery.processingMs} мс`
+        ].filter(Boolean).join(' · ') : `v${chrome.runtime.getManifest().version}`;
     }
 
     function refreshState() {

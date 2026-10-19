@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Eye, EyeOff } from "lucide-react";
+import { ArrowDown, ArrowUp, Eye, EyeOff } from "lucide-react";
 import { API_URL, apiJson } from "@/app/lib/api";
 import { Avatar, EmptyState, Loading, Meter, btn } from "@/components/ui";
 import StatusText from "@/components/StatusText";
@@ -79,17 +79,24 @@ export default function AchievementsPage() {
         : current,
     );
     try {
-      const result = await apiJson<{ is_displayed: boolean }>(
-        "/api/profile/achievements/toggle",
-        { method: "POST", json: { achievement_id: achievement.id } },
-      );
+      const result = await apiJson<{
+        is_displayed: boolean;
+        display_order: number | null;
+      }>("/api/profile/achievements/toggle", {
+        method: "POST",
+        json: { achievement_id: achievement.id },
+      });
       setData((current) =>
         current
           ? {
               ...current,
               achievements: current.achievements.map((item) =>
                 item.id === achievement.id
-                  ? { ...item, is_displayed: result.is_displayed }
+                  ? {
+                      ...item,
+                      is_displayed: result.is_displayed,
+                      display_order: result.display_order,
+                    }
                   : item,
               ),
             }
@@ -121,6 +128,50 @@ export default function AchievementsPage() {
         next.delete(achievement.id);
         return next;
       });
+    }
+  };
+
+  const displayedAchievements = (data?.achievements ?? [])
+    .filter((item) => item.is_earned && item.is_displayed)
+    .sort(
+      (left, right) =>
+        (left.display_order ?? Number.MAX_SAFE_INTEGER) -
+        (right.display_order ?? Number.MAX_SAFE_INTEGER),
+    );
+
+  const moveDisplayed = async (achievementId: number, direction: -1 | 1) => {
+    const oldOrder = displayedAchievements.map((item) => item.id);
+    const index = oldOrder.indexOf(achievementId);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= oldOrder.length) return;
+    const nextOrder = [...oldOrder];
+    [nextOrder[index], nextOrder[target]] = [
+      nextOrder[target],
+      nextOrder[index],
+    ];
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            achievements: current.achievements.map((item) => ({
+              ...item,
+              display_order:
+                nextOrder.indexOf(item.id) >= 0
+                  ? nextOrder.indexOf(item.id)
+                  : item.display_order,
+            })),
+          }
+        : current,
+    );
+    try {
+      await apiJson("/api/profile/achievements/reorder", {
+        method: "POST",
+        json: { achievement_ids: nextOrder },
+      });
+      globalThis.dispatchEvent(new Event("profile_update"));
+    } catch {
+      setMessage("❌ Не удалось сохранить порядок");
+      void load();
     }
   };
 
@@ -284,24 +335,53 @@ export default function AchievementsPage() {
                 </div>
               )}
               {isOwner && a.is_earned && (
-                <button
-                  type="button"
-                  className={`${btn.secondary} ${btn.sm} w-full`}
-                  aria-pressed={Boolean(a.is_displayed)}
-                  disabled={pending.has(a.id)}
-                  onClick={() => void toggleDisplayed(a)}
-                >
-                  {a.is_displayed ? (
-                    <EyeOff className="h-4 w-4" aria-hidden="true" />
-                  ) : (
-                    <Eye className="h-4 w-4" aria-hidden="true" />
+                <div className="flex gap-2">
+                  {a.is_displayed && (
+                    <>
+                      <button
+                        type="button"
+                        aria-label="Поднять"
+                        className={`${btn.secondary} ${btn.sm}`}
+                        disabled={displayedAchievements[0]?.id === a.id}
+                        onClick={() => void moveDisplayed(a.id, -1)}
+                      >
+                        <ArrowUp className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Опустить"
+                        className={`${btn.secondary} ${btn.sm}`}
+                        disabled={displayedAchievements.at(-1)?.id === a.id}
+                        onClick={() => void moveDisplayed(a.id, 1)}
+                      >
+                        <ArrowDown className="h-4 w-4" />
+                      </button>
+                    </>
                   )}
-                  {pending.has(a.id)
-                    ? "Сохраняем…"
-                    : a.is_displayed
-                      ? "Убрать из профиля"
-                      : "Показать в профиле"}
-                </button>
+                  <button
+                    type="button"
+                    className={`${btn.secondary} ${btn.sm} flex-1`}
+                    aria-pressed={Boolean(a.is_displayed)}
+                    disabled={
+                      pending.has(a.id) ||
+                      (!a.is_displayed && displayedAchievements.length >= 6)
+                    }
+                    onClick={() => void toggleDisplayed(a)}
+                  >
+                    {a.is_displayed ? (
+                      <EyeOff className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <Eye className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    {pending.has(a.id)
+                      ? "Сохраняем…"
+                      : a.is_displayed
+                        ? "Убрать из профиля"
+                        : displayedAchievements.length >= 6
+                          ? "Лимит 6"
+                          : "Показать в профиле"}
+                  </button>
+                </div>
               )}
               <span className="mt-auto font-mono text-[11px] text-fg-3">
                 есть у {a.rarity ?? 0}% слушателей

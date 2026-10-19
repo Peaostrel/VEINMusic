@@ -238,7 +238,7 @@ def check_auto_achievements(user, db: Session) -> list[Achievement]:
             continue
         checker = checkers.get(str(ach.rule_type))
         if checker and checker(user, ach, db):
-            db.add(UserAchievement(user_id=user.id, achievement_id=ach.id))
+            create_user_achievement(db, int(user.id), int(ach.id))
             user.integration.bonus_xp = (
                 user.integration.bonus_xp or 0) + (ach.reward_xp or 0)
             try:
@@ -261,6 +261,20 @@ def check_auto_achievements(user, db: Session) -> list[Achievement]:
     return awarded
 
 
+def create_user_achievement(db: Session, user_id: int, achievement_id: int) -> UserAchievement:
+    """Create an award and place it into a free showcase slot, up to six."""
+    displayed = db.query(UserAchievement).filter_by(
+        user_id=user_id, is_displayed=True).count()
+    row = UserAchievement(
+        user_id=user_id,
+        achievement_id=achievement_id,
+        is_displayed=displayed < 6,
+        display_order=displayed if displayed < 6 else None,
+    )
+    db.add(row)
+    return row
+
+
 async def notify_achievements_unlocked(user_id: int, achievements: list[dict]) -> None:
     """Send Web Push notifications and `achievement.unlocked` webhooks."""
     if not achievements:
@@ -271,6 +285,11 @@ async def notify_achievements_unlocked(user_id: int, achievements: list[dict]) -
     try:
         user = db.query(User).filter(User.id == user_id).first()
         push_enabled = not user or push_allowed(user, "achievements")
+        if user:
+            from app.core.websockets import manager
+            await manager.broadcast_to_user(str(user.username), {
+                "type": "ACHIEVEMENTS_UNLOCKED", "achievements": achievements
+            })
         for ach in achievements:
             await dispatch_webhook_event("achievement.unlocked", ach, user_id, db)
             if push_enabled:
@@ -926,14 +945,45 @@ def _calculate_achievement_progress(db: Session, user: User, a: Achievement) -> 
     return 0
 
 
-def _format_achievement_data(db: Session, user: User, a: Achievement, ua: UserAchievement | None, total_users: int) -> dict:
-    earned_count = db.query(UserAchievement).filter_by(achievement_id=a.id).count()
+def calculate_achievement_progresses(
+        db: Session, user: User, achievements: Sequence[Achievement],
+        earned_ids: set[int]) -> dict[int, int]:
+    """Calculate common counters once; only target-specific rules query alone."""
+    needed = [a for a in achievements if int(a.id) not in earned_ids and a.rule_type != "manual"]
+    if not needed:
+        return {}
+    valid = db.query(Scrobble.played_at).join(Track).filter(
+        Scrobble.user_id == user.id,
+        Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,
+    ).all()
+    total = len(valid)
+    offset = get_user_timezone_offset(
+        str(user.profile.location) if user.profile and user.profile.location else "")
+    night = sum(1 for (stamp,) in valid
+                if (stamp + timedelta(hours=offset)).strftime("%H") in {"00", "01", "02", "03", "04", "05"})
+    result: dict[int, int] = {}
+    for achievement in needed:
+        if achievement.rule_type == "total_scrobbles":
+            result[int(achievement.id)] = total
+        elif achievement.rule_type == "night_scrobbles":
+            result[int(achievement.id)] = night
+        else:
+            result[int(achievement.id)] = _calculate_achievement_progress(db, user, achievement)
+    return result
+
+
+def _format_achievement_data(db: Session, user: User, a: Achievement, ua: UserAchievement | None,
+                             total_users: int, *, earned_count: int | None = None,
+                             current_progress: int | None = None) -> dict:
+    if earned_count is None:
+        earned_count = db.query(UserAchievement).filter_by(achievement_id=a.id).count()
     rarity = round((earned_count / total_users * 100), 1) if total_users > 0 else 0
     current_val = 0
     target_val = a.rule_value
 
     if not ua and a.rule_type != "manual":
-        current_val = _calculate_achievement_progress(db, user, a)
+        current_val = (current_progress if current_progress is not None
+                       else _calculate_achievement_progress(db, user, a))
     if ua:
         current_val = int(target_val) if target_val else 0
 
@@ -947,6 +997,7 @@ def _format_achievement_data(db: Session, user: User, a: Achievement, ua: UserAc
         "is_earned": bool(ua),
         "earned_at": ua.earned_at if ua else None,
         "is_displayed": ua.is_displayed if ua else False,
+        "display_order": ua.display_order if ua else None,
         "rarity": rarity,
         "current_progress": current_val,
         "target_value": target_val,

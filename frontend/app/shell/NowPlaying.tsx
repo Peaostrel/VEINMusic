@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { API_URL, openSocket } from "@/app/lib/api";
+import { API_URL, subscribeSocket } from "@/app/lib/api";
 import { useVisiblePolling } from "@/app/lib/usePolling";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { Music2, Pause } from "lucide-react";
@@ -48,6 +48,9 @@ export default function NowPlaying({
   const mobileRef = useRef<HTMLDetailsElement>(null);
   const [track, setTrack] = useState<CurrentTrack | null>(null);
   const [clock, setClock] = useState(0);
+  const [connectionState, setConnectionState] = useState<
+    "connecting" | "live" | "retrying"
+  >("connecting");
   const requestSequence = useRef(0);
 
   const load = useCallback(async () => {
@@ -90,50 +93,60 @@ export default function NowPlaying({
   useEffect(
     () =>
       live
-        ? openSocket(
-            `/ws/${encodeURIComponent(username)}`,
-            (ws) => {
-              ws.onopen = () => void load();
-              ws.onmessage = (event) => {
-                try {
-                  const msg = JSON.parse(event.data);
-                  if (
-                    msg.type === "NEW_SCROBBLE" ||
-                    msg.type === "PLAYBACK_STATE"
-                  ) {
-                    globalThis.dispatchEvent(new Event("account_data_update"));
-                    if (!msg.track) {
-                      void load();
-                      return;
+        ? (() => {
+            const subscription = subscribeSocket(
+              `/ws/${encodeURIComponent(username)}`,
+              {
+                onOpen: () => {
+                  setConnectionState("live");
+                  void load();
+                },
+                onClose: () => setConnectionState("retrying"),
+                onMessage: (event) => {
+                  try {
+                    const msg = JSON.parse(event.data);
+                    if (
+                      msg.type === "NEW_SCROBBLE" ||
+                      msg.type === "PLAYBACK_STATE"
+                    ) {
+                      globalThis.dispatchEvent(
+                        new Event("account_data_update"),
+                      );
+                      if (!msg.track) {
+                        void load();
+                        return;
+                      }
+                      // A late HTTP response must not undo a pause or skip.
+                      requestSequence.current++;
+                      const item = msg.track;
+                      const age = Math.max(
+                        0,
+                        (Date.now() - playbackTimestamp(item.updated_at)) /
+                          1000,
+                      );
+                      const advance = item.is_playing ? Math.min(age, 45) : 0;
+                      setTrack({
+                        ...item,
+                        playing: item.is_playing && age < 45,
+                        paused: !item.is_playing,
+                        display_listened_sec: item.listened_sec + advance,
+                        display_position_sec:
+                          item.position_sec == null
+                            ? null
+                            : item.position_sec + advance,
+                        playback_remaining_sec: Math.max(0, 45 - age),
+                        receivedAt: performance.now(),
+                      });
                     }
-                    // A late HTTP response must not undo a pause or skip.
-                    requestSequence.current++;
-                    const item = msg.track;
-                    const age = Math.max(
-                      0,
-                      (Date.now() - playbackTimestamp(item.updated_at)) / 1000,
-                    );
-                    const advance = item.is_playing ? Math.min(age, 45) : 0;
-                    setTrack({
-                      ...item,
-                      playing: item.is_playing && age < 45,
-                      paused: !item.is_playing,
-                      display_listened_sec: item.listened_sec + advance,
-                      display_position_sec:
-                        item.position_sec == null
-                          ? null
-                          : item.position_sec + advance,
-                      playback_remaining_sec: Math.max(0, 45 - age),
-                      receivedAt: performance.now(),
-                    });
+                  } catch {
+                    // not JSON
                   }
-                } catch {
-                  // not JSON
-                }
-              };
-            },
-            { authed: true },
-          )
+                },
+              },
+              { authed: true },
+            );
+            return () => subscription.close();
+          })()
         : undefined,
     [username, load, live],
   );
@@ -169,6 +182,16 @@ export default function NowPlaying({
   if (track.excluded) creditLabel = "Исключено из статистики";
   const details = (
     <div className="space-y-2">
+      {live && (
+        <p className="flex items-center gap-1.5 text-xs text-fg-3">
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${connectionState === "live" ? "bg-emerald-500" : "bg-amber-500"}`}
+          />
+          {connectionState === "live"
+            ? "Обновляется мгновенно"
+            : "Переподключение…"}
+        </p>
+      )}
       {track.source && (
         <p className="text-xs text-fg-2">{sourceLabel(track.source)}</p>
       )}

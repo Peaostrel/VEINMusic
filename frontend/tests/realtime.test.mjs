@@ -15,7 +15,7 @@ async function load(path) {
     `data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`
   );
 }
-const { openSocket } = await load("../app/lib/api.ts");
+const { openSocket, subscribeSocket } = await load("../app/lib/api.ts");
 const {
   listeningElapsed,
   freshPlayback,
@@ -124,6 +124,7 @@ async function fakeBrowser(run) {
   let timerId = 0;
   let failTicket = false;
   class Socket extends EventTarget {
+    static OPEN = 1;
     static CLOSING = 2;
     readyState = 0;
     constructor(url) {
@@ -183,6 +184,28 @@ async function fakeBrowser(run) {
     for (const key of keys) globalThis[key] = originals[key];
   }
 }
+
+test("socket subscribers share one connection until the last closes", async () => {
+  await fakeBrowser(async ({ sockets, flush }) => {
+    const messages = [];
+    const first = subscribeSocket("/ws/shared", {
+      onMessage: (event) => messages.push(`first:${event.data}`),
+    });
+    const second = subscribeSocket("/ws/shared", {
+      onMessage: (event) => messages.push(`second:${event.data}`),
+    });
+    await flush();
+    assert.equal(sockets.length, 1);
+    const event = new Event("message");
+    Object.defineProperty(event, "data", { value: "track" });
+    sockets[0].dispatchEvent(event);
+    assert.deepEqual(messages, ["first:track", "second:track"]);
+    first.close();
+    assert.equal(sockets[0].readyState, 0);
+    second.close();
+    assert.equal(sockets[0].readyState, 3);
+  });
+});
 
 test("socket reconnect uses a fresh ticket, preserves handlers and cleans up", async () => {
   await fakeBrowser(async ({ sockets, tickets, timers, flush, retry }) => {

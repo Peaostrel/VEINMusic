@@ -9,6 +9,7 @@ from fastapi import (
     HTTPException,
     Query,
     Request,
+    Response,
 )
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -36,16 +37,17 @@ from app.routers.common import (
 from app.schemas import (
     FollowAction,
     MarkRead,
+    ReorderAchievements,
     ToggleAch,
 )
 from app.services import notifications
 from app.services.achievements import render_achievement_description
+from app.services.user_preferences import preferences_dict, public_preferences
 from app.services.user_stats import (
     get_active_streak,
     get_levels_for_users,
     get_user_level_info,
 )
-from app.services.user_preferences import preferences_dict, public_preferences
 
 router = APIRouter(tags=["users"])
 
@@ -129,6 +131,12 @@ def _earned_achievements(user: User, db: Session) -> list[dict]:
     rows = db.query(Achievement, UserAchievement).join(
         UserAchievement, Achievement.id == UserAchievement.achievement_id).filter(
         UserAchievement.user_id == user.id).all()
+    rows.sort(key=lambda row: (
+        not bool(row[1].is_displayed),
+        row[1].display_order is None,
+        row[1].display_order if row[1].display_order is not None else 10**9,
+        -int(row[1].id),
+    ))
     return [{
         "id": a.id,
         "name": a.name,
@@ -140,6 +148,7 @@ def _earned_achievements(user: User, db: Session) -> list[dict]:
         "rule_target": a.rule_target,
         "rule_meta": a.rule_meta,
         "is_displayed": ua.is_displayed,
+        "display_order": ua.display_order,
         "earned_at": ua.earned_at} for a, ua in rows]
 
 
@@ -282,6 +291,31 @@ def get_follow_stats_fallback(
     return get_follow_stats("null", profile, request, db, current_user)
 
 
+@router.get("/api/profile/{username}/snapshot",
+            responses={404: {"description": "User not found"}})
+@limiter.limit(HEAVY_READ_LIMIT)
+def get_profile_snapshot(
+        username: str,
+        request: Request,
+        response: Response,
+        db: Annotated[Session, Depends(get_db)],
+        current_user: Annotated[User | None, Depends(get_current_user_optional)] = None):
+    """Fresh data needed for the first profile paint in one round trip."""
+    from app.routers.scrobbling import get_history
+    from app.routers.stats import get_stats
+
+    viewer = str(current_user.username) if current_user else "null"
+    response.headers["Cache-Control"] = "private, no-store"
+    history = get_history(username, request, db, current_user)
+    stats = get_stats.__wrapped__(username, request, db)
+    return {
+        "history": history.get("history", []),
+        "stats": stats,
+        "user": get_user_info(username, request, db),
+        "followStats": get_follow_stats(viewer, username, request, db, current_user),
+    }
+
+
 def _user_cards(users: list[User], db: Session) -> list[dict]:
     levels = get_levels_for_users(users, db)
     return [{"username": u.username,
@@ -421,6 +455,36 @@ def toggle_achievement(data: ToggleAch, db: Annotated[Session, Depends(
         user_id=user.id, achievement_id=data.achievement_id).first()
     if not ua:
         raise HTTPException(404)
-    ua.is_displayed = not ua.is_displayed  # type: ignore[assignment]
+    if ua.is_displayed:
+        ua.is_displayed = False  # type: ignore[assignment]
+        ua.display_order = None  # type: ignore[assignment]
+    else:
+        displayed = db.query(UserAchievement).filter_by(
+            user_id=user.id, is_displayed=True).count()
+        if displayed >= 6:
+            raise HTTPException(409, "В профиле можно показать не больше 6 достижений")
+        ua.is_displayed = True  # type: ignore[assignment]
+        ua.display_order = displayed  # type: ignore[assignment]
     db.commit()
-    return {"status": "ok", "is_displayed": ua.is_displayed}
+    return {"status": "ok", "is_displayed": ua.is_displayed,
+            "display_order": ua.display_order}
+
+
+@router.post("/api/profile/achievements/reorder",
+             responses={400: {"description": "Invalid showcase order"}})
+def reorder_achievements(
+        data: ReorderAchievements,
+        db: Annotated[Session, Depends(get_db)],
+        current_user: Annotated[User, Depends(get_current_user)]):
+    ids = data.achievement_ids
+    if len(ids) != len(set(ids)):
+        raise HTTPException(400, "Достижения не должны повторяться")
+    rows = db.query(UserAchievement).filter_by(
+        user_id=current_user.id, is_displayed=True).all()
+    if set(ids) != {int(row.achievement_id) for row in rows}:
+        raise HTTPException(400, "Передайте все показанные достижения")
+    order = {achievement_id: index for index, achievement_id in enumerate(ids)}
+    for row in rows:
+        row.display_order = order[int(row.achievement_id)]  # type: ignore[assignment]
+    db.commit()
+    return {"status": "ok", "achievement_ids": ids}

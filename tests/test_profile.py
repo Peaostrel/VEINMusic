@@ -3,7 +3,50 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from app.core.security import create_session_token
 from app.database import SessionLocal
-from app.models import User
+from app.models import Achievement, User, UserAchievement
+
+
+def test_profile_snapshot_returns_fresh_critical_sections(auth_client):
+    response = auth_client.get("/api/profile/profileuser/snapshot")
+    assert response.status_code == 200, response.text
+    assert response.headers["cache-control"] == "private, no-store"
+    data = response.json()
+    assert data["user"]["username"] == "profileuser"
+    assert data["history"] == []
+    assert "stats" in data
+    assert data["followStats"]["is_following"] is False
+
+
+def test_achievement_showcase_has_limit_and_persistent_order(auth_client, db, auth_user):
+    achievements = [Achievement(name=f"A{index}", description="", icon="🏆") for index in range(7)]
+    db.add_all(achievements)
+    db.flush()
+    db.add_all([
+        UserAchievement(user_id=auth_user.id, achievement_id=item.id,
+                        is_displayed=False, display_order=None)
+        for item in achievements
+    ])
+    db.commit()
+    for item in achievements[:6]:
+        response = auth_client.post(
+            "/api/profile/achievements/toggle",
+            json={"achievement_id": item.id},
+        )
+        assert response.status_code == 200
+    assert auth_client.post(
+        "/api/profile/achievements/toggle",
+        json={"achievement_id": achievements[6].id},
+    ).status_code == 409
+    order = [item.id for item in reversed(achievements[:6])]
+    assert auth_client.post(
+        "/api/profile/achievements/reorder",
+        json={"achievement_ids": order},
+    ).status_code == 200
+    db.expire_all()
+    rows = db.query(UserAchievement).filter_by(
+        user_id=auth_user.id, is_displayed=True).order_by(
+        UserAchievement.display_order).all()
+    assert [row.achievement_id for row in rows] == order
 
 
 @pytest.fixture

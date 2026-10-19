@@ -169,3 +169,77 @@ export function openSocket(
     ws?.close();
   };
 }
+
+export interface SocketSubscriber {
+  onOpen?: () => void;
+  onMessage?: (event: MessageEvent) => void;
+  onClose?: (event: CloseEvent) => void;
+}
+
+export interface SocketSubscription {
+  close: () => void;
+  send: (data: string) => boolean;
+}
+
+interface SharedChannel {
+  socket: WebSocket | null;
+  subscribers: Set<SocketSubscriber>;
+  stop: () => void;
+}
+
+const sharedChannels = new Map<string, SharedChannel>();
+
+/** Share one physical socket between every component watching one channel. */
+export function subscribeSocket(
+  path: string,
+  subscriber: SocketSubscriber,
+  { authed = false }: { authed?: boolean } = {},
+): SocketSubscription {
+  const key = `${authed ? "auth" : "guest"}:${path}`;
+  let channel = sharedChannels.get(key);
+  if (!channel) {
+    channel = { socket: null, subscribers: new Set(), stop: () => {} };
+    const current = channel;
+    current.stop = openSocket(
+      path,
+      (socket) => {
+        current.socket = socket;
+        socket.addEventListener("open", () => {
+          for (const item of current.subscribers) item.onOpen?.();
+        });
+        socket.addEventListener("message", (event) => {
+          for (const item of current.subscribers) item.onMessage?.(event);
+        });
+        socket.addEventListener("close", (event) => {
+          if (current.socket === socket) current.socket = null;
+          for (const item of current.subscribers) item.onClose?.(event);
+        });
+      },
+      { authed },
+    );
+    sharedChannels.set(key, current);
+    channel = current;
+  }
+  channel.subscribers.add(subscriber);
+  if (channel.socket?.readyState === WebSocket.OPEN) {
+    queueMicrotask(() => subscriber.onOpen?.());
+  }
+
+  return {
+    close: () => {
+      const current = sharedChannels.get(key);
+      if (!current) return;
+      current.subscribers.delete(subscriber);
+      if (current.subscribers.size === 0) {
+        current.stop();
+        sharedChannels.delete(key);
+      }
+    },
+    send: (data: string) => {
+      const socket = sharedChannels.get(key)?.socket;
+      if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+      socket.send(data);
+      return true;
+    },
+  };
+}
