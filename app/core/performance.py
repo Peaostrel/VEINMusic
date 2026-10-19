@@ -14,7 +14,10 @@ _lock = Lock()
 def record_request(route: str, elapsed_ms: float, status_code: int) -> None:
     with _lock:
         if route not in _samples and len(_samples) >= MAX_ROUTES:
-            return
+            # Keep the sampler bounded without permanently freezing the first
+            # routes seen after process startup. Dicts preserve insertion
+            # order, so discard the oldest inactive route for the new one.
+            del _samples[next(iter(_samples))]
         _samples[route].append((max(0.0, elapsed_ms), status_code >= 500))
 
 

@@ -1,7 +1,11 @@
-from app.core.performance import latency_snapshot, record_request
+from app.core.performance import MAX_ROUTES, latency_snapshot, record_request
 
 
 def test_latency_snapshot_reports_percentiles_and_errors():
+    # A long-lived API process can already have sampled the maximum number of
+    # route templates. New routes must still become observable.
+    for index in range(MAX_ROUTES + 5):
+        record_request(f"/test/fill-{index}", 1, 200)
     route = "/test/performance-metrics"
     for value in range(1, 101):
         record_request(route, value, 500 if value == 100 else 200)
