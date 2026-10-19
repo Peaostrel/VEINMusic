@@ -68,21 +68,24 @@ def get_all_achievements(
         check_auto_achievements(user, db)
 
     all_achs = db.query(Achievement).all()
-    user_achs = {ua.achievement_id: ua for ua in db.query(
+    user_achs = {int(ua.achievement_id): ua for ua in db.query(
         UserAchievement).filter_by(user_id=user.id).all()}
     total_users = db.query(User).count()
-    rarity_counts = dict(db.query(
-        UserAchievement.achievement_id,
-        func.count(func.distinct(UserAchievement.user_id)),
-    ).group_by(UserAchievement.achievement_id).all())
+    rarity_counts: dict[int, int] = {
+        int(achievement_id): int(count)
+        for achievement_id, count in db.query(
+            UserAchievement.achievement_id,
+            func.count(func.distinct(UserAchievement.user_id)),
+        ).group_by(UserAchievement.achievement_id).all()
+    }
     progresses = calculate_achievement_progresses(
         db, user, all_achs, set(user_achs))
     res = []
 
     for a in all_achs:
         item = _format_achievement_data(
-            db, user, a, user_achs.get(a.id), total_users,
-            earned_count=int(rarity_counts.get(a.id, 0)),
+            db, user, a, user_achs.get(int(a.id)), total_users,
+            earned_count=rarity_counts.get(int(a.id), 0),
             current_progress=progresses.get(int(a.id)),
         )
         item["track_progress_available"] = bool(

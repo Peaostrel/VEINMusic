@@ -2,6 +2,7 @@
 
 from collections import defaultdict, deque
 from threading import Lock
+from typing import TypedDict
 
 MAX_ROUTES = 120
 SAMPLES_PER_ROUTE = 300
@@ -9,6 +10,15 @@ _samples: dict[str, deque[tuple[float, bool]]] = defaultdict(
     lambda: deque(maxlen=SAMPLES_PER_ROUTE)
 )
 _lock = Lock()
+
+
+class LatencyRow(TypedDict):
+    route: str
+    requests: int
+    p50_ms: float
+    p95_ms: float
+    p99_ms: float
+    errors: int
 
 
 def record_request(route: str, elapsed_ms: float, status_code: int) -> None:
@@ -28,10 +38,10 @@ def _percentile(values: list[float], quantile: float) -> float:
     return round(values[index], 1)
 
 
-def latency_snapshot() -> list[dict[str, object]]:
+def latency_snapshot() -> list[LatencyRow]:
     with _lock:
         copied = {route: list(values) for route, values in _samples.items()}
-    result = []
+    result: list[LatencyRow] = []
     for route, samples in copied.items():
         values = sorted(value for value, _ in samples)
         result.append({
@@ -42,4 +52,4 @@ def latency_snapshot() -> list[dict[str, object]]:
             "p99_ms": _percentile(values, 0.99),
             "errors": sum(1 for _, error in samples if error),
         })
-    return sorted(result, key=lambda item: float(item["p95_ms"]), reverse=True)
+    return sorted(result, key=lambda item: item["p95_ms"], reverse=True)
