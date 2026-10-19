@@ -15,6 +15,14 @@ interface Quality {
     average_processing_ms: number;
     verified_accounts: number;
   }[];
+  api_latency: {
+    route: string;
+    requests: number;
+    p50_ms: number;
+    p95_ms: number;
+    p99_ms: number;
+    errors: number;
+  }[];
 }
 export default function QualityMetrics() {
   const [data, setData] = useState<Quality | null>(null);
@@ -84,6 +92,38 @@ export default function QualityMetrics() {
               </tbody>
             </table>
           </div>
+          {data.api_latency.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold">Самые медленные API</h4>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr>
+                      {["Маршрут", "Запросы", "p50", "p95", "p99", "5xx"].map(
+                        (label) => (
+                          <th key={label} className="p-2">
+                            {label}
+                          </th>
+                        ),
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.api_latency.map((row) => (
+                      <tr key={row.route} className="border-t border-line">
+                        <td className="p-2 font-mono">{row.route}</td>
+                        <td className="p-2">{row.requests}</td>
+                        <td className="p-2">{row.p50_ms} мс</td>
+                        <td className="p-2">{row.p95_ms} мс</td>
+                        <td className="p-2">{row.p99_ms} мс</td>
+                        <td className="p-2">{row.errors}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
           <p className="text-xs text-fg-3">{data.note}</p>
         </>
       ) : (

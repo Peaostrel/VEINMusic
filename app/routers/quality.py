@@ -7,15 +7,23 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.performance import latency_snapshot
 from app.core.security import get_admin_user, get_current_user
 from app.database import get_db
-from app.models import LastfmImportJob, RecommendationFeedback, Scrobble, SourceHealth, Track, User
+from app.models import (
+    LastfmImportJob,
+    RecommendationFeedback,
+    Scrobble,
+    SourceHealth,
+    Track,
+    User,
+)
 from app.routers.common import _get_visible_user
 from app.routers.library import _track_dict
 from app.services.cache import invalidate_all
 from app.services.lastfm_import import job_to_dict
-from app.services.source_health import MESSAGES, SOURCES
 from app.services.music_story import weekly_story as build_weekly_story
+from app.services.source_health import MESSAGES, SOURCES
 
 router = APIRouter(tags=["quality"])
 DB = Annotated[Session, Depends(get_db)]
@@ -222,4 +230,5 @@ def quality_metrics(db: DB, admin: Admin):
             "sources": [{"source": source, "accounts": accounts, "events": int(events or 0),
                          "errors": int(errors or 0), "average_processing_ms": round(float(ms or 0), 1),
                          "verified_accounts": verified} for source, accounts, events, errors, ms, verified in rows],
-            "note": "Счётчики источников накопительные с момента установки. Время — обработка последнего события каждого аккаунта, а не задержка доставки от плеера."}
+            "api_latency": latency_snapshot()[:12],
+            "note": "Счётчики источников накопительные с момента установки. API-процентили считаются для текущего процесса с момента запуска."}

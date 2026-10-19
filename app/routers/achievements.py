@@ -33,7 +33,9 @@ from app.services import audit
 from app.services.achievements import (
     _enrich_achievement_data,
     _format_achievement_data,
+    calculate_achievement_progresses,
     check_auto_achievements,
+    create_user_achievement,
     enrich_artist_targets,
     get_album_track_progress,
     get_artist_track_progress,
@@ -66,13 +68,26 @@ def get_all_achievements(
         check_auto_achievements(user, db)
 
     all_achs = db.query(Achievement).all()
-    user_achs = {ua.achievement_id: ua for ua in db.query(
+    user_achs = {int(ua.achievement_id): ua for ua in db.query(
         UserAchievement).filter_by(user_id=user.id).all()}
     total_users = db.query(User).count()
+    rarity_counts: dict[int, int] = {
+        int(achievement_id): int(count)
+        for achievement_id, count in db.query(
+            UserAchievement.achievement_id,
+            func.count(func.distinct(UserAchievement.user_id)),
+        ).group_by(UserAchievement.achievement_id).all()
+    }
+    progresses = calculate_achievement_progresses(
+        db, user, all_achs, set(user_achs))
     res = []
 
     for a in all_achs:
-        item = _format_achievement_data(db, user, a, user_achs.get(a.id), total_users)
+        item = _format_achievement_data(
+            db, user, a, user_achs.get(int(a.id)), total_users,
+            earned_count=rarity_counts.get(int(a.id), 0),
+            current_progress=progresses.get(int(a.id)),
+        )
         item["track_progress_available"] = bool(
             is_owner and a.rule_type in {SPECIFIC_ALBUM_RULE, SPECIFIC_ARTIST_RULE}
         )
@@ -80,7 +95,10 @@ def get_all_achievements(
 
     earned = [x for x in res if x["is_earned"]]
     unearned = [x for x in res if not x["is_earned"]]
-    earned.sort(key=lambda x: str(x["earned_at"]), reverse=True)
+    earned.sort(key=lambda x: (
+        not x["is_displayed"], x["display_order"] is None,
+        x["display_order"] if x["display_order"] is not None else 10**9,
+        -int(x["id"])))
     res = earned + unearned
 
     return {
@@ -276,10 +294,7 @@ def assign_achievement(target_username: str,
         raise HTTPException(404, "Достижение не найдено")
     if not db.query(UserAchievement).filter_by(user_id=user.id,
                                                achievement_id=data.achievement_id).first():
-        db.add(
-            UserAchievement(
-                user_id=user.id,
-                achievement_id=data.achievement_id))
+        create_user_achievement(db, int(user.id), data.achievement_id)
         user.integration.bonus_xp = int(
             user.integration.bonus_xp or 0) + int(ach.reward_xp or 0)
         audit.record(db, admin, "achievement.grant", target_username, achievement=ach.name)

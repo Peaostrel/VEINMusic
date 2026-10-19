@@ -4,7 +4,11 @@ import type { getRankInfo, getNextRankInfo } from "@/app/lib/ranks";
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { API_URL, openSocket } from "@/app/lib/api";
+import {
+  API_URL,
+  subscribeSocket,
+  type SocketSubscription,
+} from "@/app/lib/api";
 import { applyPlaybackUpdate } from "@/app/lib/playback";
 import { useCountries } from "@/app/lib/geo";
 import { useProfileTheme } from "./hooks";
@@ -115,7 +119,9 @@ export function useProfilePage() {
   };
   const [wrapped, setWrapped] = useState<WrappedStats | null>(null);
   const [mood, setMood] = useState<MoodInfo | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+  const wsRef = useRef<SocketSubscription | null>(null);
+  const followPending = useRef(false);
+  const [identityReady, setIdentityReady] = useState(false);
   const playbackRevision = useRef(0);
 
   const handleNewScrobble = (track: HistoryEntry) => {
@@ -138,164 +144,91 @@ export function useProfilePage() {
   useEffect(() => {
     setIsMyProfile(localStorage.getItem("username") === username);
     setIsLogged(!!localStorage.getItem("username"));
+    setIdentityReady(true);
   }, [username]);
 
   useEffect(() => {
-    if (!username) return;
+    if (!username || !identityReady) return;
     let active = true;
     let refreshing = false;
+    let refreshQueued = false;
 
-    const fetchAllData = async () => {
+    const fetchSnapshot = async () => {
+      if (refreshing) {
+        refreshQueued = true;
+        return;
+      }
+      refreshing = true;
       const revision = playbackRevision.current;
       try {
-        const viewer = localStorage.getItem("username") || "null";
-        const ts = Date.now();
-        const [hRes, sRes, uRes, fRes, tRes, rRes, wRes, mRes] =
-          await Promise.all([
-            fetch(`${API_URL}/api/history/${username}?t=${ts}`, {
-              credentials: "include",
-            })
-              .then((r) => (r.ok ? r.json() : { history: [] }))
-              .catch((e) => {
-                console.error("history err", e);
-                return { history: [] };
-              }),
-            fetch(`${API_URL}/api/stats/${username}?t=${ts}`, {
-              credentials: "include",
-            })
-              .then((r) => (r.ok ? r.json() : {}))
-              .catch((e) => {
-                console.error("stats err", e);
-                return {};
-              }),
-            fetch(`${API_URL}/api/user/${username}?t=${ts}`, {
-              credentials: "include",
-            })
-              .then((r) => (r.ok ? r.json() : null))
-              .catch((e) => {
-                console.error("user err", e);
-                return null;
-              }),
-            fetch(`${API_URL}/api/follow-stats/${viewer}/${username}?t=${ts}`, {
-              credentials: "include",
-            })
-              .then((r) => (r.ok ? r.json() : null))
-              .catch((e) => {
-                console.error("follow err", e);
-                return null;
-              }),
-            viewer !== "null" && viewer !== username
-              ? fetch(
-                  `${API_URL}/api/taste-match/${viewer}/${username}?t=${ts}`,
-                  { credentials: "include" },
-                )
-                  .then((r) => (r.ok ? r.json() : null))
-                  .catch(() => null)
-              : Promise.resolve(null),
-            fetch(`${API_URL}/api/recommendations?username=${username}`, {
-              credentials: "include",
-            })
-              .then((r) => (r.ok ? r.json() : []))
-              .catch((e) => {
-                console.error("recs err", e);
-                return [];
-              }),
-            fetch(`${API_URL}/api/stats/wrapped?username=${username}`, {
-              credentials: "include",
-            })
-              .then((r) => (r.ok ? r.json() : null))
-              .catch((e) => {
-                console.error("wrapped err", e);
-                return null;
-              }),
-            fetch(`${API_URL}/api/user/mood?username=${username}`, {
-              credentials: "include",
-            })
-              .then((r) => (r.ok ? r.json() : null))
-              .catch((e) => {
-                console.error("mood err", e);
-                return null;
-              }),
-          ]);
-
+        const response = await fetch(
+          `${API_URL}/api/profile/${encodeURIComponent(String(username))}/snapshot`,
+          { credentials: "include", cache: "no-store" },
+        );
+        if (!response.ok) throw new Error(`Profile ${response.status}`);
+        const snapshot = await response.json();
         if (!active) return;
         setData((prev) => ({
           history:
             revision === playbackRevision.current
-              ? hRes.history || []
+              ? snapshot.history || []
               : prev.history,
-          stats: sRes || {},
-          user: uRes || null,
-          taste: tRes,
-          followStats: fRes || {
+          stats: snapshot.stats || {},
+          user: snapshot.user || null,
+          taste: prev.taste,
+          followStats: snapshot.followStats || {
             followers: 0,
             following: 0,
             is_following: false,
           },
         }));
-        setRecs(rRes);
-        setWrapped(wRes);
-        setMood(mRes);
-        if (uRes) setError("");
+        if (snapshot.user) setError("");
         else setError("User not found");
       } catch (err) {
         if (!active) return;
         console.error("Ошибка загрузки профиля:", err);
         setError("Ошибка подключения к серверу");
       } finally {
-        if (active) setLoading(false);
+        refreshing = false;
+        if (active && refreshQueued) {
+          refreshQueued = false;
+          void fetchSnapshot();
+        } else if (active) {
+          setLoading(false);
+        }
       }
     };
 
-    const refreshLiveData = async () => {
-      if (!active || refreshing || document.visibilityState !== "visible")
-        return;
-      refreshing = true;
-      const revision = playbackRevision.current;
-      try {
-        const responses = await Promise.all(
-          ["history", "stats", "user"].map((path) =>
-            fetch(
-              `${API_URL}/api/${path}/${encodeURIComponent(String(username))}`,
-              {
-                credentials: "include",
-                cache: "no-store",
-              },
-            ),
-          ),
-        );
-        if (responses.some((res) => res.status === 403 || res.status === 404)) {
-          await fetchAllData();
-          return;
-        }
-        if (responses.some((res) => !res.ok)) return;
-        const [history, stats, user] = await Promise.all(
-          responses.map((res) => res.json()),
-        );
-        if (active)
-          setData((prev) => ({
-            ...prev,
-            history:
-              revision === playbackRevision.current
-                ? history.history || []
-                : prev.history,
-            stats,
-            user,
-          }));
-      } catch {
-        // Preserve the last snapshot while disconnected.
-      } finally {
-        refreshing = false;
-        if (active && revision !== playbackRevision.current)
-          void refreshLiveData();
-      }
+    const fetchSecondary = async () => {
+      const viewer = localStorage.getItem("username");
+      const json = (url: string, fallback: unknown) =>
+        fetch(url, { credentials: "include" })
+          .then((response) => (response.ok ? response.json() : fallback))
+          .catch(() => fallback);
+      const [taste, recommendations, wrappedData, moodData] = await Promise.all(
+        [
+          viewer && viewer !== username
+            ? json(`${API_URL}/api/taste-match/${viewer}/${username}`, null)
+            : Promise.resolve(null),
+          json(`${API_URL}/api/recommendations?username=${username}`, []),
+          json(`${API_URL}/api/stats/wrapped?username=${username}`, null),
+          json(`${API_URL}/api/user/mood?username=${username}`, null),
+        ],
+      );
+      if (!active) return;
+      setData((previous) => ({
+        ...previous,
+        taste: taste as TasteMatch | null,
+      }));
+      setRecs(recommendations as ArtistRecommendation[]);
+      setWrapped(wrappedData as WrappedStats | null);
+      setMood(moodData as MoodInfo | null);
     };
     const refresh = () => {
-      // A background tab waits: it refreshes when shown again
       if (document.visibilityState === "hidden") return;
-      void refreshLiveData();
+      void fetchSnapshot();
     };
-    const timer = setInterval(refresh, 15_000);
+    const timer = setInterval(refresh, 60_000);
     document.addEventListener("visibilitychange", refresh);
     window.addEventListener("online", refresh);
 
@@ -308,22 +241,22 @@ export function useProfilePage() {
       );
     };
 
-    void fetchAllData();
+    void fetchSnapshot();
+    void fetchSecondary();
     checkNotifications();
 
     // Live updates: the server only opens a user's own channel
-    const closeSocket = isMyProfile
-      ? openSocket(
+    const subscription = isMyProfile
+      ? subscribeSocket(
           `/ws/${username}`,
-          (ws) => {
-            wsRef.current = ws;
-            ws.onopen = refresh;
-            ws.onmessage = (event) => {
+          {
+            onOpen: refresh,
+            onMessage: (event) => {
               try {
                 const msg = JSON.parse(event.data);
                 if (msg.type === "NEW_SCROBBLE") {
                   handleNewScrobble(msg.track);
-                  refresh();
+                  if (msg.counted) refresh();
                   checkNotifications();
                 } else if (msg.type === "PLAYBACK_STATE") {
                   if (msg.track) handleNewScrobble(msg.track);
@@ -331,7 +264,13 @@ export function useProfilePage() {
                     playbackRevision.current++;
                     handlePlaybackState(msg.id, msg.is_playing);
                   }
+                  if (msg.counted) {
+                    refresh();
+                    checkNotifications();
+                  }
+                } else if (msg.type === "ACHIEVEMENTS_UNLOCKED") {
                   refresh();
+                  checkNotifications();
                 } else if (msg.type === "SYNC_INVITE") {
                   if (
                     confirm(
@@ -342,28 +281,46 @@ export function useProfilePage() {
                   }
                 } else if (msg.type === "IMPORT_FINISHED") {
                   alert(msg.message);
-                  void fetchAllData();
+                  void fetchSnapshot();
+                  void fetchSecondary();
                 }
               } catch {
                 // Ignore malformed messages; polling can still reconcile state.
               }
-            };
+            },
           },
           { authed: true },
         )
-      : undefined;
+      : null;
+    wsRef.current = subscription;
     return () => {
       active = false;
       clearInterval(timer);
       document.removeEventListener("visibilitychange", refresh);
       window.removeEventListener("online", refresh);
-      closeSocket?.();
+      subscription?.close();
+      if (wsRef.current === subscription) wsRef.current = null;
     };
-  }, [username, isMyProfile, router]);
+  }, [username, isMyProfile, identityReady, router]);
 
   // Таймеры для уведомлений теперь создаются индивидуально при их добавлении
 
   const handleFollow = async () => {
+    if (followPending.current) return;
+    followPending.current = true;
+    const previous = data.followStats;
+    const nextFollowing = !previous.is_following;
+    setData((current) => ({
+      ...current,
+      followStats: {
+        ...current.followStats,
+        is_following: nextFollowing,
+        followers: Math.max(
+          0,
+          current.followStats.followers + (nextFollowing ? 1 : -1),
+        ),
+      },
+    }));
     try {
       const res = await fetch(`${API_URL}/api/follow/${username}`, {
         credentials: "include",
@@ -371,21 +328,27 @@ export function useProfilePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
+      if (!res.ok) throw new Error(`Follow ${res.status}`);
       if (res.ok) {
         const result = await res.json();
+        const serverFollowing = result.status === "followed";
         setData((prev) => ({
           ...prev,
           followStats: {
             ...prev.followStats,
-            is_following: result.status === "followed",
-            followers:
-              prev.followStats.followers +
-              (result.status === "followed" ? 1 : -1),
+            is_following: serverFollowing,
+            followers: Math.max(
+              0,
+              previous.followers + (serverFollowing ? 1 : -1),
+            ),
           },
         }));
       }
     } catch (err) {
       console.error(err);
+      setData((current) => ({ ...current, followStats: previous }));
+    } finally {
+      followPending.current = false;
     }
   };
 

@@ -126,6 +126,7 @@ export interface AchievementInfo {
   is_earned?: boolean;
   earned_at?: string | null;
   is_displayed?: boolean;
+  display_order?: number | null;
   /** Share of users who earned it, in percent. */
   rarity?: number;
   current_progress?: number;

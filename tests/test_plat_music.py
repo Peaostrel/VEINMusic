@@ -1,6 +1,7 @@
 """Partner sends authenticated playback to the shared scrobble API."""
 import json
 import secrets
+import time
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
@@ -37,6 +38,8 @@ def payload(source="plat_music", progress=0, playing=True):
 def test_partner_receives_track_and_diagnostics(client, db, plat_account, source, auth):
     user, _, token, owner = plat_account
     data = payload(source)
+    data.update(client_event_id="event-42", client_version="1.5.3",
+                client_observed_at_ms=int(time.time() * 1000) - 25)
     headers = {}
     if auth == "body":
         data["api_key"] = token
@@ -45,6 +48,11 @@ def test_partner_receives_track_and_diagnostics(client, db, plat_account, source
     response = client.post("/api/scrobble", json=data, headers=headers)
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "ok"
+    diagnostics = response.json()["diagnostics"]
+    assert diagnostics["event_id"] == "event-42"
+    assert diagnostics["client_version"] == "1.5.3"
+    assert diagnostics["delivery_ms"] >= 0
+    assert diagnostics["processing_ms"] >= 0
     row = db.query(Scrobble).one()
     assert row.user_id == user.id
     assert row.source == "plat"

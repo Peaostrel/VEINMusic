@@ -575,7 +575,9 @@ def _matches_filter(
 
 def _is_blacklisted(title: str, artist: str, album: str, db: Session) -> bool:
     from app.models import BlacklistFilter
-    filters = db.query(BlacklistFilter).filter(BlacklistFilter.is_active == True).all()  # noqa: E712
+    filters = db.query(BlacklistFilter).filter(
+        BlacklistFilter.is_active.is_(True),
+    ).all()
     t_l, a_l, alb_l = title.lower(), artist.lower(), (album or "").lower()
     return any(_matches_filter(f, t_l, a_l, alb_l, title, artist) for f in filters)
 
@@ -819,12 +821,10 @@ def _integration_paused(db, integrations, source_name):
         return True
     if any(name in source_name and not enabled for name, enabled in integration_keys.items()):
         return True
-    if any(
+    return any(
         name in source_name and not runtime_settings.is_feature_enabled(feature, db)
         for name, feature in integration_features.items()
-    ):
-        return True
-    return False
+    )
 
 
 # Links in a title or artist are spam (the shared catalog and the public feed
@@ -897,11 +897,15 @@ async def _process_scrobble(
     if result["new_item"] is not None:
         await manager.broadcast_to_user(result["username"], {
             "type": "NEW_SCROBBLE",
+            "counted": result["counted"] is not None,
             "track": result["new_item"]
         })
     elif result.get("state_change") is not None:
         await manager.broadcast_to_user(result["username"], {
-            "type": "PLAYBACK_STATE", **result["state_change"]})
+            "type": "PLAYBACK_STATE",
+            "counted": result["counted"] is not None,
+            **result["state_change"],
+        })
     if result["counted"] is not None:
         await _dispatch_counted_scrobble(result["user_id"], result["counted"])
     if result["new_item"] is not None and listening.auto_metadata:
@@ -917,6 +921,7 @@ async def process_scrobble(db, user, title, artist, cover_url, track_url, source
                            **credit_options: Unpack[ScrobbleCreditOptions]):
     """Record diagnostic outcomes without recording filtered track metadata."""
     from time import monotonic
+
     from app.services.source_health import record_health
     started = monotonic()
     status = await _process_scrobble(db, user, title, artist, cover_url, track_url,
