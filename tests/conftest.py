@@ -19,18 +19,30 @@ def _worker_postgres_url(url: str) -> str:
     """Give the worker its own PostgreSQL database next to the configured one."""
     from sqlalchemy import create_engine, text
     from sqlalchemy.engine import make_url
+    from sqlalchemy.exc import OperationalError, ProgrammingError
 
     base = make_url(url)
     if WORKER == "main":
         return url
     worker_url = base.set(database=f"{base.database}_{WORKER}")
-    admin = create_engine(base.set(database="postgres"), isolation_level="AUTOCOMMIT")
+    # A pre-created worker database is used as is; otherwise the test role
+    # needs CREATEDB to make one
+    probe = create_engine(worker_url)
+    try:
+        with probe.connect():
+            return worker_url.render_as_string(hide_password=False)
+    except OperationalError:
+        pass
+    finally:
+        probe.dispose()
+    admin = create_engine(base, isolation_level="AUTOCOMMIT")
     try:
         with admin.connect() as conn:
-            exists = conn.execute(text("SELECT 1 FROM pg_database WHERE datname = :name"),
-                                  {"name": worker_url.database}).scalar()
-            if not exists:
-                conn.execute(text(f'CREATE DATABASE "{worker_url.database}"'))
+            conn.execute(text(f'CREATE DATABASE "{worker_url.database}"'))
+    except ProgrammingError as exc:
+        raise RuntimeError(
+            f"Can't create {worker_url.database} for xdist worker {WORKER}: grant the test role "
+            f"CREATEDB or create the databases {base.database}_gw0, _gw1, ... beforehand") from exc
     finally:
         admin.dispose()
     return worker_url.render_as_string(hide_password=False)
@@ -182,12 +194,11 @@ def db():
 
 async def _drain_background_tasks():
     from app.core import redis
-    # A job may start another one, so wait until none are left (or give up)
-    for _ in range(10):
-        pending = set(redis._BACKGROUND_TASKS)
-        if not pending:
-            return
-        await asyncio.wait(pending, timeout=10)
+    # A job may start another one, so wait until none are left or time is up
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + 30
+    while redis._BACKGROUND_TASKS and loop.time() < deadline:
+        await asyncio.wait(set(redis._BACKGROUND_TASKS), timeout=deadline - loop.time())
 
 
 @pytest.fixture
