@@ -4,6 +4,7 @@ import hmac
 import os
 import secrets
 import urllib.parse
+from datetime import UTC, datetime
 from typing import Annotated
 
 import httpx
@@ -24,7 +25,7 @@ from app.core.security import (
 )
 from app.database import get_db
 from app.models import User, UserIntegration, UserProfile
-from app.schemas import UserCreate, UserLogin
+from app.schemas import UserLogin, UserRegister
 from app.services import captcha, runtime_settings, security_events
 from app.services.sessions import current_session_id, issue_session
 
@@ -48,12 +49,15 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 # Sign-ups per IP; the end-to-end test run raises it because every test
 # registers a fresh account from the same address.
 REGISTER_RATE_LIMIT = os.getenv("REGISTER_RATE_LIMIT", "3/minute")
+# Edition of the consent text on the site's /consent page; change it together
+# with that text so each account records which wording it agreed to
+PD_CONSENT_VERSION = "2026-10-19"
 
 
 @router.post("/register", responses={400: {"description": "Bad Request"},
                                       403: {"description": "Registration is switched off"}})
 @limiter.limit(REGISTER_RATE_LIMIT)
-def register(request: Request, data: UserCreate, response: Response,
+def register(request: Request, data: UserRegister, response: Response,
              db: Annotated[Session, Depends(get_db)]):
     if not runtime_settings.is_feature_enabled("registration", db):
         raise HTTPException(403, "Регистрация временно закрыта")
@@ -75,6 +79,9 @@ def register(request: Request, data: UserCreate, response: Response,
         hashed_password=get_password_hash(
             data.password),
         api_key=hashed_api_key)
+    if data.pd_consent:
+        new_user.pd_consent_at = datetime.now(UTC)  # type: ignore[assignment]
+        new_user.pd_consent_version = PD_CONSENT_VERSION  # type: ignore[assignment]
     db.add(new_user)
     try:
         db.commit()

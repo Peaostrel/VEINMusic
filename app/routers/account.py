@@ -89,7 +89,8 @@ def build_account_export(user: User, db: Session, include_history: bool = True) 
         "format": "veinmusic",
         "version": 1,
         "exported_at": datetime.now(UTC).isoformat(),
-        "account": {"username": user.username, "role": user.role, "is_banned": user.is_banned},
+        "account": {"username": user.username, "role": user.role, "is_banned": user.is_banned,
+                    "pd_consent_at": _iso(user.pd_consent_at), "pd_consent_version": user.pd_consent_version},
         "profile": {f: _iso(getattr(profile, f, None)) for f in profile_fields} if profile else {},
         # Credentials themselves are never exported, only which ones exist
         "integrations": {

@@ -15,6 +15,8 @@ const STATIC_PAGES = [
   "/developers",
   "/privacy",
   "/terms",
+  "/consent",
+  "/recommendations",
 ];
 
 const date = (value: string | null) => (value ? new Date(value) : undefined);

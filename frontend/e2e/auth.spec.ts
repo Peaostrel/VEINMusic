@@ -19,6 +19,7 @@ test.describe("Authentication Flow", () => {
     // Fill form
     await page.locator("#auth-username").fill(testUser);
     await page.locator("#auth-password").fill(testPassword);
+    await page.getByRole("checkbox", { name: /согласие на обработку/ }).check();
 
     // Submit
     await page.getByRole("button", { name: "Создать аккаунт" }).click();
