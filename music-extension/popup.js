@@ -1,3 +1,15 @@
+const DELIVERY_TONES = {
+    ok: 'ok', confirmed_duplicate: 'ok',
+    rate_limited: 'warn', ignored_spam_protection: 'warn', network_error: 'warn',
+    server_error: 'warn', invalid_response: 'warn', ignored_inactive: 'warn',
+    auth_required: 'danger', invalid_payload: 'danger', flagged: 'danger', blacklisted: 'danger'
+};
+
+const SOURCE_LABELS = {
+    yandex: 'Яндекс Музыка', spotify: 'Spotify', youtube_music: 'YouTube Music',
+    vk: 'VK', soundcloud: 'SoundCloud', apple_music: 'Apple Music'
+};
+
 function playbackDetail(delivery) {
     if (delivery.position == null) return '';
     const state = delivery.playing ? 'играет' : 'пауза';
@@ -8,17 +20,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const $ = (id) => document.getElementById(id);
     let pollTimer;
 
-    function setPairStatus(text, color = '#aaa') {
+    function setPairStatus(text, tone = '') {
         $('pair-status').innerText = text;
-        $('pair-status').style.color = color;
+        $('pair-status').dataset.tone = tone;
     }
 
+    $('version').innerText = `v${chrome.runtime.getManifest().version}`;
+
     function deliveryDetails(delivery) {
-        const version = chrome.runtime.getManifest().version;
-        if (!delivery) return `v${version}`;
+        if (!delivery) return '';
         return [
-            `v${delivery.version || version}`,
-            delivery.title ? `${delivery.artist} — ${delivery.title}` : '',
+            SOURCE_LABELS[delivery.source] || delivery.source,
             playbackDetail(delivery),
             delivery.deliveryMs == null ? '' : `доставка ${delivery.deliveryMs} мс`,
             delivery.processingMs == null ? '' : `сервер ${delivery.processingMs} мс`
@@ -30,14 +42,19 @@ document.addEventListener('DOMContentLoaded', () => {
         $('tracking-enabled').checked = data.trackingEnabled === true;
         $('pair-btn').disabled = data.trackingEnabled !== true;
         $('save-btn').disabled = data.trackingEnabled !== true;
+        $('pair-hint').hidden = data.trackingEnabled === true;
         $('auth-box').style.display = connected ? 'block' : 'none';
         $('unauth-box').style.display = connected ? 'none' : 'block';
         $('pair-box').style.display = connected ? 'none' : 'block';
         $('username-display').innerText = data.username || '';
+        $('avatar').innerText = (data.username || '?').slice(0, 1);
+        $('tracking-dot').toggleAttribute('data-off', data.trackingEnabled !== true);
         $('tracking-status').innerText = data.trackingEnabled === true ?
-            'Передача включена.' : 'Передача прослушиваний приостановлена.';
-        $('delivery-status').innerText = data.last_delivery?.message || 'Включите трек в музыкальной вкладке. Здесь появится результат приёма.';
+            'Передача включена' : 'Передача приостановлена';
         const delivery = data.last_delivery;
+        $('delivery-track').innerText = delivery?.title ? `${delivery.artist} — ${delivery.title}` : '';
+        $('delivery-status').innerText = delivery?.message || 'Включите трек в музыкальной вкладке. Здесь появится результат приёма.';
+        $('delivery-status').dataset.tone = DELIVERY_TONES[delivery?.status] || '';
         $('delivery-details').innerText = deliveryDetails(delivery);
     }
 
@@ -56,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             refreshState();
         } catch {
-            setPairStatus('Не удалось сохранить настройку.', '#ef4444');
+            setPairStatus('Не удалось сохранить настройку.', 'danger');
         }
     });
 
@@ -72,14 +89,14 @@ document.addEventListener('DOMContentLoaded', () => {
             // Keep popup and minute-alarm polling in one background context.
             const status = await chrome.runtime.sendMessage({ type: 'PAIRING_POLL' }).catch(() => 'error');
             if (status === 'approved') {
-                setPairStatus('Подключено!', '#1DB954');
+                setPairStatus('Подключено!', 'ok');
                 refreshState();
             } else if (status === 'pending' || status === 'error') {
                 pollLoop(intervalSec);
             } else {
                 $('pair-code-box').style.display = 'none';
                 if (status !== 'none') setPairStatus(status === 'denied' ?
-                    'Подключение отклонено на сайте.' : 'Код устарел. Попробуйте ещё раз.', '#ef4444');
+                    'Подключение отклонено на сайте.' : 'Код устарел. Попробуйте ещё раз.', 'danger');
             }
         }, intervalSec * 1000);
     }
@@ -104,7 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
             chrome.tabs.create({ url: pairing.url });
             pollLoop(pairing.interval);
         } catch (error) {
-            setPairStatus(`Ошибка: ${error.message}`, '#ef4444');
+            setPairStatus(`Ошибка: ${error.message}`, 'danger');
         } finally {
             refreshState();
         }
@@ -114,7 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!$('tracking-enabled').checked) return;
         const apiKey = $('api-key-input').value.trim();
         const username = $('username-input').value.trim();
-        if (!apiKey || !username) return setPairStatus('Введите ключ и никнейм.', '#ef4444');
+        if (!apiKey || !username) return setPairStatus('Введите ключ и никнейм.', 'danger');
         await veinStorageSet({ apiKey, username, offline_scrobbles: [], last_delivery: null });
         $('api-key-input').value = '';
         refreshState();
@@ -129,6 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
     $('test-btn').addEventListener('click', async () => {
         const logBox = $('log-box');
         logBox.innerText = 'Проверяем связь…';
+        logBox.dataset.tone = '';
         try {
             const settings = await veinStorageGet(['apiUrl', 'apiKey']);
             if (!settings.apiKey) throw new Error('Сначала подключите аккаунт');
@@ -140,8 +158,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const hint = response.status === 401 || response.status === 403 ?
                 'подключите аккаунт заново.' : 'попробуйте позже.';
             logBox.innerText = response.ok ? 'Связь с VEIN работает.' : `Ошибка ${response.status}: ${hint}`;
+            logBox.dataset.tone = response.ok ? 'ok' : 'danger';
         } catch (error) {
             logBox.innerText = `Ошибка: ${error.message}`;
+            logBox.dataset.tone = 'danger';
         }
     });
 });
