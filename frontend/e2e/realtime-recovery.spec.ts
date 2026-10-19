@@ -15,12 +15,9 @@ test("history caps stale playback and reconciles history and counters without na
     artist: "Recovery artist",
   });
   const response = await (
-    await page.request.get(`${API_URL}/api/history/${username}`)
+    await page.request.get(`${API_URL}/api/profile/${username}/snapshot`)
   ).json();
-  const stats = await (
-    await page.request.get(`${API_URL}/api/stats/${username}`)
-  ).json();
-  let history = {
+  let snapshot = {
     ...response,
     history: [
       {
@@ -31,30 +28,30 @@ test("history caps stale playback and reconciles history and counters without na
         is_playing: true,
       },
     ],
+    stats: { ...response.stats, total_scrobbles: 1 },
   };
-  let total = 1;
-  await page.route(`**/api/history/${username}*`, (route) =>
-    route.fulfill({ json: history }),
-  );
-  await page.route(`**/api/stats/${username}*`, (route) =>
-    route.fulfill({ json: { ...stats, total_scrobbles: total } }),
+  await page.route(`**/api/profile/${username}/snapshot*`, (route) =>
+    route.fulfill({ json: snapshot }),
   );
   await page.goto(`/user/${username}`);
   const section = page.getByRole("region", { name: "История", exact: true });
   await expect(section.getByText("нет связи", { exact: false })).toBeVisible();
   await expect(section.getByText("03:20", { exact: true })).toBeVisible();
-  history = {
-    ...history,
+  snapshot = {
+    ...snapshot,
     history: [
       {
-        ...history.history[0],
+        ...snapshot.history[0],
         title: "Reconciled track",
         listened_sec: 42,
         is_playing: false,
       },
     ],
+    stats: { ...snapshot.stats, total_scrobbles: 7 },
   };
-  total = 7;
+  // Simulate connectivity recovery; the profile reconciles its snapshot
+  // immediately instead of waiting for the 60-second safety interval.
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await expect(
     section.getByText("Reconciled track", { exact: true }),
   ).toBeVisible({ timeout: 20_000 });

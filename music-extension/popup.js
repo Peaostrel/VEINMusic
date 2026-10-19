@@ -1,3 +1,9 @@
+function playbackDetail(delivery) {
+    if (delivery.position == null) return '';
+    const state = delivery.playing ? 'играет' : 'пауза';
+    return `${state}, ${Math.round(delivery.position)} с`;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const $ = (id) => document.getElementById(id);
     let pollTimer;
@@ -5,6 +11,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function setPairStatus(text, color = '#aaa') {
         $('pair-status').innerText = text;
         $('pair-status').style.color = color;
+    }
+
+    function deliveryDetails(delivery) {
+        const version = chrome.runtime.getManifest().version;
+        if (!delivery) return `v${version}`;
+        return [
+            `v${delivery.version || version}`,
+            delivery.title ? `${delivery.artist} — ${delivery.title}` : '',
+            playbackDetail(delivery),
+            delivery.deliveryMs == null ? '' : `доставка ${delivery.deliveryMs} мс`,
+            delivery.processingMs == null ? '' : `сервер ${delivery.processingMs} мс`
+        ].filter(Boolean).join(' · ');
     }
 
     function showState(data) {
@@ -19,6 +37,8 @@ document.addEventListener('DOMContentLoaded', () => {
         $('tracking-status').innerText = data.trackingEnabled === true ?
             'Передача включена.' : 'Передача прослушиваний приостановлена.';
         $('delivery-status').innerText = data.last_delivery?.message || 'Включите трек в музыкальной вкладке. Здесь появится результат приёма.';
+        const delivery = data.last_delivery;
+        $('delivery-details').innerText = deliveryDetails(delivery);
     }
 
     function refreshState() {

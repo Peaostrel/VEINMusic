@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
+
 from app.core.sources import normalize_source
 
 SyncPrivacy = Literal["all", "followers", "none"]
@@ -83,6 +84,9 @@ class ScrobbleData(BaseModel):
     progress_sec: Position = 0
     is_playing: bool | None = True
     duration: Seconds = 0
+    client_event_id: str | None = Field(None, max_length=64)
+    client_observed_at_ms: int | None = Field(None, ge=0, le=10_000_000_000_000)
+    client_version: str | None = Field(None, max_length=32)
 
 
 class ProfileUpdate(BaseModel):
@@ -153,6 +157,10 @@ class AchAssign(BaseModel):
 class ToggleAch(BaseModel):
     api_key: str | None = None
     achievement_id: int
+
+
+class ReorderAchievements(BaseModel):
+    achievement_ids: list[int] = Field(default_factory=list, max_length=6)
 
 
 class FollowAction(BaseModel):

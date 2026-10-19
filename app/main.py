@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 import asyncio
 import logging
 import math
@@ -7,6 +6,7 @@ import re
 import secrets
 import time
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 import anyio
 from fastapi import FastAPI, WebSocket
@@ -21,14 +21,13 @@ from sqlalchemy.orm import Session
 from app.core.body_limit import BodySizeLimitMiddleware
 from app.core.flood_guard import FloodGuardMiddleware
 from app.core.observability import setup_observability
+from app.core.performance import record_request
 from app.core.rate_limit import limiter
 from app.core.websockets import manager
 from app.database import Base, SessionLocal, engine
 from app.models import User
 from app.routers import (
     account,
-    email,
-    portability,
     admin,
     admin_data,
     admin_security,
@@ -36,11 +35,13 @@ from app.routers import (
     auth,
     developer,
     devices,
+    email,
     extended,
     geo,
-    preview,
     lastfm_connect,
     notifications,
+    portability,
+    preview,
     profile,
     reports,
     scrobbling,
@@ -156,8 +157,20 @@ _DOCS_PATHS = ("/docs", "/redoc", "/openapi.json")
 
 @app.middleware("http")
 async def security_headers(request, call_next):
-    response = await call_next(request)
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        route = getattr(request.scope.get("route"), "path", None) or "<unmatched>"
+        record_request(route, elapsed_ms, 500)
+        raise
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    route = getattr(request.scope.get("route"), "path", None) or "<unmatched>"
+    record_request(route, elapsed_ms, response.status_code)
     headers = response.headers
+    headers.setdefault("Server-Timing", f"app;dur={elapsed_ms:.1f}")
+    headers.setdefault("X-Response-Time", f"{elapsed_ms:.1f}ms")
     headers.setdefault("X-Content-Type-Options", "nosniff")
     headers.setdefault("X-Frame-Options", "DENY")
     headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
@@ -180,7 +193,8 @@ app.add_middleware(
     allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
+    expose_headers=["Server-Timing", "X-Response-Time"],
 )
 
 
@@ -308,8 +322,8 @@ def _get_ticket_username(ticket: str, db) -> str | None:
     if user and not user.is_banned and verify_ticket(ticket, session_version=int(user.session_version or 0)):
         session_id = ticket_session_id(ticket)
         if session_id:
-            from app.models import UserSession
             from app.core.security import _as_aware
+            from app.models import UserSession
             session = db.get(UserSession, session_id)
             if not session or session.user_id != user.id or session.revoked or session.session_version != user.session_version or _as_aware(session.expires_at) <= datetime.now(UTC):
                 return None

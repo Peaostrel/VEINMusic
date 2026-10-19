@@ -1,9 +1,101 @@
 import json
 from unittest.mock import AsyncMock, patch
+
 import pytest
+
 from app.core.security import create_session_token
 from app.database import SessionLocal
-from app.models import User
+from app.models import Achievement, User, UserAchievement
+from app.services.achievements import create_user_achievement
+
+
+def test_profile_snapshot_returns_fresh_critical_sections(auth_client):
+    response = auth_client.get("/api/profile/profileuser/snapshot")
+    assert response.status_code == 200, response.text
+    assert response.headers["cache-control"] == "private, no-store"
+    data = response.json()
+    assert data["user"]["username"] == "profileuser"
+    assert data["history"] == []
+    assert "stats" in data
+    assert data["followStats"]["is_following"] is False
+
+
+def test_profile_snapshot_keeps_private_profile_shell(auth_client, db, auth_user):
+    user = db.query(User).filter(User.id == auth_user.id).first()
+    user.profile.is_private = True
+    db.commit()
+    auth_client.cookies.clear()
+
+    response = auth_client.get("/api/profile/profileuser/snapshot")
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["user"]["is_private"] is True
+    assert data["user"]["can_view_private"] is False
+    assert data["history"] == []
+    assert data["stats"] == {}
+
+
+def test_achievement_showcase_has_limit_and_persistent_order(auth_client, db, auth_user):
+    achievements = [Achievement(name=f"A{index}", description="", icon="🏆") for index in range(7)]
+    db.add_all(achievements)
+    db.flush()
+    db.add_all([
+        UserAchievement(user_id=auth_user.id, achievement_id=item.id,
+                        is_displayed=False, display_order=None)
+        for item in achievements
+    ])
+    db.commit()
+    for item in achievements[:6]:
+        response = auth_client.post(
+            "/api/profile/achievements/toggle",
+            json={"achievement_id": item.id},
+        )
+        assert response.status_code == 200
+    assert auth_client.post(
+        "/api/profile/achievements/toggle",
+        json={"achievement_id": achievements[6].id},
+    ).status_code == 409
+    order = [item.id for item in reversed(achievements[:6])]
+    assert auth_client.post(
+        "/api/profile/achievements/reorder",
+        json={"achievement_ids": order},
+    ).status_code == 200
+    db.expire_all()
+    rows = db.query(UserAchievement).filter_by(
+        user_id=auth_user.id, is_displayed=True).order_by(
+        UserAchievement.display_order).all()
+    assert [row.achievement_id for row in rows] == order
+
+
+def test_new_achievement_compacts_sparse_showcase_order(db, auth_user):
+    achievements = [
+        Achievement(name=f"Sparse {index}", description="", icon="🏆")
+        for index in range(4)
+    ]
+    db.add_all(achievements)
+    db.flush()
+    db.add_all([
+        UserAchievement(
+            user_id=auth_user.id,
+            achievement_id=item.id,
+            is_displayed=True,
+            display_order=order,
+        )
+        for item, order in zip(achievements[:3], (1, 3, 5), strict=True)
+    ])
+    db.flush()
+
+    created = create_user_achievement(
+        db, int(auth_user.id), int(achievements[3].id),
+    )
+    db.flush()
+
+    rows = db.query(UserAchievement).filter_by(
+        user_id=auth_user.id, is_displayed=True,
+    ).order_by(UserAchievement.display_order).all()
+    assert [int(row.display_order) for row in rows] == [0, 1, 2, 3]
+    assert created.display_order == 3
 
 
 @pytest.fixture
@@ -99,6 +191,7 @@ def test_generate_api_key(auth_client, db, auth_user):
     updated_user = db.query(User).filter(
         User.username == auth_user.username).first()
     import hashlib
+
     from app.core.security import SECRET_KEY
     expected_hash = hashlib.pbkdf2_hmac('sha256', raw_key.encode('utf-8'), SECRET_KEY.encode(), 100000).hex()
     assert updated_user.api_key == expected_hash

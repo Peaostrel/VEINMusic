@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { API_URL, openSocket } from "@/app/lib/api";
+import { API_URL, subscribeSocket } from "@/app/lib/api";
 import { useVisiblePolling } from "@/app/lib/usePolling";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { Music2, Pause } from "lucide-react";
@@ -30,6 +30,56 @@ interface CurrentTrack {
   receivedAt?: number;
 }
 
+interface LiveMessageHandlers {
+  reload: () => Promise<void>;
+  invalidateRequest: () => void;
+  setTrack: (track: CurrentTrack) => void;
+}
+
+function handleLiveMessage(event: MessageEvent, handlers: LiveMessageHandlers) {
+  try {
+    const message = JSON.parse(event.data);
+    if (message.type !== "NEW_SCROBBLE" && message.type !== "PLAYBACK_STATE") {
+      return;
+    }
+    globalThis.dispatchEvent(new Event("account_data_update"));
+    if (!message.track) {
+      void handlers.reload();
+      return;
+    }
+    // A late HTTP response must not undo a pause or skip.
+    handlers.invalidateRequest();
+    const item = message.track;
+    const age = Math.max(
+      0,
+      (Date.now() - playbackTimestamp(item.updated_at)) / 1000,
+    );
+    const advance = item.is_playing ? Math.min(age, 45) : 0;
+    handlers.setTrack({
+      ...item,
+      playing: item.is_playing && age < 45,
+      paused: !item.is_playing,
+      display_listened_sec: item.listened_sec + advance,
+      display_position_sec:
+        item.position_sec == null ? null : item.position_sec + advance,
+      playback_remaining_sec: Math.max(0, 45 - age),
+      receivedAt: performance.now(),
+    });
+  } catch {
+    // Ignore malformed messages; polling still reconciles state.
+  }
+}
+
+function listeningCreditLabel(track: CurrentTrack, progress: number | null) {
+  if (track.excluded) return "Исключено из статистики";
+  const credited =
+    !!track.duration &&
+    track.listened_sec != null &&
+    track.listened_sec * 100 >= track.duration * 85;
+  if (credited) return "Прослушивание засчитано";
+  return `${progress}% · зачёт от 85%`;
+}
+
 // WebSocket events refresh immediately; polling also reconciles heartbeat data.
 const POLL_MS = 10_000;
 
@@ -48,6 +98,9 @@ export default function NowPlaying({
   const mobileRef = useRef<HTMLDetailsElement>(null);
   const [track, setTrack] = useState<CurrentTrack | null>(null);
   const [clock, setClock] = useState(0);
+  const [connectionState, setConnectionState] = useState<
+    "connecting" | "live" | "retrying"
+  >("connecting");
   const requestSequence = useRef(0);
 
   const load = useCallback(async () => {
@@ -87,56 +140,27 @@ export default function NowPlaying({
     };
   }, [variant, track?.playing]);
 
-  useEffect(
-    () =>
-      live
-        ? openSocket(
-            `/ws/${encodeURIComponent(username)}`,
-            (ws) => {
-              ws.onopen = () => void load();
-              ws.onmessage = (event) => {
-                try {
-                  const msg = JSON.parse(event.data);
-                  if (
-                    msg.type === "NEW_SCROBBLE" ||
-                    msg.type === "PLAYBACK_STATE"
-                  ) {
-                    globalThis.dispatchEvent(new Event("account_data_update"));
-                    if (!msg.track) {
-                      void load();
-                      return;
-                    }
-                    // A late HTTP response must not undo a pause or skip.
-                    requestSequence.current++;
-                    const item = msg.track;
-                    const age = Math.max(
-                      0,
-                      (Date.now() - playbackTimestamp(item.updated_at)) / 1000,
-                    );
-                    const advance = item.is_playing ? Math.min(age, 45) : 0;
-                    setTrack({
-                      ...item,
-                      playing: item.is_playing && age < 45,
-                      paused: !item.is_playing,
-                      display_listened_sec: item.listened_sec + advance,
-                      display_position_sec:
-                        item.position_sec == null
-                          ? null
-                          : item.position_sec + advance,
-                      playback_remaining_sec: Math.max(0, 45 - age),
-                      receivedAt: performance.now(),
-                    });
-                  }
-                } catch {
-                  // not JSON
-                }
-              };
-            },
-            { authed: true },
-          )
-        : undefined,
-    [username, load, live],
-  );
+  useEffect(() => {
+    if (!live) return;
+    const subscription = subscribeSocket(
+      `/ws/${encodeURIComponent(username)}`,
+      {
+        onOpen: () => {
+          setConnectionState("live");
+          void load();
+        },
+        onClose: () => setConnectionState("retrying"),
+        onMessage: (event) =>
+          handleLiveMessage(event, {
+            reload: load,
+            invalidateRequest: () => requestSequence.current++,
+            setTrack,
+          }),
+      },
+      { authed: true },
+    );
+    return () => subscription.close();
+  }, [username, load, live]);
 
   const elapsed = track?.playing
     ? Math.max(0, (clock - (track.receivedAt ?? clock)) / 1_000)
@@ -160,15 +184,19 @@ export default function NowPlaying({
     elapsed,
     track.display_position_sec,
   );
-  const credited =
-    !!track.duration &&
-    track.listened_sec != null &&
-    track.listened_sec * 100 >= track.duration * 85;
-  let creditLabel = `${progress}% · зачёт от 85%`;
-  if (credited) creditLabel = "Прослушивание засчитано";
-  if (track.excluded) creditLabel = "Исключено из статистики";
+  const creditLabel = listeningCreditLabel(track, progress);
   const details = (
     <div className="space-y-2">
+      {live && (
+        <p className="flex items-center gap-1.5 text-xs text-fg-3">
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${connectionState === "live" ? "bg-emerald-500" : "bg-amber-500"}`}
+          />
+          {connectionState === "live"
+            ? "Обновляется мгновенно"
+            : "Переподключение…"}
+        </p>
+      )}
       {track.source && (
         <p className="text-xs text-fg-2">{sourceLabel(track.source)}</p>
       )}

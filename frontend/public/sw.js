@@ -1,9 +1,8 @@
 // VEINMusic PWA Service Worker
 const CACHE_NAME = "veinmusic-cache-v7";
-// Answers of the API, so the feed, profiles and statistics opened before
-// still show without a connection. The pages delete it on login and logout
-// (clearOfflineCache in app/lib/offline.ts).
-const API_CACHE = "veinmusic-api-v1";
+// Small cache for public discovery data only. Mutable account/profile state
+// is deliberately excluded so an old response can never overwrite realtime.
+const API_CACHE = "veinmusic-api-v2";
 const OFFLINE_URL = "/offline";
 const PRECACHE_URLS = ["/manifest.json", "/icon-512.png", OFFLINE_URL];
 
@@ -19,18 +18,13 @@ const API_ORIGIN = (() => {
 // Read-only API answers worth keeping for offline reading
 const API_CACHED_PATHS = [
   /^\/api\/(global-history|friends-history|history-friends)\b/,
-  /^\/api\/user\/[^/]+$/,
-  /^\/api\/(stats|history|follow-stats|detailed-stats)\//,
-  /^\/api\/achievements\/all\//,
-  /^\/api\/profile\/preferences$/,
   /^\/api\/music\/(artist|track)\//,
   /^\/api\/leaderboard\b/,
   /^\/api\/discovery\/taste-twins\b/,
-  /^\/api\/integrations\/status$/,
 ];
 const API_CACHE_LIMIT = 150;
 // On a bad connection wait this long before falling back to the cache
-const API_TIMEOUT_MS = 6000;
+const API_TIMEOUT_MS = 1500;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

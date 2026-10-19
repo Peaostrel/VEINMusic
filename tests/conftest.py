@@ -1,3 +1,4 @@
+import asyncio
 import os
 import sys
 import pytest
@@ -8,9 +9,50 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-TEST_DB_FILE = os.path.join(project_root, "test_temp.db")
+# Each pytest-xdist worker ("gw0", "gw1", ...) gets its own database, so
+# `pytest -n auto` works; a plain run uses the "main" one
+WORKER = os.getenv("PYTEST_XDIST_WORKER", "main")
+TEST_DB_FILE = os.path.join(project_root, f"test_temp_{WORKER}.db")
+
+
+def _worker_postgres_url(url: str) -> str:
+    """Give the worker its own PostgreSQL database next to the configured one."""
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.engine import make_url
+    from sqlalchemy.exc import OperationalError, ProgrammingError
+
+    base = make_url(url)
+    if WORKER == "main":
+        return url
+    worker_url = base.set(database=f"{base.database}_{WORKER}")
+    # A pre-created worker database is used as is; otherwise the test role
+    # needs CREATEDB to make one
+    probe = create_engine(worker_url)
+    try:
+        with probe.connect():
+            return worker_url.render_as_string(hide_password=False)
+    except OperationalError:
+        pass
+    finally:
+        probe.dispose()
+    admin = create_engine(base, isolation_level="AUTOCOMMIT")
+    try:
+        with admin.connect() as conn:
+            conn.execute(text(f'CREATE DATABASE "{worker_url.database}"'))
+    except ProgrammingError as exc:
+        raise RuntimeError(
+            f"Can't create {worker_url.database} for xdist worker {WORKER}: grant the test role "
+            f"CREATEDB or create the databases {base.database}_gw0, _gw1, ... beforehand") from exc
+    finally:
+        admin.dispose()
+    return worker_url.render_as_string(hide_password=False)
+
+
 # CI also runs the suite against PostgreSQL by setting TEST_DATABASE_URL
-TEST_DB_URL = os.getenv("TEST_DATABASE_URL", f"sqlite:///{TEST_DB_FILE}")
+if os.getenv("TEST_DATABASE_URL"):
+    TEST_DB_URL = _worker_postgres_url(os.environ["TEST_DATABASE_URL"])
+else:
+    TEST_DB_URL = f"sqlite:///{TEST_DB_FILE}"
 
 # Force env vars for testing before importing database module
 os.environ["DATABASE_URL"] = TEST_DB_URL
@@ -150,6 +192,15 @@ def db():
         cache.CACHE.clear()
 
 
+async def _drain_background_tasks():
+    from app.core import redis
+    # A job may start another one, so wait until none are left or time is up
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + 30
+    while redis._BACKGROUND_TASKS and loop.time() < deadline:
+        await asyncio.wait(set(redis._BACKGROUND_TASKS), timeout=deadline - loop.time())
+
+
 @pytest.fixture
 def client(db):
     # Always start with clean overrides
@@ -163,5 +214,8 @@ def client(db):
     security_events.reset()
     with TestClient(app) as test_client:
         yield test_client
+        # Jobs a request started in-process (Redis is off in tests) must finish
+        # before the tables are wiped, or they write into the next test
+        test_client.portal.call(_drain_background_tasks)
     # Always clear overrides after the test
     app.dependency_overrides.clear()

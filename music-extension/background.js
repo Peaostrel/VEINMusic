@@ -7,6 +7,10 @@ if (typeof veinPollPairing === 'undefined' && typeof importScripts === 'function
 }
 
 const ALARM_NAME = 'FLUSH_OFFLINE_SCROBBLES';
+const extensionVersion = (() => {
+    try { return chrome.runtime.getManifest().version; }
+    catch { return 'unknown'; }
+})();
 
 // These are classic Chrome/Firefox scripts, so await belongs inside functions.
 async function createFlushAlarm() {
@@ -157,17 +161,22 @@ async function submitScrobble(apiBase, apiKey, payload) {
     try { data = await response.json(); }
     catch { return {kind: 'retry', status: 'invalid_response', httpStatus: response.status}; }
     const status = data?.status;
-    if (ACCEPTED_STATUSES.has(status)) return {kind: 'accepted', status, httpStatus: response.status};
-    if (SKIPPED_STATUSES.has(status)) return {kind: 'skipped', status, httpStatus: response.status};
+    if (ACCEPTED_STATUSES.has(status)) return {kind: 'accepted', status, httpStatus: response.status, diagnostics: data?.diagnostics};
+    if (SKIPPED_STATUSES.has(status)) return {kind: 'skipped', status, httpStatus: response.status, diagnostics: data?.diagnostics};
     return {kind: 'retry', status: Object.hasOwn(DELIVERY_MESSAGES, status) ? status : 'invalid_response', httpStatus: response.status};
 }
 
-async function rememberDelivery(outcome, source, accountKey) {
+async function rememberDelivery(outcome, payload, accountKey) {
     const settings = await storageGet(['apiKey', 'trackingEnabled']);
     if (settings.apiKey !== accountKey || settings.trackingEnabled !== true) return;
     await storageSet({last_delivery: {
         status: outcome.status, message: DELIVERY_MESSAGES[outcome.status],
-        httpStatus: outcome.httpStatus ?? null, source: source || '', at: Date.now()
+        httpStatus: outcome.httpStatus ?? null, source: payload?.source || '', at: Date.now(),
+        title: payload?.title || '', artist: payload?.artist || '',
+        position: payload?.progress_sec ?? null, playing: Boolean(payload?.is_playing),
+        eventId: payload?.client_event_id || null, version: extensionVersion,
+        deliveryMs: outcome.diagnostics?.delivery_ms ?? null,
+        processingMs: outcome.diagnostics?.processing_ms ?? null
     }});
 }
 
@@ -181,7 +190,7 @@ async function flushQueuedSnapshots() {
         const current = await storageGet(['apiKey', 'trackingEnabled']);
         if (!freshSnapshot(item, current)) continue;
         const outcome = await submitScrobble(veinApiBase(settings), settings.apiKey, item.payload);
-        await rememberDelivery(outcome, item.payload?.source, settings.apiKey);
+        await rememberDelivery(outcome, item.payload, settings.apiKey);
         if (outcome.kind === 'retry') {
             scheduleRetry();
             break;
@@ -221,7 +230,7 @@ async function deliverLiveSnapshot(event) {
     const settings = await storageGet(['apiKey', 'trackingEnabled']);
     if (!freshSnapshot({accountKey: event.accountKey, queuedAt: event.observedAt}, settings)) return;
     const outcome = await submitScrobble(event.apiBase, event.accountKey, event.payload);
-    await rememberDelivery(outcome, event.payload.source, event.accountKey);
+    await rememberDelivery(outcome, event.payload, event.accountKey);
     if (outcome.kind === 'retry') {
         await bufferScrobble(event.payload, event.accountKey, event.observedAt);
         scheduleRetry();
@@ -237,7 +246,10 @@ let sendingLive = false;
 async function sendScrobble(payload) {
     const settings = await storageGet(['apiUrl', 'apiKey', 'trackingEnabled']);
     if (!settings.apiKey || settings.trackingEnabled !== true || !shouldSendScrobble(payload)) return;
-    pendingLive = {payload, accountKey: settings.apiKey, apiBase: veinApiBase(settings), observedAt: Date.now()};
+    const observedAt = Date.now();
+    payload = {...payload, client_event_id: crypto.randomUUID(),
+        client_observed_at_ms: observedAt, client_version: extensionVersion};
+    pendingLive = {payload, accountKey: settings.apiKey, apiBase: veinApiBase(settings), observedAt};
     if (sendingLive) return;
     sendingLive = true;
     try {
