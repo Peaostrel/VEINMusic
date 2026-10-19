@@ -11,7 +11,7 @@ export default function JsonLd({
     <script
       type="application/ld+json"
       dangerouslySetInnerHTML={{
-        __html: JSON.stringify(data).replaceAll("<", String.raw`<`),
+        __html: JSON.stringify(data).replaceAll("<", "\\u003c"),
       }}
     />
   );

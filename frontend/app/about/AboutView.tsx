@@ -137,9 +137,10 @@ function useLandingData(initial: LandingData | null) {
     ])
       .then(([stats, week, data]) => {
         if (!active) return;
-        setStats(stats);
-        setWeek(week);
-        setFeed(Array.isArray(data?.feed) ? data.feed : []);
+        // Keep what the server already sent if a retry fails
+        if (stats) setStats(stats);
+        if (week) setWeek(week);
+        if (Array.isArray(data?.feed)) setFeed(data.feed);
       })
       .catch(() => {
         /* The landing page remains usable without statistics. */

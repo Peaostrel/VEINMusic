@@ -7,9 +7,11 @@ import type { FeedItem, LandingData, PublicStats, Week } from "./AboutView";
  */
 export async function landingData(): Promise<LandingData> {
   const [stats, week, data] = await Promise.all([
+    // Site-wide counts only: safe to share for a while
     publicApiJson<PublicStats>("/api/public-stats", 30),
-    publicApiJson<Week>("/api/public-stats/week", 300),
-    publicApiJson<{ feed: FeedItem[] }>("/api/feed/global", 30),
+    // Built from public profiles: the API rechecks privacy on each request
+    publicApiJson<Week>("/api/public-stats/week"),
+    publicApiJson<{ feed: FeedItem[] }>("/api/feed/global"),
   ]);
   return {
     stats,

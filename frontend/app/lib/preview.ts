@@ -79,16 +79,19 @@ export async function previewJson<T>(path: string): Promise<T | null> {
 }
 
 /**
- * Public JSON of the API (no session), shared by every visitor for
- * `revalidate` seconds; null when the API is slow, down or says no.
+ * Public JSON of the API (no session); null when the API is slow, down or
+ * says no. `revalidate` shares the answer between visitors for that many
+ * seconds: only for data no privacy setting can hide, since a shared copy
+ * would outlive a change of those settings. Without it every request asks
+ * the API, which rechecks privacy itself.
  */
 export async function publicApiJson<T>(
   path: string,
-  revalidate: number,
+  revalidate?: number,
 ): Promise<T | null> {
   try {
     const res = await fetch(`${SERVER_API_URL}${path}`, {
-      next: { revalidate },
+      ...(revalidate ? { next: { revalidate } } : { cache: "no-store" }),
       signal: AbortSignal.timeout(1500),
     });
     return res.ok ? ((await res.json()) as T) : null;
