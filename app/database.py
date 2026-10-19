@@ -27,7 +27,19 @@ if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
         SQLALCHEMY_DATABASE_URL, connect_args={
             "check_same_thread": False})
 else:
-    engine = create_engine(SQLALCHEMY_DATABASE_URL)
+    # pool_pre_ping: after a PostgreSQL restart (update, backup restore) the
+    # pooled connections are dead; without the check the first request on
+    # each of them fails with a 500 instead of reconnecting.
+    # DB_POOL_SIZE / DB_MAX_OVERFLOW: sync endpoints share a thread pool of
+    # 40, more than the default 5 + 10 connections. Raise them only within
+    # max_connections (80 in deploy/), counting the second container of a
+    # blue-green switch and the worker.
+    engine = create_engine(
+        SQLALCHEMY_DATABASE_URL,
+        pool_pre_ping=True,
+        pool_size=int(os.getenv("DB_POOL_SIZE", "5")),
+        max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "10")),
+    )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base: Any = declarative_base()

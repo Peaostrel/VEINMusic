@@ -10,6 +10,7 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from slowapi.util import get_remote_address
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core import login_guard
@@ -75,7 +76,13 @@ def register(request: Request, data: UserCreate, response: Response,
             data.password),
         api_key=hashed_api_key)
     db.add(new_user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Two sign-ups with the same name at once: the unique index refuses
+        # the second one, which must not surface as a server error
+        db.rollback()
+        raise HTTPException(400, "Никнейм занят") from None
     db.refresh(new_user)
 
     db.add(UserProfile(user_id=new_user.id))
