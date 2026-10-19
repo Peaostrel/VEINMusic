@@ -357,8 +357,19 @@ export default function DiscoverPage() {
           </button>
         )}
         {!tracks.length && (
-          <EmptyState title="Пока нет новых рекомендаций">
-            Продолжайте слушать музыку, чтобы появилась подборка.
+          <EmptyState
+            title="Пока нет новых рекомендаций"
+            action={
+              <Link
+                href="/library/connect"
+                className={`${btn.secondary} ${btn.sm}`}
+              >
+                Проверить подключение
+              </Link>
+            }
+          >
+            Продолжайте слушать музыку, чтобы появилась подборка. Если
+            прослушивания не появляются, проверьте подключение сервиса.
           </EmptyState>
         )}
         <div className="grid gap-3 sm:grid-cols-2">

@@ -15,6 +15,7 @@ import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { sourceLabel } from "@/utils/formatters";
 import {
   Avatar,
+  btn,
   EmptyState,
   Meter,
   PageHeader,
@@ -491,11 +492,31 @@ export default function Home({
   else if (currentFeed.length === 0)
     feedBody =
       activeFeed === "friends" ? (
-        <EmptyState title="Тут пока пусто">
+        <EmptyState
+          title="Тут пока пусто"
+          action={
+            <Link href="/leaderboard" className={`${btn.secondary} ${btn.sm}`}>
+              Найти слушателей
+            </Link>
+          }
+        >
           Подпишитесь на кого-нибудь, чтобы видеть здесь их треки.
         </EmptyState>
       ) : (
-        <EmptyState title="Пока тихо">
+        <EmptyState
+          title="Пока тихо"
+          action={
+            integrationSummary?.services.some((service) => service.linked) ===
+            false ? (
+              <Link
+                href="/library/connect"
+                className={`${btn.primary} ${btn.sm}`}
+              >
+                Подключить музыку
+              </Link>
+            ) : undefined
+          }
+        >
           Включите музыку — ваш трек появится здесь первым.
         </EmptyState>
       );

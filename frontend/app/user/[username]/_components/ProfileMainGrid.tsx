@@ -1,6 +1,7 @@
 "use client";
 
-import { Meter } from "@/components/ui";
+import Link from "next/link";
+import { Meter, btn } from "@/components/ui";
 import { getSafeUrl, getTrackUrl } from "./profileUtils";
 import { ArtistLinks, HistoryItem } from "./HistoryItem";
 import { playbackTimestamp } from "@/app/lib/playback";
@@ -29,7 +30,13 @@ function Cover({
   );
 }
 
-export function ProfileMainGrid({ data, recs, wrapped, u }: ProfileViewProps) {
+export function ProfileMainGrid({
+  data,
+  recs,
+  wrapped,
+  u,
+  isMyProfile,
+}: ProfileViewProps) {
   const now = useNow();
   const topArtists = data.stats.top_artists ?? [];
   const topTracks = data.stats.top_tracks ?? [];
@@ -111,7 +118,23 @@ export function ProfileMainGrid({ data, recs, wrapped, u }: ProfileViewProps) {
             <h2 id="history-title" className="text-base font-semibold">
               История
             </h2>
-            {data.history.length === 0 ? (
+            {data.history.length === 0 && isMyProfile ? (
+              <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-line px-5 py-10 text-center">
+                <p className="text-sm font-medium">
+                  Здесь появится всё, что вы слушаете
+                </p>
+                <p className="max-w-sm text-sm text-fg-2">
+                  Подключите Яндекс Музыку, Spotify или SoundCloud либо
+                  поставьте расширение: первый трек появится через пару секунд.
+                </p>
+                <Link
+                  href="/library/connect"
+                  className={`${btn.primary} ${btn.sm} mt-1`}
+                >
+                  Подключить музыку
+                </Link>
+              </div>
+            ) : data.history.length === 0 ? (
               <p className="rounded-xl border border-dashed border-line px-5 py-10 text-center text-sm text-fg-2">
                 Тут пока пусто.
               </p>
