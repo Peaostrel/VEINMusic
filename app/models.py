@@ -37,6 +37,10 @@ class User(Base):
     is_flagged_antifraud = Column(Boolean, default=False, server_default=text("false"), nullable=False)
     # Bumped to revoke all session tokens ("log out everywhere", bans)
     session_version = Column(Integer, default=0, server_default=text("0"), nullable=False)
+    # When the user ticked the consent to personal data processing at sign-up
+    # and which text of /consent it was (152-FZ: proof of a separate consent)
+    pd_consent_at = Column(DateTime(timezone=True), nullable=True)
+    pd_consent_version = Column(String(32), nullable=True)
     totp_enabled = Column(Boolean, default=False, server_default=text("false"), nullable=False)
     totp_secret = Column(EncryptedString, nullable=True)
     totp_last_step = Column(Integer, default=-1, server_default=text("-1"), nullable=False)

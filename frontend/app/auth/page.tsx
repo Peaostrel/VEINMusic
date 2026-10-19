@@ -127,6 +127,8 @@ export default function Auth() {
   // server asked for it
   const [captchaAsked, setCaptchaAsked] = useState(false);
   const [captchaToken, setCaptchaToken] = useState("");
+  // The separate consent to personal data processing (152-FZ), sign-up only
+  const [pdConsent, setPdConsent] = useState(false);
   const [captchaRound, setCaptchaRound] = useState(0);
   const [error, setError] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -157,7 +159,9 @@ export default function Auth() {
           username,
           password,
           captcha_token: captchaToken || undefined,
-          ...(isLogin ? { otp_code: otpCode || undefined } : {}),
+          ...(isLogin
+            ? { otp_code: otpCode || undefined }
+            : { pd_consent: pdConsent }),
         }),
       });
       const data = await res.json();
@@ -302,6 +306,27 @@ export default function Auth() {
                 required
               />
             </div>
+          )}
+          {!isLogin && (
+            <label className="flex items-start gap-2.5 text-[13px] text-fg-2">
+              <input
+                type="checkbox"
+                checked={pdConsent}
+                onChange={(e) => setPdConsent(e.target.checked)}
+                className="mt-0.5 size-4 shrink-0 accent-accent"
+                required
+              />
+              <span>
+                Даю{" "}
+                <a
+                  href="/consent"
+                  target="_blank"
+                  className="text-fg underline underline-offset-2"
+                >
+                  согласие на обработку персональных данных
+                </a>
+              </span>
+            </label>
           )}
           {(!isLogin || captchaAsked) && (
             <Captcha

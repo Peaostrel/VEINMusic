@@ -38,9 +38,13 @@ def _visible_ranking(ranking, db, viewer_id=None):
 def _full_ranking(db: Session, viewer_id: int | None = None) -> list[dict[str, Any]]:
     """Every non-banned user with total XP, best first, with a global rank.
     Aggregates over all scrobbles: cached briefly (shared through Redis)."""
+    return _visible_ranking(_lifetime_ranking(db), db, viewer_id)
+
+
+def _lifetime_ranking(db: Session) -> list[dict[str, Any]]:
     cached = get_from_cache(LEADERBOARD_CACHE_KEY, ttl=LEADERBOARD_CACHE_TTL)
     if cached is not None:
-        return _visible_ranking(cached, db, viewer_id)
+        return cached
     sql = text("""
         SELECT u.username, p.display_name, p.avatar_url, i.is_verified, p.theme,
                (COALESCE(SUM(s.xp_earned), 0) + COALESCE(i.bonus_xp, 0)) as total_xp, u.role
@@ -73,16 +77,24 @@ def _full_ranking(db: Session, viewer_id: int | None = None) -> list[dict[str, A
             "theme": theme
         })
     set_to_cache(LEADERBOARD_CACHE_KEY, ranking)
-    return _visible_ranking(ranking, db, viewer_id)
+    return ranking
 
 
 def _period_ranking(db: Session, period: str, viewer_id: int | None = None) -> list[dict[str, Any]]:
     if period == "all":
         return _full_ranking(db, viewer_id)
-    lifetime_levels = {
-        entry["username"]: entry["level"] for entry in _full_ranking(db, viewer_id)
-    }
-    visible_ids = list(visible_statistics_users(db, viewer_id).values())
+    return _visible_ranking(_recent_ranking(db, period), db, viewer_id)
+
+
+def _recent_ranking(db: Session, period: str) -> list[dict[str, Any]]:
+    """XP of the last 7 or 30 days of every non-banned user, before privacy
+    filtering. Sums a month of everyone's plays: cached like the lifetime
+    ranking, otherwise every page view (and /me, /following) recounts it."""
+    key = f"{LEADERBOARD_CACHE_KEY}:{period}"
+    cached = get_from_cache(key, ttl=LEADERBOARD_CACHE_TTL)
+    if cached is not None:
+        return cached
+    lifetime_levels = {entry["username"]: entry["level"] for entry in _lifetime_ranking(db)}
     days = 7 if period == "7d" else 30
     start = datetime.now(UTC) - timedelta(days=days)
     xp = (
@@ -111,13 +123,12 @@ def _period_ranking(db: Session, period: str, viewer_id: int | None = None) -> l
         .outerjoin(xp, xp.c.user_id == User.id)
         .filter(
             User.is_banned.isnot(True),
-            User.id.in_(visible_ids),
             xp.c.total_xp.isnot(None),
         )
         .order_by(func.coalesce(xp.c.total_xp, 0).desc(), User.username)
         .all()
     )
-    return [
+    ranking = [
         {
             "rank": rank,
             "username": user.username,
@@ -131,6 +142,8 @@ def _period_ranking(db: Session, period: str, viewer_id: int | None = None) -> l
         }
         for rank, (user, profile, integration, total_xp) in enumerate(rows, 1)
     ]
+    set_to_cache(key, ranking, expire=LEADERBOARD_CACHE_TTL * 2)
+    return ranking
 
 
 @router.get("/api/leaderboard")

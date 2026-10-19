@@ -66,6 +66,11 @@ class UserCreate(BaseModel):
     captcha_token: str | None = Field(None, max_length=4096)
 
 
+class UserRegister(UserCreate):
+    # The separate consent to personal data processing ticked in the form
+    pd_consent: bool = False
+
+
 class UserLogin(UserCreate):
     otp_code: str | None = Field(None, max_length=64)
 

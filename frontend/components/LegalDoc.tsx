@@ -19,6 +19,8 @@ export function legalSection(
 const DOCS = [
   { href: "/privacy", label: "Конфиденциальность" },
   { href: "/terms", label: "Условия использования" },
+  { href: "/consent", label: "Согласие на обработку данных" },
+  { href: "/recommendations", label: "Рекомендательные технологии" },
 ];
 
 /** Shared layout of the privacy policy and the terms of use. */
@@ -40,7 +42,7 @@ export default function LegalDoc({
     <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-8 px-4 pt-12 pb-24 md:flex-row md:gap-14 md:px-8 md:pt-16">
       <nav
         aria-label="Документы"
-        className="flex shrink-0 gap-1 md:sticky md:top-24 md:h-fit md:w-[220px] md:flex-col"
+        className="flex shrink-0 flex-wrap gap-1 md:sticky md:top-24 md:h-fit md:w-[220px] md:flex-col md:flex-nowrap"
       >
         {DOCS.map((d) => {
           const active = d.href === current;
