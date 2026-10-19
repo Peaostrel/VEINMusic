@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { API_URL } from "@/app/lib/api";
-import { storedPreferences } from "@/app/lib/preferences";
+import { isHiddenSource, storedPreferences } from "@/app/lib/preferences";
 import { useVisiblePolling } from "@/app/lib/usePolling";
 import { sourceLabel } from "@/utils/formatters";
 import {
@@ -38,15 +38,6 @@ function matchesSource(source: string, selectedSource: string): boolean {
   if (selectedSource === "extension")
     return s.includes("extension") || s.includes("web");
   return s.includes(selectedSource);
-}
-
-function isHiddenSource(source: string, hiddenSources: string[]): boolean {
-  const normalized = source.toLowerCase();
-  return hiddenSources.some((hidden) => {
-    if (hidden === "desktop")
-      return normalized.includes("desktop") || normalized.includes("app");
-    return normalized.includes(hidden);
-  });
 }
 
 function matchesSearchQuery(item: FeedItem, query: string): boolean {

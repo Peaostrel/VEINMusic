@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ChartColumn, Download, Minus, Plus, Trophy, Zap } from "lucide-react";
+import { ChartColumn, Minus, Plus, Trophy, Zap } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
 import { formatNumber, plural } from "@/app/lib/plural";
 import { isValidUser } from "@/app/lib/theme";
@@ -10,7 +10,12 @@ import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { sourceLabel } from "@/utils/formatters";
 import { PlayingBars, btn } from "@/components/ui";
 import { coverAt } from "@/app/lib/coverSize";
-import { FeatureGrid, NumbersStrip, StepsSection } from "@/components/Landing";
+import {
+  FeatureGrid,
+  HeroIntro,
+  NumbersStrip,
+  StepsSection,
+} from "@/components/Landing";
 
 export interface PublicStats {
   total_scrobbles: number;
@@ -307,6 +312,26 @@ function Cover({ src, size }: Readonly<{ src?: string | null; size: number }>) {
   );
 }
 
+/** Cover, title and artist of a feed row. */
+function CoverAndTitle({
+  item,
+  size,
+}: Readonly<{ item: FeedItem; size: 36 | 40 }>) {
+  return (
+    <>
+      <Cover src={item.cover_url} size={size} />
+      <span className="min-w-0">
+        <span
+          className={`block truncate font-medium ${size === 36 ? "text-[13px]" : "text-sm"}`}
+        >
+          {item.title}
+        </span>
+        <span className="block truncate text-xs text-fg-2">{item.artist}</span>
+      </span>
+    </>
+  );
+}
+
 export default function About({
   initial = null,
 }: Readonly<{ initial?: LandingData | null }>) {
@@ -370,28 +395,13 @@ export default function About({
               прямо сейчас
             </span>
           )}
-          <h1
-            id="hero-title"
-            className="text-[44px] font-semibold leading-[1.04] tracking-[-0.035em] sm:text-[64px]"
-          >
-            Твоя музыка.
-            <br />
-            <span className="text-fg-3">Твоя история.</span>
-          </h1>
-          <p className="max-w-[520px] text-lg leading-relaxed text-fg-2">
-            VEIN собирает всё, что вы слушаете в Яндекс Музыке, Spotify, YouTube
-            Music, VK и SoundCloud, в одну историю — с топами, статистикой по
-            часам и лентой друзей.
-          </p>
-          <div className="flex flex-col gap-2.5 sm:flex-row">
-            <Link href={primaryHref} className={`${btn.primary} ${btn.lg}`}>
-              {primaryLabel}
-            </Link>
-            <Link href="/extension" className={`${btn.secondary} ${btn.lg}`}>
-              <Download className="h-4 w-4" aria-hidden="true" />
-              Расширение для браузера
-            </Link>
-          </div>
+          <HeroIntro
+            title="Твоя музыка."
+            subtitle="Твоя история."
+            text="VEIN собирает всё, что вы слушаете в Яндекс Музыке, Spotify, YouTube Music, VK и SoundCloud, в одну историю — с топами, статистикой по часам и лентой друзей."
+            primary={{ href: primaryHref, label: primaryLabel }}
+            extensionLabel="Расширение для браузера"
+          />
           <ul
             aria-label="Поддерживаемые сервисы"
             className="flex flex-wrap gap-x-5 gap-y-1 font-mono text-xs text-fg-3"
@@ -425,15 +435,7 @@ export default function About({
                   key={item.id}
                   className="grid grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3 border-b border-line py-2.5 last:border-0"
                 >
-                  <Cover src={item.cover_url} size={36} />
-                  <span className="min-w-0">
-                    <span className="block truncate text-[13px] font-medium">
-                      {item.title}
-                    </span>
-                    <span className="block truncate text-xs text-fg-2">
-                      {item.artist}
-                    </span>
-                  </span>
+                  <CoverAndTitle item={item} size={36} />
                   <span className="flex flex-col items-end gap-0.5 font-mono text-[11px]">
                     <span className="max-w-[120px] truncate text-fg-2">
                       {item.username}
@@ -506,15 +508,7 @@ export default function About({
                   key={item.id}
                   className="grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3.5 border-b border-line-soft py-3"
                 >
-                  <Cover src={item.cover_url} size={40} />
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium">
-                      {item.title}
-                    </span>
-                    <span className="block truncate text-xs text-fg-2">
-                      {item.artist}
-                    </span>
-                  </span>
+                  <CoverAndTitle item={item} size={40} />
                   <span className="text-right font-mono text-[11px] leading-relaxed text-fg-3">
                     {item.username && (
                       <Link

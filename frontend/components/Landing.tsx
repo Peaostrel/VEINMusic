@@ -1,5 +1,8 @@
 /** Blocks shared by the Russian landing and the English one at /en. */
 import type { ComponentType } from "react";
+import Link from "next/link";
+import { Download } from "lucide-react";
+import { btn } from "@/components/ui";
 
 export interface LandingNumber {
   label: string;
@@ -114,5 +117,43 @@ function StepList({ steps }: Readonly<{ steps: LandingStep[] }>) {
         </li>
       ))}
     </ol>
+  );
+}
+
+/** Headline, pitch and the two calls to action of a landing. */
+export function HeroIntro({
+  title,
+  subtitle,
+  text,
+  primary,
+  extensionLabel,
+}: Readonly<{
+  title: string;
+  subtitle: string;
+  text: string;
+  primary: { href: string; label: string };
+  extensionLabel: string;
+}>) {
+  return (
+    <>
+      <h1
+        id="hero-title"
+        className="text-[44px] font-semibold leading-[1.04] tracking-[-0.035em] sm:text-[64px]"
+      >
+        {title}
+        <br />
+        <span className="text-fg-3">{subtitle}</span>
+      </h1>
+      <p className="max-w-[540px] text-lg leading-relaxed text-fg-2">{text}</p>
+      <div className="flex flex-col gap-2.5 sm:flex-row">
+        <Link href={primary.href} className={`${btn.primary} ${btn.lg}`}>
+          {primary.label}
+        </Link>
+        <Link href="/extension" className={`${btn.secondary} ${btn.lg}`}>
+          <Download className="h-4 w-4" aria-hidden="true" />
+          {extensionLabel}
+        </Link>
+      </div>
+    </>
   );
 }

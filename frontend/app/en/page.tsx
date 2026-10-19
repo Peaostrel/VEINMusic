@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChartColumn, Download, Trophy, Users, Zap } from "lucide-react";
-import { btn } from "@/components/ui";
-import { FeatureGrid, NumbersStrip, StepsSection } from "@/components/Landing";
+import { ChartColumn, Trophy, Users, Zap } from "lucide-react";
+import {
+  FeatureGrid,
+  HeroIntro,
+  NumbersStrip,
+  StepsSection,
+} from "@/components/Landing";
 import JsonLd from "@/components/JsonLd";
 import { openGraph, publicApiJson } from "@/app/lib/preview";
 import { websiteData } from "@/app/lib/structuredData";
@@ -101,31 +105,13 @@ export default async function EnglishLanding() {
         aria-labelledby="hero-title"
         className="mx-auto flex w-full max-w-[1200px] flex-col gap-7 px-4 pb-16 pt-14 sm:px-6 lg:pb-20 lg:pt-24"
       >
-        <h1
-          id="hero-title"
-          className="text-[44px] font-semibold leading-[1.04] tracking-[-0.035em] sm:text-[64px]"
-        >
-          Your music.
-          <br />
-          <span className="text-fg-3">Your history.</span>
-        </h1>
-        <p className="max-w-[560px] text-lg leading-relaxed text-fg-2">
-          VEIN collects everything you play on Yandex Music, Spotify, YouTube
-          Music, VK and SoundCloud into one history, with charts, hourly stats
-          and a feed of what your friends are playing.
-        </p>
-        <div className="flex flex-col gap-2.5 sm:flex-row">
-          <Link
-            href="/auth?mode=register"
-            className={`${btn.primary} ${btn.lg}`}
-          >
-            Start scrobbling
-          </Link>
-          <Link href="/extension" className={`${btn.secondary} ${btn.lg}`}>
-            <Download className="h-4 w-4" aria-hidden="true" />
-            Browser extension
-          </Link>
-        </div>
+        <HeroIntro
+          title="Your music."
+          subtitle="Your history."
+          text="VEIN collects everything you play on Yandex Music, Spotify, YouTube Music, VK and SoundCloud into one history, with charts, hourly stats and a feed of what your friends are playing."
+          primary={{ href: "/auth?mode=register", label: "Start scrobbling" }}
+          extensionLabel="Browser extension"
+        />
         <p className="text-[13px] text-fg-3">
           <Link href="/" hrefLang="ru" lang="ru" className="hover:text-fg-2">
             Русская версия

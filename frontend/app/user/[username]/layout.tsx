@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
-import JsonLd from "@/components/JsonLd";
+import { layoutWithJsonLd } from "@/components/JsonLd";
 import { profileData } from "@/app/lib/structuredData";
 import { userDescription, userTitle } from "@/app/_og/describe";
 import {
@@ -28,25 +27,12 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   };
 }
 
-/** Streamed after the page, so a slow API never holds the page back. */
-async function ProfileData({ params }: Params) {
+async function profileJsonLd({ params }: Params) {
   const { username } = await params;
   const p = await requestPreviewJson<UserPreview>(
     `/user/${encodeURIComponent(username)}`,
   );
-  return <JsonLd data={p ? profileData(p, userDescription(p)) : null} />;
+  return p ? profileData(p, userDescription(p)) : null;
 }
 
-export default function ProfileLayout({
-  children,
-  params,
-}: Readonly<{ children: React.ReactNode }> & Params) {
-  return (
-    <>
-      {children}
-      <Suspense fallback={null}>
-        <ProfileData params={params} />
-      </Suspense>
-    </>
-  );
-}
+export default layoutWithJsonLd(profileJsonLd);

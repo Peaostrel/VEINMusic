@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
-import JsonLd from "@/components/JsonLd";
+import { layoutWithJsonLd } from "@/components/JsonLd";
 import { artistData } from "@/app/lib/structuredData";
 import { artistDescription } from "@/app/_og/describe";
 import {
@@ -27,25 +26,12 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   };
 }
 
-/** Streamed after the page, so a slow API never holds the page back. */
-async function ArtistData({ params }: Params) {
+async function artistJsonLd({ params }: Params) {
   const { name } = await params;
   const a = await requestPreviewJson<ArtistPreview>(
     `/artist/${encodeURIComponent(name)}`,
   );
-  return <JsonLd data={a ? artistData(a, artistDescription(a)) : null} />;
+  return a ? artistData(a, artistDescription(a)) : null;
 }
 
-export default function ArtistLayout({
-  children,
-  params,
-}: Readonly<{ children: React.ReactNode }> & Params) {
-  return (
-    <>
-      {children}
-      <Suspense fallback={null}>
-        <ArtistData params={params} />
-      </Suspense>
-    </>
-  );
-}
+export default layoutWithJsonLd(artistJsonLd);

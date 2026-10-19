@@ -7,7 +7,7 @@ import { FeedDay, feedDay } from "@/components/FeedDay";
 import GoalsCard from "./goals/GoalsCard";
 import { API_URL } from "@/app/lib/api";
 import { formatNumber, plural } from "@/app/lib/plural";
-import { storedPreferences } from "@/app/lib/preferences";
+import { isHiddenSource, storedPreferences } from "@/app/lib/preferences";
 import { isValidUser } from "@/app/lib/theme";
 import type { TasteTwin, UserPreferences } from "@/app/lib/types";
 import { useVisiblePolling } from "@/app/lib/usePolling";
@@ -63,15 +63,6 @@ interface IntegrationSummary {
     admin_enabled: boolean;
   }[];
   auto_sync: boolean;
-}
-
-function sourceIsHidden(source: string, hiddenSources: string[]): boolean {
-  const normalized = source.toLowerCase();
-  return hiddenSources.some((hidden) => {
-    if (hidden === "desktop")
-      return normalized.includes("desktop") || normalized.includes("app");
-    return normalized.includes(hidden);
-  });
 }
 
 function Cover({ src }: Readonly<{ src?: string }>) {
@@ -485,7 +476,7 @@ export default function Home({
 
   const currentFeed = (
     activeFeed === "global" ? globalHistory : friendsHistory
-  ).filter((item) => !sourceIsHidden(item.source, hiddenSources));
+  ).filter((item) => !isHiddenSource(item.source, hiddenSources));
 
   let feedBody: React.ReactNode;
   if (loading) feedBody = <SkeletonRows />;

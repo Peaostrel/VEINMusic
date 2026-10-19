@@ -65,12 +65,21 @@ export interface SitemapData {
 }
 
 /** JSON from /api/preview/…; null when the backend is down or says 404. */
-export async function previewJson<T>(path: string): Promise<T | null> {
+export function previewJson<T>(path: string): Promise<T | null> {
+  // The backend rechecks privacy before reading its own aggregate cache.
+  return apiJson<T>(`/api/preview${path}`, { cache: "no-store" }, TIMEOUT_MS);
+}
+
+/** JSON from the API as seen from the site's server; null on any failure. */
+async function apiJson<T>(
+  path: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<T | null> {
   try {
-    const res = await fetch(`${SERVER_API_URL}/api/preview${path}`, {
-      // The backend rechecks privacy before reading its own aggregate cache.
-      cache: "no-store",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+    const res = await fetch(`${SERVER_API_URL}${path}`, {
+      ...init,
+      signal: AbortSignal.timeout(timeoutMs),
     });
     return res.ok ? ((await res.json()) as T) : null;
   } catch {
@@ -85,19 +94,15 @@ export async function previewJson<T>(path: string): Promise<T | null> {
  * would outlive a change of those settings. Without it every request asks
  * the API, which rechecks privacy itself.
  */
-export async function publicApiJson<T>(
+export function publicApiJson<T>(
   path: string,
   revalidate?: number,
 ): Promise<T | null> {
-  try {
-    const res = await fetch(`${SERVER_API_URL}${path}`, {
-      ...(revalidate ? { next: { revalidate } } : { cache: "no-store" }),
-      signal: AbortSignal.timeout(1500),
-    });
-    return res.ok ? ((await res.json()) as T) : null;
-  } catch {
-    return null;
-  }
+  return apiJson<T>(
+    path,
+    revalidate ? { next: { revalidate } } : { cache: "no-store" },
+    1500,
+  );
 }
 
 /**
