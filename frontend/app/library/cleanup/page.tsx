@@ -1,4 +1,5 @@
 "use client";
+import { coverAt } from "@/app/lib/coverSize";
 import { useCallback, useEffect, useState } from "react";
 import { Merge } from "lucide-react";
 import { btn, EmptyState, Loading, PageHeader } from "@/components/ui";
@@ -104,8 +105,10 @@ function DuplicateGroup({
             />
             {track.cover_url ? (
               <img
-                src={track.cover_url}
+                src={coverAt(track.cover_url, 40)}
                 alt=""
+                loading="lazy"
+                decoding="async"
                 className="h-10 w-10 rounded object-cover"
               />
             ) : (

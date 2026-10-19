@@ -1,5 +1,6 @@
 "use client";
 
+import { coverAt } from "@/app/lib/coverSize";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
@@ -306,7 +307,9 @@ export function MusicCalendar({ username }: Readonly<{ username: string }>) {
                 <div className="flex flex-col gap-4 rounded-lg border border-line bg-bg p-4 sm:flex-row sm:flex-wrap sm:items-center">
                   {selected.top_track.cover_url ? (
                     <img
-                      src={getSafeUrl(selected.top_track.cover_url)}
+                      src={getSafeUrl(
+                        coverAt(selected.top_track.cover_url, 64),
+                      )}
                       alt=""
                       className="h-16 w-16 rounded-lg object-cover"
                     />

@@ -178,3 +178,16 @@ export function storedPreferences(): UserPreferences {
     return mergePreferences();
   }
 }
+
+/** Whether the feed should leave out plays from `source` (per the user's hidden sources). */
+export function isHiddenSource(
+  source: string,
+  hiddenSources: string[],
+): boolean {
+  const normalized = source.toLowerCase();
+  return hiddenSources.some((hidden) => {
+    if (hidden === "desktop")
+      return normalized.includes("desktop") || normalized.includes("app");
+    return normalized.includes(hidden);
+  });
+}

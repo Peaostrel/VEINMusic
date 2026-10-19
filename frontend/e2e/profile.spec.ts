@@ -25,8 +25,13 @@ test.describe("Profile Page Flow", () => {
       page.locator("h2").filter({ hasText: "История" }),
     ).toBeVisible();
 
-    // We expect 'Тут пока пусто.' since it's a new user without scrobbles
-    await expect(page.getByText("Тут пока пусто.")).toBeVisible();
+    // A new user without scrobbles is shown how to connect music
+    await expect(
+      page.getByText("Здесь появится всё, что вы слушаете"),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Подключить музыку" }),
+    ).toHaveAttribute("href", "/library/connect");
   });
 
   test("should load another user profile", async ({ page }) => {

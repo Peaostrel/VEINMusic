@@ -1,7 +1,14 @@
 import Link from "next/link";
 import { KeyRound } from "lucide-react";
 import { btn } from "@/components/ui";
+import { pageMetadata } from "@/app/lib/preview";
 import CodeSamples from "./CodeSamples";
+
+export const metadata = pageMetadata(
+  "API для разработчиков",
+  "Открытый API VEIN: отправка скробблов по ключу, профили, топ слушателей и подключение устройств по коду.",
+  "/developers",
+);
 
 const TOC = [
   ["#auth", "Ключ"],

@@ -4,6 +4,7 @@
  * `generateMetadata`, never in the browser.
  */
 import type { Metadata } from "next";
+import { cache } from "react";
 import { API_URL } from "./api";
 import { formatNumber, plural } from "./plural";
 
@@ -64,18 +65,51 @@ export interface SitemapData {
 }
 
 /** JSON from /api/preview/…; null when the backend is down or says 404. */
-export async function previewJson<T>(path: string): Promise<T | null> {
+export function previewJson<T>(path: string): Promise<T | null> {
+  // The backend rechecks privacy before reading its own aggregate cache.
+  return apiJson<T>(`/api/preview${path}`, { cache: "no-store" }, TIMEOUT_MS);
+}
+
+/** JSON from the API as seen from the site's server; null on any failure. */
+async function apiJson<T>(
+  path: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<T | null> {
   try {
-    const res = await fetch(`${SERVER_API_URL}/api/preview${path}`, {
-      // The backend rechecks privacy before reading its own aggregate cache.
-      cache: "no-store",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+    const res = await fetch(`${SERVER_API_URL}${path}`, {
+      ...init,
+      signal: AbortSignal.timeout(timeoutMs),
     });
     return res.ok ? ((await res.json()) as T) : null;
   } catch {
     return null;
   }
 }
+
+/**
+ * Public JSON of the API (no session); null when the API is slow, down or
+ * says no. `revalidate` shares the answer between visitors for that many
+ * seconds: only for data no privacy setting can hide, since a shared copy
+ * would outlive a change of those settings. Without it every request asks
+ * the API, which rechecks privacy itself.
+ */
+export function publicApiJson<T>(
+  path: string,
+  revalidate?: number,
+): Promise<T | null> {
+  return apiJson<T>(
+    path,
+    revalidate ? { next: { revalidate } } : { cache: "no-store" },
+    1500,
+  );
+}
+
+/**
+ * previewJson remembered for one request, so `generateMetadata` and the
+ * layout's structured data share one call to the API.
+ */
+export const requestPreviewJson = cache(previewJson) as typeof previewJson;
 
 /** The avatar or cover for a preview card as a data URL, or null. */
 export async function previewImage(path: string): Promise<string | null> {
@@ -113,6 +147,20 @@ export function openGraph(
     siteName: "VEINMusic",
     locale: "ru_RU",
     type,
+  };
+}
+
+/** Title, description, canonical link and preview of a static page. */
+export function pageMetadata(
+  title: string,
+  description: string,
+  path: string,
+): Metadata {
+  return {
+    title,
+    description,
+    alternates: { canonical: path },
+    openGraph: openGraph(title, description, path),
   };
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { coverAt } from "@/app/lib/coverSize";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -276,8 +277,10 @@ function MemorySection({
             >
               {track.cover_url ? (
                 <img
-                  src={track.cover_url}
+                  src={coverAt(track.cover_url, 200)}
                   alt=""
+                  loading="lazy"
+                  decoding="async"
                   className="aspect-square w-full object-cover"
                 />
               ) : (
