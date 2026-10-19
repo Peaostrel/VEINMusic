@@ -19,10 +19,12 @@ chrome.storage.onChanged.addListener((_changes, area) => {
     if (area === 'local') chrome.storage.local.get(['trackingEnabled', 'apiKey'], updateTrackingState);
 });
 
-// Слушаем сообщения от page_world.js и передаем их в ядро расширения
+// Слушаем сообщения от page_world.js и передаем их в ядро расширения.
+// In Firefox the content-script global is a sandbox, not the page window:
+// event.source is never globalThis there, so compare with window.
 globalThis.addEventListener('message', (event) => {
     if (!trackingEnabled || event.origin !== location.origin) return;
-    if (event.source != globalThis || event.data?.type !== 'VEIN_SCROBBLE') return;
+    if (event.source !== window || event.data?.type !== 'VEIN_SCROBBLE') return; // NOSONAR S7764: Firefox sandbox global is not the window.
     
     lastMainMessageAt = Date.now();
     chrome.runtime.sendMessage({ 
