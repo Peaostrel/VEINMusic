@@ -1,5 +1,6 @@
 "use client";
 
+import { coverAt } from "@/app/lib/coverSize";
 import { useCallback, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -56,8 +57,9 @@ function RoomCard({ room }: Readonly<{ room: RoomInfo }>) {
       <div className="grid grid-cols-[56px_minmax(0,1fr)] items-center gap-3.5">
         {track?.cover_url ? (
           <img
-            src={track.cover_url}
+            src={coverAt(track.cover_url, 56)}
             alt=""
+            decoding="async"
             className="h-14 w-14 rounded-md object-cover"
           />
         ) : (
