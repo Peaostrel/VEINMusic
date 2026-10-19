@@ -151,9 +151,13 @@ export function useProfilePage() {
     if (!username || !identityReady) return;
     let active = true;
     let refreshing = false;
+    let refreshQueued = false;
 
     const fetchSnapshot = async () => {
-      if (refreshing) return;
+      if (refreshing) {
+        refreshQueued = true;
+        return;
+      }
       refreshing = true;
       const revision = playbackRevision.current;
       try {
@@ -186,7 +190,12 @@ export function useProfilePage() {
         setError("Ошибка подключения к серверу");
       } finally {
         refreshing = false;
-        if (active) setLoading(false);
+        if (active && refreshQueued) {
+          refreshQueued = false;
+          void fetchSnapshot();
+        } else if (active) {
+          setLoading(false);
+        }
       }
     };
 
@@ -247,6 +256,7 @@ export function useProfilePage() {
                 const msg = JSON.parse(event.data);
                 if (msg.type === "NEW_SCROBBLE") {
                   handleNewScrobble(msg.track);
+                  if (msg.counted) refresh();
                   checkNotifications();
                 } else if (msg.type === "PLAYBACK_STATE") {
                   if (msg.track) handleNewScrobble(msg.track);

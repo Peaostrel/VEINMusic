@@ -261,15 +261,28 @@ def check_auto_achievements(user, db: Session) -> list[Achievement]:
     return awarded
 
 
+def normalize_showcase_order(db: Session, user_id: int) -> list[UserAchievement]:
+    """Compact a user's visible showcase order and return its rows."""
+    rows = db.query(UserAchievement).filter_by(
+        user_id=user_id, is_displayed=True,
+    ).order_by(
+        UserAchievement.display_order.is_(None),
+        UserAchievement.display_order,
+        UserAchievement.id,
+    ).all()
+    for index, row in enumerate(rows):
+        row.display_order = index  # type: ignore[assignment]
+    return rows
+
+
 def create_user_achievement(db: Session, user_id: int, achievement_id: int) -> UserAchievement:
     """Create an award and place it into a free showcase slot, up to six."""
-    displayed = db.query(UserAchievement).filter_by(
-        user_id=user_id, is_displayed=True).count()
+    displayed = normalize_showcase_order(db, user_id)
     row = UserAchievement(
         user_id=user_id,
         achievement_id=achievement_id,
-        is_displayed=displayed < 6,
-        display_order=displayed if displayed < 6 else None,
+        is_displayed=len(displayed) < 6,
+        display_order=len(displayed) if len(displayed) < 6 else None,
     )
     db.add(row)
     return row
@@ -952,15 +965,30 @@ def calculate_achievement_progresses(
     needed = [a for a in achievements if int(a.id) not in earned_ids and a.rule_type != "manual"]
     if not needed:
         return {}
-    valid = db.query(Scrobble.played_at).join(Track).filter(
+    common_filter = (
         Scrobble.user_id == user.id,
-        Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,
-    ).all()
-    total = len(valid)
-    offset = get_user_timezone_offset(
-        str(user.profile.location) if user.profile and user.profile.location else "")
-    night = sum(1 for (stamp,) in valid
-                if (stamp + timedelta(hours=offset)).strftime("%H") in {"00", "01", "02", "03", "04", "05"})
+        Scrobble.listened_sec * 100
+        >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,
+    )
+    rule_types = {str(achievement.rule_type) for achievement in needed}
+    total = 0
+    if "total_scrobbles" in rule_types:
+        total = int(db.query(func.count(Scrobble.id)).join(Track).filter(
+            *common_filter,
+        ).scalar() or 0)
+    night = 0
+    if "night_scrobbles" in rule_types:
+        valid_times = db.query(Scrobble.played_at).join(Track).filter(
+            *common_filter,
+        ).all()
+        offset = get_user_timezone_offset(
+            str(user.profile.location)
+            if user.profile and user.profile.location else "")
+        night = sum(
+            1 for (stamp,) in valid_times
+            if (stamp + timedelta(hours=offset)).strftime("%H")
+            in {"00", "01", "02", "03", "04", "05"}
+        )
     result: dict[int, int] = {}
     for achievement in needed:
         if achievement.rule_type == "total_scrobbles":

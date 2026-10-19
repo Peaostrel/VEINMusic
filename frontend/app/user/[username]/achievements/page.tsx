@@ -139,6 +139,21 @@ export default function AchievementsPage() {
         (right.display_order ?? Number.MAX_SAFE_INTEGER),
     );
 
+  const orderedAchievements = [...(data?.achievements ?? [])].sort(
+    (left, right) => {
+      const leftGroup = left.is_earned ? (left.is_displayed ? 0 : 1) : 2;
+      const rightGroup = right.is_earned ? (right.is_displayed ? 0 : 1) : 2;
+      if (leftGroup !== rightGroup) return leftGroup - rightGroup;
+      if (leftGroup === 0) {
+        return (
+          (left.display_order ?? Number.MAX_SAFE_INTEGER) -
+          (right.display_order ?? Number.MAX_SAFE_INTEGER)
+        );
+      }
+      return right.id - left.id;
+    },
+  );
+
   const moveDisplayed = async (achievementId: number, direction: -1 | 1) => {
     const oldOrder = displayedAchievements.map((item) => item.id);
     const index = oldOrder.indexOf(achievementId);
@@ -256,7 +271,7 @@ export default function AchievementsPage() {
       )}
 
       <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {data.achievements.map((a) => {
+        {orderedAchievements.map((a) => {
           const currentVal = a.current_progress || 0;
           const targetVal = Number(a.target_value) || 1;
           const showProgress =

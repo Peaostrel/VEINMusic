@@ -158,7 +158,13 @@ _DOCS_PATHS = ("/docs", "/redoc", "/openapi.json")
 @app.middleware("http")
 async def security_headers(request, call_next):
     started = time.perf_counter()
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception:
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        route = getattr(request.scope.get("route"), "path", None) or "<unmatched>"
+        record_request(route, elapsed_ms, 500)
+        raise
     elapsed_ms = (time.perf_counter() - started) * 1000
     route = getattr(request.scope.get("route"), "path", None) or "<unmatched>"
     record_request(route, elapsed_ms, response.status_code)

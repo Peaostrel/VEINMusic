@@ -41,7 +41,10 @@ from app.schemas import (
     ToggleAch,
 )
 from app.services import notifications
-from app.services.achievements import render_achievement_description
+from app.services.achievements import (
+    normalize_showcase_order,
+    render_achievement_description,
+)
 from app.services.user_preferences import preferences_dict, public_preferences
 from app.services.user_stats import (
     get_active_streak,
@@ -306,12 +309,23 @@ def get_profile_snapshot(
 
     viewer = str(current_user.username) if current_user else "null"
     response.headers["Cache-Control"] = "private, no-store"
-    history = get_history(username, request, db, current_user)
-    stats = get_stats.__wrapped__(username, request, db)
+    user_info = get_user_info(username, request, db)
+    try:
+        history = get_history(username, request, db, current_user)
+    except HTTPException as exc:
+        if exc.status_code != 403:
+            raise
+        history = {"history": []}
+    try:
+        stats = get_stats.__wrapped__(username, request, db)
+    except HTTPException as exc:
+        if exc.status_code != 403:
+            raise
+        stats = {}
     return {
         "history": history.get("history", []),
         "stats": stats,
-        "user": get_user_info(username, request, db),
+        "user": user_info,
         "followStats": get_follow_stats(viewer, username, request, db, current_user),
     }
 
@@ -458,13 +472,14 @@ def toggle_achievement(data: ToggleAch, db: Annotated[Session, Depends(
     if ua.is_displayed:
         ua.is_displayed = False  # type: ignore[assignment]
         ua.display_order = None  # type: ignore[assignment]
+        db.flush()
+        normalize_showcase_order(db, int(user.id))
     else:
-        displayed = db.query(UserAchievement).filter_by(
-            user_id=user.id, is_displayed=True).count()
-        if displayed >= 6:
+        displayed = normalize_showcase_order(db, int(user.id))
+        if len(displayed) >= 6:
             raise HTTPException(409, "В профиле можно показать не больше 6 достижений")
         ua.is_displayed = True  # type: ignore[assignment]
-        ua.display_order = displayed  # type: ignore[assignment]
+        ua.display_order = len(displayed)  # type: ignore[assignment]
     db.commit()
     return {"status": "ok", "is_displayed": ua.is_displayed,
             "display_order": ua.display_order}
