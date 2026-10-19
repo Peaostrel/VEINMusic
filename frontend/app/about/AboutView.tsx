@@ -402,6 +402,14 @@ export default function About({
             <li>SoundCloud</li>
             <li>Last.fm (импорт)</li>
           </ul>
+          <Link
+            href="/en"
+            hrefLang="en"
+            lang="en"
+            className="self-start text-[13px] text-fg-3 hover:text-fg-2"
+          >
+            English
+          </Link>
         </div>
 
         <div className="flex flex-col gap-3">

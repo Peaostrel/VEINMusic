@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import Home from "./HomeView";
 import About from "./about/AboutView";
@@ -6,6 +7,13 @@ import JsonLd from "@/components/JsonLd";
 import { websiteData } from "./lib/structuredData";
 
 const description = "Вся музыка, что вы слушаете, — в одной истории";
+
+export const metadata: Metadata = {
+  alternates: {
+    canonical: "/",
+    languages: { ru: "/", en: "/en", "x-default": "/" },
+  },
+};
 
 /** The guest landing with the numbers, week and feed read on the server. */
 async function Landing() {
