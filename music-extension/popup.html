@@ -94,7 +94,7 @@
         .status[data-tone="ok"] { color: var(--ok); }
         .status[data-tone="warn"] { color: var(--warn); }
         .status[data-tone="danger"] { color: var(--danger); }
-        .details { margin: 6px 0 0; font: 11px ui-monospace, monospace; color: var(--fg-3); word-break: break-word; }
+        .details { margin: 6px 0 0; font: 11px ui-monospace, monospace; color: var(--fg-3); overflow-wrap: anywhere; }
         .details:empty, .track:empty { display: none; }
         #log-box, #pair-status { font-size: 12px; margin-top: 8px; }
         #log-box:empty, #pair-status:empty, #pair-hint[hidden] { display: none; }
@@ -117,7 +117,7 @@
                 <span class="toggle-title">Передавать прослушивания</span><br>
                 <span class="muted">в ваш аккаунт VEIN</span>
             </span>
-            <input type="checkbox" id="tracking-enabled" role="switch">
+            <input type="checkbox" id="tracking-enabled">
         </label>
         <p class="privacy">
             Отправляются трек, исполнитель, обложка, ссылка и время воспроизведения.

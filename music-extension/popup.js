@@ -16,6 +16,16 @@ function playbackDetail(delivery) {
     return `${state}, ${Math.round(delivery.position)} с`;
 }
 
+function deliveryDetails(delivery) {
+    if (!delivery) return '';
+    return [
+        SOURCE_LABELS[delivery.source] || delivery.source,
+        playbackDetail(delivery),
+        delivery.deliveryMs == null ? '' : `доставка ${delivery.deliveryMs} мс`,
+        delivery.processingMs == null ? '' : `сервер ${delivery.processingMs} мс`
+    ].filter(Boolean).join(' · ');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const $ = (id) => document.getElementById(id);
     let pollTimer;
@@ -26,16 +36,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     $('version').innerText = `v${chrome.runtime.getManifest().version}`;
-
-    function deliveryDetails(delivery) {
-        if (!delivery) return '';
-        return [
-            SOURCE_LABELS[delivery.source] || delivery.source,
-            playbackDetail(delivery),
-            delivery.deliveryMs == null ? '' : `доставка ${delivery.deliveryMs} мс`,
-            delivery.processingMs == null ? '' : `сервер ${delivery.processingMs} мс`
-        ].filter(Boolean).join(' · ');
-    }
 
     function showState(data) {
         const connected = Boolean(data.apiKey);
