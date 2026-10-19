@@ -237,7 +237,7 @@ export function subscribeSocket(
     },
     send: (data: string) => {
       const socket = sharedChannels.get(key)?.socket;
-      if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+      if (socket?.readyState !== WebSocket.OPEN) return false;
       socket.send(data);
       return true;
     },

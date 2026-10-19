@@ -7,6 +7,24 @@ document.addEventListener('DOMContentLoaded', () => {
         $('pair-status').style.color = color;
     }
 
+    function playbackDetail(delivery) {
+        if (delivery.position == null) return '';
+        const state = delivery.playing ? 'играет' : 'пауза';
+        return `${state}, ${Math.round(delivery.position)} с`;
+    }
+
+    function deliveryDetails(delivery) {
+        const version = chrome.runtime.getManifest().version;
+        if (!delivery) return `v${version}`;
+        return [
+            `v${delivery.version || version}`,
+            delivery.title ? `${delivery.artist} — ${delivery.title}` : '',
+            playbackDetail(delivery),
+            delivery.deliveryMs == null ? '' : `доставка ${delivery.deliveryMs} мс`,
+            delivery.processingMs == null ? '' : `сервер ${delivery.processingMs} мс`
+        ].filter(Boolean).join(' · ');
+    }
+
     function showState(data) {
         const connected = Boolean(data.apiKey);
         $('tracking-enabled').checked = data.trackingEnabled === true;
@@ -20,13 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'Передача включена.' : 'Передача прослушиваний приостановлена.';
         $('delivery-status').innerText = data.last_delivery?.message || 'Включите трек в музыкальной вкладке. Здесь появится результат приёма.';
         const delivery = data.last_delivery;
-        $('delivery-details').innerText = delivery ? [
-            `v${delivery.version || chrome.runtime.getManifest().version}`,
-            delivery.title ? `${delivery.artist} — ${delivery.title}` : '',
-            delivery.position == null ? '' : `${delivery.playing ? 'играет' : 'пауза'}, ${Math.round(delivery.position)} с`,
-            delivery.deliveryMs == null ? '' : `доставка ${delivery.deliveryMs} мс`,
-            delivery.processingMs == null ? '' : `сервер ${delivery.processingMs} мс`
-        ].filter(Boolean).join(' · ') : `v${chrome.runtime.getManifest().version}`;
+        $('delivery-details').innerText = deliveryDetails(delivery);
     }
 
     function refreshState() {

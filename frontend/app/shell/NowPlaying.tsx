@@ -30,6 +30,46 @@ interface CurrentTrack {
   receivedAt?: number;
 }
 
+interface LiveMessageHandlers {
+  reload: () => Promise<void>;
+  invalidateRequest: () => void;
+  setTrack: (track: CurrentTrack) => void;
+}
+
+function handleLiveMessage(event: MessageEvent, handlers: LiveMessageHandlers) {
+  try {
+    const message = JSON.parse(event.data);
+    if (message.type !== "NEW_SCROBBLE" && message.type !== "PLAYBACK_STATE") {
+      return;
+    }
+    globalThis.dispatchEvent(new Event("account_data_update"));
+    if (!message.track) {
+      void handlers.reload();
+      return;
+    }
+    // A late HTTP response must not undo a pause or skip.
+    handlers.invalidateRequest();
+    const item = message.track;
+    const age = Math.max(
+      0,
+      (Date.now() - playbackTimestamp(item.updated_at)) / 1000,
+    );
+    const advance = item.is_playing ? Math.min(age, 45) : 0;
+    handlers.setTrack({
+      ...item,
+      playing: item.is_playing && age < 45,
+      paused: !item.is_playing,
+      display_listened_sec: item.listened_sec + advance,
+      display_position_sec:
+        item.position_sec == null ? null : item.position_sec + advance,
+      playback_remaining_sec: Math.max(0, 45 - age),
+      receivedAt: performance.now(),
+    });
+  } catch {
+    // Ignore malformed messages; polling still reconciles state.
+  }
+}
+
 // WebSocket events refresh immediately; polling also reconciles heartbeat data.
 const POLL_MS = 10_000;
 
@@ -90,66 +130,27 @@ export default function NowPlaying({
     };
   }, [variant, track?.playing]);
 
-  useEffect(
-    () =>
-      live
-        ? (() => {
-            const subscription = subscribeSocket(
-              `/ws/${encodeURIComponent(username)}`,
-              {
-                onOpen: () => {
-                  setConnectionState("live");
-                  void load();
-                },
-                onClose: () => setConnectionState("retrying"),
-                onMessage: (event) => {
-                  try {
-                    const msg = JSON.parse(event.data);
-                    if (
-                      msg.type === "NEW_SCROBBLE" ||
-                      msg.type === "PLAYBACK_STATE"
-                    ) {
-                      globalThis.dispatchEvent(
-                        new Event("account_data_update"),
-                      );
-                      if (!msg.track) {
-                        void load();
-                        return;
-                      }
-                      // A late HTTP response must not undo a pause or skip.
-                      requestSequence.current++;
-                      const item = msg.track;
-                      const age = Math.max(
-                        0,
-                        (Date.now() - playbackTimestamp(item.updated_at)) /
-                          1000,
-                      );
-                      const advance = item.is_playing ? Math.min(age, 45) : 0;
-                      setTrack({
-                        ...item,
-                        playing: item.is_playing && age < 45,
-                        paused: !item.is_playing,
-                        display_listened_sec: item.listened_sec + advance,
-                        display_position_sec:
-                          item.position_sec == null
-                            ? null
-                            : item.position_sec + advance,
-                        playback_remaining_sec: Math.max(0, 45 - age),
-                        receivedAt: performance.now(),
-                      });
-                    }
-                  } catch {
-                    // not JSON
-                  }
-                },
-              },
-              { authed: true },
-            );
-            return () => subscription.close();
-          })()
-        : undefined,
-    [username, load, live],
-  );
+  useEffect(() => {
+    if (!live) return;
+    const subscription = subscribeSocket(
+      `/ws/${encodeURIComponent(username)}`,
+      {
+        onOpen: () => {
+          setConnectionState("live");
+          void load();
+        },
+        onClose: () => setConnectionState("retrying"),
+        onMessage: (event) =>
+          handleLiveMessage(event, {
+            reload: load,
+            invalidateRequest: () => requestSequence.current++,
+            setTrack,
+          }),
+      },
+      { authed: true },
+    );
+    return () => subscription.close();
+  }, [username, load, live]);
 
   const elapsed = track?.playing
     ? Math.max(0, (clock - (track.receivedAt ?? clock)) / 1_000)

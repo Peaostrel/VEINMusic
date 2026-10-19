@@ -460,7 +460,10 @@ def mark_notifications_read(username: str,
 
 # --- POST /api/profile/achievements/toggle ---
 @router.post("/api/profile/achievements/toggle",
-             responses={404: {"description": "Achievement not found"}})
+             responses={
+                 404: {"description": "Achievement not found"},
+                 409: {"description": "Showcase limit reached"},
+             })
 def toggle_achievement(data: ToggleAch, db: Annotated[Session, Depends(
         get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user

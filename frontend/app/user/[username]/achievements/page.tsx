@@ -22,6 +22,176 @@ interface AchievementsResponse {
   total_count: number;
 }
 
+function showcaseGroup(achievement: AchievementInfo) {
+  if (!achievement.is_earned) return 2;
+  return achievement.is_displayed ? 0 : 1;
+}
+
+function showcaseButtonLabel(
+  saving: boolean,
+  displayed: boolean,
+  showcaseFull: boolean,
+) {
+  if (saving) return "Сохраняем…";
+  if (displayed) return "Убрать из профиля";
+  return showcaseFull ? "Лимит 6" : "Показать в профиле";
+}
+
+interface AchievementCardProps {
+  achievement: AchievementInfo;
+  username: string;
+  isOwner: boolean;
+  saving: boolean;
+  showcaseFull: boolean;
+  firstDisplayed: boolean;
+  lastDisplayed: boolean;
+  onMove: (achievementId: number, direction: -1 | 1) => void;
+  onToggle: (achievement: AchievementInfo) => void;
+}
+
+function AchievementCard({
+  achievement,
+  username,
+  isOwner,
+  saving,
+  showcaseFull,
+  firstDisplayed,
+  lastDisplayed,
+  onMove,
+  onToggle,
+}: Readonly<AchievementCardProps>) {
+  const currentVal = achievement.current_progress || 0;
+  const targetVal = Number(achievement.target_value) || 1;
+  const showProgress =
+    !achievement.is_earned &&
+    achievement.rule_type !== "manual" &&
+    targetVal > 0;
+  return (
+    <li
+      className={`flex flex-col gap-3 rounded-xl border p-4 ${
+        achievement.is_earned ? "border-line bg-surface" : "border-line-soft"
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <span
+          className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-2 text-2xl ${achievement.is_earned ? "" : "opacity-40 grayscale"}`}
+        >
+          {achievement.target_image ? (
+            <img
+              src={coverAt(achievement.target_image, 44)}
+              loading="lazy"
+              className="h-full w-full object-cover"
+              alt=""
+              onError={(event) => {
+                event.currentTarget.style.display = "none";
+              }}
+            />
+          ) : (
+            <span aria-hidden="true">{achievement.icon}</span>
+          )}
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <h3
+              className={`text-sm font-medium ${achievement.is_earned ? "text-fg" : "text-fg-2"}`}
+            >
+              {achievement.name}
+            </h3>
+            <span
+              className={`shrink-0 font-mono text-[11px] ${achievement.is_earned ? "text-accent" : "text-fg-3"}`}
+            >
+              {achievement.is_earned
+                ? (formatAchievementDate(achievement.earned_at) ?? "Получено")
+                : "Заблокировано"}
+            </span>
+          </div>
+          <p className="text-[13px] leading-relaxed text-fg-2">
+            {renderDescriptionWithLinks(
+              achievement.description || "",
+              achievement.rule_meta ?? null,
+              achievement.rule_target ?? null,
+              achievement.name,
+            )}
+          </p>
+        </div>
+      </div>
+      {showProgress && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex justify-between font-mono text-[11px] text-fg-3">
+            <span>прогресс</span>
+            <span>
+              {currentVal} / {targetVal}
+            </span>
+          </div>
+          <Meter value={currentVal} max={targetVal} accent={false} />
+          {achievement.track_progress_available &&
+            (achievement.rule_type === "specific_album" ||
+              achievement.rule_type === "specific_artist") && (
+              <AchievementTrackProgress
+                username={username}
+                achievementId={achievement.id}
+                remaining={Math.max(targetVal - currentVal, 0)}
+                kind={
+                  achievement.rule_type === "specific_artist"
+                    ? "artist"
+                    : "album"
+                }
+              />
+            )}
+        </div>
+      )}
+      {isOwner && achievement.is_earned && (
+        <div className="flex gap-2">
+          {achievement.is_displayed && (
+            <>
+              <button
+                type="button"
+                aria-label="Поднять"
+                className={`${btn.secondary} ${btn.sm}`}
+                disabled={firstDisplayed}
+                onClick={() => onMove(achievement.id, -1)}
+              >
+                <ArrowUp className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                aria-label="Опустить"
+                className={`${btn.secondary} ${btn.sm}`}
+                disabled={lastDisplayed}
+                onClick={() => onMove(achievement.id, 1)}
+              >
+                <ArrowDown className="h-4 w-4" />
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            className={`${btn.secondary} ${btn.sm} flex-1`}
+            aria-pressed={Boolean(achievement.is_displayed)}
+            disabled={saving || (!achievement.is_displayed && showcaseFull)}
+            onClick={() => onToggle(achievement)}
+          >
+            {achievement.is_displayed ? (
+              <EyeOff className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <Eye className="h-4 w-4" aria-hidden="true" />
+            )}
+            {showcaseButtonLabel(
+              saving,
+              Boolean(achievement.is_displayed),
+              showcaseFull,
+            )}
+          </button>
+        </div>
+      )}
+      <span className="mt-auto font-mono text-[11px] text-fg-3">
+        есть у {achievement.rarity ?? 0}% слушателей
+        {achievement.reward_xp > 0 ? ` · +${achievement.reward_xp} XP` : ""}
+      </span>
+    </li>
+  );
+}
+
 export default function AchievementsPage() {
   const { username } = useParams<{ username: string }>();
   const [data, setData] = useState<AchievementsResponse | null>(null);
@@ -141,8 +311,8 @@ export default function AchievementsPage() {
 
   const orderedAchievements = [...(data?.achievements ?? [])].sort(
     (left, right) => {
-      const leftGroup = left.is_earned ? (left.is_displayed ? 0 : 1) : 2;
-      const rightGroup = right.is_earned ? (right.is_displayed ? 0 : 1) : 2;
+      const leftGroup = showcaseGroup(left);
+      const rightGroup = showcaseGroup(right);
       if (leftGroup !== rightGroup) return leftGroup - rightGroup;
       if (leftGroup === 0) {
         return (
@@ -164,17 +334,20 @@ export default function AchievementsPage() {
       nextOrder[target],
       nextOrder[index],
     ];
+    const orderById = new Map(
+      nextOrder.map((itemId, position) => [itemId, position]),
+    );
     setData((current) =>
       current
         ? {
             ...current,
-            achievements: current.achievements.map((item) => ({
-              ...item,
-              display_order:
-                nextOrder.indexOf(item.id) >= 0
-                  ? nextOrder.indexOf(item.id)
-                  : item.display_order,
-            })),
+            achievements: current.achievements.map((item) => {
+              const nextPosition = orderById.get(item.id);
+              return {
+                ...item,
+                display_order: nextPosition ?? item.display_order,
+              };
+            }),
           }
         : current,
     );
@@ -271,140 +444,22 @@ export default function AchievementsPage() {
       )}
 
       <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {orderedAchievements.map((a) => {
-          const currentVal = a.current_progress || 0;
-          const targetVal = Number(a.target_value) || 1;
-          const showProgress =
-            !a.is_earned && a.rule_type !== "manual" && targetVal > 0;
-          return (
-            <li
-              key={a.id}
-              className={`flex flex-col gap-3 rounded-xl border p-4 ${
-                a.is_earned ? "border-line bg-surface" : "border-line-soft"
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <span
-                  className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-2 text-2xl ${a.is_earned ? "" : "opacity-40 grayscale"}`}
-                >
-                  {a.target_image ? (
-                    <img
-                      src={coverAt(a.target_image, 44)}
-                      loading="lazy"
-                      className="h-full w-full object-cover"
-                      alt=""
-                      onError={(e) => {
-                        e.currentTarget.style.display = "none";
-                      }}
-                    />
-                  ) : (
-                    <span aria-hidden="true">{a.icon}</span>
-                  )}
-                </span>
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <h3
-                      className={`text-sm font-medium ${a.is_earned ? "text-fg" : "text-fg-2"}`}
-                    >
-                      {a.name}
-                    </h3>
-                    <span
-                      className={`shrink-0 font-mono text-[11px] ${a.is_earned ? "text-accent" : "text-fg-3"}`}
-                    >
-                      {a.is_earned
-                        ? (formatAchievementDate(a.earned_at) ?? "Получено")
-                        : "Заблокировано"}
-                    </span>
-                  </div>
-                  <p className="text-[13px] leading-relaxed text-fg-2">
-                    {renderDescriptionWithLinks(
-                      a.description || "",
-                      a.rule_meta ?? null,
-                      a.rule_target ?? null,
-                      a.name,
-                    )}
-                  </p>
-                </div>
-              </div>
-              {showProgress && (
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex justify-between font-mono text-[11px] text-fg-3">
-                    <span>прогресс</span>
-                    <span>
-                      {currentVal} / {targetVal}
-                    </span>
-                  </div>
-                  <Meter value={currentVal} max={targetVal} accent={false} />
-                  {a.track_progress_available &&
-                    (a.rule_type === "specific_album" ||
-                      a.rule_type === "specific_artist") && (
-                      <AchievementTrackProgress
-                        username={data.user.username}
-                        achievementId={a.id}
-                        remaining={Math.max(targetVal - currentVal, 0)}
-                        kind={
-                          a.rule_type === "specific_artist" ? "artist" : "album"
-                        }
-                      />
-                    )}
-                </div>
-              )}
-              {isOwner && a.is_earned && (
-                <div className="flex gap-2">
-                  {a.is_displayed && (
-                    <>
-                      <button
-                        type="button"
-                        aria-label="Поднять"
-                        className={`${btn.secondary} ${btn.sm}`}
-                        disabled={displayedAchievements[0]?.id === a.id}
-                        onClick={() => void moveDisplayed(a.id, -1)}
-                      >
-                        <ArrowUp className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Опустить"
-                        className={`${btn.secondary} ${btn.sm}`}
-                        disabled={displayedAchievements.at(-1)?.id === a.id}
-                        onClick={() => void moveDisplayed(a.id, 1)}
-                      >
-                        <ArrowDown className="h-4 w-4" />
-                      </button>
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    className={`${btn.secondary} ${btn.sm} flex-1`}
-                    aria-pressed={Boolean(a.is_displayed)}
-                    disabled={
-                      pending.has(a.id) ||
-                      (!a.is_displayed && displayedAchievements.length >= 6)
-                    }
-                    onClick={() => void toggleDisplayed(a)}
-                  >
-                    {a.is_displayed ? (
-                      <EyeOff className="h-4 w-4" aria-hidden="true" />
-                    ) : (
-                      <Eye className="h-4 w-4" aria-hidden="true" />
-                    )}
-                    {pending.has(a.id)
-                      ? "Сохраняем…"
-                      : a.is_displayed
-                        ? "Убрать из профиля"
-                        : displayedAchievements.length >= 6
-                          ? "Лимит 6"
-                          : "Показать в профиле"}
-                  </button>
-                </div>
-              )}
-              <span className="mt-auto font-mono text-[11px] text-fg-3">
-                есть у {a.rarity ?? 0}% слушателей
-                {a.reward_xp > 0 ? ` · +${a.reward_xp} XP` : ""}
-              </span>
-            </li>
-          );
-        })}
+        {orderedAchievements.map((achievement) => (
+          <AchievementCard
+            key={achievement.id}
+            achievement={achievement}
+            username={data.user.username}
+            isOwner={isOwner}
+            saving={pending.has(achievement.id)}
+            showcaseFull={displayedAchievements.length >= 6}
+            firstDisplayed={displayedAchievements[0]?.id === achievement.id}
+            lastDisplayed={displayedAchievements.at(-1)?.id === achievement.id}
+            onMove={(achievementId, direction) =>
+              void moveDisplayed(achievementId, direction)
+            }
+            onToggle={(item) => void toggleDisplayed(item)}
+          />
+        ))}
       </ul>
     </div>
   );
