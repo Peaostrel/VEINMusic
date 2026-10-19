@@ -70,6 +70,16 @@ function handleLiveMessage(event: MessageEvent, handlers: LiveMessageHandlers) {
   }
 }
 
+function listeningCreditLabel(track: CurrentTrack, progress: number | null) {
+  if (track.excluded) return "Исключено из статистики";
+  const credited =
+    !!track.duration &&
+    track.listened_sec != null &&
+    track.listened_sec * 100 >= track.duration * 85;
+  if (credited) return "Прослушивание засчитано";
+  return `${progress}% · зачёт от 85%`;
+}
+
 // WebSocket events refresh immediately; polling also reconciles heartbeat data.
 const POLL_MS = 10_000;
 
@@ -174,13 +184,7 @@ export default function NowPlaying({
     elapsed,
     track.display_position_sec,
   );
-  const credited =
-    !!track.duration &&
-    track.listened_sec != null &&
-    track.listened_sec * 100 >= track.duration * 85;
-  let creditLabel = `${progress}% · зачёт от 85%`;
-  if (credited) creditLabel = "Прослушивание засчитано";
-  if (track.excluded) creditLabel = "Исключено из статистики";
+  const creditLabel = listeningCreditLabel(track, progress);
   const details = (
     <div className="space-y-2">
       {live && (

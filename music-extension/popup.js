@@ -1,3 +1,9 @@
+function playbackDetail(delivery) {
+    if (delivery.position == null) return '';
+    const state = delivery.playing ? 'играет' : 'пауза';
+    return `${state}, ${Math.round(delivery.position)} с`;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const $ = (id) => document.getElementById(id);
     let pollTimer;
@@ -5,12 +11,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function setPairStatus(text, color = '#aaa') {
         $('pair-status').innerText = text;
         $('pair-status').style.color = color;
-    }
-
-    function playbackDetail(delivery) {
-        if (delivery.position == null) return '';
-        const state = delivery.playing ? 'играет' : 'пауза';
-        return `${state}, ${Math.round(delivery.position)} с`;
     }
 
     function deliveryDetails(delivery) {
