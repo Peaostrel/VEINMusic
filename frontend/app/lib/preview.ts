@@ -150,6 +150,20 @@ export function openGraph(
   };
 }
 
+/** Title, description, canonical link and preview of a static page. */
+export function pageMetadata(
+  title: string,
+  description: string,
+  path: string,
+): Metadata {
+  return {
+    title,
+    description,
+    alternates: { canonical: path },
+    openGraph: openGraph(title, description, path),
+  };
+}
+
 export const NO_INDEX: Metadata["robots"] = { index: false, follow: false };
 
 /** Cut text to `max` characters on a word boundary, adding an ellipsis. */

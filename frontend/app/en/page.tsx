@@ -11,6 +11,15 @@ import JsonLd from "@/components/JsonLd";
 import { openGraph, publicApiJson } from "@/app/lib/preview";
 import { websiteData } from "@/app/lib/structuredData";
 import type { PublicStats } from "@/app/about/AboutView";
+// The English copy lives in JSON, apart from the markup it fills
+import content from "./content.json";
+
+const ICONS = { ChartColumn, Trophy, Users, Zap };
+const features = content.features.map((f) => ({
+  ...f,
+  icon: ICONS[f.icon as keyof typeof ICONS],
+}));
+const { steps, faq } = content;
 
 const title = "VEIN Music — every song you play, in one history";
 const description =
@@ -25,67 +34,6 @@ export const metadata: Metadata = {
   },
   openGraph: { ...openGraph(title, description, "/en"), locale: "en_US" },
 };
-
-const features = [
-  {
-    icon: Zap,
-    title: "Scrobbling from every service",
-    text: "Yandex Music, Spotify and SoundCloud connect directly, with no browser tab open. YouTube Music, VK and other web players work through the VEIN extension.",
-  },
-  {
-    icon: ChartColumn,
-    title: "Honest statistics",
-    text: "Hour-by-hour history, top artists, tracks and albums for any period, a listening calendar and your own Wrapped whenever you want it.",
-  },
-  {
-    icon: Trophy,
-    title: "Levels and achievements",
-    text: "Earn XP for every track you play to 85%, keep a daily streak, climb the ranks and compete on the leaderboard.",
-  },
-  {
-    icon: Users,
-    title: "Listen together",
-    text: "Follow friends, see what they play right now, compare tastes and open a room where everyone hears the same track.",
-  },
-];
-
-const steps = [
-  {
-    title: "Create a profile",
-    text: "Sign up with a username and password. No email or phone number needed.",
-  },
-  {
-    title: "Connect your music",
-    text: "Link Yandex Music, Spotify or SoundCloud, install the extension, or import your Last.fm history.",
-  },
-  {
-    title: "Watch your stats grow",
-    text: "Every play shows up in your profile within seconds.",
-  },
-];
-
-const faq = [
-  {
-    q: "Are there ads?",
-    a: "No. VEIN shows exactly what came from your player, with no ads and no sponsored picks.",
-  },
-  {
-    q: "Do I need the browser extension?",
-    a: "No. Yandex Music, Spotify and SoundCloud connect directly. The extension is for YouTube Music, VK and other web players.",
-  },
-  {
-    q: "Is the site in English?",
-    a: "The app itself is in Russian for now. Charts, numbers and track names read the same in any language.",
-  },
-  {
-    q: "Who can see my history?",
-    a: "You decide: make your profile public or private, and choose what your friends see in their feed.",
-  },
-  {
-    q: "Can I take my data with me?",
-    a: "Yes. Export your whole history from the settings, or delete your account together with its data.",
-  },
-];
 
 const fmt = new Intl.NumberFormat("en-US");
 
