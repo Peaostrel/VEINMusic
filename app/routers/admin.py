@@ -754,17 +754,6 @@ def retry_lastfm_import_job(
                                           id=job_id)}
 
 
-# ─── LISTEN TOGETHER ROOMS MONITORING ─────────────────────────────────────────
-
-
-@router.get("/together/rooms")
-async def list_admin_together_rooms(
-    admin: Annotated[User, Depends(get_admin_user)],
-):
-    """List live Listen Together rooms and metrics."""
-    return {"rooms": await manager.get_active_rooms_info()}
-
-
 # ─── AUDIT LOG ────────────────────────────────────────────────────────────────
 
 
