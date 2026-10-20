@@ -16,10 +16,16 @@ const captchaOrigins = [
   "https://challenges.cloudflare.com",
 ];
 
+// VK ID One Tap (components/VkIdButton.tsx): its button is an iframe and
+// the SDK reports its own analytics to the VK API
+const vkidOrigins = ["https://id.vk.ru", "https://id.vk.com"];
+
 // Origins the browser may connect to (fetch / WebSocket)
 const connectSrc = [
   "'self'",
   ...captchaOrigins,
+  ...vkidOrigins,
+  "https://api.vk.ru",
   apiUrl,
   apiUrl.replace(/^http/, "ws"),
   `ws://${wsHost}`,
@@ -39,7 +45,7 @@ function contentSecurityPolicy(nonce: string): string {
     "img-src * data: blob:",
     "font-src 'self' data:",
     `connect-src ${connectSrc.join(" ")}`,
-    `frame-src ${captchaOrigins.join(" ")}`,
+    `frame-src ${[...captchaOrigins, ...vkidOrigins].join(" ")}`,
     "worker-src 'self'",
     "manifest-src 'self'",
     "object-src 'none'",

@@ -7,6 +7,7 @@ import { useFeature } from "@/app/lib/featureFlags";
 import { clearOfflineCache } from "@/app/lib/offline";
 import { isValidUser } from "@/app/lib/theme";
 import { Segmented, btn, input, label } from "@/components/ui";
+import VkIdButton from "@/components/VkIdButton";
 import Captcha from "./Captcha";
 
 type Mode = "login" | "register";
@@ -416,12 +417,13 @@ export default function Auth() {
             {submitLabel}
           </button>
           {isLogin && vkEnabled && !vkMfa && (
-            <a
-              href={`${API_URL}/auth/vk/login`}
-              className={`${btn.secondary} ${btn.lg}`}
-            >
-              Войти через VK ID
-            </a>
+            <VkIdButton
+              mode="login"
+              onResult={(result) => {
+                if (result === "finish") void finishVk();
+                else setError(vkErrors[result] ?? vkErrors.error);
+              }}
+            />
           )}
           {isLogin && (
             <Link href="/email/forgot" className="text-sm text-accent">
