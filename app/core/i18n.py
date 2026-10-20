@@ -34,7 +34,7 @@ def _english() -> dict[str, str]:
 
 
 def normalize_lang(value: object) -> str | None:
-    return value if value in LANGS else None
+    return value if isinstance(value, str) and value in LANGS else None
 
 
 def lang_from_accept(header: str | None) -> str | None:

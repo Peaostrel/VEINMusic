@@ -546,7 +546,7 @@ def achievement_texts(a: Achievement, lang: str = "ru") -> dict[str, str]:
 
 def achievement_admin_texts(a: Achievement) -> dict[str, str | None]:
     """English fields as stored, for the admin form to edit."""
-    return {"name_en": a.name_en, "description_en": a.description_en}
+    return {"name_en": cast(str | None, a.name_en), "description_en": cast(str | None, a.description_en)}
 
 
 def _calculate_specific_artist_progress(
