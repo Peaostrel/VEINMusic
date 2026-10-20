@@ -886,18 +886,38 @@ async def _process_scrobble(
                            credit_options.get("credit_sec"), credit_options.get("pending_sec", 0),
                            credit_options.get("collector", "client"), credit_options.get("player_position", False))
 
-    if result["new_item"] is not None:
+    live_item = result["new_item"]
+    if live_item is not None:
         await manager.broadcast_to_user(result["username"], {
             "type": "NEW_SCROBBLE",
             "counted": result["counted"] is not None,
-            "track": result["new_item"]
+            "track": live_item
         })
     elif result.get("state_change") is not None:
+        live_item = result["state_change"].get("track")
         await manager.broadcast_to_user(result["username"], {
             "type": "PLAYBACK_STATE",
             "counted": result["counted"] is not None,
             **result["state_change"],
         })
+
+    # A Listen Together room follows the DJ's real player. Previously the
+    # room accepted TRACK_SYNC messages, but no production client sent them.
+    if live_item is not None:
+        position = live_item.get("position_sec")
+        if position is None:
+            position = live_item.get("listened_sec", 0)
+        await manager.sync_host_track(result["username"], {
+            "title": live_item.get("title") or track.title,
+            "artist": live_item.get("artist") or track.artist,
+            "album": track.album or "",
+            "cover_url": live_item.get("cover_url") or track.cover_url or "",
+            "duration": live_item.get("duration") or track.duration or 0,
+            "progress_sec": max(0, float(position or 0)),
+            "is_playing": bool(live_item.get("is_playing")),
+            "updated_at": datetime.now(UTC).timestamp(),
+        })
+
     if result["counted"] is not None:
         await _dispatch_counted_scrobble(result["user_id"], result["counted"])
     if result["new_item"] is not None and listening.auto_metadata:
