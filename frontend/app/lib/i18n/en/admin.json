@@ -70,7 +70,6 @@
   "Верифицировать": "Verify",
   "Вернулись на 2-й неделе": "Returned in week 2",
   "Витрина обновлена по поиску": "Showcase refreshed from search",
-  "Включает режим синхронного прослушивания": "Turns on synced listening",
   "Включить двухфакторную защиту": "Turn on two-factor authentication",
   "Внешний бэкап:": "Off-site backup:",
   "Внизу письма будет ссылка на настройки отключения писем.": "The email will end with a link to the settings for turning emails off.",
@@ -478,5 +477,6 @@
   "Название (английский)": "Name (English)",
   "Описание (английский)": "Description (English)",
   "Необязательно": "Optional",
-  "Необязательно — иначе покажем русское": "Optional — the Russian one is shown otherwise"
+  "Необязательно — иначе покажем русское": "Optional — the Russian one is shown otherwise",
+  "Временно ограничивает доступ к сервису": "Temporarily limits access to the service"
 }
