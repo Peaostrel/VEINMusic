@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { BrandLink } from "@/components/brand";
 import { btn } from "@/components/ui";
+import LanguageSwitch from "@/components/LanguageSwitch";
 import UserSearch from "./UserSearch";
 
 const links = [
@@ -21,9 +22,12 @@ export default function GuestHeader({
       <div className="mx-auto flex h-16 w-full max-w-[1200px] items-center gap-8 px-4 sm:px-6">
         <BrandLink />
         {minimal ? (
-          <Link href="/" className="ml-auto text-sm text-fg-2 hover:text-fg">
-            ← На главную
-          </Link>
+          <div className="ml-auto flex items-center gap-4">
+            <Link href="/" className="text-sm text-fg-2 hover:text-fg">
+              ← На главную
+            </Link>
+            <LanguageSwitch />
+          </div>
         ) : (
           <>
             <nav
@@ -41,6 +45,7 @@ export default function GuestHeader({
               id="header-search"
               className="hidden w-[220px] lg:block"
             />
+            <LanguageSwitch />
             <Link
               href="/auth"
               className={`${btn.secondary} h-9 px-3.5 text-sm sm:border-0 sm:px-0 sm:text-fg-2 sm:hover:bg-transparent sm:hover:text-fg`}

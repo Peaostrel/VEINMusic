@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Award, LogOut, Shield, SlidersHorizontal, User } from "lucide-react";
 import { Avatar } from "@/components/ui";
+import LanguageSwitch from "@/components/LanguageSwitch";
 import { VerifiedBadge } from "@/components/UserBadges";
 import { isStaff } from "./nav";
 import type { NavUser } from "./types";
@@ -135,6 +136,10 @@ export default function AccountMenu({
               </Link>
             )}
           </nav>
+          <div className="flex items-center justify-between gap-3 border-t border-line px-4 py-2.5 text-sm text-fg-2">
+            <span>Язык</span>
+            <LanguageSwitch />
+          </div>
           <div className="border-t border-line p-1.5">
             <button
               type="button"

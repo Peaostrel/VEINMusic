@@ -6,6 +6,8 @@ import AppShell from "./shell/AppShell";
 import PWARegistration from "../components/PWARegistration";
 import { SITE_URL, openGraph } from "./lib/preview";
 import MaintenanceOverlay from "../components/MaintenanceOverlay";
+import { LangProvider } from "./lib/i18n/client";
+import { getLang, getT, messagesFor } from "./lib/i18n/server";
 
 const plexSans = IBM_Plex_Sans({
   subsets: ["latin", "cyrillic"],
@@ -27,21 +29,23 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-const description = "Вся музыка, что вы слушаете, — в одной истории";
-
-export const metadata: Metadata = {
-  metadataBase: new URL(SITE_URL),
-  title: { default: "VEINMusic", template: "%s — VEINMusic" },
-  description,
-  openGraph: openGraph("VEINMusic", description, "/"),
-  twitter: { card: "summary_large_image" },
-  manifest: "/manifest.json",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "black-translucent",
-    title: "VEINMusic",
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  const description = t("Вся музыка, что вы слушаете, — в одной истории");
+  return {
+    metadataBase: new URL(SITE_URL),
+    title: { default: "VEINMusic", template: "%s — VEINMusic" },
+    description,
+    openGraph: openGraph("VEINMusic", description, "/"),
+    twitter: { card: "summary_large_image" },
+    manifest: "/manifest.json",
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "black-translucent",
+      title: "VEINMusic",
+    },
+  };
+}
 
 /*
  * Runs before first paint: marks signed-in visitors so the shell CSS shows
@@ -57,9 +61,11 @@ export default async function RootLayout({
 }) {
   // Per-request nonce from proxy.ts (CSP without 'unsafe-inline')
   const nonce = (await headers()).get("x-nonce") ?? undefined;
+  const lang = await getLang();
+  const t = await getT();
   return (
     <html
-      lang="ru"
+      lang={lang}
       className={`${plexSans.variable} ${plexMono.variable}`}
       suppressHydrationWarning
     >
@@ -81,11 +87,13 @@ export default async function RootLayout({
           href="#main"
           className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-surface-2 focus:px-4 focus:py-2 focus:text-sm"
         >
-          К содержимому
+          {t("К содержимому")}
         </a>
-        <AppShell>{children}</AppShell>
-        <PWARegistration />
-        <MaintenanceOverlay />
+        <LangProvider lang={lang} messages={messagesFor(lang)}>
+          <AppShell>{children}</AppShell>
+          <PWARegistration />
+          <MaintenanceOverlay />
+        </LangProvider>
       </body>
     </html>
   );

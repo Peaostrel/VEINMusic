@@ -8,6 +8,8 @@
  *   (with the server's `detail` message) for non-2xx responses.
  */
 
+import { tr } from "./i18n/active";
+
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
@@ -57,7 +59,7 @@ export function apiFetch(path: string, init: ApiInit = {}): Promise<Response> {
 async function errorMessage(res: Response): Promise<string> {
   try {
     const data = await res.json();
-    if (typeof data?.detail === "string") return data.detail;
+    if (typeof data?.detail === "string") return tr(data.detail);
     // FastAPI validation errors: [{ loc, msg, type }, …]
     if (Array.isArray(data?.detail)) {
       const messages = data.detail
@@ -70,7 +72,7 @@ async function errorMessage(res: Response): Promise<string> {
   } catch {
     // not JSON
   }
-  return `Ошибка сервера (${res.status})`;
+  return tr("Ошибка сервера ({status})", { status: res.status });
 }
 
 export async function apiJson<T>(path: string, init: ApiInit = {}): Promise<T> {
