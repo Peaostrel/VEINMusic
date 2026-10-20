@@ -71,9 +71,11 @@ function IntegrationHealth({ API_URL }: Readonly<{ API_URL: string }>) {
       });
       const result = await response.json().catch(() => ({}));
       setMessage(
-        response.ok
-          ? "Синхронизация завершена."
-          : result.detail || "Не удалось запустить синхронизацию.",
+        response.status === 202
+          ? "Синхронизация продолжается в фоне, новые прослушивания появятся в течение минуты."
+          : response.ok
+            ? "Синхронизация завершена."
+            : result.detail || "Не удалось запустить синхронизацию.",
       );
       load();
     } finally {
