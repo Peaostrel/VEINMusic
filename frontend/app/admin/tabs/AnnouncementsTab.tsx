@@ -169,7 +169,7 @@ export default function AnnouncementsTab({
             <input
               autoComplete="off"
               type="text"
-              placeholder={t("Включает режим синхронного прослушивания")}
+              placeholder={t("Временно ограничивает доступ к сервису")}
               value={newFlag.description}
               onChange={(e) =>
                 setNewFlag({ ...newFlag, description: e.target.value })
