@@ -122,5 +122,15 @@ export default function VkIdButton({
       </a>
     );
   }
-  return <div ref={container} className="min-h-11 w-full" />;
+  return (
+    <div
+      ref={container}
+      className="min-h-11 w-full"
+      // Without a session in VK the SDK draws a plain <button> (no type), so
+      // inside the sign-in form a click would also submit the password form
+      onClick={(e) => {
+        if ((e.target as Element).closest("button")) e.preventDefault();
+      }}
+    />
+  );
 }
