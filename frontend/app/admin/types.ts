@@ -285,15 +285,6 @@ export interface LastfmJob {
   finished_at: string | null;
 }
 
-export interface TogetherRoom {
-  room_id: string;
-  name: string;
-  host_username: string;
-  listeners_count: number;
-  listeners: string[];
-  current_track: { title?: string; artist?: string } | null;
-}
-
 export interface BlacklistFilter {
   id: number;
   pattern: string;
