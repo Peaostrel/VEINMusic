@@ -2,6 +2,7 @@
 import os
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
+from app.core.i18n import tr, user_lang
 from app.core.security import create_session_token
 from app.models import Notification, UserSession
 
@@ -11,6 +12,11 @@ def device_label(user_agent):
     browser = next((label for key, label in (("edg/", "Edge"), ("firefox/", "Firefox"), ("chrome/", "Chrome"), ("safari/", "Safari")) if key in value), "Браузер")
     platform = next((label for key, label in (("android", "Android"), ("iphone", "iPhone"), ("ipad", "iPad"), ("windows", "Windows"), ("macintosh", "macOS"), ("linux", "Linux")) if key in value), "Неизвестное устройство")
     return f"{browser} · {platform}"
+
+
+def localized_device(label, lang):
+    """A stored device_label ("Браузер · Неизвестное устройство") in `lang`."""
+    return " · ".join(tr(lang, part) for part in str(label or "").split(" · "))
 
 
 DEVICE_COOKIE = "device_id"
@@ -40,15 +46,19 @@ def issue_session(db, user, request, notify=True, response=None, background_task
                       created_at=now, last_seen_at=now, expires_at=now + timedelta(days=30))
     db.add(row)
     alert = None
+    lang = user_lang(user)
+    device = localized_device(row.device, lang)
     if notify and known_device:
         db.add(Notification(user_id=user.id, actor_id=user.id, kind="security",
-                            message=f"Новый вход: {row.device}. Проверьте устройства в настройках безопасности."))
+                            message=tr(lang, "Новый вход: {device}. Проверьте устройства в настройках безопасности.",
+                                       device=device)))
     elif notify:
         # A browser that never signed in to this account: worth a push, since
         # it is what a stolen password looks like
         alert = notifications.create(
             db, recipient_id=int(user.id), actor_id=int(user.id), kind=notifications.KIND_SECURITY,
-            message=f"Вход с нового устройства: {row.device}. Не вы? Смените пароль и завершите сеансы")
+            message=tr(lang, "Вход с нового устройства: {device}. Не вы? Смените пароль и завершите сеансы",
+                       device=device))
     if notify and not known_device:
         from app.services.email_delivery import new_login
         new_login(db, user, row.device)

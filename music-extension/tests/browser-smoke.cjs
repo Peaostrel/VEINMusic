@@ -26,7 +26,9 @@ const {chromium} = require('playwright');
     try {
         context = await chromium.launchPersistentContext(profile, {
             channel: 'chromium', headless: process.env.VEIN_SMOKE_HEADLESS === '1',
-            args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`]
+            // The extension follows the browser language; the assertions below use the Russian catalog.
+            locale: 'ru-RU', env: {...process.env, LANG: 'ru_RU.UTF-8', LANGUAGE: 'ru'},
+            args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`, '--lang=ru']
         });
         let worker = context.serviceWorkers()[0];
         worker ||= await context.waitForEvent('serviceworker');
@@ -34,6 +36,8 @@ const {chromium} = require('playwright');
         const popup = await context.newPage();
         await popup.goto(`chrome-extension://${id}/popup.html`);
         assert.equal(await popup.locator('#tracking-enabled').isChecked(), false);
+        assert.equal(await popup.evaluate(() => document.documentElement.lang), 'ru');
+        assert.equal(await popup.locator('#pair-btn').innerText(), 'Подключить через сайт');
         await popup.evaluate(() => chrome.storage.local.set({apiUrl: 'http://127.0.0.1:8000', apiKey: 'fixture-key', username: 'fixture'}));
         await popup.locator('#tracking-enabled').check();
         await popup.waitForFunction(() => document.querySelector('#auth-box').style.display === 'block');

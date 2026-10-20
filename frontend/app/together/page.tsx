@@ -10,6 +10,7 @@ import { API_URL } from "@/app/lib/api";
 import Dialog from "@/components/Dialog";
 import { useFeature } from "@/app/lib/featureFlags";
 import { plural } from "@/app/lib/plural";
+import { useT } from "@/app/lib/i18n/client";
 import { useVisiblePolling } from "@/app/lib/usePolling";
 import {
   Avatar,
@@ -38,6 +39,7 @@ interface RoomInfo {
 }
 
 function RoomCard({ room }: Readonly<{ room: RoomInfo }>) {
+  const t = useT();
   const track = room.current_track;
   const playing = Boolean(track?.is_playing);
   return (
@@ -46,12 +48,16 @@ function RoomCard({ room }: Readonly<{ room: RoomInfo }>) {
       className="flex h-full flex-col gap-4 rounded-xl border border-line bg-surface p-5 transition-colors hover:bg-surface-2"
     >
       <div className="flex items-center justify-between gap-3">
-        <span className="truncate text-base font-semibold">{room.name}</span>
+        <span className="truncate text-base font-semibold">
+          {/^Комната \S+$/.test(room.name)
+            ? t("Комната {id}", { id: room.name.slice(8) })
+            : room.name}
+        </span>
         <span
           className={`flex shrink-0 items-center gap-1.5 font-mono text-[11px] ${playing ? "text-accent" : "text-fg-3"}`}
         >
           {playing && <PlayingBars />}
-          {playing ? "играет" : "пауза"}
+          {playing ? t("играет") : t("пауза")}
         </span>
       </div>
       <div className="grid grid-cols-[56px_minmax(0,1fr)] items-center gap-3.5">
@@ -67,10 +73,10 @@ function RoomCard({ room }: Readonly<{ room: RoomInfo }>) {
         )}
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="truncate text-sm font-medium">
-            {track?.title || "Ожидание трека"}
+            {track?.title || t("Ожидание трека")}
           </span>
           <span className="truncate text-[13px] text-fg-2">
-            {track?.artist || "DJ пока выбирает"}
+            {track?.artist || t("DJ пока выбирает")}
           </span>
         </span>
       </div>
@@ -89,6 +95,7 @@ function RoomCard({ room }: Readonly<{ room: RoomInfo }>) {
 }
 
 export default function ListenTogetherLobby() {
+  const t = useT();
   const router = useRouter();
   const [rooms, setRooms] = useState<RoomInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,34 +135,34 @@ export default function ListenTogetherLobby() {
     e.preventDefault();
     const roomId = `room-${Date.now().toString(36)}`;
     router.push(
-      `/together/${roomId}?name=${encodeURIComponent(newRoomName || "Музыкальная комната")}`,
+      `/together/${roomId}?name=${encodeURIComponent(newRoomName || t("Музыкальная комната"))}`,
     );
   };
 
   let content: React.ReactNode;
   if (!enabled) {
     content = (
-      <EmptyState title="«Слушать вместе» временно отключено">
-        Администратор выключил эту функцию. Загляните позже.
+      <EmptyState title={t("«Слушать вместе» временно отключено")}>
+        {t("Администратор выключил эту функцию. Загляните позже.")}
       </EmptyState>
     );
   } else if (loading) {
-    content = <Loading label="Ищем активные комнаты…" />;
+    content = <Loading label={t("Ищем активные комнаты…")} />;
   } else if (rooms.length === 0) {
     content = (
       <EmptyState
-        title="Сейчас нет активных комнат"
+        title={t("Сейчас нет активных комнат")}
         action={
           <button
             type="button"
             onClick={() => setShowCreateModal(true)}
             className={`${btn.secondary} ${btn.md}`}
           >
-            Создать первую комнату
+            {t("Создать первую комнату")}
           </button>
         }
       >
-        Станьте первым DJ — создайте комнату и включите музыку.
+        {t("Станьте первым DJ — создайте комнату и включите музыку.")}
       </EmptyState>
     );
   } else {
@@ -174,7 +181,7 @@ export default function ListenTogetherLobby() {
           )}
         </p>
         <ul
-          aria-label="Активные комнаты"
+          aria-label={t("Активные комнаты")}
           className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
         >
           {rooms.map((room) => (
@@ -190,8 +197,10 @@ export default function ListenTogetherLobby() {
   return (
     <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-7 px-4 py-8 sm:px-8 lg:px-12 lg:py-10">
       <PageHeader
-        title="Слушать вместе"
-        subtitle="Комнаты, где музыка играет у всех одновременно. DJ ставит треки, остальные слушают и болтают в чате."
+        title={t("Слушать вместе")}
+        subtitle={t(
+          "Комнаты, где музыка играет у всех одновременно. DJ ставит треки, остальные слушают и болтают в чате.",
+        )}
         actions={
           <button
             type="button"
@@ -200,31 +209,36 @@ export default function ListenTogetherLobby() {
             className={`${btn.primary} ${btn.md}`}
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
-            Создать комнату
+            {t("Создать комнату")}
           </button>
         }
       />
 
       {showCreateModal && (
-        <Dialog label="Новая комната" onClose={() => setShowCreateModal(false)}>
+        <Dialog
+          label={t("Новая комната")}
+          onClose={() => setShowCreateModal(false)}
+        >
           <div className="flex w-full max-w-[440px] flex-col gap-5 rounded-2xl border border-line bg-surface p-7">
             <div className="flex flex-col gap-1.5">
-              <h2 className="text-lg font-semibold">Новая комната</h2>
+              <h2 className="text-lg font-semibold">{t("Новая комната")}</h2>
               <p className="text-[13px] leading-normal text-fg-2">
-                Вы будете DJ: что играет у вас — то слышат все, кто зайдёт.
+                {t(
+                  "Вы будете DJ: что играет у вас — то слышат все, кто зайдёт.",
+                )}
               </p>
             </div>
             <form onSubmit={handleCreateRoom} className="flex flex-col gap-5">
               <div>
                 <label htmlFor="room-name" className={label}>
-                  Название комнаты
+                  {t("Название комнаты")}
                 </label>
                 <input
                   id="room-name"
                   type="text"
                   value={newRoomName}
                   onChange={(e) => setNewRoomName(e.target.value)}
-                  placeholder="Например: пост-панк по пятницам"
+                  placeholder={t("Например: пост-панк по пятницам")}
                   maxLength={60}
                   className={inputOnCard}
                   required
@@ -236,10 +250,10 @@ export default function ListenTogetherLobby() {
                   onClick={() => setShowCreateModal(false)}
                   className={`${btn.secondary} ${btn.md}`}
                 >
-                  Отмена
+                  {t("Отмена")}
                 </button>
                 <button type="submit" className={`${btn.primary} ${btn.md}`}>
-                  Создать и стать DJ
+                  {t("Создать и стать DJ")}
                 </button>
               </div>
             </form>

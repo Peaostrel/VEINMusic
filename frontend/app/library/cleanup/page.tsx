@@ -4,6 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { Merge } from "lucide-react";
 import { btn, EmptyState, Loading, PageHeader } from "@/components/ui";
 import { jsonRequest, qualityRequest } from "@/app/lib/qualityApi";
+import { useT } from "@/app/lib/i18n/client";
+import { tr } from "@/app/lib/i18n/active";
+import { plural } from "@/app/lib/plural";
 import ImportBatches from "./ImportBatches";
 import HistoryManager from "./HistoryManager";
 interface Track {
@@ -15,6 +18,7 @@ interface Track {
   plays: number;
 }
 export default function CleanupPage() {
+  const t = useT();
   const [duplicates, setDuplicates] = useState<Track[][]>([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
@@ -28,13 +32,16 @@ export default function CleanupPage() {
   useEffect(() => {
     void load().catch(() => {
       setLoading(false);
-      setStatus("Не удалось загрузить дубли");
+      setStatus(tr("Не удалось загрузить дубли"));
     });
   }, [load]);
   const merge = async (source: Track, target: Track) => {
     if (
       !confirm(
-        `Объединить «${source.title}» с «${target.title}»? Это изменение нельзя отменить.`,
+        t(
+          "Объединить «{source}» с «{target}»? Это изменение нельзя отменить.",
+          { source: source.title, target: target.title },
+        ),
       )
     )
       return;
@@ -46,27 +53,29 @@ export default function CleanupPage() {
           target_track_id: target.id,
         }),
       );
-      setStatus("Треки объединены.");
+      setStatus(t("Треки объединены."));
       await load();
     } catch (cause) {
       setStatus(
-        cause instanceof Error ? cause.message : "Не удалось объединить",
+        cause instanceof Error ? cause.message : t("Не удалось объединить"),
       );
     }
   };
-  if (loading) return <Loading label="Ищем дубли…" />;
+  if (loading) return <Loading label={t("Ищем дубли…")} />;
   return (
     <main className="mx-auto max-w-[980px] space-y-8 px-4 py-8 sm:px-8">
       <PageHeader
-        title="Порядок в истории"
-        subtitle="Изменения затрагивают только вашу историю"
+        title={t("Порядок в истории")}
+        subtitle={t("Изменения затрагивают только вашу историю")}
       />
       <output aria-live="polite">{status}</output>
       <ImportBatches onChanged={load} />
       <HistoryManager />
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Возможные дубли в каталоге</h2>
-        {!duplicates.length && <EmptyState title="Дублей не найдено" />}
+        <h2 className="text-lg font-semibold">
+          {t("Возможные дубли в каталоге")}
+        </h2>
+        {!duplicates.length && <EmptyState title={t("Дублей не найдено")} />}
         {duplicates.map((group) => (
           <DuplicateGroup
             key={group.map((track) => track.id).join("-")}
@@ -86,11 +95,14 @@ function DuplicateGroup({
   tracks: Track[];
   onMerge: (source: Track, target: Track) => void;
 }>) {
+  const t = useT();
   const [targetId, setTargetId] = useState(tracks[0].id);
   const target = tracks.find((track) => track.id === targetId) ?? tracks[0];
   return (
     <article className="rounded-xl border border-line bg-surface p-4">
-      <p className="mb-3 text-xs text-fg-3">Какой вариант оставить основным?</p>
+      <p className="mb-3 text-xs text-fg-3">
+        {t("Какой вариант оставить основным?")}
+      </p>
       <div className="flex flex-col gap-2">
         {tracks.map((track) => (
           <label
@@ -119,7 +131,13 @@ function DuplicateGroup({
                 {track.title}
               </span>
               <span className="block truncate text-xs text-fg-3">
-                {track.artist} · {track.plays} прослушиваний
+                {track.artist} · {track.plays}{" "}
+                {plural(
+                  track.plays,
+                  "прослушивание",
+                  "прослушивания",
+                  "прослушиваний",
+                )}
               </span>
             </span>
             {targetId !== track.id && (
@@ -132,7 +150,7 @@ function DuplicateGroup({
                 className={`${btn.secondary} ${btn.sm}`}
               >
                 <Merge className="h-3.5 w-3.5" />
-                Объединить
+                {t("Объединить")}
               </button>
             )}
           </label>

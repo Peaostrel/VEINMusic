@@ -1,4 +1,7 @@
+"use client";
 import type { UserInfo } from "@/app/lib/types";
+import { useT } from "@/app/lib/i18n/client";
+import { currentLocale, tr } from "@/app/lib/i18n/active";
 import { useCallback, useEffect, useState } from "react";
 import { Cloud, Import, Puzzle, RefreshCw } from "lucide-react";
 import { useFeature } from "@/app/lib/featureFlags";
@@ -46,6 +49,7 @@ interface IntegrationStatus {
 }
 
 function IntegrationHealth({ API_URL }: Readonly<{ API_URL: string }>) {
+  const t = useT();
   const [status, setStatus] = useState<IntegrationStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -72,10 +76,14 @@ function IntegrationHealth({ API_URL }: Readonly<{ API_URL: string }>) {
       const result = await response.json().catch(() => ({}));
       setMessage(
         response.status === 202
-          ? "Синхронизация продолжается в фоне, новые прослушивания появятся в течение минуты."
+          ? t(
+              "Синхронизация продолжается в фоне, новые прослушивания появятся в течение минуты.",
+            )
           : response.ok
-            ? "Синхронизация завершена."
-            : result.detail || "Не удалось запустить синхронизацию.",
+            ? t("Синхронизация завершена.")
+            : result.detail
+              ? t(result.detail)
+              : t("Не удалось запустить синхронизацию."),
       );
       load();
     } finally {
@@ -92,11 +100,15 @@ function IntegrationHealth({ API_URL }: Readonly<{ API_URL: string }>) {
     <section className={`${settingsCard} p-5`}>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-sm font-medium">Состояние синхронизации</h3>
+          <h3 className="text-sm font-medium">
+            {t("Состояние синхронизации")}
+          </h3>
           <p className="mt-1 text-xs text-fg-3">
             {status?.last_sync
-              ? `Последняя активность ${new Date(status.last_sync).toLocaleString("ru-RU")}`
-              : "VEIN пока не получил данные от облачных подключений."}
+              ? t("Последняя активность {time}", {
+                  time: new Date(status.last_sync).toLocaleString(t.locale),
+                })
+              : t("VEIN пока не получил данные от облачных подключений.")}
           </p>
         </div>
         <div className="flex gap-2">
@@ -109,7 +121,7 @@ function IntegrationHealth({ API_URL }: Readonly<{ API_URL: string }>) {
             <RefreshCw
               className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
             />
-            Проверить
+            {t("Проверить")}
           </button>
           <button
             type="button"
@@ -120,31 +132,31 @@ function IntegrationHealth({ API_URL }: Readonly<{ API_URL: string }>) {
             <RefreshCw
               className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`}
             />
-            Синхронизировать
+            {t("Синхронизировать")}
           </button>
         </div>
       </div>
       <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {(status?.services ?? []).map((service) => {
-          let label = service.linked ? "подключено" : "не подключено";
+          let label = service.linked ? t("подключено") : t("не подключено");
           let color = service.linked ? "text-ok" : "text-fg-3";
           if (service.mode === "extension")
             label = service.last_event_at
-              ? "события получены"
-              : "ожидает расширение";
+              ? t("события получены")
+              : t("ожидает расширение");
           if (service.mode === "partner")
             label = service.last_event_at
-              ? "события получены"
-              : "ожидает сервис";
+              ? t("события получены")
+              : t("ожидает сервис");
           if (service.error) {
-            label = "требует внимания";
+            label = t("требует внимания");
             color = "text-danger";
           }
           if (!service.admin_enabled) {
-            label = "отключено администратором";
+            label = t("отключено администратором");
             color = "text-danger";
           } else if (!status?.auto_sync || !service.user_enabled) {
-            label = "приостановлено вами";
+            label = t("приостановлено вами");
             color = "text-fg-3";
           }
           return (
@@ -154,15 +166,15 @@ function IntegrationHealth({ API_URL }: Readonly<{ API_URL: string }>) {
             >
               <span className="flex items-center gap-2 text-xs font-medium">
                 {icon(service.mode)}
-                {service.name}
+                {t(service.name)}
               </span>
               <span className={`mt-1 block font-mono text-[10px] ${color}`}>
                 {label}
               </span>
-              <p className="mt-2 text-xs text-fg-3">{service.diagnostic}</p>
+              <p className="mt-2 text-xs text-fg-3">{t(service.diagnostic)}</p>
               {service.last_event_at && (
                 <p className="mt-1 text-xs text-fg-3">
-                  {new Date(service.last_event_at).toLocaleString("ru-RU")}
+                  {new Date(service.last_event_at).toLocaleString(t.locale)}
                 </p>
               )}
             </div>
@@ -220,20 +232,25 @@ function Row({
 }
 
 function synced(userProfile: UserInfo | null, linked?: boolean) {
-  if (!linked) return "не подключено";
-  if (!userProfile?.last_sync) return "подключено";
-  return `подключено · синхр. ${new Date(userProfile.last_sync).toLocaleString("ru-RU")}`;
+  if (!linked) return tr("не подключено");
+  if (!userProfile?.last_sync) return tr("подключено");
+  return tr("подключено · синхр. {time}", {
+    time: new Date(userProfile.last_sync).toLocaleString(currentLocale()),
+  });
 }
 
 function IntegrationDiagnostics({
   data,
   userProfile,
 }: Readonly<IntegrationsTabProps>) {
+  const t = useT();
   return (
     <section className={`${settingsCard} p-5`}>
-      <h3 className="text-sm font-medium">Диагностика интеграций</h3>
+      <h3 className="text-sm font-medium">{t("Диагностика интеграций")}</h3>
       <p className="mb-4 mt-1 text-xs text-fg-2">
-        Текущее состояние подключений без токенов и других секретных данных.
+        {t(
+          "Текущее состояние подключений без токенов и других секретных данных.",
+        )}
       </p>
       <dl className="grid gap-3 font-mono text-xs sm:grid-cols-2">
         <div>
@@ -241,7 +258,7 @@ function IntegrationDiagnostics({
           <dd>{userProfile?.spotify_linked ? "linked" : "not linked"}</dd>
         </div>
         <div>
-          <dt className="text-fg-3">Яндекс</dt>
+          <dt className="text-fg-3">{t("Яндекс")}</dt>
           <dd>{userProfile?.yandex_linked ? "linked" : "not linked"}</dd>
         </div>
         <div>
@@ -253,11 +270,11 @@ function IntegrationDiagnostics({
           <dd>{data.lastfmUsername || "not linked"}</dd>
         </div>
         <div>
-          <dt className="text-fg-3">Последняя синхронизация</dt>
+          <dt className="text-fg-3">{t("Последняя синхронизация")}</dt>
           <dd>
             {userProfile?.last_sync
-              ? new Date(userProfile.last_sync).toLocaleString("ru-RU")
-              : "нет данных"}
+              ? new Date(userProfile.last_sync).toLocaleString(t.locale)
+              : t("нет данных")}
           </dd>
         </div>
       </dl>
@@ -270,6 +287,7 @@ function SpotifyConnection({
   handleDisconnect,
   API_URL,
 }: Readonly<IntegrationsTabProps>) {
+  const t = useT();
   const spotifyEnabled = useFeature("integration_spotify");
   return (
     <Row
@@ -279,8 +297,8 @@ function SpotifyConnection({
       statusOk={Boolean(userProfile?.spotify_linked)}
       description={
         spotifyEnabled
-          ? "Скробблинг напрямую через сервер, без расширения."
-          : "Временно приостановлено администратором."
+          ? t("Скробблинг напрямую через сервер, без расширения.")
+          : t("Временно приостановлено администратором.")
       }
     >
       <div className="flex gap-2 md:justify-end">
@@ -290,7 +308,7 @@ function SpotifyConnection({
             onClick={() => handleDisconnect("spotify")}
             className={smallDanger}
           >
-            Отключить
+            {t("Отключить")}
           </button>
         )}
         {spotifyEnabled ? (
@@ -298,16 +316,16 @@ function SpotifyConnection({
             href={`${API_URL}/auth/spotify/login`}
             className={userProfile?.spotify_linked ? small : smallPrimary}
           >
-            {userProfile?.spotify_linked ? "Обновить" : "Подключить"}
+            {userProfile?.spotify_linked ? t("Обновить") : t("Подключить")}
           </a>
         ) : (
           <button
             type="button"
             disabled
-            title="Spotify временно отключён"
+            title={t("Spotify временно отключён")}
             className={userProfile?.spotify_linked ? small : smallPrimary}
           >
-            {userProfile?.spotify_linked ? "Обновить" : "Подключить"}
+            {userProfile?.spotify_linked ? t("Обновить") : t("Подключить")}
           </button>
         )}
       </div>
@@ -320,6 +338,7 @@ function SoundCloudConnection({
   handleDisconnect,
   API_URL,
 }: Readonly<IntegrationsTabProps>) {
+  const t = useT();
   const soundcloudEnabled = useFeature("integration_soundcloud");
   return (
     <Row
@@ -329,8 +348,10 @@ function SoundCloudConnection({
       statusOk={Boolean(userProfile?.soundcloud_linked)}
       description={
         soundcloudEnabled
-          ? "Скробблинг напрямую через сервер, без расширения. После подключения включите следующий трек — старая история не импортируется."
-          : "Временно приостановлено администратором."
+          ? t(
+              "Скробблинг напрямую через сервер, без расширения. После подключения включите следующий трек — старая история не импортируется.",
+            )
+          : t("Временно приостановлено администратором.")
       }
     >
       <div className="flex gap-2 md:justify-end">
@@ -340,7 +361,7 @@ function SoundCloudConnection({
             onClick={() => handleDisconnect("soundcloud")}
             className={smallDanger}
           >
-            Отключить
+            {t("Отключить")}
           </button>
         )}
         {soundcloudEnabled ? (
@@ -348,16 +369,16 @@ function SoundCloudConnection({
             href={`${API_URL}/auth/soundcloud/login`}
             className={userProfile?.soundcloud_linked ? small : smallPrimary}
           >
-            {userProfile?.soundcloud_linked ? "Обновить" : "Подключить"}
+            {userProfile?.soundcloud_linked ? t("Обновить") : t("Подключить")}
           </a>
         ) : (
           <button
             type="button"
             disabled
-            title="SoundCloud временно отключён"
+            title={t("SoundCloud временно отключён")}
             className={userProfile?.soundcloud_linked ? small : smallPrimary}
           >
-            {userProfile?.soundcloud_linked ? "Обновить" : "Подключить"}
+            {userProfile?.soundcloud_linked ? t("Обновить") : t("Подключить")}
           </button>
         )}
       </div>
@@ -366,17 +387,22 @@ function SoundCloudConnection({
 }
 
 function YouTubeConnection() {
+  const t = useT();
   const youtubeMusicEnabled = useFeature("integration_youtube_music");
   return (
     <Row
       logo="YT"
       name="YouTube Music"
-      status={youtubeMusicEnabled ? "через расширение VEIN" : "приостановлено"}
+      status={
+        youtubeMusicEnabled ? t("через расширение VEIN") : t("приостановлено")
+      }
       statusOk={youtubeMusicEnabled}
       description={
         youtubeMusicEnabled
-          ? "Откройте YouTube Music в браузере с подключённым расширением VEIN — текущий трек, пауза и прогресс определяются автоматически."
-          : "Временно приостановлено администратором."
+          ? t(
+              "Откройте YouTube Music в браузере с подключённым расширением VEIN — текущий трек, пауза и прогресс определяются автоматически.",
+            )
+          : t("Временно приостановлено администратором.")
       }
     >
       <a
@@ -386,11 +412,11 @@ function YouTubeConnection() {
         aria-disabled={!youtubeMusicEnabled}
         tabIndex={youtubeMusicEnabled ? undefined : -1}
         title={
-          youtubeMusicEnabled ? undefined : "YouTube Music временно отключён"
+          youtubeMusicEnabled ? undefined : t("YouTube Music временно отключён")
         }
         className={`${smallPrimary} ${youtubeMusicEnabled ? "" : "cursor-not-allowed opacity-50"}`}
       >
-        Открыть YouTube Music
+        {t("Открыть YouTube Music")}
       </a>
     </Row>
   );
@@ -403,28 +429,29 @@ function YandexConnection({
   handleDisconnect,
   saveYandexToken,
 }: Readonly<IntegrationsTabProps>) {
+  const t = useT();
   const yandexEnabled = useFeature("integration_yandex");
   return (
     <Row
-      logo="Я"
-      name="Яндекс Музыка"
+      logo={t("Я")}
+      name={t("Яндекс Музыка")}
       status={synced(userProfile, userProfile?.yandex_linked)}
       statusOk={Boolean(userProfile?.yandex_linked)}
       description={
         yandexEnabled ? (
           <>
-            Нужен OAuth-токен.{" "}
+            {t("Нужен OAuth-токен.")}{" "}
             <a
               href="https://oauth.yandex.ru/authorize?response_type=token&client_id=23cabbbdc6cd418abb4b39c32c41195d"
               target="_blank"
               rel="noopener noreferrer"
               className="text-accent hover:underline"
             >
-              Получить токен
+              {t("Получить токен")}
             </a>
           </>
         ) : (
-          "Временно приостановлено администратором."
+          t("Временно приостановлено администратором.")
         )
       }
     >
@@ -433,7 +460,7 @@ function YandexConnection({
         value={data.yandexToken}
         onChange={(e) => updateData("yandexToken", e.target.value)}
         placeholder="y0_AgAAA…"
-        aria-label="OAuth-токен Яндекса"
+        aria-label={t("OAuth-токен Яндекса")}
         autoComplete="new-password"
         disabled={!yandexEnabled}
         readOnly
@@ -447,17 +474,19 @@ function YandexConnection({
             onClick={() => handleDisconnect("yandex")}
             className={`${smallDanger} flex-1`}
           >
-            Удалить
+            {t("Удалить")}
           </button>
         )}
         <button
           type="button"
           onClick={saveYandexToken}
           disabled={!yandexEnabled}
-          title={yandexEnabled ? undefined : "Яндекс Музыка временно отключена"}
+          title={
+            yandexEnabled ? undefined : t("Яндекс Музыка временно отключена")
+          }
           className={`${smallPrimary} flex-1`}
         >
-          Сохранить
+          {t("Сохранить")}
         </button>
       </div>
     </Row>
@@ -471,32 +500,37 @@ function LastfmConnection({
   startLastfmImport,
   importRefresh,
 }: Readonly<IntegrationsTabProps>) {
+  const t = useT();
   const lastfmEnabled = useFeature("integration_lastfm");
   const importEnabled = useFeature("lastfm_import");
   const preferences = data.preferences.integrations;
   const pausedTitle = preferences.lastfm_enabled
-    ? "Импорт временно отключён"
-    : "Last.fm приостановлен в настройках аккаунта";
+    ? t("Импорт временно отключён")
+    : t("Last.fm приостановлен в настройках аккаунта");
   return (
     <Row
       logo="fm"
       name="Last.fm"
       status={
-        data.lastfmUsername ? `аккаунт ${data.lastfmUsername}` : "не подключено"
+        data.lastfmUsername
+          ? t("аккаунт {name}", { name: data.lastfmUsername })
+          : t("не подключено")
       }
       statusOk={Boolean(data.lastfmUsername)}
       description={
         lastfmEnabled
-          ? "Импорт истории. Повторный импорт добавит только новые прослушивания."
-          : "Временно приостановлено администратором."
+          ? t(
+              "Импорт истории. Повторный импорт добавит только новые прослушивания.",
+            )
+          : t("Временно приостановлено администратором.")
       }
       footer={<LastfmImportStatus refreshKey={importRefresh ?? 0} />}
     >
       <input
         value={data.lastfmUsername}
         onChange={(e) => updateData("lastfmUsername", e.target.value)}
-        placeholder="Ник на Last.fm"
-        aria-label="Ник на Last.fm"
+        placeholder={t("Ник на Last.fm")}
+        aria-label={t("Ник на Last.fm")}
         autoComplete="off"
         disabled={!lastfmEnabled}
         readOnly
@@ -510,7 +544,7 @@ function LastfmConnection({
             onClick={() => handleDisconnect("lastfm")}
             className={`${small} flex-1`}
           >
-            Очистить
+            {t("Очистить")}
           </button>
         )}
         <button
@@ -526,7 +560,7 @@ function LastfmConnection({
           }
           className={`${smallPrimary} flex-1`}
         >
-          Импорт
+          {t("Импорт")}
         </button>
       </div>
     </Row>
@@ -540,19 +574,21 @@ function ExtensionConnection({
   copied,
   handleGenerateApiKey,
 }: Readonly<IntegrationsTabProps>) {
+  const t = useT();
   return (
     userProfile?.has_api_key && (
       <Row
         logo={<LogoGlyph size={18} />}
-        name="Расширение VEIN"
-        status="ключ выпущен"
+        name={t("Расширение VEIN")}
+        status={t("ключ выпущен")}
         statusOk
-        description="Ключ для браузерного расширения и своих скриптов."
+        description={t("Ключ для браузерного расширения и своих скриптов.")}
         footer={
           generatedApiKey && (
             <p className="text-xs text-accent">
-              Ключ показывается один раз — скопируйте его сейчас. После
-              перезагрузки страницы он скроется.
+              {t(
+                "Ключ показывается один раз — скопируйте его сейчас. После перезагрузки страницы он скроется.",
+              )}
             </p>
           )
         }
@@ -563,12 +599,12 @@ function ExtensionConnection({
           </code>
           {generatedApiKey && (
             <button type="button" onClick={handleCopyKey} className={small}>
-              {copied ? "Готово" : "Копировать"}
+              {copied ? t("Готово") : t("Копировать")}
             </button>
           )}
         </div>
         <button type="button" onClick={handleGenerateApiKey} className={small}>
-          {generatedApiKey ? "Выпустить другой" : "Выпустить новый ключ"}
+          {generatedApiKey ? t("Выпустить другой") : t("Выпустить новый ключ")}
         </button>
       </Row>
     )
@@ -576,6 +612,7 @@ function ExtensionConnection({
 }
 
 export default function IntegrationsTab(props: Readonly<IntegrationsTabProps>) {
+  const t = useT();
   const { data, updatePreference, API_URL } = props;
   const preferences = data.preferences.integrations;
   const updateIntegration = (patch: Partial<typeof preferences>) =>
@@ -584,9 +621,9 @@ export default function IntegrationsTab(props: Readonly<IntegrationsTabProps>) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold">Подключённые сервисы</h2>
+        <h2 className="text-lg font-semibold">{t("Подключённые сервисы")}</h2>
         <p className="text-[13px] text-fg-2">
-          Откуда VEIN берёт ваши прослушивания.
+          {t("Откуда VEIN берёт ваши прослушивания.")}
         </p>
       </div>
 
@@ -596,9 +633,9 @@ export default function IntegrationsTab(props: Readonly<IntegrationsTabProps>) {
       <section className={`${settingsCard} p-5`}>
         <h3 className="text-sm font-medium">Plat Music</h3>
         <p className="mt-2 text-sm text-fg-2">
-          В настройках Plat Music откройте «Интеграции», выберите VEIN Music и
-          подтвердите подключение на сайте VEIN. После этого включите музыку:
-          прослушивания будут приходить напрямую, расширение не требуется.
+          {t(
+            "В настройках Plat Music откройте «Интеграции», выберите VEIN Music и подтвердите подключение на сайте VEIN. После этого включите музыку: прослушивания будут приходить напрямую, расширение не требуется.",
+          )}
         </p>
         <a
           href="https://plat-music.ru"
@@ -606,32 +643,40 @@ export default function IntegrationsTab(props: Readonly<IntegrationsTabProps>) {
           rel="noopener noreferrer"
           className={`${small} mt-4`}
         >
-          Открыть Plat Music
+          {t("Открыть Plat Music")}
         </a>
       </section>
 
       <section className={settingsCard}>
         <ToggleRow
-          title="Автоматическая синхронизация"
-          description="Разрешить фоновым подключениям получать новые прослушивания."
+          title={t("Автоматическая синхронизация")}
+          description={t(
+            "Разрешить фоновым подключениям получать новые прослушивания.",
+          )}
           checked={preferences.auto_sync}
           onChange={(auto_sync) => updateIntegration({ auto_sync })}
         />
         <ToggleRow
           title="Spotify"
-          description="Временно приостановить запись из Spotify, не удаляя подключение."
+          description={t(
+            "Временно приостановить запись из Spotify, не удаляя подключение.",
+          )}
           checked={preferences.spotify_enabled}
           onChange={(spotify_enabled) => updateIntegration({ spotify_enabled })}
         />
         <ToggleRow
-          title="Яндекс Музыка"
-          description="Временно приостановить запись из Яндекс Музыки, сохранив токен."
+          title={t("Яндекс Музыка")}
+          description={t(
+            "Временно приостановить запись из Яндекс Музыки, сохранив токен.",
+          )}
           checked={preferences.yandex_enabled}
           onChange={(yandex_enabled) => updateIntegration({ yandex_enabled })}
         />
         <ToggleRow
           title="YouTube Music"
-          description="Временно приостановить запись YouTube Music через расширение VEIN."
+          description={t(
+            "Временно приостановить запись YouTube Music через расширение VEIN.",
+          )}
           checked={preferences.youtube_music_enabled}
           onChange={(youtube_music_enabled) =>
             updateIntegration({ youtube_music_enabled })
@@ -639,7 +684,9 @@ export default function IntegrationsTab(props: Readonly<IntegrationsTabProps>) {
         />
         <ToggleRow
           title="SoundCloud"
-          description="Временно приостановить облачный скробблинг SoundCloud, сохранив подключение."
+          description={t(
+            "Временно приостановить облачный скробблинг SoundCloud, сохранив подключение.",
+          )}
           checked={preferences.soundcloud_enabled}
           onChange={(soundcloud_enabled) =>
             updateIntegration({ soundcloud_enabled })
@@ -647,13 +694,17 @@ export default function IntegrationsTab(props: Readonly<IntegrationsTabProps>) {
         />
         <ToggleRow
           title="Last.fm"
-          description="Приостановить автоматическую работу с Last.fm без удаления аккаунта."
+          description={t(
+            "Приостановить автоматическую работу с Last.fm без удаления аккаунта.",
+          )}
           checked={preferences.lastfm_enabled}
           onChange={(lastfm_enabled) => updateIntegration({ lastfm_enabled })}
         />
         <ToggleRow
           title="Plat Music"
-          description="Приостановить запись из Plat Music, сохранив подключение."
+          description={t(
+            "Приостановить запись из Plat Music, сохранив подключение.",
+          )}
           checked={preferences.plat_enabled}
           onChange={(plat_enabled) => updateIntegration({ plat_enabled })}
         />

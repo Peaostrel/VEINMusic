@@ -9,6 +9,7 @@ import {
   type TrackPreview,
   type UserPreview,
 } from "./preview";
+import type { Lang } from "./i18n/core";
 
 type Thing = Record<string, unknown>;
 
@@ -18,14 +19,14 @@ const listens = (count: number): Thing => ({
   userInteractionCount: count,
 });
 
-export function websiteData(description: string): Thing {
+export function websiteData(description: string, lang: Lang = "ru"): Thing {
   return {
     "@context": "https://schema.org",
     "@type": "WebSite",
     name: "VEINMusic",
     url: SITE_URL,
     description,
-    inLanguage: "ru",
+    inLanguage: lang,
   };
 }
 

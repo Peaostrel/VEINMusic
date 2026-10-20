@@ -13,6 +13,8 @@ import {
 } from "@/app/lib/achievementText";
 import { AchievementTrackProgress } from "./_components/AchievementTrackProgress";
 import { coverAt } from "@/app/lib/coverSize";
+import { useT } from "@/app/lib/i18n/client";
+import type { Translator } from "@/app/lib/i18n/core";
 
 /** GET /api/achievements/all/{username} */
 interface AchievementsResponse {
@@ -31,10 +33,11 @@ function showcaseButtonLabel(
   saving: boolean,
   displayed: boolean,
   showcaseFull: boolean,
+  t: Translator,
 ) {
-  if (saving) return "Сохраняем…";
-  if (displayed) return "Убрать из профиля";
-  return showcaseFull ? "Лимит 6" : "Показать в профиле";
+  if (saving) return t("Сохраняем…");
+  if (displayed) return t("Убрать из профиля");
+  return showcaseFull ? t("Лимит 6") : t("Показать в профиле");
 }
 
 interface AchievementCardProps {
@@ -60,6 +63,7 @@ function AchievementCard({
   onMove,
   onToggle,
 }: Readonly<AchievementCardProps>) {
+  const t = useT();
   const currentVal = achievement.current_progress || 0;
   const targetVal = Number(achievement.target_value) || 1;
   const showProgress =
@@ -95,19 +99,20 @@ function AchievementCard({
             <h3
               className={`text-sm font-medium ${achievement.is_earned ? "text-fg" : "text-fg-2"}`}
             >
-              {achievement.name}
+              {t(achievement.name)}
             </h3>
             <span
               className={`shrink-0 font-mono text-[11px] ${achievement.is_earned ? "text-accent" : "text-fg-3"}`}
             >
               {achievement.is_earned
-                ? (formatAchievementDate(achievement.earned_at) ?? "Получено")
-                : "Заблокировано"}
+                ? (formatAchievementDate(achievement.earned_at) ??
+                  t("Получено"))
+                : t("Заблокировано")}
             </span>
           </div>
           <p className="text-[13px] leading-relaxed text-fg-2">
             {renderDescriptionWithLinks(
-              achievement.description || "",
+              t(achievement.description || ""),
               achievement.rule_meta ?? null,
               achievement.rule_target ?? null,
               achievement.name,
@@ -118,7 +123,7 @@ function AchievementCard({
       {showProgress && (
         <div className="flex flex-col gap-1.5">
           <div className="flex justify-between font-mono text-[11px] text-fg-3">
-            <span>прогресс</span>
+            <span>{t("прогресс")}</span>
             <span>
               {currentVal} / {targetVal}
             </span>
@@ -146,7 +151,7 @@ function AchievementCard({
             <>
               <button
                 type="button"
-                aria-label="Поднять"
+                aria-label={t("Поднять")}
                 className={`${btn.secondary} ${btn.sm}`}
                 disabled={firstDisplayed}
                 onClick={() => onMove(achievement.id, -1)}
@@ -155,7 +160,7 @@ function AchievementCard({
               </button>
               <button
                 type="button"
-                aria-label="Опустить"
+                aria-label={t("Опустить")}
                 className={`${btn.secondary} ${btn.sm}`}
                 disabled={lastDisplayed}
                 onClick={() => onMove(achievement.id, 1)}
@@ -180,12 +185,13 @@ function AchievementCard({
               saving,
               Boolean(achievement.is_displayed),
               showcaseFull,
+              t,
             )}
           </button>
         </div>
       )}
       <span className="mt-auto font-mono text-[11px] text-fg-3">
-        есть у {achievement.rarity ?? 0}% слушателей
+        {t("есть у {n}% слушателей", { n: achievement.rarity ?? 0 })}
         {achievement.reward_xp > 0 ? ` · +${achievement.reward_xp} XP` : ""}
       </span>
     </li>
@@ -193,6 +199,7 @@ function AchievementCard({
 }
 
 export default function AchievementsPage() {
+  const t = useT();
   const { username } = useParams<{ username: string }>();
   const [data, setData] = useState<AchievementsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -274,8 +281,8 @@ export default function AchievementsPage() {
       );
       setMessage(
         result.is_displayed
-          ? "✅ Достижение добавлено в профиль"
-          : "✅ Достижение скрыто из профиля",
+          ? t("✅ Достижение добавлено в профиль")
+          : t("✅ Достижение скрыто из профиля"),
       );
       globalThis.dispatchEvent(new Event("profile_update"));
     } catch {
@@ -291,7 +298,7 @@ export default function AchievementsPage() {
             }
           : current,
       );
-      setMessage("❌ Не удалось изменить отображение достижения");
+      setMessage(t("❌ Не удалось изменить отображение достижения"));
     } finally {
       setPending((current) => {
         const next = new Set(current);
@@ -358,22 +365,22 @@ export default function AchievementsPage() {
       });
       globalThis.dispatchEvent(new Event("profile_update"));
     } catch {
-      setMessage("❌ Не удалось сохранить порядок");
+      setMessage(t("❌ Не удалось сохранить порядок"));
       void load();
     }
   };
 
-  if (loading) return <Loading label="Загружаем достижения…" />;
+  if (loading) return <Loading label={t("Загружаем достижения…")} />;
 
   if (error || !data?.user)
     return (
       <div className="mx-auto flex max-w-md flex-col items-center gap-3 px-4 py-24 text-center">
-        <h1 className="text-2xl font-semibold">Не удалось загрузить</h1>
+        <h1 className="text-2xl font-semibold">{t("Не удалось загрузить")}</h1>
         <p className="text-sm text-fg-2">
-          Пользователь не найден или сервер не ответил.
+          {t("Пользователь не найден или сервер не ответил.")}
         </p>
         <Link href="/" className={`${btn.secondary} ${btn.md} mt-4`}>
-          На главную
+          {t("На главную")}
         </Link>
       </div>
     );
@@ -388,7 +395,7 @@ export default function AchievementsPage() {
           href={`/user/${username}`}
           className="self-start text-[13px] text-fg-2 hover:text-fg"
         >
-          ← Профиль
+          {t("← Профиль")}
         </Link>
         <div className="flex items-center gap-4">
           <Avatar
@@ -401,7 +408,7 @@ export default function AchievementsPage() {
               {data.user.display_name}
             </h1>
             <span className="text-sm text-fg-2">
-              Достижения ·{" "}
+              {t("Достижения")} ·{" "}
               <span className="font-mono text-fg-3">@{data.user.username}</span>
             </span>
           </div>
@@ -409,13 +416,14 @@ export default function AchievementsPage() {
       </header>
 
       <section
-        aria-label="Прогресс"
+        aria-label={t("Прогресс")}
         className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-5"
       >
         <div className="flex items-baseline justify-between gap-4">
           <p className="text-sm text-fg-2">
-            Получено{" "}
-            <span className="font-mono text-fg">{data.earned_count}</span> из{" "}
+            {t("Получено")}{" "}
+            <span className="font-mono text-fg">{data.earned_count}</span>{" "}
+            {t("из")}{" "}
             <span className="font-mono text-fg">{data.total_count}</span>
           </p>
           <span className="font-mono text-2xl font-medium">
@@ -425,7 +433,7 @@ export default function AchievementsPage() {
         <Meter value={progressPercent} height={4} />
         <progress
           className="sr-only"
-          aria-label="Прогресс достижений"
+          aria-label={t("Прогресс достижений")}
           max={100}
           value={Math.round(progressPercent)}
         />
@@ -438,8 +446,8 @@ export default function AchievementsPage() {
       )}
 
       {data.achievements.length === 0 && (
-        <EmptyState title="Достижений пока нет">
-          Администраторы ещё не завели ни одного достижения.
+        <EmptyState title={t("Достижений пока нет")}>
+          {t("Администраторы ещё не завели ни одного достижения.")}
         </EmptyState>
       )}
 

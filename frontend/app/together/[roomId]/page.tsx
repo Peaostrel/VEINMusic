@@ -8,6 +8,7 @@ import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { openSocket } from "@/app/lib/api";
 import { isValidUser } from "@/app/lib/theme";
 import { plural } from "@/app/lib/plural";
+import { useT } from "@/app/lib/i18n/client";
 import { Avatar, Meter, btn, inputOnCard } from "@/components/ui";
 
 interface ChatMessage {
@@ -32,9 +33,10 @@ interface PageProps {
 }
 
 export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
+  const t = useT();
   const { roomId } = use(params);
   const searchParams = useSearchParams();
-  const roomNameParam = searchParams.get("name") || "Музыкальная комната";
+  const roomNameParam = searchParams.get("name") || t("Музыкальная комната");
 
   const [connected, setConnected] = useState(false);
   const [listeners, setListeners] = useState<string[]>([]);
@@ -43,7 +45,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
   // The server names unauthenticated listeners "Guest_…" (real usernames are lowercase)
   const isGuest = me.startsWith("Guest_");
   const [track, setTrack] = useState<TrackState>({
-    title: "Ожидание трека от DJ…",
+    title: t("Ожидание трека от DJ…"),
     artist: "VEINMusic",
     album: "",
     cover_url: "",
@@ -188,13 +190,13 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
           href="/library/discover"
           className="text-xs text-fg-2 hover:text-fg"
         >
-          Подборка для двоих
+          {t("Подборка для двоих")}
         </Link>
         <Link
           href="/together"
           className="self-start text-[13px] text-fg-2 hover:text-fg"
         >
-          ← Все комнаты
+          {t("← Все комнаты")}
         </Link>
         <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2">
           <h1 className="text-[28px] font-semibold tracking-[-0.02em]">
@@ -204,7 +206,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
             <span
               className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-ok" : "bg-danger"}`}
             />
-            {connected ? "синхронно" : "подключение…"}
+            {connected ? t("синхронно") : t("подключение…")}
           </span>
           <span className="font-mono text-xs text-fg-3">
             {listeners.length}{" "}
@@ -216,7 +218,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex min-w-0 flex-col gap-6">
           <section
-            aria-label="Сейчас играет"
+            aria-label={t("Сейчас играет")}
             className="flex flex-col gap-6 rounded-xl border border-line bg-surface p-6 md:p-7"
           >
             <div className="flex flex-col items-center gap-6 sm:flex-row sm:gap-7">
@@ -231,10 +233,13 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
               )}
               <div className="flex min-w-0 flex-col gap-2 text-center sm:text-left">
                 <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-fg-3">
-                  ставит DJ {host ? `@${host}` : "—"}
+                  {t("ставит DJ {host}", { host: host ? `@${host}` : "—" })}
                 </span>
                 <h2 className="text-2xl font-semibold tracking-[-0.02em] md:text-[30px]">
-                  {track.title}
+                  {/* The server's placeholder before the DJ plays anything */}
+                  {track.title === "Ожидание трека от DJ..."
+                    ? t(track.title)
+                    : track.title}
                 </h2>
                 <span className="text-base text-fg-2">
                   {track.artist}
@@ -271,7 +276,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
                 type="button"
                 onClick={handleTogglePlay}
                 disabled={!isHost || !connected}
-                aria-label={track.is_playing ? "Пауза" : "Играть"}
+                aria-label={track.is_playing ? t("Пауза") : t("Играть")}
                 className={`flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full transition-colors ${
                   isHost
                     ? "bg-accent text-on-accent hover:brightness-110"
@@ -289,8 +294,8 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
               </button>
               <span className="text-[13px] text-fg-3">
                 {isHost
-                  ? "Вы DJ — пауза и перемотка идут у всех"
-                  : "Управлять воспроизведением может только DJ"}
+                  ? t("Вы DJ — пауза и перемотка идут у всех")
+                  : t("Управлять воспроизведением может только DJ")}
               </span>
             </div>
           </section>
@@ -300,7 +305,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
             className="flex flex-col gap-3.5"
           >
             <h2 id="people-title" className="text-sm font-semibold">
-              В комнате ({listeners.length})
+              {t("В комнате ({n})", { n: listeners.length })}
             </h2>
             <ul className="flex flex-wrap gap-2">
               {listeners.map((user) => (
@@ -329,7 +334,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
             id="chat-title"
             className="border-b border-line px-5 py-4 text-sm font-semibold"
           >
-            Чат комнаты
+            {t("Чат комнаты")}
           </h2>
           <div
             ref={chatBoxRef}
@@ -338,7 +343,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
           >
             {chatMessages.length === 0 ? (
               <p className="m-auto text-center text-[13px] text-fg-3">
-                Здесь пока тихо. Напишите первое сообщение!
+                {t("Здесь пока тихо. Напишите первое сообщение!")}
               </p>
             ) : (
               chatMessages.map((msg) => (
@@ -354,7 +359,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
                     </span>
                     <span className="font-mono text-[10px] text-fg-3">
                       {new Date(msg.timestamp * 1000).toLocaleTimeString(
-                        "ru-RU",
+                        t.locale,
                         { hour: "2-digit", minute: "2-digit" },
                       )}
                     </span>
@@ -370,12 +375,12 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
           {/* Signed-in listeners only; guests just listen */}
           {isGuest ? (
             <p className="border-t border-line px-5 py-4 text-[13px] text-fg-2">
-              Чтобы писать в чат,{" "}
+              {t("Чтобы писать в чат,")}{" "}
               <Link
                 href="/auth"
                 className="text-accent underline underline-offset-2"
               >
-                войдите
+                {t("войдите")}
               </Link>
               .
             </p>
@@ -388,14 +393,14 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Написать в чат…"
-                aria-label="Сообщение в чат"
+                placeholder={t("Написать в чат…")}
+                aria-label={t("Сообщение в чат")}
                 maxLength={300}
                 className={inputOnCard}
               />
               <button
                 type="submit"
-                aria-label="Отправить"
+                aria-label={t("Отправить")}
                 className={`${btn.primary} h-10 w-10 shrink-0`}
               >
                 <Send className="h-4 w-4" aria-hidden="true" />

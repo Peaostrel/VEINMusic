@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Area } from "react-easy-crop";
 import { API_URL } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/client";
+import { msg } from "@/app/lib/i18n/core";
+import { tr } from "@/app/lib/i18n/active";
 import {
   DEFAULT_PREFERENCES,
   applyAppearance,
@@ -31,7 +34,7 @@ async function ensureSaved(
   let detail = fallback;
   try {
     const body = (await response.json()) as { detail?: unknown };
-    if (typeof body.detail === "string") detail = body.detail;
+    if (typeof body.detail === "string") detail = tr(body.detail);
   } catch {
     // Non-JSON error responses retain the readable fallback.
   }
@@ -54,27 +57,28 @@ export type SettingsTab =
   | "experiments";
 
 export const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
-  { id: "general", label: "Общие данные" },
-  { id: "showcase", label: "Витрина профиля" },
-  { id: "theme", label: "Оформление" },
-  { id: "profile-layout", label: "Конструктор профиля" },
-  { id: "listening", label: "Прослушивания" },
-  { id: "feed", label: "Лента и общение" },
-  { id: "notifications", label: "Уведомления" },
-  { id: "privacy", label: "Приватность" },
-  { id: "wrapped", label: "Настройки Wrapped" },
-  { id: "security", label: "Безопасность и данные" },
-  { id: "integrations", label: "Интеграции" },
-  { id: "export", label: "Экспорт и вебхуки" },
-  { id: "experiments", label: "Экспериментальное" },
+  { id: "general", label: msg("Общие данные") },
+  { id: "showcase", label: msg("Витрина профиля") },
+  { id: "theme", label: msg("Оформление") },
+  { id: "profile-layout", label: msg("Конструктор профиля") },
+  { id: "listening", label: msg("Прослушивания") },
+  { id: "feed", label: msg("Лента и общение") },
+  { id: "notifications", label: msg("Уведомления") },
+  { id: "privacy", label: msg("Приватность") },
+  { id: "wrapped", label: msg("Настройки Wrapped") },
+  { id: "security", label: msg("Безопасность и данные") },
+  { id: "integrations", label: msg("Интеграции") },
+  { id: "export", label: msg("Экспорт и вебхуки") },
+  { id: "experiments", label: msg("Экспериментальное") },
 ];
 
 function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "Ошибка";
+  return e instanceof Error ? e.message : tr("Ошибка");
 }
 
 /** State, data loading and actions of the settings page. */
 export function useSettingsPage() {
+  const t = useT();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -144,31 +148,32 @@ export function useSettingsPage() {
 
   useEffect(() => {
     if (searchParams.get("spotify") === "success") {
-      setStatus("✅ Spotify успешно привязан!");
+      setStatus(t("✅ Spotify успешно привязан!"));
       setActiveTab("integrations");
     }
     const soundcloudResult = searchParams.get("soundcloud");
     if (soundcloudResult === "success") {
-      setStatus("✅ SoundCloud подключён! Включите следующий трек.");
+      setStatus(t("✅ SoundCloud подключён! Включите следующий трек."));
       setActiveTab("integrations");
     } else if (soundcloudResult === "error") {
-      setStatus("❌ Не удалось подключить SoundCloud");
+      setStatus(t("❌ Не удалось подключить SoundCloud"));
       setActiveTab("integrations");
     }
     const vkResult = searchParams.get("vk");
     if (vkResult === "linked")
-      setStatus("✅ VK ID привязан, теперь через него можно входить");
+      setStatus(t("✅ VK ID привязан, теперь через него можно входить"));
     else if (vkResult === "taken")
-      setStatus("❌ Этот VK ID уже привязан к другому аккаунту");
-    else if (vkResult === "error") setStatus("❌ Не удалось привязать VK ID");
+      setStatus(t("❌ Этот VK ID уже привязан к другому аккаунту"));
+    else if (vkResult === "error")
+      setStatus(t("❌ Не удалось привязать VK ID"));
     const tabParam = searchParams.get("tab");
-    const linkedTab = SETTINGS_TABS.find((t) => t.id === tabParam);
+    const linkedTab = SETTINGS_TABS.find((tab) => tab.id === tabParam);
     if (linkedTab) setActiveTab(linkedTab.id);
     if (tabParam === "export") {
       const result = searchParams.get("status");
-      if (result === "lastfm_connected") setStatus("✅ Last.fm подключён");
+      if (result === "lastfm_connected") setStatus(t("✅ Last.fm подключён"));
       else if (result === "lastfm_error")
-        setStatus("❌ Не удалось подключить Last.fm");
+        setStatus(t("❌ Не удалось подключить Last.fm"));
     }
 
     const username = localStorage.getItem("username");
@@ -185,7 +190,7 @@ export function useSettingsPage() {
       })
       .catch((error) => console.error(error))
       .finally(() => setLoading(false));
-  }, [router, searchParams]);
+  }, [router, searchParams, t]);
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
@@ -213,7 +218,7 @@ export function useSettingsPage() {
 
   const handleCropSave = async () => {
     if (!cropImageSrc || !croppedAreaPixels || !cropFieldTarget) return;
-    setStatus("Обрезаем...");
+    setStatus(t("Обрезаем..."));
     try {
       // Sizes match the API's limits for each kind (app/services/images.py)
       const kind = cropFieldTarget === "avatarUrl" ? "avatar" : "banner";
@@ -234,13 +239,13 @@ export function useSettingsPage() {
         if (res.ok) {
           const { url } = (await res.json()) as { url: string };
           updateData(cropFieldTarget, url);
-          setStatus("✅ Картинка успешно загружена!");
+          setStatus(t("✅ Картинка успешно загружена!"));
           setTimeout(() => setStatus(""), 2000);
-        } else setStatus("❌ Ошибка на сервере");
+        } else setStatus(t("❌ Ошибка на сервере"));
       }
     } catch (e) {
       console.error(e);
-      setStatus("❌ Ошибка сети");
+      setStatus(t("❌ Ошибка сети"));
     }
     setCropImageSrc(null);
   };
@@ -275,11 +280,13 @@ export function useSettingsPage() {
   const handleGenerateApiKey = async () => {
     if (
       !confirm(
-        "Вы уверены, что хотите сбросить текущий API ключ? Все ваши сторонние приложения/расширения перестанут работать, пока вы не обновите в них ключ.",
+        t(
+          "Вы уверены, что хотите сбросить текущий API ключ? Все ваши сторонние приложения/расширения перестанут работать, пока вы не обновите в них ключ.",
+        ),
       )
     )
       return;
-    setStatus("Генерация...");
+    setStatus(t("Генерация..."));
     try {
       const res = await fetch(`${API_URL}/api/profile/apikey/generate`, {
         credentials: "include",
@@ -303,14 +310,14 @@ export function useSettingsPage() {
           },
           globalThis.location.origin,
         );
-        setStatus("✅ Новый API ключ успешно сгенерирован!");
+        setStatus(t("✅ Новый API ключ успешно сгенерирован!"));
         setTimeout(() => setStatus(""), 5000);
       } else {
-        setStatus("❌ Ошибка при генерации");
+        setStatus(t("❌ Ошибка при генерации"));
       }
     } catch (e) {
       console.error("API key generation failed:", e);
-      setStatus("❌ Ошибка сети");
+      setStatus(t("❌ Ошибка сети"));
     }
   };
 
@@ -320,22 +327,24 @@ export function useSettingsPage() {
         await navigator.clipboard.writeText(generatedApiKey);
       } catch {
         setStatus(
-          "Не удалось скопировать ключ. Проверьте разрешение на доступ к буферу обмена.",
+          t(
+            "Не удалось скопировать ключ. Проверьте разрешение на доступ к буферу обмена.",
+          ),
         );
         return;
       }
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-      setStatus("✅ API ключ скопирован в буфер обмена");
+      setStatus(t("✅ API ключ скопирован в буфер обмена"));
       setTimeout(() => setStatus(""), 3000);
     } else {
-      setStatus("⚠️ API-ключ не найден");
+      setStatus(t("⚠️ API-ключ не найден"));
       setTimeout(() => setStatus(""), 2000);
     }
   };
 
   const executeSave = async () => {
-    setStatus("Сохраняем...");
+    setStatus(t("Сохраняем..."));
     setShowConfirmModal(false);
     const finalLocation =
       data.country && data.city
@@ -377,7 +386,7 @@ export function useSettingsPage() {
           ),
         }),
       });
-      await ensureSaved(res, "Ошибка при сохранении");
+      await ensureSaved(res, t("Ошибка при сохранении"));
       const preferencesRes = await fetch(`${API_URL}/api/profile/preferences`, {
         credentials: "include",
         method: "PUT",
@@ -386,7 +395,7 @@ export function useSettingsPage() {
       });
       await ensureSaved(
         preferencesRes,
-        "Не удалось сохранить дополнительные настройки",
+        t("Не удалось сохранить дополнительные настройки"),
       );
       const savedPreferences = (await preferencesRes.json()) as UserPreferences;
       storePreferences(savedPreferences);
@@ -397,7 +406,7 @@ export function useSettingsPage() {
       const username = localStorage.getItem("username");
       if (username) await loadProfile(username);
       globalThis.dispatchEvent(new Event("profile_update"));
-      setStatus("✅ Успешно!");
+      setStatus(t("✅ Успешно!"));
       setTimeout(() => setStatus(""), 3000);
     } catch (err) {
       setStatus("❌ " + errorMessage(err));
@@ -418,7 +427,9 @@ export function useSettingsPage() {
   };
 
   const resetPreferences = () => {
-    if (!confirm("Вернуть дополнительные настройки к значениям по умолчанию?"))
+    if (
+      !confirm(t("Вернуть дополнительные настройки к значениям по умолчанию?"))
+    )
       return;
     const defaults = structuredClone(DEFAULT_PREFERENCES);
     applyAppearance(defaults.appearance);
@@ -426,7 +437,7 @@ export function useSettingsPage() {
   };
 
   const saveYandexToken = async () => {
-    setStatus("Сохраняем токен Яндекса...");
+    setStatus(t("Сохраняем токен Яндекса..."));
     try {
       const res = await fetch(`${API_URL}/api/integrations/yandex`, {
         credentials: "include",
@@ -435,18 +446,18 @@ export function useSettingsPage() {
         body: JSON.stringify({ token: data.yandexToken }),
       });
       if (res.ok) {
-        setStatus("✅ Токен Яндекса сохранен!");
+        setStatus(t("✅ Токен Яндекса сохранен!"));
         setUserProfile((prev) => prev && { ...prev, yandex_linked: true });
-      } else setStatus("❌ Ошибка сохранения");
+      } else setStatus(t("❌ Ошибка сохранения"));
     } catch (e) {
       console.error(e);
-      setStatus("❌ Ошибка сети");
+      setStatus(t("❌ Ошибка сети"));
     }
   };
 
   const handleDisconnect = async (service: string) => {
-    if (!confirm(`Отключить ${service}?`)) return;
-    setStatus(`Отключаем ${service}...`);
+    if (!confirm(t("Отключить {service}?", { service }))) return;
+    setStatus(t("Отключаем {service}...", { service }));
     try {
       const res = await fetch(
         `${API_URL}/api/integrations/${service}/disconnect`,
@@ -458,7 +469,7 @@ export function useSettingsPage() {
         },
       );
       if (res.ok) {
-        setStatus(`✅ ${service} отключен`);
+        setStatus(t("✅ {service} отключен", { service }));
         if (service === "spotify")
           setUserProfile((prev) => prev && { ...prev, spotify_linked: false });
         if (service === "soundcloud")
@@ -473,13 +484,13 @@ export function useSettingsPage() {
       }
     } catch (e) {
       console.error(e);
-      setStatus("❌ Ошибка сети");
+      setStatus(t("❌ Ошибка сети"));
     }
   };
 
   const startLastfmImport = async () => {
-    if (!data.lastfmUsername) return alert("Введите никнейм Last.fm");
-    setStatus("Запускаем импорт...");
+    if (!data.lastfmUsername) return alert(t("Введите никнейм Last.fm"));
+    setStatus(t("Запускаем импорт..."));
     try {
       const updateRes = await fetch(`${API_URL}/api/profile/update`, {
         credentials: "include",
@@ -488,7 +499,7 @@ export function useSettingsPage() {
         body: JSON.stringify({ lastfm_username: data.lastfmUsername }),
       });
       if (!updateRes.ok) {
-        setStatus("❌ Ошибка сохранения профиля");
+        setStatus(t("❌ Ошибка сохранения профиля"));
         return;
       }
 
@@ -503,24 +514,24 @@ export function useSettingsPage() {
         const started = (await res.json()) as { status: string };
         setStatus(
           started.status === "already_running"
-            ? "⏳ Импорт уже идёт"
-            : "✅ Импорт запущен",
+            ? t("⏳ Импорт уже идёт")
+            : t("✅ Импорт запущен"),
         );
         setImportRefresh((n) => n + 1);
       } else {
-        let message = "Не удалось запустить импорт";
+        let message = t("Не удалось запустить импорт");
         try {
           const errData = (await res.json()) as { detail?: string };
-          message = errData.detail || message;
+          message = errData.detail ? t(errData.detail) : message;
         } catch (e) {
           console.error(e);
-          message = `Ошибка сервера (${res.status})`;
+          message = t("Ошибка сервера ({status})", { status: res.status });
         }
-        setStatus(`❌ Ошибка: ${message}`);
+        setStatus(t("❌ Ошибка: {message}", { message }));
       }
     } catch (e) {
       console.error(e);
-      setStatus("❌ Ошибка сети");
+      setStatus(t("❌ Ошибка сети"));
     }
   };
 

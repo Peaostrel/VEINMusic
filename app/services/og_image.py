@@ -4,6 +4,8 @@ from __future__ import annotations
 import html
 from typing import Any
 
+from app.core.i18n import tr
+
 
 def _escape(val: Any) -> str:
     if val is None:
@@ -18,8 +20,10 @@ def generate_recap_card_svg(
     total_hours: float,
     top_artists: list[tuple[str, int]],
     top_genre: str = "Various",
+    lang: str = "ru",
 ) -> str:
-    """Generate high-res 1200x630 social share card for Weekly/Monthly recap."""
+    """Generate high-res 1200x630 social share card for Weekly/Monthly recap
+    (labels in `lang`; the period title comes translated)."""
     escaped_user = _escape(username)
     escaped_period = _escape(period_title)
     escaped_genre = _escape(top_genre or "Eclectic")
@@ -73,7 +77,7 @@ def generate_recap_card_svg(
 
     <!-- User & Title -->
     <g transform="translate(60, 140)">
-        <text x="0" y="0" fill="#71717a" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="16" font-weight="700" letter-spacing="1.5">МУЗЫКАЛЬНЫЕ ИТОГИ</text>
+        <text x="0" y="0" fill="#71717a" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="16" font-weight="700" letter-spacing="1.5">{_escape(tr(lang, 'МУЗЫКАЛЬНЫЕ ИТОГИ'))}</text>
         <text x="0" y="44" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="44" font-weight="900">@{escaped_user}</text>
         <text x="0" y="80" fill="#a1a1aa" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="20" font-weight="500">{escaped_period}</text>
     </g>
@@ -82,26 +86,26 @@ def generate_recap_card_svg(
     <g transform="translate(60, 280)">
         <!-- Scrobbles Box -->
         <rect width="240" height="120" rx="16" fill="rgba(255, 255, 255, 0.03)" stroke="rgba(255, 255, 255, 0.08)"/>
-        <text x="24" y="40" fill="#71717a" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="700" letter-spacing="1">СКРОББЛОВ</text>
+        <text x="24" y="40" fill="#71717a" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="700" letter-spacing="1">{_escape(tr(lang, 'СКРОББЛОВ'))}</text>
         <text x="24" y="86" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="36" font-weight="900">{total_scrobbles:,}</text>
 
         <!-- Hours Box -->
         <g transform="translate(260, 0)">
             <rect width="240" height="120" rx="16" fill="rgba(255, 255, 255, 0.03)" stroke="rgba(255, 255, 255, 0.08)"/>
-            <text x="24" y="40" fill="#71717a" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="700" letter-spacing="1">ВРЕМЯ В МУЗЫКЕ</text>
-            <text x="24" y="86" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="36" font-weight="900">{total_hours:.1f} ч</text>
+            <text x="24" y="40" fill="#71717a" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="700" letter-spacing="1">{_escape(tr(lang, 'ВРЕМЯ В МУЗЫКЕ'))}</text>
+            <text x="24" y="86" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="36" font-weight="900">{_escape(tr(lang, "{hours} ч", hours=f"{total_hours:.1f}"))}</text>
         </g>
 
         <!-- Top Genre Box -->
         <g transform="translate(0, 140)">
             <rect width="500" height="90" rx="16" fill="rgba(255, 255, 255, 0.03)" stroke="rgba(255, 255, 255, 0.08)"/>
-            <text x="24" y="36" fill="#71717a" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="700" letter-spacing="1">ГЛАВНЫЙ ЖАНР</text>
+            <text x="24" y="36" fill="#71717a" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="700" letter-spacing="1">{_escape(tr(lang, 'ГЛАВНЫЙ ЖАНР'))}</text>
             <text x="24" y="68" fill="#ef4444" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="24" font-weight="800">{escaped_genre}</text>
         </g>
     </g>
 
     <!-- Right Top Artists Header -->
-    <text x="620" y="270" fill="#a1a1aa" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="14" font-weight="800" letter-spacing="1.5">ТОП ИСПОЛНИТЕЛЕЙ</text>
+    <text x="620" y="270" fill="#a1a1aa" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="14" font-weight="800" letter-spacing="1.5">{_escape(tr(lang, 'ТОП ИСПОЛНИТЕЛЕЙ'))}</text>
     {''.join(artist_rows)}
 
     <!-- Footer URL -->
@@ -115,6 +119,7 @@ def generate_achievement_card_svg(
     description: str,
     icon: str = "🏆",
     reward_xp: int = 100,
+    lang: str = "ru",
 ) -> str:
     """Generate high-res social card for an unlocked achievement."""
     escaped_user = _escape(username)
@@ -138,7 +143,7 @@ def generate_achievement_card_svg(
     <rect x="20" y="20" width="1160" height="590" rx="24" stroke="rgba(234, 179, 8, 0.2)" stroke-width="1.5"/>
 
     <g transform="translate(60, 60)">
-        <text x="0" y="20" fill="#eab308" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="16" font-weight="800" letter-spacing="2">НОВОЕ ДОСТИЖЕНИЕ РАЗБЛОКИРОВАНО</text>
+        <text x="0" y="20" fill="#eab308" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="16" font-weight="800" letter-spacing="2">{_escape(tr(lang, 'НОВОЕ ДОСТИЖЕНИЕ РАЗБЛОКИРОВАНО'))}</text>
         <text x="0" y="55" fill="#a1a1aa" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="18" font-weight="600">@{escaped_user}</text>
     </g>
 

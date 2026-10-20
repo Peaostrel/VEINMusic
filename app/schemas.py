@@ -130,6 +130,9 @@ class AchCreate(BaseModel):
     api_key: str | None = None
     name: str
     description: str
+    # Optional English texts; empty means "show the Russian ones"
+    name_en: str | None = Field(default=None, max_length=200)
+    description_en: str | None = Field(default=None, max_length=1000)
     icon: str
     rule_type: str = "manual"
     rule_value: int = 0
@@ -144,6 +147,9 @@ class AchUpdate(BaseModel):
     api_key: str | None = None
     name: str
     description: str
+    # Optional English texts; empty means "show the Russian ones"
+    name_en: str | None = Field(default=None, max_length=200)
+    description_en: str | None = Field(default=None, max_length=1000)
     icon: str
     rule_type: str = "manual"
     rule_value: int = 0

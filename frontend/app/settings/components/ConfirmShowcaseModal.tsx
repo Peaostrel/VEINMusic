@@ -2,15 +2,17 @@
 
 import { AlertTriangle } from "lucide-react";
 import Dialog from "@/components/Dialog";
+import { useT } from "@/app/lib/i18n/client";
 
 /** Asks to confirm a showcase change, which locks it for 30 days. */
 export default function ConfirmShowcaseModal({
   onCancel,
   onConfirm,
 }: Readonly<{ onCancel: () => void; onConfirm: () => void }>) {
+  const t = useT();
   return (
     <Dialog
-      label="Подтверждение изменения витрины"
+      label={t("Подтверждение изменения витрины")}
       onClose={onCancel}
       className=""
     >
@@ -19,14 +21,16 @@ export default function ConfirmShowcaseModal({
           <AlertTriangle className="w-10 h-10 text-accent" aria-hidden="true" />
         </div>
         <h2 className="text-2xl font-semibold text-fg tracking-tight">
-          Подтверждение
+          {t("Подтверждение")}
         </h2>
         <p className="text-fg-2 text-sm leading-relaxed">
-          Вы изменили витрину профиля! Вы точно хотите утвердить этих любимых
-          исполнителей, треки или альбомы? <br />
+          {t(
+            "Вы изменили витрину профиля! Вы точно хотите утвердить этих любимых исполнителей, треки или альбомы?",
+          )}{" "}
+          <br />
           <br />
           <strong className="text-accent">
-            Они будут заблокированы на 30 дней.
+            {t("Они будут заблокированы на 30 дней.")}
           </strong>
         </p>
         <div className="flex gap-4 pt-4">
@@ -35,14 +39,14 @@ export default function ConfirmShowcaseModal({
             onClick={onCancel}
             className="flex-1 px-6 py-3 rounded-xl font-medium text-fg-2 bg-surface-2 hover:bg-line transition-colors"
           >
-            Отмена
+            {t("Отмена")}
           </button>
           <button
             type="button"
             onClick={onConfirm}
             className="flex-1 px-6 py-3 rounded-xl font-semibold text-black transition-all shadow-[var(--accent)]/20"
           >
-            Сохранить
+            {t("Сохранить")}
           </button>
         </div>
       </div>

@@ -8,6 +8,7 @@ import {
 } from "@/app/lib/achievementText";
 import type { AchievementInfo } from "@/app/lib/types";
 import { coverAt } from "@/app/lib/coverSize";
+import { useT } from "@/app/lib/i18n/client";
 
 const CARD_WIDTH = 320;
 const SCREEN_GAP = 16;
@@ -44,6 +45,7 @@ function Cover({ a, size }: Readonly<{ a: AchievementInfo; size: string }>) {
  * date it was earned.
  */
 export function AchievementChip({ a }: Readonly<{ a: AchievementInfo }>) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   // Horizontal shift of the card from the chip, keeping it on screen
   const [offsetX, setOffsetX] = useState(0);
@@ -116,14 +118,14 @@ export function AchievementChip({ a }: Readonly<{ a: AchievementInfo }>) {
         className={`inline-flex h-8 items-center gap-2 rounded-md border px-2.5 transition-colors hover:bg-surface-2 ${open ? "border-accent/50 bg-surface-2" : "border-line"}`}
       >
         <Cover a={a} size="h-5 w-5 text-sm" />
-        <span className="text-xs font-medium">{a.name}</span>
+        <span className="text-xs font-medium">{t(a.name)}</span>
       </button>
 
       {open && (
         <dialog
           open
           id={cardId}
-          aria-label={`Достижение «${a.name}»`}
+          aria-label={t("Достижение «{name}»", { name: t(a.name) })}
           style={{ left: offsetX, right: "auto" }}
           className="absolute top-full z-40 m-0 mt-2 flex w-[min(320px,calc(100vw-32px))] flex-col gap-3 rounded-xl border border-line bg-surface p-4 text-fg shadow-[0_16px_48px_rgba(0,0,0,0.45)]"
         >
@@ -131,14 +133,14 @@ export function AchievementChip({ a }: Readonly<{ a: AchievementInfo }>) {
             <Cover a={a} size="h-14 w-14 text-3xl" />
             <div className="flex min-w-0 flex-col gap-1">
               <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-accent">
-                Достижение
+                {t("Достижение")}
               </span>
               <h4 className="text-[15px] font-semibold leading-snug text-fg">
-                {a.name}
+                {t(a.name)}
               </h4>
               {date && (
                 <span className="font-mono text-[11px] text-fg-3">
-                  получено {date}
+                  {t("получено {date}", { date })}
                 </span>
               )}
             </div>
@@ -147,7 +149,7 @@ export function AchievementChip({ a }: Readonly<{ a: AchievementInfo }>) {
           {a.description && (
             <p className="text-[13px] leading-relaxed text-fg-2">
               {renderDescriptionWithLinks(
-                a.description,
+                t(a.description),
                 a.rule_meta ?? null,
                 a.rule_target ?? null,
                 a.name,
@@ -172,8 +174,8 @@ export function AchievementChip({ a }: Readonly<{ a: AchievementInfo }>) {
                   className="inline-flex items-center gap-1 text-xs text-fg-2 hover:text-fg"
                 >
                   {url.includes("music.yandex.")
-                    ? "Открыть в Яндекс Музыке"
-                    : "Открыть"}
+                    ? t("Открыть в Яндекс Музыке")
+                    : t("Открыть")}
                   <ExternalLink className="h-3 w-3" aria-hidden="true" />
                 </a>
               )}

@@ -32,19 +32,19 @@ def get_user_timezone_offset(location: str) -> int:
         return 3
     loc = location.lower()
     mappings = {
-        ("москва", "moscow", "санкт", "питер", "россия", "russia"): 3,
-        ("калининград",): 2,
-        ("самара",): 4,
-        ("екатеринбург",): 5,
-        ("омск",): 6,
-        ("новосибирск", "красноярск"): 7,
-        ("иркутск",): 8,
-        ("якутск",): 9,
-        ("владивосток",): 10,
-        ("магадан",): 11,
-        ("камчатка", "анадырь"): 12,
-        ("лондон", "london", "uk"): 0,
-        ("германия", "germany", "берлин", "paris", "франция"): 1
+        ("москва", "moscow", "санкт", "питер", "россия", "russia", "petersburg"): 3,
+        ("калининград", "kaliningrad"): 2,
+        ("самара", "samara"): 4,
+        ("екатеринбург", "yekaterinburg"): 5,
+        ("омск", "omsk"): 6,
+        ("новосибирск", "красноярск", "novosibirsk", "krasnoyarsk"): 7,
+        ("иркутск", "irkutsk"): 8,
+        ("якутск", "yakutsk"): 9,
+        ("владивосток", "vladivostok"): 10,
+        ("магадан", "magadan"): 11,
+        ("камчатка", "анадырь", "kamchatka", "anadyr"): 12,
+        ("лондон", "london", "uk", "united kingdom"): 0,
+        ("германия", "germany", "берлин", "berlin", "paris", "франция", "france"): 1
     }
     words = set(re.findall(r"\w+", loc))
     for keys, offset in mappings.items():

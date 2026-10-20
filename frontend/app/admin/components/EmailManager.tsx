@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { apiJson } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/client";
+import { msg } from "@/app/lib/i18n/core";
 import { btn, input, label } from "@/components/ui";
 type History = {
   configured: boolean;
@@ -15,13 +17,14 @@ type History = {
   }[];
 };
 const statuses: Record<string, string> = {
-  pending: "В очереди",
-  sent: "Передано Resend",
-  failed: "Ошибка",
-  cancelled: "Отменено",
-  expired: "Истекло",
+  pending: msg("В очереди"),
+  sent: msg("Передано Resend"),
+  failed: msg("Ошибка"),
+  cancelled: msg("Отменено"),
+  expired: msg("Истекло"),
 };
 export default function EmailManager() {
+  const t = useT();
   const [history, setHistory] = useState<History | null>(null);
   const [username, setUsername] = useState("");
   const [subject, setSubject] = useState("");
@@ -42,23 +45,27 @@ export default function EmailManager() {
         method: "POST",
         json: { username, subject, text },
       });
-      setMessage(result.message);
+      setMessage(t(result.message));
       setPreview(false);
       setText("");
       await load();
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Ошибка сети");
+      setMessage(e instanceof Error ? e.message : t("Ошибка сети"));
     } finally {
       setBusy(false);
     }
   }
   return (
     <section className="space-y-4 rounded-xl border border-line bg-surface p-5">
-      <h3 className="font-semibold">Письма пользователям</h3>
+      <h3 className="font-semibold">{t("Письма пользователям")}</h3>
       <p className="text-sm text-fg-2">
         {history?.configured
-          ? "Resend подключён. Письма доступны пользователям с подтверждённой почтой и включённым согласием."
-          : "Resend пока не подключён: настройте отправителя и ключ сервиса."}
+          ? t(
+              "Resend подключён. Письма доступны пользователям с подтверждённой почтой и включённым согласием.",
+            )
+          : t(
+              "Resend пока не подключён: настройте отправителя и ключ сервиса.",
+            )}
       </p>
       <form
         className="space-y-3"
@@ -68,7 +75,7 @@ export default function EmailManager() {
         }}
       >
         <label className={label}>
-          <span>Никнейм</span>
+          <span>{t("Никнейм")}</span>
           <input
             className={`${input} mt-1`}
             value={username}
@@ -82,7 +89,7 @@ export default function EmailManager() {
           />
         </label>
         <label className={label}>
-          <span>Тема</span>
+          <span>{t("Тема")}</span>
           <input
             className={`${input} mt-1`}
             value={subject}
@@ -95,7 +102,7 @@ export default function EmailManager() {
           />
         </label>
         <label className={label}>
-          <span>Текст</span>
+          <span>{t("Текст")}</span>
           <textarea
             className={`${input} mt-1 min-h-28`}
             value={text}
@@ -108,16 +115,16 @@ export default function EmailManager() {
           />
         </label>
         <button type="submit" className={`${btn.secondary} ${btn.md}`}>
-          Предпросмотр
+          {t("Предпросмотр")}
         </button>
       </form>
       {preview && (
         <div className="space-y-3 rounded-lg border border-line p-4">
-          <p className="text-sm">Получатель: {username}</p>
+          <p className="text-sm">{t("Получатель: {username}", { username })}</p>
           <h4 className="font-semibold">{subject}</h4>
           <p className="whitespace-pre-wrap text-sm">{text}</p>
           <p className="text-xs text-fg-2">
-            Внизу письма будет ссылка на настройки отключения писем.
+            {t("Внизу письма будет ссылка на настройки отключения писем.")}
           </p>
           <button
             type="button"
@@ -125,26 +132,27 @@ export default function EmailManager() {
             disabled={busy || !history?.configured}
             onClick={() => void send()}
           >
-            Отправить письмо
+            {t("Отправить письмо")}
           </button>
         </div>
       )}
       {message && <output className="text-sm">{message}</output>}
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold">Последние отправки</h4>
+        <h4 className="text-sm font-semibold">{t("Последние отправки")}</h4>
         <button
           type="button"
           className={`${btn.secondary} ${btn.sm}`}
           onClick={() => void load().catch((e) => setMessage(e.message))}
         >
-          Обновить
+          {t("Обновить")}
         </button>
       </div>
       <ul className="space-y-2">
         {history?.items.map((row) => (
           <li key={row.id} className="text-sm">
-            {row.username} · {statuses[row.status] || row.status} ·{" "}
-            {new Date(row.created_at).toLocaleString("ru-RU")}
+            {row.username} ·{" "}
+            {statuses[row.status] ? t(statuses[row.status]) : row.status} ·{" "}
+            {new Date(row.created_at).toLocaleString(t.locale)}
             {row.error_code ? ` · ${row.error_code}` : ""}
           </li>
         ))}

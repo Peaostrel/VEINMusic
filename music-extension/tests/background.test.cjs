@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const { i18nMock } = require('./i18n-mock.cjs');
 
 const source = fs.readFileSync(path.join(__dirname, '../background.js'), 'utf8');
 const pairing = fs.readFileSync(path.join(__dirname, '../pairing.js'), 'utf8');
@@ -15,6 +16,7 @@ function harness(items, fetch) {
     let onMessage;
     const chrome = {
         alarms: null,
+        i18n: i18nMock('ru'),
         runtime: { id: 'test-extension', getURL: (path) => `chrome-extension://test-extension/${path}`,
             onMessage: { addListener(listener) { onMessage = listener; } } },
         storage: { local: {

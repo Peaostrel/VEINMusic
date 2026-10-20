@@ -20,6 +20,7 @@ import anyio
 import httpx
 
 from app.core.constants import TEXT_KEY
+from app.core.i18n import plural, tr, user_lang
 from app.core.websockets import manager
 from app.database import SessionLocal
 from app.models import LastfmImportJob, Scrobble, Track, User
@@ -188,8 +189,9 @@ def _set_job_state(job_id: int, **fields: Any) -> Optional[dict[str, Any]]:
             if owner is not None and owner.integration is not None:
                 owner.integration.has_imported_lastfm = True
         db.commit()
-        username = db.query(User.username).filter(User.id == job.user_id).scalar()
-        return {**job_to_dict(job), "user_id": job.user_id, "username": username,
+        owner = db.query(User).filter(User.id == job.user_id).first()
+        username = owner.username if owner else None
+        return {**job_to_dict(job), "user_id": job.user_id, "username": username, "lang": user_lang(owner),
                 "window_from": job.window_from, "window_to": job.window_to}
     finally:
         db.close()
@@ -262,7 +264,8 @@ async def run_import_job(job_id: int) -> None:
         if final:
             await manager.broadcast_to_user(final["username"], {
                 "type": "IMPORT_FINISHED",
-                "message": "❌ Импорт из Last.fm прервался. Нажмите «Импорт» ещё раз, чтобы продолжить."})
+                "message": tr(final["lang"],
+                              "❌ Импорт из Last.fm прервался. Нажмите «Импорт» ещё раз, чтобы продолжить.")})
         return
 
     final = await anyio.to_thread.run_sync(
@@ -270,4 +273,9 @@ async def run_import_job(job_id: int) -> None:
     if final:
         await manager.broadcast_to_user(final["username"], {
             "type": "IMPORT_FINISHED",
-            "message": f"✅ Импорт завершен! Добавлено {final['imported_tracks']} треков."})
+            "message": import_finished_text(final["lang"], int(final["imported_tracks"] or 0))})
+
+
+def import_finished_text(lang: str, imported: int) -> str:
+    return tr(lang, "✅ Импорт завершен! Добавлено {n} треков.", n=imported,
+              tracks=plural(lang, imported, "трек", "трека", "треков"))

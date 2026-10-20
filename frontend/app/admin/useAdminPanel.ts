@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { API_URL, apiJson, ApiError } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/client";
 import type {
   User,
   SuspiciousUser,
@@ -35,6 +36,7 @@ export type AdminTab = (typeof ADMIN_TABS)[number];
 
 /** All state, data loading and actions of the admin panel. */
 export function useAdminPanel() {
+  const t = useT();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   // Links such as a report notification open a tab: /admin?tab=reports
@@ -178,7 +180,7 @@ export function useAdminPanel() {
       setErrorStatus(e instanceof ApiError ? e.status : null);
       setError(
         (e instanceof Error && e.message) ||
-          "Ошибка загрузки панели администратора",
+          t("Ошибка загрузки панели администратора"),
       );
       setLoading(false);
     }
@@ -232,7 +234,9 @@ export function useAdminPanel() {
 
   const handleChangeRole = async (username: string, currentRole: string) => {
     const newRole = prompt(
-      `Изменить роль для @${username} (admin, moderator, user):`,
+      t("Изменить роль для @{username} (admin, moderator, user):", {
+        username,
+      }),
       currentRole,
     );
     if (!newRole || !["admin", "moderator", "user"].includes(newRole)) return;
@@ -253,7 +257,11 @@ export function useAdminPanel() {
 
   const handleResetProfile = async (username: string) => {
     if (
-      !confirm(`Очистить аватар, обложку и описание пользователя @${username}?`)
+      !confirm(
+        t("Очистить аватар, обложку и описание пользователя @{username}?", {
+          username,
+        }),
+      )
     )
       return;
     try {
@@ -265,7 +273,7 @@ export function useAdminPanel() {
         },
       );
       if (res.ok) {
-        alert("Профиль очищен");
+        alert(t("Профиль очищен"));
         await loadAllData();
       }
     } catch (e) {
@@ -276,7 +284,9 @@ export function useAdminPanel() {
   const handleDeleteUser = async (username: string) => {
     if (
       !confirm(
-        `Навсегда удалить аккаунт @${username}? Это действие необратимо!`,
+        t("Навсегда удалить аккаунт @{username}? Это действие необратимо!", {
+          username,
+        }),
       )
     )
       return;
@@ -299,7 +309,9 @@ export function useAdminPanel() {
   const handleResetSuspiciousXp = async (username: string) => {
     if (
       !confirm(
-        `Сбросить нечестный XP и обнулить стрик пользователя @${username}?`,
+        t("Сбросить нечестный XP и обнулить стрик пользователя @{username}?", {
+          username,
+        }),
       )
     )
       return;
@@ -312,7 +324,7 @@ export function useAdminPanel() {
         },
       );
       if (res.ok) {
-        alert("Опыт пользователя сброшен, аккаунт помечен");
+        alert(t("Опыт пользователя сброшен, аккаунт помечен"));
         await loadAllData();
       }
     } catch (e) {
@@ -353,12 +365,20 @@ export function useAdminPanel() {
       });
       const data = await res.json();
       if (res.ok) {
-        alert(data.message || "Треки успешно объединены!");
+        alert(
+          typeof data.message === "string"
+            ? t(data.message)
+            : t("Треки успешно объединены!"),
+        );
         setSourceTrackId("");
         setTargetTrackId("");
         await loadAllData();
       } else {
-        alert(data.detail || "Ошибка объединения треков");
+        alert(
+          typeof data.detail === "string"
+            ? t(data.detail)
+            : t("Ошибка объединения треков"),
+        );
       }
     } catch (err) {
       console.error(err);
@@ -380,12 +400,20 @@ export function useAdminPanel() {
       });
       const data = await res.json();
       if (res.ok) {
-        alert(data.message || "Исполнители успешно объединены!");
+        alert(
+          typeof data.message === "string"
+            ? t(data.message)
+            : t("Исполнители успешно объединены!"),
+        );
         setSourceArtist("");
         setTargetArtist("");
         await loadAllData();
       } else {
-        alert(data.detail || "Ошибка объединения артистов");
+        alert(
+          typeof data.detail === "string"
+            ? t(data.detail)
+            : t("Ошибка объединения артистов"),
+        );
       }
     } catch (err) {
       console.error(err);
@@ -403,7 +431,7 @@ export function useAdminPanel() {
       });
       if (res.ok) {
         setXpMultiplier(val);
-        alert(`Множитель опыта установлен на x${val}`);
+        alert(t("Множитель опыта установлен на x{val}", { val }));
       }
     } catch (e) {
       console.error(e);
@@ -438,7 +466,7 @@ export function useAdminPanel() {
   };
 
   const handleDeleteFrame = async (id: number) => {
-    if (!confirm("Удалить эту рамку?")) return;
+    if (!confirm(t("Удалить эту рамку?"))) return;
     try {
       const res = await fetch(`${API_BASE}/api/admin/frames/${id}`, {
         method: "DELETE",
@@ -492,7 +520,7 @@ export function useAdminPanel() {
   };
 
   const handleDeleteAnnouncement = async (id: number) => {
-    if (!confirm("Удалить оповещение?")) return;
+    if (!confirm(t("Удалить оповещение?"))) return;
     try {
       const res = await fetch(`${API_BASE}/api/admin/announcements/${id}`, {
         method: "DELETE",
@@ -549,7 +577,7 @@ export function useAdminPanel() {
         credentials: "include",
       });
       if (res.ok) {
-        alert("Системный кэш успешно очищен!");
+        alert(t("Системный кэш успешно очищен!"));
       }
     } catch (e) {
       console.error(e);

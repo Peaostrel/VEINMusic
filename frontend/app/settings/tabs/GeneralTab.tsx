@@ -1,4 +1,5 @@
 "use client";
+import { useT } from "@/app/lib/i18n/client";
 
 import { Plus, X } from "lucide-react";
 import { getSocialNetwork, SOCIAL_NETWORKS } from "@/app/lib/socialNetworks";
@@ -46,12 +47,18 @@ export default function GeneralTab({
   updateSocialLink,
   removeSocialLink,
 }: Readonly<GeneralTabProps>) {
+  const t = useT();
   const selectedSocialNetworks = new Set(
     socialLinks.map((link) => link.network),
   );
   const socialNetworkGroups = [
     ...new Set(SOCIAL_NETWORKS.map((network) => network.group)),
   ];
+  // Country names are stored in Russian; only the shown name follows the language.
+  const regionNames =
+    t.lang === "ru"
+      ? null
+      : new Intl.DisplayNames([t.locale], { type: "region" });
 
   return (
     <div className="space-y-6">
@@ -61,7 +68,7 @@ export default function GeneralTab({
             htmlFor="cover-upload"
             className="mb-1.5 block text-xs text-fg-2"
           >
-            Визуальное оформление
+            {t("Визуальное оформление")}
           </label>
           <div className="relative w-full rounded-xl bg-surface-2 border-2 border-dashed border-line hover:border-line transition-colors group mb-10">
             <label
@@ -75,7 +82,7 @@ export default function GeneralTab({
                 ></div>
               ) : (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-fg-2 group-hover:text-fg transition-colors">
-                  <span className="font-medium">Загрузить обложку</span>
+                  <span className="font-medium">{t("Загрузить обложку")}</span>
                 </div>
               )}
               <input
@@ -93,13 +100,13 @@ export default function GeneralTab({
               {data.avatarUrl ? (
                 <img
                   src={data.avatarUrl}
-                  alt="Аватар"
+                  alt={t("Аватар")}
                   className="w-full h-full object-cover group-hover/avatar:scale-110 transition-transform"
                 />
               ) : (
                 <img
                   src={`https://api.dicebear.com/9.x/micah/svg?seed=${username || "default"}&backgroundColor=transparent`}
-                  alt="Аватар"
+                  alt={t("Аватар")}
                   className="w-full h-full object-cover group-hover/avatar:scale-110 transition-transform bg-surface-2"
                 />
               )}
@@ -118,7 +125,7 @@ export default function GeneralTab({
             htmlFor="display-name"
             className="mb-1.5 block text-xs text-fg-2"
           >
-            Отображаемое Имя
+            {t("Отображаемое Имя")}
           </label>
           <input
             id="display-name"
@@ -132,7 +139,7 @@ export default function GeneralTab({
             htmlFor="country-select"
             className="mb-1.5 block text-xs text-fg-2"
           >
-            Страна
+            {t("Страна")}
           </label>
           <select
             id="country-select"
@@ -140,10 +147,10 @@ export default function GeneralTab({
             onChange={(e) => updateData("country", e.target.value)}
             className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-fg placeholder:text-fg-3 outline-none transition-colors focus:border-fg-3 cursor-pointer"
           >
-            <option value="">Выберите страну...</option>
+            <option value="">{t("Выберите страну...")}</option>
             {countries.map((c) => (
               <option key={c.code} value={c.name}>
-                {c.flag} {c.name}
+                {c.flag} {regionNames?.of(c.code) ?? c.name}
               </option>
             ))}
           </select>
@@ -153,7 +160,7 @@ export default function GeneralTab({
             htmlFor="city-input"
             className="mb-1.5 block text-xs text-fg-2"
           >
-            Город
+            {t("Город")}
           </label>
           <div className="relative">
             <input
@@ -162,7 +169,7 @@ export default function GeneralTab({
               onChange={(e) => updateData("city", e.target.value)}
               onFocus={() => setIsCityInputFocused(true)}
               onBlur={() => setTimeout(() => setIsCityInputFocused(false), 200)}
-              placeholder="Введите название..."
+              placeholder={t("Введите название...")}
               className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-fg placeholder:text-fg-3 outline-none transition-colors focus:border-fg-3"
             />
             {isCityInputFocused && cities.length > 0 && (
@@ -190,7 +197,7 @@ export default function GeneralTab({
           htmlFor="bio-textarea"
           className="mb-1.5 block text-xs text-fg-2"
         >
-          О себе
+          {t("О себе")}
         </label>
         <textarea
           id="bio-textarea"
@@ -203,7 +210,7 @@ export default function GeneralTab({
 
       <div className="pt-6 border-t border-line-soft space-y-4">
         <span className="block text-sm font-medium text-fg-2">
-          Социальные сети
+          {t("Социальные сети")}
         </span>
 
         {socialLinks && socialLinks.length > 0 ? (
@@ -217,7 +224,7 @@ export default function GeneralTab({
                   className="flex gap-3 items-center bg-surface p-3 rounded-lg border border-line-soft"
                 >
                   <select
-                    aria-label="Соцсеть"
+                    aria-label={t("Соцсеть")}
                     value={link.network}
                     onChange={(e) =>
                       updateSocialLink(link.id, "network", e.target.value)
@@ -225,7 +232,7 @@ export default function GeneralTab({
                     className="h-10 cursor-pointer rounded-lg border border-line bg-surface px-3 text-sm text-fg outline-none transition-colors focus:border-fg-3"
                   >
                     {socialNetworkGroups.map((group) => (
-                      <optgroup key={group} label={group}>
+                      <optgroup key={group} label={t(group)}>
                         {SOCIAL_NETWORKS.filter(
                           (network) => network.group === group,
                         ).map((network) => (
@@ -237,7 +244,7 @@ export default function GeneralTab({
                               selectedSocialNetworks.has(network.id)
                             }
                           >
-                            {network.label}
+                            {t(network.label)}
                           </option>
                         ))}
                       </optgroup>
@@ -251,16 +258,18 @@ export default function GeneralTab({
                       updateSocialLink(link.id, "username", e.target.value)
                     }
                     placeholder={
-                      selectedNetwork?.placeholder ?? "Никнейм или ID"
+                      selectedNetwork
+                        ? t(selectedNetwork.placeholder)
+                        : t("Никнейм или ID")
                     }
-                    aria-label={`${selectedNetwork?.label ?? "Соцсеть"}: ${selectedNetwork?.placeholder ?? "никнейм или ID"}`}
+                    aria-label={`${selectedNetwork ? t(selectedNetwork.label) : t("Соцсеть")}: ${selectedNetwork ? t(selectedNetwork.placeholder) : t("никнейм или ID")}`}
                     className="h-10 min-w-0 flex-grow rounded-lg border border-line bg-surface px-3 text-sm text-fg outline-none focus:border-fg-3"
                   />
 
                   <button
                     type="button"
                     onClick={() => removeSocialLink(link.id)}
-                    aria-label="Удалить ссылку"
+                    aria-label={t("Удалить ссылку")}
                     className="p-2.5 text-danger border border-danger-line rounded-lg hover:bg-[#2a1b1b] transition-colors text-sm font-medium"
                   >
                     <X className="h-4 w-4" aria-hidden="true" />
@@ -271,7 +280,7 @@ export default function GeneralTab({
           </div>
         ) : (
           <p className="text-sm text-fg-2">
-            Социальные сети пока не привязаны.
+            {t("Социальные сети пока не привязаны.")}
           </p>
         )}
 
@@ -282,7 +291,7 @@ export default function GeneralTab({
           className="bg-surface-2 hover:bg-line border border-line text-fg font-medium px-4 py-2 rounded-lg text-xs transition-all flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface-2"
         >
           <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-          Добавить ссылку
+          {t("Добавить ссылку")}
         </button>
       </div>
     </div>

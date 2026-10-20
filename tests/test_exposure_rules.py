@@ -34,7 +34,7 @@ def _play(db, user, title, playing=False, deleted=False, minutes_ago=0):
 
 
 def _now_playing(client, username):
-    response = client.get(f"/api/widgets/now-playing/{username}.svg")
+    response = client.get(f"/api/widgets/now-playing/{username}.svg?lang=en")
     assert response.status_code == 200
     return response.text
 

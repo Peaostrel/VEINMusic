@@ -1,4 +1,6 @@
 "use client";
+import { useT } from "@/app/lib/i18n/client";
+import { msg } from "@/app/lib/i18n/core";
 
 import { ArrowDown, ArrowUp, Eye, EyeOff } from "lucide-react";
 import type { ProfileSection } from "@/app/lib/types";
@@ -10,24 +12,37 @@ import {
 } from "../components/PreferenceControls";
 
 const LABELS: Record<ProfileSection, { title: string; description: string }> = {
-  showcase: { title: "Витрина", description: "Любимый артист, трек и альбом" },
+  showcase: {
+    title: msg("Витрина"),
+    description: msg("Любимый артист, трек и альбом"),
+  },
   recommendations: {
-    title: "Рекомендации",
-    description: "Артисты, которые могут понравиться",
+    title: msg("Рекомендации"),
+    description: msg("Артисты, которые могут понравиться"),
   },
-  history: { title: "История", description: "Последние прослушивания" },
-  wrapped: { title: "Итоги месяца", description: "Краткий Wrapped в профиле" },
+  history: {
+    title: msg("История"),
+    description: msg("Последние прослушивания"),
+  },
+  wrapped: {
+    title: msg("Итоги месяца"),
+    description: msg("Краткий Wrapped в профиле"),
+  },
   top_tracks: {
-    title: "Топ треков",
-    description: "Чаще всего прослушиваемые треки",
+    title: msg("Топ треков"),
+    description: msg("Чаще всего прослушиваемые треки"),
   },
-  top_artists: { title: "Топ артистов", description: "Любимые исполнители" },
+  top_artists: {
+    title: msg("Топ артистов"),
+    description: msg("Любимые исполнители"),
+  },
 };
 
 export default function ProfileLayoutTab({
   data,
   updatePreference,
 }: Readonly<{ data: SettingsData; updatePreference: UpdatePreference }>) {
+  const t = useT();
   const settings = data.preferences.profile;
   const update = (patch: Partial<typeof settings>) =>
     updatePreference("profile", { ...settings, ...patch });
@@ -53,8 +68,10 @@ export default function ProfileLayoutTab({
   return (
     <div className="space-y-6">
       <SettingsIntro
-        title="Конструктор профиля"
-        description="Скройте ненужные блоки и задайте их приоритет внутри основной и боковой колонок. Витрина закреплена сразу под шапкой профиля."
+        title={t("Конструктор профиля")}
+        description={t(
+          "Скройте ненужные блоки и задайте их приоритет внутри основной и боковой колонок. Витрина закреплена сразу под шапкой профиля.",
+        )}
       />
       <ol className={settingsCard}>
         {settings.section_order.map((section, index) => {
@@ -71,18 +88,20 @@ export default function ProfileLayoutTab({
               </span>
               <span className={`min-w-0 flex-1 ${hidden ? "opacity-45" : ""}`}>
                 <span className="block text-sm font-medium">
-                  {LABELS[section].title}
+                  {t(LABELS[section].title)}
                 </span>
                 <span className="block text-xs text-fg-2">
-                  {LABELS[section].description}
-                  {fixed ? " · закреплено" : ""}
+                  {t(LABELS[section].description)}
+                  {fixed ? ` · ${t("закреплено")}` : ""}
                 </span>
               </span>
               <button
                 type="button"
                 onClick={() => move(section, -1)}
                 disabled={fixed || movableIndex === 0}
-                aria-label={`Поднять ${LABELS[section].title}`}
+                aria-label={t("Поднять {section}", {
+                  section: t(LABELS[section].title),
+                })}
                 className="rounded-md p-2 text-fg-2 hover:bg-surface-2 hover:text-fg disabled:opacity-25"
               >
                 <ArrowUp className="h-4 w-4" aria-hidden="true" />
@@ -91,7 +110,9 @@ export default function ProfileLayoutTab({
                 type="button"
                 onClick={() => move(section, 1)}
                 disabled={fixed || movableIndex === movableSections.length - 1}
-                aria-label={`Опустить ${LABELS[section].title}`}
+                aria-label={t("Опустить {section}", {
+                  section: t(LABELS[section].title),
+                })}
                 className="rounded-md p-2 text-fg-2 hover:bg-surface-2 hover:text-fg disabled:opacity-25"
               >
                 <ArrowDown className="h-4 w-4" aria-hidden="true" />
@@ -99,7 +120,15 @@ export default function ProfileLayoutTab({
               <button
                 type="button"
                 onClick={() => toggle(section)}
-                aria-label={`${hidden ? "Показать" : "Скрыть"} ${LABELS[section].title}`}
+                aria-label={
+                  hidden
+                    ? t("Показать {section}", {
+                        section: t(LABELS[section].title),
+                      })
+                    : t("Скрыть {section}", {
+                        section: t(LABELS[section].title),
+                      })
+                }
                 className="rounded-md p-2 text-fg-2 hover:bg-surface-2 hover:text-fg"
               >
                 {hidden ? (
@@ -114,8 +143,10 @@ export default function ProfileLayoutTab({
       </ol>
       <section className={settingsCard}>
         <ToggleRow
-          title="Показывать статус онлайн"
-          description="Разрешить другим видеть, что профиль сейчас активен."
+          title={t("Показывать статус онлайн")}
+          description={t(
+            "Разрешить другим видеть, что профиль сейчас активен.",
+          )}
           checked={settings.show_online_status}
           onChange={(show_online_status) => update({ show_online_status })}
         />

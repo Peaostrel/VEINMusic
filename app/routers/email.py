@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.i18n import request_lang, tr, user_lang
 from app.core.rate_limit import limiter
 from app.core.security import get_admin_user, get_current_user, get_password_hash, revoke_all_sessions, verify_password
 from app.database import get_db
@@ -130,9 +131,13 @@ def bind(request: Request, data: Bind, db: DB, user: Owner):
     row.verify_stamp = mail.digest(str(user.hashed_password))
     row.verify_expires = datetime.now(UTC) + timedelta(minutes=30)  # type: ignore[assignment]
     cancel(db, user.id, "verify")
-    mail.queue(db, user.id, "verify", data.email, "Подтвердите почту VEIN Music",
-               f"Подтвердите привязку почты к аккаунту {user.username}. Ссылка действует 30 минут.\n"
-               "Если вы не запрашивали это письмо, проигнорируйте его.", mail.site_url() + "/email/verify#" + raw)
+    # The owner asks for it from the page: their current interface language
+    lang = request_lang(request, user)
+    mail.queue(db, user.id, "verify", data.email, tr(lang, "Подтвердите почту VEIN Music"),
+               tr(lang, "Подтвердите привязку почты к аккаунту {username}. Ссылка действует 30 минут.",
+                  username=user.username) + "\n"
+               + tr(lang, "Если вы не запрашивали это письмо, проигнорируйте его."),
+               mail.site_url() + "/email/verify#" + raw, lang=lang)
     db.commit()
     return {"message": "Письмо подтверждения поставлено в очередь"}
 
@@ -198,9 +203,12 @@ def forgot(request: Request, data: Address, db: DB):
         row.reset_expires = datetime.now(UTC) + timedelta(minutes=30)  # type: ignore[assignment]
         row.password_stamp = mail.digest(str(user.hashed_password))
         cancel(db, user.id, "reset")
-        mail.queue(db, user.id, "reset", row.email, "Восстановление пароля VEIN Music",
-                   "Вы запросили новый пароль. Ссылка действует 30 минут.\nЕсли это не вы, проигнорируйте письмо.",
-                   mail.site_url() + "/email/reset#" + raw)
+        # Anyone may ask: the account owner's saved language, not the asker's
+        lang = user_lang(user)
+        mail.queue(db, user.id, "reset", row.email, tr(lang, "Восстановление пароля VEIN Music"),
+                   tr(lang, "Вы запросили новый пароль. Ссылка действует 30 минут.") + "\n"
+                   + tr(lang, "Если это не вы, проигнорируйте письмо."),
+                   mail.site_url() + "/email/reset#" + raw, lang=lang)
         db.commit()
     return {"message": "Если почта привязана к аккаунту, мы отправим ссылку восстановления"}
 
@@ -241,7 +249,10 @@ def admin_message(request: Request, data: Message, db: DB, admin: Admin):
         raise HTTPException(400, "Пользователь не разрешил письма или не подтвердил почту")
     if not budget(db, target.id, "message"):
         raise HTTPException(429, "Дневной лимит писем пользователю исчерпан")
-    text = data.text + "\n\nОтключить письма от администрации можно в настройках безопасности VEIN Music."
-    message = mail.queue(db, target.id, "message", row.email, data.subject, text, mail.site_url() + "/settings?tab=security")
+    # The admin's own words stay as typed; the footer is in the recipient's language
+    lang = user_lang(target)
+    text = data.text + "\n\n" + tr(lang, "Отключить письма от администрации можно в настройках безопасности VEIN Music.")
+    message = mail.queue(db, target.id, "message", row.email, data.subject, text,
+                         mail.site_url() + "/settings?tab=security", lang=lang)
     db.commit()
     return {"message": "Письмо поставлено в очередь", "id": message.id}

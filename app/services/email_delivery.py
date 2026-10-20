@@ -9,6 +9,7 @@ from uuid import uuid4
 import httpx
 from sqlalchemy.orm import Session
 
+from app.core.i18n import normalize_lang, tr, user_lang
 from app.database import SessionLocal
 from app.models import EmailAccount, EmailOutbox, User
 
@@ -25,23 +26,38 @@ def site_url():
     return os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
 
 
-def queue(db: Session, user_id, kind, recipient, subject, text, link=None):
-    payload = {"to": recipient, "subject": subject, "text": text, "link": link}
+def queue(db: Session, user_id, kind, recipient, subject, text, link=None, lang="ru"):
+    """`subject` and `text` are already in `lang`, the recipient's language."""
+    payload = {"to": recipient, "subject": subject, "text": text, "link": link, "lang": lang}
     row = EmailOutbox(id=uuid4().hex, user_id=user_id, kind=kind, payload=json.dumps(payload))
     db.add(row)
     return row
 
 
+_MONTHS_EN = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def time_text(lang, value):
+    """20.10.2026 14:05 in Russian, Oct 20, 2026 14:05 in English."""
+    if lang == "en":
+        return f"{_MONTHS_EN[value.month - 1]} {value.day}, {value.year} {value:%H:%M}"
+    return f"{value:%d.%m.%Y %H:%M}"
+
+
 def new_login(db, user, device):
     if not configured():
         return
+    from app.services.sessions import localized_device
+
     account = db.get(EmailAccount, user.id)
     if account and account.email and account.security_alerts:
-        queue(db, user.id, "security", account.email, "Новый вход в VEIN Music",
-              f"В аккаунт {user.username} вошли с нового устройства: {device}.\n"
-              f"Время: {datetime.now(UTC):%d.%m.%Y %H:%M} UTC.\n"
-              "Если это не вы, смените пароль и завершите другие сеансы.",
-              site_url() + "/settings?tab=security")
+        lang = user_lang(user)
+        queue(db, user.id, "security", account.email, tr(lang, "Новый вход в VEIN Music"),
+              tr(lang, "В аккаунт {username} вошли с нового устройства: {device}.", username=user.username,
+                 device=localized_device(device, lang)) + "\n"
+              + tr(lang, "Время: {time} UTC.", time=time_text(lang, datetime.now(UTC))) + "\n"
+              + tr(lang, "Если это не вы, смените пароль и завершите другие сеансы."),
+              site_url() + "/settings?tab=security", lang=lang)
 
 
 ACTIONS = {"verify": "Подтвердить почту", "reset": "Задать новый пароль",
@@ -51,6 +67,7 @@ ACTIONS = {"verify": "Подтвердить почту", "reset": "Задать
 def render(payload, kind="message"):
     """Table layout with inline styles: mail clients drop <style> blocks and flexbox."""
     esc = html.escape
+    lang = normalize_lang(payload.get("lang")) or "ru"
     paragraphs = "".join(
         f'<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#d6d6d3">{esc(line)}</p>'
         for line in payload["text"].split("\n") if line.strip())
@@ -62,14 +79,17 @@ def render(payload, kind="message"):
             '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:10px 0 22px"><tr>'
             '<td style="border-radius:8px;background:#e3a93b">'
             f'<a href="{href}" style="display:inline-block;padding:12px 22px;font-size:15px;font-weight:600;'
-            f'color:#121212;text-decoration:none;border-radius:8px">{esc(ACTIONS.get(kind, ACTIONS["message"]))}</a>'
+            f'color:#121212;text-decoration:none;border-radius:8px">{esc(tr(lang, ACTIONS.get(kind, ACTIONS["message"])))}</a>'
             '</td></tr></table>'
-            '<p style="margin:0;font-size:12px;line-height:1.5;color:#8a8b88">Если кнопка не работает, откройте ссылку:<br>'
+            '<p style="margin:0;font-size:12px;line-height:1.5;color:#8a8b88">'
+            f'{esc(tr(lang, "Если кнопка не работает, откройте ссылку:"))}<br>'
             f'<a href="{href}" style="color:#e3a93b;word-break:break-all">{esc(link)}</a></p>')
     site = esc(site_url(), quote=True)
     domain = esc(site_url().split("://")[-1])
+    footer = esc(tr(lang, "Это служебное письмо от {domain}.")).replace(
+        "{domain}", f'<a href="{site}" style="color:#8a8b88">{domain}</a>')
     return f"""<!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="{lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark light"><meta name="supported-color-schemes" content="dark light">
 <title>{esc(payload["subject"])}</title></head>
 <body style="margin:0;padding:0;background:#0e0f10">
@@ -87,7 +107,7 @@ def render(payload, kind="message"):
 {paragraphs}{action}
 </td></tr>
 <tr><td style="padding:18px 4px 0;font-size:12px;line-height:1.5;color:#6f706d">
-Это служебное письмо от <a href="{site}" style="color:#8a8b88">{domain}</a>.
+{footer}
 </td></tr>
 </table></td></tr></table></body></html>"""
 

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useT } from "@/app/lib/i18n/client";
 
 /*
  * Shared building blocks for the "restrained dark" design.
@@ -277,9 +278,10 @@ export function EmptyState({
 }
 
 /** Quiet loading line. */
-export function Loading({
-  label: text = "Загрузка…",
-}: Readonly<{ label?: string }>) {
+export function Loading({ label }: Readonly<{ label?: string }>) {
+  // A hook: Loading is rendered by Client Components only
+  const t = useT();
+  const text = label ?? t("Загрузка…");
   return (
     <output
       aria-live="polite"

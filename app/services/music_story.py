@@ -3,11 +3,26 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import extract, func
 
+from app.core.i18n import plural, tr
 from app.models import Scrobble, Track
 from app.services.user_stats import get_user_timezone_offset
 
 
-def weekly_story(user, db, now=None):
+def story_text(lang, plays, minutes, top=None, discovery=None, new_count=0, peak_hour=None):
+    """The weekly narrative in `lang` (the reader's language)."""
+    parts = [tr(lang, "За неделю — {plays} прослушиваний и {minutes} минут музыки.", plays=plays, minutes=minutes,
+                plays_word=plural(lang, plays, "прослушивание", "прослушивания", "прослушиваний"),
+                minutes_word=plural(lang, minutes, "минута", "минуты", "минут"))]
+    if top:
+        parts.append(tr(lang, "Чаще всего звучал {artist}.", artist=top))
+    if discovery:
+        parts.append(tr(lang, "Главное открытие — {artist}. Новых исполнителей: {n}.", artist=discovery, n=new_count))
+    if peak_hour is not None:
+        parts.append(tr(lang, "Самый музыкальный час — {hour}:00.", hour=f"{peak_hour:02d}"))
+    return " ".join(parts)
+
+
+def weekly_story(user, db, now=None, lang="ru"):
     now = now or datetime.now(UTC)
     start = now - timedelta(days=7)
     query = db.query(Track.artist, func.count(Scrobble.id)).join(Scrobble, Scrobble.track_id == Track.id).filter(Scrobble.user_id == user.id, Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85)
@@ -23,13 +38,7 @@ def weekly_story(user, db, now=None):
         Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85,
         Scrobble.user_id == user.id, Scrobble.played_at >= start, Scrobble.played_at <= now).group_by(extract("hour", Scrobble.played_at)).all()
     peak_hour = (int(max(hours, key=lambda row: row[1])[0]) + offset) % 24 if hours else None
-    text = f"За неделю — {plays} прослушиваний и {int(seconds) // 60} минут музыки."
-    if top:
-        text += f" Чаще всего звучал {top}."
-    if new:
-        text += f" Главное открытие — {new[0]}. Новых исполнителей: {len(new)}."
-    if peak_hour is not None:
-        text += f" Самый музыкальный час — {peak_hour:02d}:00."
+    text = story_text(lang, int(plays), int(seconds) // 60, top, new[0] if new else None, len(new), peak_hour)
     return {"from": start, "to": now, "plays": int(plays), "minutes": int(seconds) // 60,
             "top_artist": top, "new_artists": new[:12], "new_artists_count": len(new),
             "discovery": new[0] if new else None, "peak_hour": peak_hour, "story": text}

@@ -5,8 +5,7 @@ import About from "./about/AboutView";
 import { landingData } from "./about/landingData";
 import JsonLd from "@/components/JsonLd";
 import { websiteData } from "./lib/structuredData";
-
-const description = "Вся музыка, что вы слушаете, — в одной истории";
+import { getT } from "./lib/i18n/server";
 
 export const metadata: Metadata = {
   alternates: {
@@ -20,11 +19,13 @@ async function Landing() {
   return <About initial={await landingData()} />;
 }
 
-export default function HomePage() {
+export default async function HomePage() {
+  const t = await getT();
+  const description = t("Вся музыка, что вы слушаете, — в одной истории");
   // Streamed: a signed-in visitor's dashboard never waits for guest data
   return (
     <>
-      <JsonLd data={websiteData(description)} />
+      <JsonLd data={websiteData(description, t.lang)} />
       <Home
         landing={
           <Suspense fallback={<About />}>

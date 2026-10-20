@@ -2,41 +2,57 @@ import Link from "next/link";
 import { KeyRound } from "lucide-react";
 import { btn } from "@/components/ui";
 import { pageMetadata } from "@/app/lib/preview";
+import { msg } from "@/app/lib/i18n/core";
+import { getT } from "@/app/lib/i18n/server";
 import CodeSamples from "./CodeSamples";
 
-export const metadata = pageMetadata(
-  "API для разработчиков",
-  "Открытый API VEIN: отправка скробблов по ключу, профили, топ слушателей и подключение устройств по коду.",
-  "/developers",
-);
+export async function generateMetadata() {
+  const t = await getT();
+  return pageMetadata(
+    t("API для разработчиков"),
+    t(
+      "Открытый API VEIN: отправка скробблов по ключу, профили, топ слушателей и подключение устройств по коду.",
+    ),
+    "/developers",
+    t.lang,
+  );
+}
 
 const TOC = [
-  ["#auth", "Ключ"],
-  ["#endpoints", "Эндпоинты"],
-  ["#fields", "Поля скроббла"],
-  ["#devices", "Подключение устройства"],
-  ["#examples", "Примеры"],
+  ["#auth", msg("Ключ")],
+  ["#endpoints", msg("Эндпоинты")],
+  ["#fields", msg("Поля скроббла")],
+  ["#devices", msg("Подключение устройства")],
+  ["#examples", msg("Примеры")],
 ];
 
 const ENDPOINTS = [
-  ["POST", "/api/scrobble", "Отправить трек в историю. Нужен api_key."],
-  ["GET", "/api/user/:username", "Профиль, аватар и что играет сейчас."],
-  ["GET", "/api/leaderboard", "Топ слушателей по опыту."],
-  ["GET", "/api/public-stats", "Общие цифры сайта: прослушивания, треки."],
-  ["POST", "/api/devices/code", "Начать подключение устройства без ключа."],
-  ["POST", "/api/devices/token", "Забрать ключ, когда пользователь разрешил."],
+  ["POST", "/api/scrobble", msg("Отправить трек в историю. Нужен api_key.")],
+  ["GET", "/api/user/:username", msg("Профиль, аватар и что играет сейчас.")],
+  ["GET", "/api/leaderboard", msg("Топ слушателей по опыту.")],
+  ["GET", "/api/public-stats", msg("Общие цифры сайта: прослушивания, треки.")],
+  [
+    "POST",
+    "/api/devices/code",
+    msg("Начать подключение устройства без ключа."),
+  ],
+  [
+    "POST",
+    "/api/devices/token",
+    msg("Забрать ключ, когда пользователь разрешил."),
+  ],
 ];
 
 const FIELDS: [string, boolean, string][] = [
-  ["api_key", true, "Ваш секретный ключ."],
-  ["title", true, "Название трека."],
-  ["artist", true, "Исполнитель."],
-  ["source", true, "Откуда трек: discord_rpc, custom_script и т. п."],
-  ["album", false, "Альбом."],
-  ["duration", false, "Длина трека в секундах."],
-  ["progress_sec", false, "Сколько секунд уже прослушано."],
-  ["is_playing", false, "Играет ли трек прямо сейчас."],
-  ["cover_url, track_url", false, "Ссылки на обложку и сам трек."],
+  ["api_key", true, msg("Ваш секретный ключ.")],
+  ["title", true, msg("Название трека.")],
+  ["artist", true, msg("Исполнитель.")],
+  ["source", true, msg("Откуда трек: discord_rpc, custom_script и т. п.")],
+  ["album", false, msg("Альбом.")],
+  ["duration", false, msg("Длина трека в секундах.")],
+  ["progress_sec", false, msg("Сколько секунд уже прослушано.")],
+  ["is_playing", false, msg("Играет ли трек прямо сейчас.")],
+  ["cover_url, track_url", false, msg("Ссылки на обложку и сам трек.")],
 ];
 
 function Section({
@@ -66,15 +82,16 @@ function Code({ children }: Readonly<{ children: React.ReactNode }>) {
   );
 }
 
-export default function Developers() {
+export default async function Developers() {
+  const t = await getT();
   return (
     <div className="mx-auto flex w-full max-w-[1080px] gap-14 px-4 pt-12 pb-24 md:px-8 md:pt-16">
       <nav
-        aria-label="Разделы документации"
+        aria-label={t("Разделы документации")}
         className="sticky top-24 hidden h-fit w-[180px] shrink-0 flex-col gap-1 lg:flex"
       >
         <span className="mb-2 font-mono text-[11px] uppercase tracking-[0.06em] text-fg-3">
-          на странице
+          {t("на странице")}
         </span>
         {TOC.map(([href, text]) => (
           <a
@@ -82,7 +99,7 @@ export default function Developers() {
             href={href}
             className="rounded-md py-1.5 text-[13px] text-fg-2 transition-colors hover:text-fg"
           >
-            {text}
+            {t(text)}
           </a>
         ))}
       </nav>
@@ -90,21 +107,24 @@ export default function Developers() {
       <div className="flex min-w-0 max-w-[760px] flex-1 flex-col gap-12">
         <header className="flex flex-col gap-3">
           <span className="font-mono text-xs text-fg-3">
-            разработчикам · API v1
+            {t("разработчикам · API v1")}
           </span>
           <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.02em] md:text-[32px]">
-            API для своих плееров и ботов
+            {t("API для своих плееров и ботов")}
           </h1>
           <p className="max-w-[620px] text-[15px] leading-relaxed text-fg-2">
-            Отправляйте прослушивания из любого плеера, Discord-бота или скрипта
-            и забирайте статистику. Публичные GET-запросы работают без ключа.
+            {t(
+              "Отправляйте прослушивания из любого плеера, Discord-бота или скрипта и забирайте статистику. Публичные GET-запросы работают без ключа.",
+            )}
           </p>
         </header>
 
-        <Section id="auth" title="Ключ">
+        <Section id="auth" title={t("Ключ")}>
           <p className="text-sm leading-relaxed text-fg-2">
-            Для POST-запросов нужен ваш <Code>api_key</Code>. Никому его не
-            показывайте: с ним можно писать в вашу историю.
+            {t("Для POST-запросов нужен ваш")} <Code>api_key</Code>
+            {t(
+              ". Никому его не показывайте: с ним можно писать в вашу историю.",
+            )}
           </p>
           <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface px-5 py-4 sm:flex-row sm:items-center">
             <span className="flex flex-1 items-start gap-3">
@@ -114,10 +134,12 @@ export default function Developers() {
               />
               <span className="flex flex-col gap-0.5">
                 <span className="text-sm font-medium">
-                  Ключ показывается один раз — при регистрации
+                  {t("Ключ показывается один раз — при регистрации")}
                 </span>
                 <span className="text-[13px] text-fg-2">
-                  Потеряли? Выпустите новый, старый сразу перестанет работать.
+                  {t(
+                    "Потеряли? Выпустите новый, старый сразу перестанет работать.",
+                  )}
                 </span>
               </span>
             </span>
@@ -125,19 +147,21 @@ export default function Developers() {
               href="/settings?tab=integrations"
               className={`${btn.secondary} ${btn.md} shrink-0`}
             >
-              Выпустить новый
+              {t("Выпустить новый")}
             </Link>
           </div>
         </Section>
 
-        <Section id="endpoints" title="Эндпоинты">
+        <Section id="endpoints" title={t("Эндпоинты")}>
           <div className="overflow-x-auto rounded-xl border border-line">
             <table className="w-full min-w-[560px] text-left text-[13px]">
               <thead className="bg-surface text-xs text-fg-3">
                 <tr>
-                  <th className="w-[80px] px-4 py-2.5 font-normal">Метод</th>
-                  <th className="px-4 py-2.5 font-normal">Путь</th>
-                  <th className="px-4 py-2.5 font-normal">Что делает</th>
+                  <th className="w-[80px] px-4 py-2.5 font-normal">
+                    {t("Метод")}
+                  </th>
+                  <th className="px-4 py-2.5 font-normal">{t("Путь")}</th>
+                  <th className="px-4 py-2.5 font-normal">{t("Что делает")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -157,7 +181,7 @@ export default function Developers() {
                     <td className="px-4 py-3 font-mono whitespace-nowrap">
                       {path}
                     </td>
-                    <td className="px-4 py-3 text-fg-2">{desc}</td>
+                    <td className="px-4 py-3 text-fg-2">{t(desc)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -165,7 +189,7 @@ export default function Developers() {
           </div>
         </Section>
 
-        <Section id="fields" title="Поля скроббла">
+        <Section id="fields" title={t("Поля скроббла")}>
           <dl className="rounded-xl border border-line">
             {FIELDS.map(([name, required, desc]) => (
               <div
@@ -176,53 +200,54 @@ export default function Developers() {
                 <dd
                   className={`text-right text-xs sm:text-left ${required ? "text-accent" : "text-fg-3"}`}
                 >
-                  {required ? "обязательно" : "по желанию"}
+                  {required ? t("обязательно") : t("по желанию")}
                 </dd>
                 <dd className="col-span-2 text-[13px] text-fg-2 sm:col-span-1">
-                  {desc}
+                  {t(desc)}
                 </dd>
               </div>
             ))}
           </dl>
         </Section>
 
-        <Section id="devices" title="Подключение устройства">
+        <Section id="devices" title={t("Подключение устройства")}>
           <p className="text-sm leading-relaxed text-fg-2">
-            Если не хотите, чтобы пользователь вставлял ключ руками, подключите
-            устройство по короткому коду — так работает наше расширение.
+            {t(
+              "Если не хотите, чтобы пользователь вставлял ключ руками, подключите устройство по короткому коду — так работает наше расширение.",
+            )}
           </p>
           <ol className="flex flex-col gap-3 text-sm text-fg-2">
             <li className="grid grid-cols-[28px_1fr]">
               <span className="font-mono text-accent">01</span>
               <span>
-                Вызовите <Code>POST /api/devices/code</Code> с полем{" "}
-                <Code>client_name</Code> и покажите пользователю{" "}
-                <Code>user_code</Code>.
+                {t("Вызовите")} <Code>POST /api/devices/code</Code>{" "}
+                {t("с полем")} <Code>client_name</Code>{" "}
+                {t("и покажите пользователю")} <Code>user_code</Code>.
               </span>
             </li>
             <li className="grid grid-cols-[28px_1fr]">
               <span className="font-mono text-fg-3">02</span>
               <span>
-                Пользователь вводит код на странице{" "}
+                {t("Пользователь вводит код на странице")}{" "}
                 <Link href="/link" className="text-fg underline">
                   /link
                 </Link>{" "}
-                и разрешает доступ.
+                {t("и разрешает доступ.")}
               </span>
             </li>
             <li className="grid grid-cols-[28px_1fr]">
               <span className="font-mono text-fg-3">03</span>
               <span>
-                Опрашивайте <Code>POST /api/devices/token</Code> с{" "}
-                <Code>device_code</Code> раз в <Code>interval</Code> секунд,
-                пока статус <Code>pending</Code>. После подтверждения придёт{" "}
-                <Code>api_key</Code>.
+                {t("Опрашивайте")} <Code>POST /api/devices/token</Code> {t("с")}{" "}
+                <Code>device_code</Code> {t("раз в")} <Code>interval</Code>{" "}
+                {t("секунд, пока статус")} <Code>pending</Code>
+                {t(". После подтверждения придёт")} <Code>api_key</Code>.
               </span>
             </li>
           </ol>
         </Section>
 
-        <Section id="examples" title="Примеры">
+        <Section id="examples" title={t("Примеры")}>
           <CodeSamples />
         </Section>
       </div>

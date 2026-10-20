@@ -1,4 +1,7 @@
+"use client";
+
 import { BarStrip } from "@/components/StatsCharts";
+import { useT } from "@/app/lib/i18n/client";
 
 /** YYYY-MM-DD dates ending at the API-provided profile-local date. */
 function lastDays(days: number, endDate?: string | null): string[] {
@@ -24,9 +27,10 @@ export function DailyActivity({
   days: number;
   endDate?: string | null;
 }>) {
+  const t = useT();
   const data: Record<string, number> = {};
   for (const date of lastDays(days, endDate)) {
-    const label = new Date(`${date}T00:00:00`).toLocaleDateString("ru-RU", {
+    const label = new Date(`${date}T00:00:00`).toLocaleDateString(t.locale, {
       day: "2-digit",
       month: "2-digit",
     });
@@ -40,15 +44,15 @@ export function DailyActivity({
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h2 id="daily-activity" className="text-base font-semibold">
-          Прослушивания по дням
+          {t("Прослушивания по дням")}
         </h2>
         <span className="font-mono text-xs text-fg-3">
-          последние {days} дн.
+          {t("последние {days} дн.", { days })}
         </span>
       </div>
       <BarStrip
         data={data}
-        label="Прослушивания по дням"
+        label={t("Прослушивания по дням")}
         highlight={today}
         height={180}
         labelEvery={days > 14 ? 5 : 1}

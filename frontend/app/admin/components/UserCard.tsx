@@ -1,5 +1,7 @@
 "use client";
 
+import { useT } from "@/app/lib/i18n/client";
+import { msg } from "@/app/lib/i18n/core";
 import { useState } from "react";
 import { X } from "lucide-react";
 import Dialog from "@/components/Dialog";
@@ -18,7 +20,11 @@ import {
 const section = "bg-bg border border-line-soft rounded-xl p-4 space-y-2";
 const sectionTitle = "text-[11px] font-mono text-fg-2";
 
-const SHOWCASE_LABELS = { artist: "Артист", track: "Трек", album: "Альбом" };
+const SHOWCASE_LABELS = {
+  artist: msg("Артист"),
+  track: msg("Трек"),
+  album: msg("Альбом"),
+};
 
 function Showcase({
   items,
@@ -33,19 +39,22 @@ function Showcase({
   ) => Promise<void>;
   post: (suffix: string, json?: unknown) => () => Promise<unknown>;
 }>) {
+  const t = useT();
   return (
     <div className={section}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className={sectionTitle}>Витрина</div>
+        <div className={sectionTitle}>{t("Витрина")}</div>
         <button
           type="button"
           className={buttonClass.secondary}
           onClick={() =>
-            act(post("/showcase/refresh"), "Витрина обновлена по поиску")
+            act(post("/showcase/refresh"), t("Витрина обновлена по поиску"))
           }
-          title="Заново найти имена, картинки и ссылки; блокировки не меняются"
+          title={t(
+            "Заново найти имена, картинки и ссылки; блокировки не меняются",
+          )}
         >
-          Обновить витрину
+          {t("Обновить витрину")}
         </button>
       </div>
       <ul className="space-y-2">
@@ -62,7 +71,7 @@ function Showcase({
             )}
             <div className="min-w-0 flex-1">
               <div className="text-[10px] text-fg-3">
-                {SHOWCASE_LABELS[i.field]}
+                {t(SHOWCASE_LABELS[i.field])}
               </div>
               <div className="truncate text-fg">{i.value || "—"}</div>
             </div>
@@ -73,16 +82,21 @@ function Showcase({
                 onClick={() =>
                   act(
                     post("/showcase/unlock", { field: i.field }),
-                    "Блокировка снята",
-                    `Снять блокировку поля «${SHOWCASE_LABELS[i.field]}»? Пользователь сможет сразу выбрать другое значение.`,
+                    t("Блокировка снята"),
+                    t(
+                      "Снять блокировку поля «{field}»? Пользователь сможет сразу выбрать другое значение.",
+                      { field: t(SHOWCASE_LABELS[i.field]) },
+                    ),
                   )
                 }
-                title={`Заблокировано до ${formatDateTime(i.locked_until)}`}
+                title={t("Заблокировано до {date}", {
+                  date: formatDateTime(i.locked_until),
+                })}
               >
-                Снять блокировку
+                {t("Снять блокировку")}
               </button>
             ) : (
-              <span className="text-[10px] text-fg-3">можно менять</span>
+              <span className="text-[10px] text-fg-3">{t("можно менять")}</span>
             )}
           </li>
         ))}
@@ -92,11 +106,12 @@ function Showcase({
 }
 
 function Flag({ on, label }: Readonly<{ on: boolean; label: string }>) {
+  const t = useT();
   return (
     <span
       className={`px-2 py-0.5 rounded text-[10px] font-medium ${on ? "text-ok" : "bg-surface-2 text-fg-2"}`}
     >
-      {label}: {on ? "да" : "нет"}
+      {label}: {on ? t("да") : t("нет")}
     </span>
   );
 }
@@ -115,6 +130,7 @@ export default function UserCard({
   onChanged: () => void;
   onOpenScrobbles?: (username: string) => void;
 }>) {
+  const t = useT();
   const path = `/api/admin/users/${encodeURIComponent(username)}`;
   const { data, error, reload } = useAdminResource<UserDetails>(
     `${path}/details`,
@@ -139,9 +155,12 @@ export default function UserCard({
 
   if (!data) {
     return (
-      <Dialog label={`Пользователь @${username}`} onClose={onClose}>
+      <Dialog
+        label={t("Пользователь @{username}", { username })}
+        onClose={onClose}
+      >
         <div className="bg-surface rounded-xl p-8 text-sm text-fg-2">
-          {error ? `❌ ${error}` : "Загрузка…"}
+          {error ? `❌ ${error}` : t("Загрузка…")}
         </div>
       </Dialog>
     );
@@ -151,7 +170,10 @@ export default function UserCard({
   const earned = new Set(data.achievements.map((a) => a.id));
 
   return (
-    <Dialog label={`Пользователь @${username}`} onClose={onClose}>
+    <Dialog
+      label={t("Пользователь @{username}", { username })}
+      onClose={onClose}
+    >
       <div className="bg-surface border border-line rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 space-y-4 text-left">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-4 min-w-0">
@@ -176,27 +198,30 @@ export default function UserCard({
                 </span>
                 {user.is_banned && (
                   <span className="px-2 py-0.5 rounded text-danger">
-                    ЗАБЛОКИРОВАН
+                    {t("ЗАБЛОКИРОВАН")}
                   </span>
                 )}
                 {user.is_flagged && (
                   <span className="px-2 py-0.5 rounded text-accent">
-                    АНТИФРОД
+                    {t("АНТИФРОД")}
                   </span>
                 )}
                 {integration.is_verified && (
                   <span className="px-2 py-0.5 rounded text-fg-2">
-                    ВЕРИФИЦИРОВАН
+                    {t("ВЕРИФИЦИРОВАН")}
                   </span>
                 )}
                 {user.is_private && (
                   <span className="px-2 py-0.5 rounded bg-surface-2 text-fg-2">
-                    ПРИВАТНЫЙ
+                    {t("ПРИВАТНЫЙ")}
                   </span>
                 )}
               </div>
               <p className="text-[11px] text-fg-2 mt-1">
-                ID {user.id} · регистрация: {formatDateTime(user.created_at)}
+                {t("ID {id} · регистрация: {date}", {
+                  id: user.id,
+                  date: formatDateTime(user.created_at),
+                })}
                 {user.location && ` · ${user.location}`}
               </p>
             </div>
@@ -204,7 +229,7 @@ export default function UserCard({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Закрыть"
+            aria-label={t("Закрыть")}
             className="p-2 text-fg-2 hover:text-fg"
           >
             <X className="w-5 h-5" aria-hidden="true" />
@@ -213,31 +238,31 @@ export default function UserCard({
 
         {user.antifraud_reason && (
           <p className="text-xs text-accent rounded-lg p-2">
-            {user.antifraud_reason}
+            {t(user.antifraud_reason)}
           </p>
         )}
         <Notice text={notice} />
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
           {[
-            ["Скробблов", stats.scrobbles],
-            ["Засчитано", stats.counted],
-            ["XP за треки", stats.xp],
-            ["Бонус XP", integration.bonus_xp],
-            ["Подписчики", stats.followers],
-            ["Подписки", stats.following],
-            ["Комментарии", stats.comments],
-            ["Серия дней", integration.current_streak],
+            [msg("Скробблов"), stats.scrobbles],
+            [msg("Засчитано"), stats.counted],
+            [msg("XP за треки"), stats.xp],
+            [msg("Бонус XP"), integration.bonus_xp],
+            [msg("Подписчики"), stats.followers],
+            [msg("Подписки"), stats.following],
+            [msg("Комментарии"), stats.comments],
+            [msg("Серия дней"), integration.current_streak],
           ].map(([label, value]) => (
             <div key={label} className="bg-bg rounded-xl p-2">
               <div className="text-base font-semibold text-fg">{value}</div>
-              <div className="text-[10px] text-fg-2">{label}</div>
+              <div className="text-[10px] text-fg-2">{t(String(label))}</div>
             </div>
           ))}
         </div>
 
         <div className={section}>
-          <div className={sectionTitle}>Действия</div>
+          <div className={sectionTitle}>{t("Действия")}</div>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -247,11 +272,11 @@ export default function UserCard({
               onClick={() =>
                 act(
                   post("/ban", { is_banned: !user.is_banned }),
-                  user.is_banned ? "Разблокирован" : "Заблокирован",
+                  user.is_banned ? t("Разблокирован") : t("Заблокирован"),
                 )
               }
             >
-              {user.is_banned ? "Разблокировать" : "Заблокировать"}
+              {user.is_banned ? t("Разблокировать") : t("Заблокировать")}
             </button>
             <button
               type="button"
@@ -259,18 +284,23 @@ export default function UserCard({
               onClick={() =>
                 act(
                   post("/verify", { is_verified: !integration.is_verified }),
-                  "Верификация изменена",
+                  t("Верификация изменена"),
                 )
               }
             >
-              {integration.is_verified ? "Снять верификацию" : "Верифицировать"}
+              {integration.is_verified
+                ? t("Снять верификацию")
+                : t("Верифицировать")}
             </button>
             <label className="flex items-center gap-1">
-              <span className="sr-only">Роль</span>
+              <span className="sr-only">{t("Роль")}</span>
               <select
                 value={user.role}
                 onChange={(e) =>
-                  act(post("/role", { role: e.target.value }), "Роль изменена")
+                  act(
+                    post("/role", { role: e.target.value }),
+                    t("Роль изменена"),
+                  )
                 }
                 className={`${inputClass} w-auto`}
               >
@@ -285,12 +315,12 @@ export default function UserCard({
               onClick={() =>
                 act(
                   post("/sessions/revoke"),
-                  "Все сессии завершены",
-                  "Выйти из аккаунта на всех устройствах?",
+                  t("Все сессии завершены"),
+                  t("Выйти из аккаунта на всех устройствах?"),
                 )
               }
             >
-              Завершить все сессии
+              {t("Завершить все сессии")}
             </button>
             <button
               type="button"
@@ -298,12 +328,14 @@ export default function UserCard({
               onClick={() =>
                 act(
                   post("/reset-profile"),
-                  "Профиль очищен",
-                  `Очистить аватар, обложку и описание @${user.username}?`,
+                  t("Профиль очищен"),
+                  t("Очистить аватар, обложку и описание @{username}?", {
+                    username: user.username,
+                  }),
                 )
               }
             >
-              Сбросить профиль
+              {t("Сбросить профиль")}
             </button>
             <button
               type="button"
@@ -311,12 +343,14 @@ export default function UserCard({
               onClick={() =>
                 act(
                   () => adminRequest(`${path}/scrobbles`, { method: "DELETE" }),
-                  "История удалена",
-                  `Удалить ВСЮ историю прослушиваний @${user.username}?`,
+                  t("История удалена"),
+                  t("Удалить ВСЮ историю прослушиваний @{username}?", {
+                    username: user.username,
+                  }),
                 )
               }
             >
-              Удалить историю
+              {t("Удалить историю")}
             </button>
             <button
               type="button"
@@ -324,12 +358,14 @@ export default function UserCard({
               onClick={() =>
                 act(
                   () => adminRequest(path, { method: "DELETE" }).then(onClose),
-                  "Аккаунт удалён",
-                  `Навсегда удалить аккаунт @${user.username}?`,
+                  t("Аккаунт удалён"),
+                  t("Навсегда удалить аккаунт @{username}?", {
+                    username: user.username,
+                  }),
                 )
               }
             >
-              Удалить аккаунт
+              {t("Удалить аккаунт")}
             </button>
           </div>
           <form
@@ -338,12 +374,12 @@ export default function UserCard({
               e.preventDefault();
               await act(
                 post("/level", { new_level: Number(level) }),
-                `Уровень ${level} установлен`,
+                t("Уровень {level} установлен", { level }),
               );
             }}
           >
             <label className="w-32">
-              <span className={labelClass}>Уровень</span>
+              <span className={labelClass}>{t("Уровень")}</span>
               <input
                 type="number"
                 min={1}
@@ -355,7 +391,7 @@ export default function UserCard({
               />
             </label>
             <button type="submit" className={buttonClass.secondary}>
-              Установить уровень
+              {t("Установить уровень")}
             </button>
           </form>
         </div>
@@ -364,28 +400,37 @@ export default function UserCard({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className={section}>
-            <div className={sectionTitle}>Интеграции и экспорт</div>
+            <div className={sectionTitle}>{t("Интеграции и экспорт")}</div>
             <div className="flex flex-wrap gap-1.5">
               <Flag on={integration.spotify_linked} label="Spotify" />
-              <Flag on={integration.yandex_linked} label="Яндекс" />
+              <Flag on={integration.yandex_linked} label={t("Яндекс")} />
               <Flag on={integration.soundcloud_linked} label="SoundCloud" />
               <Flag on={data.export.lastfm} label="→ Last.fm" />
               <Flag on={data.export.listenbrainz} label="→ ListenBrainz" />
               <Flag on={data.export.librefm} label="→ Libre.fm" />
             </div>
             <p className="text-[11px] text-fg-2">
-              Last.fm: {integration.lastfm_username || "—"} · синхронизация:{" "}
-              {formatDateTime(integration.last_sync)} · push-подписок:{" "}
-              {data.push_subscriptions}
+              {t(
+                "Last.fm: {name} · синхронизация: {date} · push-подписок: {n}",
+                {
+                  name: integration.lastfm_username || "—",
+                  date: formatDateTime(integration.last_sync),
+                  n: data.push_subscriptions,
+                },
+              )}
             </p>
             {data.webhooks.map((w) => (
               <p key={w.id} className="text-[11px] text-fg-2 break-all">
-                {w.url} {!w.is_active && "(выключен)"}
+                {w.url} {!w.is_active && t("(выключен)")}
               </p>
             ))}
             {data.imports.map((j) => (
               <p key={j.id} className="text-[11px] text-fg-2">
-                Импорт #{j.id} ({j.lastfm_username}): {j.status},{" "}
+                {t("Импорт #{id} ({name}): {status},", {
+                  id: j.id,
+                  name: j.lastfm_username,
+                  status: j.status,
+                })}{" "}
                 {j.imported_tracks}/{j.total_tracks}
                 {j.error && <span className="text-danger"> — {j.error}</span>}
               </p>
@@ -393,9 +438,9 @@ export default function UserCard({
           </div>
 
           <div className={section}>
-            <div className={sectionTitle}>API-ключи и устройства</div>
+            <div className={sectionTitle}>{t("API-ключи и устройства")}</div>
             {data.api_keys.length === 0 && (
-              <p className="text-xs text-fg-2">Ключей нет</p>
+              <p className="text-xs text-fg-2">{t("Ключей нет")}</p>
             )}
             {data.api_keys.map((k) => (
               <div
@@ -410,7 +455,9 @@ export default function UserCard({
                     <span className="font-mono text-fg-2">{k.prefix}…</span>
                   </div>
                   <div className="text-[10px] text-fg-2">
-                    использован: {formatDateTime(k.last_used_at)}
+                    {t("использован: {date}", {
+                      date: formatDateTime(k.last_used_at),
+                    })}
                   </div>
                 </div>
                 {k.is_active && (
@@ -420,12 +467,12 @@ export default function UserCard({
                     onClick={() =>
                       act(
                         post(`/api-keys/${k.id}/revoke`),
-                        "Ключ отозван",
-                        `Отозвать ключ «${k.name}»?`,
+                        t("Ключ отозван"),
+                        t("Отозвать ключ «{name}»?", { name: k.name }),
                       )
                     }
                   >
-                    Отозвать
+                    {t("Отозвать")}
                   </button>
                 )}
               </div>
@@ -435,7 +482,7 @@ export default function UserCard({
 
         <div className={section}>
           <div className={sectionTitle}>
-            Достижения ({data.achievements.length})
+            {t("Достижения ({n})", { n: data.achievements.length })}
           </div>
           <div className="flex flex-wrap gap-1.5">
             {data.achievements.map((a) => (
@@ -443,10 +490,12 @@ export default function UserCard({
                 key={a.id}
                 className="inline-flex items-center gap-1 bg-surface-2 rounded-lg px-2 py-1 text-xs text-fg"
               >
-                {a.icon} {a.name}
+                {a.icon} {t(a.name ?? "")}
                 <button
                   type="button"
-                  aria-label={`Снять достижение ${a.name}`}
+                  aria-label={t("Снять достижение {name}", {
+                    name: t(a.name ?? ""),
+                  })}
                   className="text-fg-2 hover:text-danger"
                   onClick={() =>
                     act(
@@ -454,8 +503,8 @@ export default function UserCard({
                         adminRequest(`${path}/achievements/${a.id}`, {
                           method: "DELETE",
                         }),
-                      "Достижение снято",
-                      `Снять «${a.name}»?`,
+                      t("Достижение снято"),
+                      t("Снять «{name}»?", { name: t(a.name ?? "") }),
                     )
                   }
                 >
@@ -470,44 +519,44 @@ export default function UserCard({
               e.preventDefault();
               await act(
                 post("/achievements", { achievement_id: Number(grantId) }),
-                "Достижение выдано",
+                t("Достижение выдано"),
               );
             }}
           >
             <label className="flex-1">
-              <span className={labelClass}>Выдать достижение</span>
+              <span className={labelClass}>{t("Выдать достижение")}</span>
               <select
                 value={grantId}
                 onChange={(e) => setGrantId(e.target.value)}
                 className={inputClass}
                 required
               >
-                <option value="">Выберите…</option>
+                <option value="">{t("Выберите…")}</option>
                 {achievements
                   .filter((a) => !earned.has(a.id))
                   .map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.icon} {a.name} (+{a.reward_xp} XP)
+                      {a.icon} {t(a.name)} (+{a.reward_xp} XP)
                     </option>
                   ))}
               </select>
             </label>
             <button type="submit" className={buttonClass.secondary}>
-              Выдать
+              {t("Выдать")}
             </button>
           </form>
         </div>
 
         <div className={section}>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className={sectionTitle}>Последние прослушивания</div>
+            <div className={sectionTitle}>{t("Последние прослушивания")}</div>
             {onOpenScrobbles && (
               <button
                 type="button"
                 className={buttonClass.secondary}
                 onClick={() => onOpenScrobbles(username)}
               >
-                Все прослушивания →
+                {t("Все прослушивания →")}
               </button>
             )}
           </div>
@@ -525,14 +574,18 @@ export default function UserCard({
                     {s.source}
                   </td>
                   <td className="py-1.5 font-mono text-right whitespace-nowrap">
-                    {s.listened_sec}/{s.duration || "?"} с · {s.xp} XP
+                    {t("{listened}/{duration} с", {
+                      listened: s.listened_sec,
+                      duration: s.duration || "?",
+                    })}{" "}
+                    · {s.xp} XP
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
           {data.recent_scrobbles.length === 0 && (
-            <p className="text-xs text-fg-2">Прослушиваний нет</p>
+            <p className="text-xs text-fg-2">{t("Прослушиваний нет")}</p>
           )}
         </div>
       </div>

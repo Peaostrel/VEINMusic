@@ -1,4 +1,5 @@
 "use client";
+import { useT } from "@/app/lib/i18n/client";
 import React from "react";
 import AutocompleteInput from "../components/AutocompleteInput";
 import type { SettingsData, UpdateData } from "../types";
@@ -12,6 +13,7 @@ export default function ShowcaseTab({
   data,
   updateData,
 }: Readonly<ShowcaseTabProps>) {
+  const t = useT();
   const getLockInfo = (updatedAtStr: string | null) => {
     if (!updatedAtStr) return { isLocked: false, daysLeft: 0 };
     const updatedDate = new Date(updatedAtStr);
@@ -33,11 +35,13 @@ export default function ShowcaseTab({
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-fg mb-4">Витрина профиля</h2>
+      <h2 className="text-lg font-semibold text-fg mb-4">
+        {t("Витрина профиля")}
+      </h2>
       <p className="text-xs text-fg-2 mb-4 leading-relaxed">
-        Настройте свои музыкальные редкости. Они будут отображаться в красивой
-        секции на вашей публичной странице. Внимание: менять любимого артиста,
-        трек и альбом можно не чаще 1 раза в 30 дней!
+        {t(
+          "Настройте свои музыкальные редкости. Они будут отображаться в красивой секции на вашей публичной странице. Внимание: менять любимого артиста, трек и альбом можно не чаще 1 раза в 30 дней!",
+        )}
       </p>
 
       <div className="bg-surface p-5 rounded-xl border border-line-soft space-y-6">
@@ -48,11 +52,11 @@ export default function ShowcaseTab({
               htmlFor="fav-artist"
               className="block text-sm font-medium text-fg-2"
             >
-              Любимый артист
+              {t("Любимый артист")}
             </label>
             {artistLock.isLocked && (
               <span className="text-xs font-medium text-danger px-2 py-1 rounded">
-                Можно сменить через {artistLock.daysLeft} дн.
+                {t("Можно сменить через {n} дн.", { n: artistLock.daysLeft })}
               </span>
             )}
           </div>
@@ -63,7 +67,7 @@ export default function ShowcaseTab({
             entityType="artist"
             disabled={artistLock.isLocked}
             className={`w-full p-3 rounded-lg text-fg border border-line-soft transition-colors outline-none ${artistLock.isLocked ? "bg-[#1f1f1f] opacity-60 cursor-not-allowed" : "bg-surface-2 focus:border-fg-3"}`}
-            placeholder="Имя артиста (начните вводить...)"
+            placeholder={t("Имя артиста (начните вводить...)")}
           />
         </div>
 
@@ -74,11 +78,11 @@ export default function ShowcaseTab({
               htmlFor="fav-track"
               className="block text-sm font-medium text-fg-2"
             >
-              Любимый трек
+              {t("Любимый трек")}
             </label>
             {trackLock.isLocked && (
               <span className="text-xs font-medium text-danger px-2 py-1 rounded">
-                Можно сменить через {trackLock.daysLeft} дн.
+                {t("Можно сменить через {n} дн.", { n: trackLock.daysLeft })}
               </span>
             )}
           </div>
@@ -89,7 +93,9 @@ export default function ShowcaseTab({
             entityType="track"
             disabled={trackLock.isLocked}
             className={`w-full p-3 rounded-lg text-fg border border-line-soft transition-colors outline-none ${trackLock.isLocked ? "bg-[#1f1f1f] opacity-60 cursor-not-allowed" : "bg-surface-2 focus:border-fg-3"}`}
-            placeholder="Имя артиста и название трека (например: Король и Шут — Лесник)"
+            placeholder={t(
+              "Имя артиста и название трека (например: Король и Шут — Лесник)",
+            )}
           />
         </div>
 
@@ -100,11 +106,11 @@ export default function ShowcaseTab({
               htmlFor="fav-album"
               className="block text-sm font-medium text-fg-2"
             >
-              Любимый альбом
+              {t("Любимый альбом")}
             </label>
             {albumLock.isLocked && (
               <span className="text-xs font-medium text-danger px-2 py-1 rounded">
-                Можно сменить через {albumLock.daysLeft} дн.
+                {t("Можно сменить через {n} дн.", { n: albumLock.daysLeft })}
               </span>
             )}
           </div>
@@ -115,7 +121,9 @@ export default function ShowcaseTab({
             entityType="album"
             disabled={albumLock.isLocked}
             className={`w-full p-3 rounded-lg text-fg border border-line-soft transition-colors outline-none ${albumLock.isLocked ? "bg-[#1f1f1f] opacity-60 cursor-not-allowed" : "bg-surface-2 focus:border-fg-3"}`}
-            placeholder="Имя артиста и название альбома (начните вводить...)"
+            placeholder={t(
+              "Имя артиста и название альбома (начните вводить...)",
+            )}
           />
         </div>
       </div>

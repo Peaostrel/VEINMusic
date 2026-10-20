@@ -7,6 +7,7 @@ import { Meter, btn } from "@/components/ui";
 import { fallbackOnce } from "@/app/lib/img";
 import { formatNumber } from "@/app/lib/plural";
 import type { ProfileViewProps } from "./useProfilePage";
+import { useT } from "@/app/lib/i18n/client";
 
 /** Story-sized card to screenshot and share. */
 export function WrappedModal({
@@ -17,11 +18,12 @@ export function WrappedModal({
   fallbackAvatar,
   currentLevel,
 }: ProfileViewProps) {
+  const t = useT();
   if (!showWrapped) return null;
   const artists = data.stats.top_artists?.slice(0, 5) ?? [];
   const max = artists[0]?.plays || 1;
   return (
-    <Dialog label="Карточка профиля" onClose={() => setShowWrapped(false)}>
+    <Dialog label={t("Карточка профиля")} onClose={() => setShowWrapped(false)}>
       <div className="flex flex-col items-center gap-4">
         <div className="flex h-[600px] w-[360px] max-w-full flex-col justify-between rounded-2xl border border-line bg-surface p-7">
           <div className="flex flex-col items-center gap-3 text-center">
@@ -36,14 +38,16 @@ export function WrappedModal({
               <VerifiedBadge role={u.role} isVerified={u.is_verified} />
             </h2>
             <span className="font-mono text-xs text-fg-3">
-              ур. {currentLevel} ·{" "}
-              {formatNumber(data.stats.total_scrobbles || 0)} прослушиваний
+              {t("ур. {level}", { level: currentLevel })} ·{" "}
+              {t("{n} прослушиваний", {
+                n: formatNumber(data.stats.total_scrobbles || 0),
+              })}
             </span>
           </div>
 
           <section className="flex flex-col gap-3">
             <h3 className="font-mono text-[11px] uppercase tracking-[0.06em] text-fg-3">
-              Любимые артисты
+              {t("Любимые артисты")}
             </h3>
             <ol className="flex flex-col gap-3">
               {artists.map((a, i) => (
@@ -72,14 +76,14 @@ export function WrappedModal({
           </div>
         </div>
         <p className="text-center text-xs text-fg-3">
-          Сделайте скриншот и поделитесь в сторис
+          {t("Сделайте скриншот и поделитесь в сторис")}
         </p>
         <button
           type="button"
           onClick={() => setShowWrapped(false)}
           className={`${btn.secondary} ${btn.md}`}
         >
-          Закрыть
+          {t("Закрыть")}
         </button>
       </div>
     </Dialog>

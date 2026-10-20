@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
+from app.core.i18n import tr
 from app.models import RecommendationFeedback, RecommendationImpression, Scrobble, Track, User, UserProfile
 from app.services.user_preferences import preferences_dict
 
@@ -38,6 +39,7 @@ def _collect_genre_recommendations(
     db: Session,
     public_listener_ids: list[int],
     liked_artists: set[str],
+    lang: str = "ru",
 ) -> list[dict[str, Any]]:
     """Find candidate tracks matching favorite genres or explicitly liked artists."""
     if not user_genres and not liked_artists:
@@ -72,7 +74,7 @@ def _collect_genre_recommendations(
                 "cover_url": track.cover_url,
                 "track_url": track.track_url,
                 "reason_type": "genre_similarity",
-                "reason": f"В вашем любимом жанре {track.genre}",
+                "reason": tr(lang, "В вашем любимом жанре {genre}", genre=track.genre),
                 "confidence_score": 0.88,
             })
     return results
@@ -84,6 +86,7 @@ def _collect_trending_recommendations(
     seen_keys: set[tuple[str, str]],
     db: Session,
     public_listener_ids: list[int],
+    lang: str = "ru",
 ) -> list[dict[str, Any]]:
     """Find trending global tracks not yet explored by the user."""
     trending_query = (
@@ -106,7 +109,8 @@ def _collect_trending_recommendations(
         if key not in seen_keys:
             seen_keys.add(key)
             is_familiar = str(track.artist).lower() in user_artist_names
-            reason = f"Новый трек от {track.artist}" if is_familiar else "Популярно в сообществе VEIN"
+            reason = (tr(lang, "Новый трек от {artist}", artist=track.artist) if is_familiar
+                      else tr(lang, "Популярно в сообществе VEIN"))
             results.append({
                 "id": track.id,
                 "title": track.title,
@@ -126,6 +130,7 @@ def _extract_recommended_artists(
     tracks: list[dict[str, Any]],
     user_artist_names: set[str],
     max_count: int = 5,
+    lang: str = "ru",
 ) -> list[dict[str, Any]]:
     """Extract distinct recommended artists from recommended track items."""
     results: list[dict[str, Any]] = []
@@ -141,14 +146,14 @@ def _extract_recommended_artists(
             results.append({
                 "artist": name,
                 "genre": item.get("genre", "Various"),
-                "reason": f"Рекомендация на основе вкусовых паттернов ({item.get('genre')})",
+                "reason": tr(lang, "Рекомендация на основе вкусовых паттернов ({genre})", genre=item.get("genre")),
             })
             if len(results) >= max_count:
                 break
     return results
 
 
-def generate_smart_recommendations(user: User, db: Session, limit: int = 15, use_feedback: bool = True, novelty: int = 50, avoid_recent: bool = False, recent_interest: int = 50) -> dict[str, Any]:
+def generate_smart_recommendations(user: User, db: Session, limit: int = 15, use_feedback: bool = True, novelty: int = 50, avoid_recent: bool = False, recent_interest: int = 50, lang: str = "ru") -> dict[str, Any]:
     """Generate personalized recommendations for a user."""
     user_artists, user_genres = _get_user_top_artists_and_genres(int(user.id), db)
     recent_artists, recent_genres = _get_user_top_artists_and_genres(
@@ -166,18 +171,18 @@ def generate_smart_recommendations(user: User, db: Session, limit: int = 15, use
 
     public_listener_ids = [user_id for user_id in _public_listener_ids(db) if user_id != int(user.id)]
     genre_tracks = _collect_genre_recommendations(
-        user_genres, user_scrobbled_track_ids, seen_keys, db, public_listener_ids, liked_artists
+        user_genres, user_scrobbled_track_ids, seen_keys, db, public_listener_ids, liked_artists, lang
     )
     trending_tracks = _collect_trending_recommendations(
-        user_artist_names, user_scrobbled_track_ids, seen_keys, db, public_listener_ids
+        user_artist_names, user_scrobbled_track_ids, seen_keys, db, public_listener_ids, lang
     )
 
     candidates = [item for item in genre_tracks + trending_tracks if str(item["artist"]).casefold() not in blocked]
-    _apply_feedback_weights(candidates, liked_genres, liked_artists)
-    _apply_recent_interests(candidates, recent_artists, recent_genres, recent_interest)
+    _apply_feedback_weights(candidates, liked_genres, liked_artists, lang)
+    _apply_recent_interests(candidates, recent_artists, recent_genres, recent_interest, lang)
 
     all_recommended_tracks = _select_recommendations(candidates, user_artist_names, novelty, limit)
-    recommended_artists = _extract_recommended_artists(all_recommended_tracks, user_artist_names)
+    recommended_artists = _extract_recommended_artists(all_recommended_tracks, user_artist_names, lang=lang)
 
     return {
         "user": user.username,
@@ -194,29 +199,32 @@ def generate_smart_recommendations(user: User, db: Session, limit: int = 15, use
     }
 
 
-def _apply_recent_interests(candidates, artists, genres, weight):
+def _apply_recent_interests(candidates, artists, genres, weight, lang="ru"):
     for item in candidates:
         artist = item["artist"]
         if artist in artists:
             item["recent_boost"] = 0.25 * weight / 100
             if item["reason_type"] != "feedback_similarity":
-                item["reason"] = f"Вы слушали {artist} {artists[artist]} раз за последние 30 дней"
+                item["reason"] = tr(lang, "Вы слушали {artist} {count} раз за последние 30 дней",
+                                    artist=artist, count=artists[artist])
                 item["reason_type"] = "recent_artist"
         elif item["genre"] in genres:
             item["recent_boost"] = 0.12 * weight / 100
             if item["reason_type"] != "feedback_similarity":
-                item["reason"] = f"В жанре {item['genre']}, который звучал у вас последние 30 дней"
+                item["reason"] = tr(lang, "В жанре {genre}, который звучал у вас последние 30 дней",
+                                    genre=item["genre"])
                 item["reason_type"] = "recent_genre"
 
 
-def _apply_feedback_weights(candidates, liked_genres, liked_artists):
+def _apply_feedback_weights(candidates, liked_genres, liked_artists, lang="ru"):
     for candidate in candidates:
         if candidate["artist"] in liked_artists:
-            candidate["reason"] = f"На основе вашего выбора: {candidate['artist']}"
+            candidate["reason"] = tr(lang, "На основе вашего выбора: {artist}", artist=candidate["artist"])
             candidate["reason_type"] = "feedback_similarity"
             candidate["confidence_score"] = 0.96
         elif candidate["genre"] in liked_genres:
-            candidate["reason"] = f"Больше музыки в жанре {candidate['genre']}, который вы отметили"
+            candidate["reason"] = tr(lang, "Больше музыки в жанре {genre}, который вы отметили",
+                                     genre=candidate["genre"])
             candidate["reason_type"] = "feedback_similarity"
             candidate["confidence_score"] = 0.95
 

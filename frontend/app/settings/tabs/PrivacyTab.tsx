@@ -1,4 +1,7 @@
+"use client";
 import type { Visibility } from "@/app/lib/types";
+import { useT } from "@/app/lib/i18n/client";
+import { msg } from "@/app/lib/i18n/core";
 import type { SettingsData, UpdateData, UpdatePreference } from "../types";
 import {
   SelectRow,
@@ -8,9 +11,9 @@ import {
 } from "../components/PreferenceControls";
 
 const VISIBILITY = [
-  { value: "all" as const, label: "Все" },
-  { value: "followers" as const, label: "Подписчики" },
-  { value: "private" as const, label: "Только я" },
+  { value: "all" as const, label: msg("Все") },
+  { value: "followers" as const, label: msg("Подписчики") },
+  { value: "private" as const, label: msg("Только я") },
 ];
 
 export default function PrivacyTab({
@@ -22,6 +25,7 @@ export default function PrivacyTab({
   updateData: UpdateData;
   updatePreference: UpdatePreference;
 }>) {
+  const t = useT();
   const privacy = data.preferences.privacy;
   const updateVisibility = (
     key: keyof Omit<
@@ -33,24 +37,28 @@ export default function PrivacyTab({
   return (
     <div className="space-y-6">
       <SettingsIntro
-        title="Приватность"
-        description="Закройте профиль целиком или настройте доступ к каждой части отдельно. Сервер применяет эти ограничения и к API, а не только скрывает блоки на странице."
+        title={t("Приватность")}
+        description={t(
+          "Закройте профиль целиком или настройте доступ к каждой части отдельно. Сервер применяет эти ограничения и к API, а не только скрывает блоки на странице.",
+        )}
       />
       <section className={settingsCard}>
         <ToggleRow
-          title="Приватный профиль"
-          description="Весь профиль, история и статистика доступны только вам. Этот переключатель имеет приоритет над правилами ниже."
+          title={t("Приватный профиль")}
+          description={t(
+            "Весь профиль, история и статистика доступны только вам. Этот переключатель имеет приоритет над правилами ниже.",
+          )}
           checked={data.isPrivate}
           onChange={(isPrivate) => updateData("isPrivate", isPrivate)}
         />
         <SelectRow
-          title="Совместное прослушивание"
-          description="Кто может приглашать вас слушать музыку вместе."
+          title={t("Совместное прослушивание")}
+          description={t("Кто может приглашать вас слушать музыку вместе.")}
           value={data.syncPrivacy || "all"}
           options={[
-            { value: "all", label: "Все пользователи" },
-            { value: "followers", label: "Только мои подписки" },
-            { value: "none", label: "Никто" },
+            { value: "all", label: t("Все пользователи") },
+            { value: "followers", label: t("Только мои подписки") },
+            { value: "none", label: t("Никто") },
           ]}
           onChange={(value) => updateData("syncPrivacy", value)}
         />
@@ -58,77 +66,85 @@ export default function PrivacyTab({
 
       <section className={settingsCard}>
         <SelectRow
-          title="История прослушиваний"
-          description="Последние треки и подробная история."
+          title={t("История прослушиваний")}
+          description={t("Последние треки и подробная история.")}
           value={privacy.history}
           options={VISIBILITY}
           onChange={(value) => updateVisibility("history", value)}
         />
         <SelectRow
-          title="Статистика и календарь"
-          description="Топы, графики, Wrapped и музыкальный календарь."
+          title={t("Статистика и календарь")}
+          description={t("Топы, графики, Wrapped и музыкальный календарь.")}
           value={privacy.statistics}
           options={VISIBILITY}
           onChange={(value) => updateVisibility("statistics", value)}
         />
         <SelectRow
-          title="Текущий трек"
-          description="Что вы слушаете прямо сейчас."
+          title={t("Текущий трек")}
+          description={t("Что вы слушаете прямо сейчас.")}
           value={privacy.current_track}
           options={VISIBILITY}
           onChange={(value) => updateVisibility("current_track", value)}
         />
         <SelectRow
-          title="Витрина профиля"
-          description="Любимые артист, трек и альбом."
+          title={t("Витрина профиля")}
+          description={t("Любимые артист, трек и альбом.")}
           value={privacy.showcase}
           options={VISIBILITY}
           onChange={(value) => updateVisibility("showcase", value)}
         />
         <SelectRow
-          title="Подписчики и подписки"
-          description="Списки социальных связей профиля."
+          title={t("Подписчики и подписки")}
+          description={t("Списки социальных связей профиля.")}
           value={privacy.followers}
           options={VISIBILITY}
           onChange={(value) => updateVisibility("followers", value)}
         />
         <SelectRow
-          title="Страна и город"
-          description="Местоположение в шапке профиля."
+          title={t("Страна и город")}
+          description={t("Местоположение в шапке профиля.")}
           value={privacy.location}
           options={VISIBILITY}
           onChange={(value) => updateVisibility("location", value)}
         />
         <SelectRow
-          title="Точность местоположения"
-          description="Можно оставить публичной только страну, не показывая город. Владелец профиля всегда видит полное значение."
+          title={t("Точность местоположения")}
+          description={t(
+            "Можно оставить публичной только страну, не показывая город. Владелец профиля всегда видит полное значение.",
+          )}
           value={privacy.location_precision}
           options={[
-            { value: "city", label: "Страна и город" },
-            { value: "country", label: "Только страна" },
+            { value: "city", label: t("Страна и город") },
+            { value: "country", label: t("Только страна") },
           ]}
           onChange={(location_precision) =>
             updatePreference("privacy", { ...privacy, location_precision })
           }
         />
         <SelectRow
-          title="Социальные ссылки"
-          description="Добавленные ссылки на соцсети, видеоплатформы и музыкальные сервисы."
+          title={t("Социальные ссылки")}
+          description={t(
+            "Добавленные ссылки на соцсети, видеоплатформы и музыкальные сервисы.",
+          )}
           value={privacy.social_links}
           options={VISIBILITY}
           onChange={(value) => updateVisibility("social_links", value)}
         />
         <ToggleRow
-          title="Показывать источник прослушивания"
-          description="Например, Яндекс Музыка, Spotify или десктопный клиент."
+          title={t("Показывать источник прослушивания")}
+          description={t(
+            "Например, Яндекс Музыка, Spotify или десктопный клиент.",
+          )}
           checked={privacy.show_listening_source}
           onChange={(show_listening_source) =>
             updatePreference("privacy", { ...privacy, show_listening_source })
           }
         />
         <ToggleRow
-          title="Показывать профиль в поисковиках"
-          description="Яндекс и Google смогут найти страницу профиля. Если выключить, профиль останется доступен по ссылке, но поисковикам будет запрещено его показывать."
+          title={t("Показывать профиль в поисковиках")}
+          description={t(
+            "Яндекс и Google смогут найти страницу профиля. Если выключить, профиль останется доступен по ссылке, но поисковикам будет запрещено его показывать.",
+          )}
           checked={privacy.search_indexing}
           onChange={(search_indexing) =>
             updatePreference("privacy", { ...privacy, search_indexing })

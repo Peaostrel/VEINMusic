@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/app/lib/i18n/client";
 import { useState } from "react";
 import { Bug, RefreshCw, Trash2 } from "lucide-react";
 import type { LogEntry, LogPage } from "../types";
@@ -27,6 +28,7 @@ const LEVEL_STYLE: Record<LogEntry["level"], string> = {
 };
 
 function Entry({ e }: Readonly<{ e: LogEntry }>) {
+  const t = useT();
   return (
     <li className="space-y-1.5 rounded-xl border border-line-soft bg-surface p-4">
       <div className="flex flex-wrap items-center gap-2 text-xs text-fg-2">
@@ -49,7 +51,7 @@ function Entry({ e }: Readonly<{ e: LogEntry }>) {
       {e.trace && (
         <details className="text-xs">
           <summary className="cursor-pointer text-fg-2 hover:text-fg">
-            Трассировка
+            {t("Трассировка")}
           </summary>
           <pre className="mt-2 max-h-80 overflow-auto rounded-lg bg-bg p-3 font-mono text-[11px] leading-relaxed text-fg-2">
             {e.trace}
@@ -62,6 +64,7 @@ function Entry({ e }: Readonly<{ e: LogEntry }>) {
 
 /** Recent warnings and errors of the API and the worker. */
 export default function LogsTab() {
+  const t = useT();
   const [level, setLevel] = useState("");
   const [source, setSource] = useState("");
   const [q, setQ] = useState("");
@@ -72,11 +75,11 @@ export default function LogsTab() {
   const { notice, run } = useNotice();
 
   const clear = async () => {
-    if (!confirm("Очистить журнал ошибок?")) return;
+    if (!confirm(t("Очистить журнал ошибок?"))) return;
     if (
       await run(
         () => adminRequest("/api/admin/logs", { method: "DELETE" }),
-        "Журнал очищен",
+        t("Журнал очищен"),
       )
     )
       reload();
@@ -94,7 +97,7 @@ export default function LogsTab() {
       <div className={panelClass}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <PanelTitle icon={<Bug aria-hidden="true" />}>
-            Ошибки и предупреждения
+            {t("Ошибки и предупреждения")}
           </PanelTitle>
           <div className="flex gap-2">
             <button
@@ -103,7 +106,7 @@ export default function LogsTab() {
               className={buttonClass.secondary}
             >
               <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-              Обновить
+              {t("Обновить")}
             </button>
             <button
               type="button"
@@ -111,53 +114,55 @@ export default function LogsTab() {
               className={buttonClass.danger}
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-              Очистить
+              {t("Очистить")}
             </button>
           </div>
         </div>
         <p className="text-xs text-fg-2">
-          Последняя тысяча записей уровня WARNING и выше из API и воркера. Ключи
-          и токены в текстах скрыты.
+          {t(
+            "Последняя тысяча записей уровня WARNING и выше из API и воркера. Ключи и токены в текстах скрыты.",
+          )}
           {data &&
             !data.shared &&
-            " Redis недоступен: показаны записи только этого процесса API."}
+            " " +
+              t("Redis недоступен: показаны записи только этого процесса API.")}
         </p>
         {data && (
           <div className="flex flex-wrap gap-4 font-mono text-xs text-fg-2">
             <span>
-              ошибок:{" "}
+              {t("ошибок:")}{" "}
               <b className="text-danger">
                 {(data.counts.ERROR ?? 0) + (data.counts.CRITICAL ?? 0)}
               </b>
             </span>
             <span>
-              предупреждений:{" "}
+              {t("предупреждений:")}{" "}
               <b className="text-accent">{data.counts.WARNING ?? 0}</b>
             </span>
           </div>
         )}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <label>
-            <span className={labelClass}>Уровень</span>
+            <span className={labelClass}>{t("Уровень")}</span>
             <select
               value={level}
               onChange={(e) => filter(setLevel)(e.target.value)}
               className={inputClass}
             >
-              <option value="">Все</option>
-              <option value="ERROR">Ошибки</option>
-              <option value="WARNING">Предупреждения</option>
-              <option value="CRITICAL">Критические</option>
+              <option value="">{t("Все")}</option>
+              <option value="ERROR">{t("Ошибки")}</option>
+              <option value="WARNING">{t("Предупреждения")}</option>
+              <option value="CRITICAL">{t("Критические")}</option>
             </select>
           </label>
           <label>
-            <span className={labelClass}>Процесс</span>
+            <span className={labelClass}>{t("Процесс")}</span>
             <select
               value={source}
               onChange={(e) => filter(setSource)(e.target.value)}
               className={inputClass}
             >
-              <option value="">Все</option>
+              <option value="">{t("Все")}</option>
               {(data?.sources ?? []).map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -166,7 +171,7 @@ export default function LogsTab() {
             </select>
           </label>
           <label>
-            <span className={labelClass}>Текст</span>
+            <span className={labelClass}>{t("Текст")}</span>
             <input
               value={q}
               onChange={(e) => filter(setQ)(e.target.value)}
@@ -184,7 +189,7 @@ export default function LogsTab() {
         ))}
         {!loading && data?.items.length === 0 && (
           <li className="py-6 text-center text-xs text-fg-2">
-            Записей нет — и это хорошо
+            {t("Записей нет — и это хорошо")}
           </li>
         )}
       </ul>

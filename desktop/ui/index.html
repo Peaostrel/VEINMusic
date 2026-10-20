@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Настройки VEINMusic</title>
+  <title data-i18n="title">Настройки VEINMusic</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -20,41 +20,41 @@
 
     <div class="banner banner-update" id="update" hidden>
       <span id="update-text"></span>
-      <button type="button" class="btn btn-small" id="update-open">Скачать</button>
+      <button type="button" class="btn btn-small" id="update-open" data-i18n="download">Скачать</button>
     </div>
     <output class="banner" id="message" hidden></output>
 
     <section class="card" aria-labelledby="account-title">
-      <h2 id="account-title">Аккаунт</h2>
+      <h2 id="account-title" data-i18n="account">Аккаунт</h2>
       <div id="account-none" hidden>
-        <p class="muted">Подключите аккаунт VEINMusic, чтобы музыка с этого компьютера попадала в ваш профиль.</p>
-        <button type="button" class="btn btn-primary" id="pair">Подключить аккаунт</button>
+        <p class="muted" data-i18n="connectHint">Подключите аккаунт VEINMusic, чтобы музыка с этого компьютера попадала в ваш профиль.</p>
+        <button type="button" class="btn btn-primary" id="pair" data-i18n="connect">Подключить аккаунт</button>
       </div>
       <div id="account-pairing" hidden>
-        <p class="muted">Страница подтверждения открыта в окне VEINMusic. Проверьте, что там этот код, и нажмите «Подключить».</p>
+        <p class="muted" data-i18n="pairingHint">Страница подтверждения открыта в окне VEINMusic. Проверьте, что там этот код, и нажмите «Подключить».</p>
         <p class="code" id="code"></p>
-        <button type="button" class="btn" id="cancel">Отмена</button>
+        <button type="button" class="btn" id="cancel" data-i18n="cancel">Отмена</button>
       </div>
       <div id="account-ready" class="row" hidden>
         <span class="user" id="username"></span>
         <span class="actions">
-          <button type="button" class="btn btn-small" id="profile">Профиль</button>
-          <button type="button" class="btn btn-small" id="logout">Отключить</button>
+          <button type="button" class="btn btn-small" id="profile" data-i18n="profile">Профиль</button>
+          <button type="button" class="btn btn-small" id="logout" data-i18n="disconnect">Отключить</button>
         </span>
       </div>
     </section>
 
     <section class="card" aria-labelledby="now-title">
-      <h2 id="now-title">Сейчас играет</h2>
+      <h2 id="now-title" data-i18n="nowPlaying">Сейчас играет</h2>
       <div id="now" class="now"></div>
     </section>
 
     <section class="card" aria-labelledby="sources-title">
-      <h2 id="sources-title">Скробблинг</h2>
+      <h2 id="sources-title" data-i18n="scrobbling">Скробблинг</h2>
       <div class="toggles" id="toggles"></div>
     </section>
 
-    <p class="foot">Окно VEINMusic можно закрыть: приложение останется в трее и продолжит скробблить.</p>
+    <p class="foot" data-i18n="foot">Окно VEINMusic можно закрыть: приложение останется в трее и продолжит скробблить.</p>
   </main>
   <script src="app.js"></script>
 </body>

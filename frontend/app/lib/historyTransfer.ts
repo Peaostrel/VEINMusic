@@ -1,5 +1,18 @@
+/**
+ * Translates the error texts; the page passes its `t`. The default keeps the
+ * Russian text (this module has no imports so tests can load it alone).
+ */
+type Translate = (ru: string, vars?: Record<string, string | number>) => string;
+const russian: Translate = (ru, vars) =>
+  ru.replace(/\{(\w+)\}/g, (match, name: string) =>
+    vars && name in vars ? String(vars[name]) : match,
+  );
+
 /** Parse VEIN's quoted CSV without executing spreadsheet formulas. */
-export function parseHistoryCsv(text: string): Record<string, unknown>[] {
+export function parseHistoryCsv(
+  text: string,
+  t: Translate = russian,
+): Record<string, unknown>[] {
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = "";
@@ -21,22 +34,25 @@ export function parseHistoryCsv(text: string): Record<string, unknown>[] {
       }
     } else if (char !== "\r" || quoted) cell += char;
   }
-  if (quoted) throw new Error("CSV содержит незакрытые кавычки");
+  if (quoted) throw new Error(t("CSV содержит незакрытые кавычки"));
   // Empty trailing rows are removed by the decoder.
   row.push(cell);
   rows.push(row);
-  return decodeCsvRows(rows);
+  return decodeCsvRows(rows, t);
 }
 
-function decodeCsvRows(rows: string[][]): Record<string, unknown>[] {
+function decodeCsvRows(
+  rows: string[][],
+  t: Translate,
+): Record<string, unknown>[] {
   const headers = rows.shift() ?? [];
   if (!["played_at", "artist", "title"].every((name) => headers.includes(name)))
-    throw new Error("Нужен CSV истории VEIN с датой, артистом и треком");
+    throw new Error(t("Нужен CSV истории VEIN с датой, артистом и треком"));
   return rows
     .filter((values) => values.some(Boolean))
     .map((values) => {
       if (values.length !== headers.length)
-        throw new Error("Число колонок CSV не совпадает с заголовком");
+        throw new Error(t("Число колонок CSV не совпадает с заголовком"));
       return Object.fromEntries(
         headers.map((name, index) => {
           let value = values[index];
@@ -153,9 +169,13 @@ export function convertHistoryRows(items: unknown[]): Row[] | null {
 }
 
 /** Parse one JSON, JSON Lines or VEIN CSV file; null when it holds no history. */
-export function parseHistoryText(name: string, source: string): Row[] | null {
+export function parseHistoryText(
+  name: string,
+  source: string,
+  t: Translate = russian,
+): Row[] | null {
   const lower = name.toLowerCase();
-  if (lower.endsWith(".csv")) return parseHistoryCsv(source);
+  if (lower.endsWith(".csv")) return parseHistoryCsv(source, t);
   const body = source.replace(/^\uFEFF/, "").trim();
   if (!body) return [];
   if (lower.endsWith(".jsonl") || (body[0] === "{" && body.includes("}\n{")))
@@ -173,6 +193,7 @@ export function parseHistoryText(name: string, source: string): Row[] | null {
 /** History files inside a ZIP export, read with the browser's own inflater. */
 async function unzipHistory(
   file: File,
+  t: Translate,
 ): Promise<{ name: string; text: string }[]> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const view = new DataView(bytes.buffer);
@@ -186,7 +207,7 @@ async function unzipHistory(
       end = index;
       break;
     }
-  if (end < 0) throw new Error("ZIP-архив повреждён");
+  if (end < 0) throw new Error(t("ZIP-архив повреждён"));
   const count = view.getUint16(end + 10, true);
   let offset = view.getUint32(end + 16, true);
   const decoder = new TextDecoder();
@@ -194,7 +215,7 @@ async function unzipHistory(
   let total = 0;
   for (let entry = 0; entry < count; entry++) {
     if (view.getUint32(offset, true) !== 0x02014b50)
-      throw new Error("ZIP-архив повреждён");
+      throw new Error(t("ZIP-архив повреждён"));
     const method = view.getUint16(offset + 10, true);
     const compressed = view.getUint32(offset + 20, true);
     const size = view.getUint32(offset + 24, true);
@@ -212,7 +233,7 @@ async function unzipHistory(
     total += size;
     if (total > MAX_UNZIPPED_BYTES)
       throw new Error(
-        "Архив слишком большой: распакуйте его и загрузите файлы частями",
+        t("Архив слишком большой: распакуйте его и загрузите файлы частями"),
       );
     const start =
       local +
@@ -230,30 +251,38 @@ async function unzipHistory(
             .pipeThrough(new DecompressionStream("deflate-raw")),
         ).arrayBuffer(),
       );
-    else throw new Error(`Файл ${name} сжат неподдерживаемым способом`);
+    else
+      throw new Error(
+        t("Файл {name} сжат неподдерживаемым способом", { name }),
+      );
     files.push({ name, text: decoder.decode(content) });
   }
   return files;
 }
 
 /** Read VEIN, Spotify or ListenBrainz exports (files or ZIP) into one sorted history. */
-export async function readHistoryFiles(files: File[]): Promise<Row[]> {
+export async function readHistoryFiles(
+  files: File[],
+  t: Translate = russian,
+): Promise<Row[]> {
   const rows: Row[] = [];
   for (const file of files) {
     const isZip = file.name.toLowerCase().endsWith(".zip");
     if (file.size > (isZip ? MAX_ZIP_BYTES : MAX_FILE_BYTES))
       throw new Error(
         isZip
-          ? "Максимальный размер архива — 200 МБ."
-          : `Файл ${file.name} больше 20 МБ. Разделите его на части.`,
+          ? t("Максимальный размер архива — 200 МБ.")
+          : t("Файл {name} больше 20 МБ. Разделите его на части.", {
+              name: file.name,
+            }),
       );
     const parts = isZip
-      ? await unzipHistory(file)
+      ? await unzipHistory(file, t)
       : [{ name: file.name, text: await file.text() }];
     for (const part of parts) {
       let parsed: Row[] | null;
       try {
-        parsed = parseHistoryText(part.name, part.text);
+        parsed = parseHistoryText(part.name, part.text, t);
       } catch (cause) {
         // Archives also carry playlists, settings and other unrelated files.
         if (isZip) continue;
@@ -261,17 +290,21 @@ export async function readHistoryFiles(files: File[]): Promise<Row[]> {
       }
       if (!parsed) {
         if (isZip) continue;
-        throw new Error(`Не удалось распознать формат файла ${part.name}`);
+        throw new Error(
+          t("Не удалось распознать формат файла {name}", { name: part.name }),
+        );
       }
       for (const row of parsed) rows.push(row);
       if (rows.length > MAX_ROWS)
         throw new Error(
-          "За один перенос можно загрузить до 100 000 прослушиваний. Выберите меньше файлов.",
+          t(
+            "За один перенос можно загрузить до 100 000 прослушиваний. Выберите меньше файлов.",
+          ),
         );
     }
   }
   if (!rows.length)
-    throw new Error("В файлах не нашлось прослушиваний длиннее 30 секунд");
+    throw new Error(t("В файлах не нашлось прослушиваний длиннее 30 секунд"));
   return rows.sort((a, b) =>
     String(a.played_at).localeCompare(String(b.played_at)),
   );

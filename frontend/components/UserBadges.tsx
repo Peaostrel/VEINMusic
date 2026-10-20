@@ -1,3 +1,7 @@
+"use client";
+
+import { useT } from "@/app/lib/i18n/client";
+
 const BADGE_PATH =
   "M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.21-1.71-3.998-3.918-3.998-.47 0-.92.084-1.336.25C14.818 2.415 13.51 1.5 12 1.5s-2.816.917-3.337 2.25c-.416-.165-.866-.25-1.336-.25-2.21 0-3.918 1.79-3.918 4 0 .495.084.965.238 1.4-1.273.65-2.148 2.02-2.148 3.6 0 1.46.74 2.746 1.846 3.45-.05.22-.077.447-.077.68 0 2.21 1.71 3.998 3.918 3.998.47 0 .92-.084 1.336-.25C8.49 21.585 9.796 22.5 11.25 22.5c1.455 0 2.76-.915 3.338-2.25.416.166.866.25 1.336.25 2.21 0 3.918-1.79 3.918-4 0-.233-.026-.46-.077-.68 1.106-.704 1.846-1.99 1.846-3.45z";
 const CHECK_PATH =
@@ -13,16 +17,17 @@ export const VerifiedBadge = ({
   isVerified?: boolean;
   sizeClass?: string;
 }) => {
+  const t = useT();
   if (role === "developer" || role === "admin")
     return (
       <span
         className="inline-flex items-center justify-center ml-1"
-        title="Разработчик VEIN"
+        title={t("Разработчик VEIN")}
       >
         <svg
           viewBox="0 0 24 24"
           role="img"
-          aria-label="Разработчик VEIN"
+          aria-label={t("Разработчик VEIN")}
           className={`${sizeClass} shrink-0`}
         >
           <path
@@ -36,7 +41,7 @@ export const VerifiedBadge = ({
       </span>
     );
   if (role === "tester" || isVerified) {
-    const label = role === "tester" ? "Тестировщик" : "Верифицирован";
+    const label = role === "tester" ? t("Тестировщик") : t("Верифицирован");
     return (
       <span
         className="inline-flex items-center justify-center ml-1"
@@ -58,9 +63,10 @@ export const VerifiedBadge = ({
 };
 
 export const LvlBadge = ({ level }: { level: number }) => {
+  const t = useT();
   return (
     <span className="ml-2 inline-flex shrink-0 items-center rounded border border-line px-1.5 py-px font-mono text-[10px] font-medium text-fg-2">
-      ур. {level || 1}
+      {t("ур. {level}", { level: level || 1 })}
     </span>
   );
 };

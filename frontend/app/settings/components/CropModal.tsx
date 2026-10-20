@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import type { Area, CropperProps, Point } from "react-easy-crop";
 import Dialog from "@/components/Dialog";
+import { useT } from "@/app/lib/i18n/client";
 
 // The class declares the rest of CropperProps as defaultProps, which
 // dynamic() does not carry over, so only the props we pass are required.
@@ -46,8 +47,9 @@ export default function CropModal({
   onCancel: () => void;
   onSave: () => void;
 }>) {
+  const t = useT();
   return (
-    <Dialog label="Обрезка изображения" onClose={onCancel}>
+    <Dialog label={t("Обрезка изображения")} onClose={onCancel}>
       <div className="relative w-full max-w-4xl h-[50vh] md:h-[70vh] bg-surface rounded-xl overflow-hidden border border-line">
         <Cropper
           image={image}
@@ -65,14 +67,14 @@ export default function CropModal({
           onClick={onCancel}
           className="px-6 py-3 rounded-lg font-medium text-fg bg-line hover:bg-line transition-all border border-line"
         >
-          Отмена
+          {t("Отмена")}
         </button>
         <button
           type="button"
           onClick={onSave}
           className="px-8 py-3 rounded-lg font-medium text-fg bg-accent hover:bg-[var(--accent-hover)] transition-all"
         >
-          Сохранить
+          {t("Сохранить")}
         </button>
       </div>
     </Dialog>

@@ -1,5 +1,8 @@
 "use client";
 
+import { useT } from "@/app/lib/i18n/client";
+import { msg } from "@/app/lib/i18n/core";
+import { tr } from "@/app/lib/i18n/active";
 import { useState } from "react";
 import { PlugZap, RefreshCw, Unplug, UserRound } from "lucide-react";
 import type {
@@ -24,7 +27,7 @@ import {
 
 const LIMIT = 30;
 const PROVIDER_NAMES = {
-  yandex: "Яндекс Музыка",
+  yandex: msg("Яндекс Музыка"),
   spotify: "Spotify",
   soundcloud: "SoundCloud",
   lastfm: "Last.fm",
@@ -34,9 +37,9 @@ type Provider = keyof typeof PROVIDER_NAMES;
 function ago(ms: number | null, now: number) {
   if (!ms) return "—";
   const sec = Math.max(0, Math.round((now - ms) / 1000));
-  if (sec < 60) return `${sec} с назад`;
-  if (sec < 3600) return `${Math.round(sec / 60)} мин назад`;
-  if (sec < 86400) return `${Math.round(sec / 3600)} ч назад`;
+  if (sec < 60) return tr("{n} с назад", { n: sec });
+  if (sec < 3600) return tr("{n} мин назад", { n: Math.round(sec / 60) });
+  if (sec < 86400) return tr("{n} ч назад", { n: Math.round(sec / 3600) });
   return formatDateTime(new Date(ms).toISOString());
 }
 
@@ -49,31 +52,38 @@ function LiveState({
   linked: boolean;
   now: number;
 }>) {
+  const t = useT();
   if (!linked) return null;
   if (!live) {
     return (
       <span className="text-fg-3">
-        нет живого соединения (опрос раз в 30 с)
+        {t("нет живого соединения (опрос раз в 30 с)")}
       </span>
     );
   }
   return (
     <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
       <span className={live.connected ? "text-ok" : "text-danger"}>
-        ● {live.connected ? `на связи ${ago(live.since_ms, now)}` : "нет связи"}
+        ●{" "}
+        {live.connected
+          ? t("на связи {ago}", { ago: ago(live.since_ms, now) })
+          : t("нет связи")}
       </span>
       <span className="text-fg-2">
-        событие: {ago(live.last_event_ms, now)}
+        {t("событие: {ago}", { ago: ago(live.last_event_ms, now) })}
         {live.track_id &&
-          ` · трек ${live.track_id} ${live.playing ? "играет" : "на паузе"}`}
-        {live.web && " · сайт"}
+          ` · ${t("трек {id}", { id: live.track_id })} ${live.playing ? t("играет") : t("на паузе")}`}
+        {live.web && ` · ${t("сайт")}`}
       </span>
       {live.connections > 1 && (
-        <span className="text-fg-3">подключений: {live.connections}</span>
+        <span className="text-fg-3">
+          {t("подключений: {n}", { n: live.connections })}
+        </span>
       )}
       {live.last_error && (
         <span className="break-all text-danger" title={live.last_error}>
-          ошибка {ago(live.last_error_ms, now)}: {live.last_error.slice(0, 120)}
+          {t("ошибка {ago}:", { ago: ago(live.last_error_ms, now) })}{" "}
+          {live.last_error.slice(0, 120)}
         </span>
       )}
     </span>
@@ -95,12 +105,16 @@ function Row({
     confirmText?: string,
   ) => void;
 }>) {
+  const t = useT();
   const base = `/api/admin/integrations/${encodeURIComponent(r.username)}`;
   const unlink = (provider: Provider) =>
     act(
       () => adminRequest(`${base}/${provider}`, { method: "DELETE" }),
-      `${PROVIDER_NAMES[provider]} отключён`,
-      `Отключить ${PROVIDER_NAMES[provider]} у @${r.username}? Пользователь сможет подключить заново в настройках.`,
+      t("{provider} отключён", { provider: t(PROVIDER_NAMES[provider]) }),
+      t(
+        "Отключить {provider} у @{username}? Пользователь сможет подключить заново в настройках.",
+        { provider: t(PROVIDER_NAMES[provider]), username: r.username },
+      ),
     );
   const linked = (
     [
@@ -122,10 +136,16 @@ function Row({
           <UserRound className="h-3.5 w-3.5" aria-hidden="true" />@{r.username}
         </button>
         {r.is_banned && (
-          <span className="text-[10px] font-medium text-danger">БАН</span>
+          <span className="text-[10px] font-medium text-danger">
+            {t("БАН")}
+          </span>
         )}
-        <span>последний трек: {formatDateTime(r.last_scrobble)}</span>
-        <span>опрос: {formatDateTime(r.last_sync)}</span>
+        <span>
+          {t("последний трек: {date}", {
+            date: formatDateTime(r.last_scrobble),
+          })}
+        </span>
+        <span>{t("опрос: {date}", { date: formatDateTime(r.last_sync) })}</span>
       </div>
       <ul className="space-y-1.5 text-xs">
         {linked.map(([provider]) => (
@@ -134,7 +154,7 @@ function Row({
             className="flex flex-col gap-2 rounded-lg bg-bg px-3 py-2 sm:flex-row sm:items-center"
           >
             <span className="w-28 shrink-0 font-medium text-fg">
-              {PROVIDER_NAMES[provider]}
+              {t(PROVIDER_NAMES[provider])}
             </span>
             <span className="min-w-0 flex-1">
               {provider === "yandex" && (
@@ -144,7 +164,7 @@ function Row({
                 <span className="font-mono text-fg-2">{r.lastfm_username}</span>
               )}
               {(provider === "spotify" || provider === "soundcloud") && (
-                <span className="text-fg-2">опрос раз в 30 с</span>
+                <span className="text-fg-2">{t("опрос раз в 30 с")}</span>
               )}
             </span>
             <span className="flex shrink-0 gap-2">
@@ -158,12 +178,12 @@ function Row({
                         adminRequest(`${base}/yandex/reconnect`, {
                           method: "POST",
                         }),
-                      "Воркер переподключится в течение 15 секунд",
+                      t("Воркер переподключится в течение 15 секунд"),
                     )
                   }
                 >
                   <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                  Переподключить
+                  {t("Переподключить")}
                 </button>
               )}
               <button
@@ -172,7 +192,7 @@ function Row({
                 onClick={() => unlink(provider)}
               >
                 <Unplug className="h-3.5 w-3.5" aria-hidden="true" />
-                Отключить
+                {t("Отключить")}
               </button>
             </span>
           </li>
@@ -186,6 +206,7 @@ function Row({
 export default function IntegrationsTab({
   onOpenUser,
 }: Readonly<{ onOpenUser: (username: string) => void }>) {
+  const t = useT();
   const [q, setQ] = useState("");
   const [provider, setProvider] = useState("");
   const [offset, setOffset] = useState(0);
@@ -212,11 +233,12 @@ export default function IntegrationsTab({
       <div className={panelClass}>
         <div>
           <PanelTitle icon={<PlugZap aria-hidden="true" />}>
-            Управление провайдерами
+            {t("Управление провайдерами")}
           </PanelTitle>
           <p className="mt-1 text-xs text-fg-2">
-            Пауза останавливает фоновые опросы и новые подключения, но сохраняет
-            токены пользователей.
+            {t(
+              "Пауза останавливает фоновые опросы и новые подключения, но сохраняет токены пользователей.",
+            )}
           </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -230,15 +252,17 @@ export default function IntegrationsTab({
                   className="flex flex-col gap-3 rounded-lg border border-line-soft bg-bg p-3"
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <span className="text-sm font-medium text-fg">{name}</span>
+                    <span className="text-sm font-medium text-fg">
+                      {t(name)}
+                    </span>
                     <span
                       className={`font-mono text-[10px] ${enabled ? "text-ok" : "text-danger"}`}
                     >
-                      {enabled ? "РАБОТАЕТ" : "ПАУЗА"}
+                      {enabled ? t("РАБОТАЕТ") : t("ПАУЗА")}
                     </span>
                   </div>
                   <span className="text-xs text-fg-2">
-                    Подключено: {state?.linked ?? "—"}
+                    {t("Подключено: {n}", { n: state?.linked ?? "—" })}
                   </span>
                   <button
                     type="button"
@@ -254,15 +278,18 @@ export default function IntegrationsTab({
                             { method: "PUT", json: { enabled: !enabled } },
                           ),
                         enabled
-                          ? `${name} приостановлен`
-                          : `${name} снова работает`,
+                          ? t("{name} приостановлен", { name: t(name) })
+                          : t("{name} снова работает", { name: t(name) }),
                         enabled
-                          ? `Поставить ${name} на паузу для всех пользователей? Токены сохранятся.`
+                          ? t(
+                              "Поставить {name} на паузу для всех пользователей? Токены сохранятся.",
+                              { name: t(name) },
+                            )
                           : undefined,
                       )
                     }
                   >
-                    {enabled ? "Поставить на паузу" : "Возобновить"}
+                    {enabled ? t("Поставить на паузу") : t("Возобновить")}
                   </button>
                 </div>
               );
@@ -274,7 +301,7 @@ export default function IntegrationsTab({
       <div className={panelClass}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <PanelTitle icon={<PlugZap aria-hidden="true" />}>
-            Подключённые сервисы
+            {t("Подключённые сервисы")}
             {data && (
               <span className="font-mono text-xs font-normal text-fg-3">
                 {data.total}
@@ -287,33 +314,38 @@ export default function IntegrationsTab({
             className={buttonClass.secondary}
           >
             <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-            Обновить
+            {t("Обновить")}
           </button>
         </div>
         {data && (
           <p className="text-xs text-fg-2">
-            {!data.redis && "Redis недоступен: состояние соединений не видно. "}
+            {!data.redis &&
+              t("Redis недоступен: состояние соединений не видно.") + " "}
             {data.redis &&
               (heartbeatAge !== null && heartbeatAge < 60
-                ? `Воркер держит соединения с Яндексом, отчёт ${Math.round(heartbeatAge)} с назад.`
-                : "Воркер не присылал отчёт о соединениях с Яндексом больше минуты: он выключен, YANDEX_LIVE=0 или соединения держит другой процесс.")}
+                ? t("Воркер держит соединения с Яндексом, отчёт {n} с назад.", {
+                    n: Math.round(heartbeatAge),
+                  })
+                : t(
+                    "Воркер не присылал отчёт о соединениях с Яндексом больше минуты: он выключен, YANDEX_LIVE=0 или соединения держит другой процесс.",
+                  ))}
           </p>
         )}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label>
-            <span className={labelClass}>Пользователь</span>
+            <span className={labelClass}>{t("Пользователь")}</span>
             <input
               value={q}
               onChange={(e) => {
                 setQ(e.target.value.trim());
                 setOffset(0);
               }}
-              placeholder="ник"
+              placeholder={t("ник")}
               className={inputClass}
             />
           </label>
           <label>
-            <span className={labelClass}>Сервис</span>
+            <span className={labelClass}>{t("Сервис")}</span>
             <select
               value={provider}
               onChange={(e) => {
@@ -322,10 +354,10 @@ export default function IntegrationsTab({
               }}
               className={inputClass}
             >
-              <option value="">Все</option>
+              <option value="">{t("Все")}</option>
               {Object.entries(PROVIDER_NAMES).map(([id, name]) => (
                 <option key={id} value={id}>
-                  {name}
+                  {t(name)}
                 </option>
               ))}
             </select>
@@ -346,7 +378,7 @@ export default function IntegrationsTab({
         ))}
         {!loading && data?.items.length === 0 && (
           <li className="py-6 text-center text-xs text-fg-2">
-            Никто не подключил сервисы
+            {t("Никто не подключил сервисы")}
           </li>
         )}
       </ul>

@@ -4,6 +4,7 @@ import { VerifiedBadge } from "@/components/UserBadges";
 import { Avatar, Loading } from "@/components/ui";
 import type { useRouter } from "next/navigation";
 import type { UserCard } from "@/app/lib/types";
+import { useT } from "@/app/lib/i18n/client";
 
 export function FollowModalContent({
   loading,
@@ -16,10 +17,13 @@ export function FollowModalContent({
   router: ReturnType<typeof useRouter>;
   onClose: () => void;
 }>) {
+  const t = useT();
   if (loading) return <Loading />;
   if (users.length === 0) {
     return (
-      <p className="py-10 text-center text-sm text-fg-2">Тут пока пусто.</p>
+      <p className="py-10 text-center text-sm text-fg-2">
+        {t("Тут пока пусто.")}
+      </p>
     );
   }
   return (
@@ -45,7 +49,8 @@ export function FollowModalContent({
                 />
               </span>
               <span className="block truncate font-mono text-[11px] text-fg-3">
-                @{person.username} · ур. {person.level ?? 1}
+                @{person.username} ·{" "}
+                {t("ур. {level}", { level: person.level ?? 1 })}
               </span>
             </span>
           </button>

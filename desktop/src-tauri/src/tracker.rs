@@ -94,8 +94,8 @@ pub fn source_name(app_id: &str) -> &'static str {
 pub fn player_label(app_id: &str) -> String {
     match classify(app_id) {
         SourceKind::Spotify => "Spotify".into(),
-        SourceKind::Yandex => "Яндекс Музыка".into(),
-        SourceKind::Browser => "Браузер".into(),
+        SourceKind::Yandex => crate::i18n::tr("Яндекс Музыка", "Yandex Music").into(),
+        SourceKind::Browser => crate::i18n::tr("Браузер", "Browser").into(),
         SourceKind::Other => {
             // "C:\\...\\AIMP.exe", "Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic"
             let name = app_id.rsplit(['\\', '/', '!']).next().unwrap_or(app_id);
@@ -104,7 +104,7 @@ pub fn player_label(app_id: &str) -> String {
                 .or_else(|| name.strip_suffix(".EXE"))
                 .unwrap_or(name);
             if name.is_empty() {
-                "Плеер".into()
+                crate::i18n::tr("Плеер", "Player").into()
             } else {
                 name.to_string()
             }

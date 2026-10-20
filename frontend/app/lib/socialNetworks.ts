@@ -1,12 +1,15 @@
-const SOCIAL = "Социальные сети";
-const VIDEO = "Видео и стримы";
-const MUSIC = "Музыкальные сервисы";
-const USERNAME = "Никнейм";
+import { msg } from "./i18n/core";
+
+/* `group` and `placeholder` are Russian source text: show them with t(). */
+const SOCIAL = msg("Социальные сети");
+const VIDEO = msg("Видео и стримы");
+const MUSIC = msg("Музыкальные сервисы");
+const USERNAME = msg("Никнейм");
 const SLOT = "{username}";
 
 const NETWORK_DEFINITIONS = [
   ["telegram", "Telegram", SOCIAL, USERNAME, `https://t.me/${SLOT}`],
-  ["vk", "VK", SOCIAL, "Никнейм или ID", `https://vk.com/${SLOT}`],
+  ["vk", "VK", SOCIAL, msg("Никнейм или ID"), `https://vk.com/${SLOT}`],
   ["instagram", "Instagram", SOCIAL, USERNAME, `https://instagram.com/${SLOT}`],
   ["x", "X (Twitter)", SOCIAL, USERNAME, `https://x.com/${SLOT}`],
   ["threads", "Threads", SOCIAL, USERNAME, `https://www.threads.net/@${SLOT}`],
@@ -14,7 +17,7 @@ const NETWORK_DEFINITIONS = [
     "bluesky",
     "Bluesky",
     SOCIAL,
-    "Хэндл, например name.bsky.social",
+    msg("Хэндл, например name.bsky.social"),
     `https://bsky.app/profile/${SLOT}`,
   ],
   ["reddit", "Reddit", SOCIAL, USERNAME, `https://www.reddit.com/user/${SLOT}`],
@@ -22,7 +25,7 @@ const NETWORK_DEFINITIONS = [
     "discord",
     "Discord",
     SOCIAL,
-    "Числовой ID пользователя",
+    msg("Числовой ID пользователя"),
     `https://discord.com/users/${SLOT}`,
   ],
   ["github", "GitHub", SOCIAL, USERNAME, `https://github.com/${SLOT}`],
@@ -30,14 +33,14 @@ const NETWORK_DEFINITIONS = [
     "steam",
     "Steam",
     SOCIAL,
-    "Персональный ID профиля",
+    msg("Персональный ID профиля"),
     `https://steamcommunity.com/id/${SLOT}`,
   ],
   [
     "youtube",
     "YouTube",
     VIDEO,
-    "Хэндл канала",
+    msg("Хэндл канала"),
     `https://www.youtube.com/@${SLOT}`,
   ],
   ["tiktok", "TikTok", VIDEO, USERNAME, `https://www.tiktok.com/@${SLOT}`],
@@ -46,7 +49,7 @@ const NETWORK_DEFINITIONS = [
     "spotify",
     "Spotify",
     MUSIC,
-    "ID пользователя Spotify",
+    msg("ID пользователя Spotify"),
     `https://open.spotify.com/user/${SLOT}`,
   ],
   ["lastfm", "Last.fm", MUSIC, USERNAME, `https://www.last.fm/user/${SLOT}`],
@@ -61,7 +64,7 @@ const NETWORK_DEFINITIONS = [
     "bandcamp",
     "Bandcamp",
     MUSIC,
-    "Никнейм поклонника",
+    msg("Никнейм поклонника"),
     `https://bandcamp.com/${SLOT}`,
   ],
 ] as const;

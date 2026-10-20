@@ -27,23 +27,26 @@ import { CompatibilityModal } from "./_components/CompatibilityModal";
 import { ProfileMainGrid } from "./_components/ProfileMainGrid";
 import { useProfilePage } from "./_components/useProfilePage";
 import { coverAt } from "@/app/lib/coverSize";
+import { useT } from "@/app/lib/i18n/client";
 
 function StatusScreen({
   title,
   children,
 }: Readonly<{ title: string; children: React.ReactNode }>) {
+  const t = useT();
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-3 px-4 py-24 text-center">
       <h1 className="text-2xl font-semibold tracking-[-0.02em]">{title}</h1>
       <p className="text-sm text-fg-2">{children}</p>
       <Link href="/" className={`${btn.secondary} ${btn.md} mt-4`}>
-        На главную
+        {t("На главную")}
       </Link>
     </div>
   );
 }
 
 export default function Profile() {
+  const t = useT();
   const profile = useProfilePage();
   const {
     username,
@@ -65,13 +68,14 @@ export default function Profile() {
 
   if (error)
     return (
-      <StatusScreen title="Профиль не найден">
-        Пользователя <span className="font-mono text-fg">@{username}</span> нет
-        в нашей базе.
+      <StatusScreen title={t("Профиль не найден")}>
+        {t("Пользователя")}{" "}
+        <span className="font-mono text-fg">@{username}</span>{" "}
+        {t("нет в нашей базе.")}
       </StatusScreen>
     );
 
-  if (loading || !data.user) return <Loading label="Загружаем профиль…" />;
+  if (loading || !data.user) return <Loading label={t("Загружаем профиль…")} />;
 
   const u = data.user;
   const fallbackAvatar = `https://api.dicebear.com/9.x/micah/svg?seed=${username}&backgroundColor=transparent`;
@@ -93,9 +97,10 @@ export default function Profile() {
 
   if (u.is_private && !u.can_view_private)
     return (
-      <StatusScreen title="Это приватный профиль">
-        Пользователь ограничил доступ к своей статистике и истории
-        прослушиваний.
+      <StatusScreen title={t("Это приватный профиль")}>
+        {t(
+          "Пользователь ограничил доступ к своей статистике и истории прослушиваний.",
+        )}
       </StatusScreen>
     );
 
@@ -205,8 +210,8 @@ export default function Profile() {
 
       {!hiddenSections.has("top_artists") &&
         (data.stats.top_artists ?? []).length > 0 && (
-          <section aria-label="Любимые исполнители" className="space-y-3">
-            <h2 className="text-lg font-semibold">Чаще всего звучат</h2>
+          <section aria-label={t("Любимые исполнители")} className="space-y-3">
+            <h2 className="text-lg font-semibold">{t("Чаще всего звучат")}</h2>
             <div className="grid gap-3 sm:grid-cols-3">
               {(data.stats.top_artists ?? []).slice(0, 3).map((artist) => {
                 const cover = sanitizeImageUrl(
@@ -233,7 +238,9 @@ export default function Profile() {
                         {artist.artist}
                       </p>
                       <p className="text-xs text-fg-2">
-                        {formatNumber(artist.plays)} прослушиваний
+                        {t("{n} прослушиваний", {
+                          n: formatNumber(artist.plays),
+                        })}
                       </p>
                     </div>
                   </div>

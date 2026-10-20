@@ -13,6 +13,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.constants import USER_NOT_FOUND
+from app.core.i18n import request_lang
 from app.core.rate_limit import HEAVY_READ_LIMIT, limiter
 from app.core.security import get_admin_user
 from app.database import get_db
@@ -81,6 +82,7 @@ def get_all_achievements(
     }
     progresses = calculate_achievement_progresses(
         db, user, all_achs, set(user_achs))
+    lang = request_lang(request)
     res = []
 
     for a in all_achs:
@@ -88,6 +90,7 @@ def get_all_achievements(
             db, user, a, user_achs.get(int(a.id)), total_users,
             earned_count=rarity_counts.get(int(a.id), 0),
             current_progress=progresses.get(int(a.id)),
+            lang=lang,
         )
         item["track_progress_available"] = bool(
             is_owner and a.rule_type in {SPECIFIC_ALBUM_RULE, SPECIFIC_ARTIST_RULE}
@@ -174,6 +177,21 @@ def get_achievement_artist_progress(
     return {"achievement_id": achievement.id, **result}
 
 
+def _english_text(value: str | None) -> str | None:
+    """Blank English fields are stored as NULL (show the Russian text)."""
+    text = (value or "").strip()
+    return text or None
+
+
+def _apply_english_texts(ach: Achievement, data: AchCreate | AchUpdate) -> None:
+    """Store the English name/description; an update that leaves the fields
+    out (an older admin client) keeps what is stored."""
+    if "name_en" in data.model_fields_set or ach.id is None:
+        ach.name_en = _english_text(data.name_en)  # type: ignore[assignment]
+    if "description_en" in data.model_fields_set or ach.id is None:
+        ach.description_en = _english_text(data.description_en)  # type: ignore[assignment]
+
+
 def _admin_yandex_token(admin: User) -> str | None:
     """Yandex Music answers metadata requests from outside Russia only with a
     token: the admin's own, when they linked Yandex Music."""
@@ -210,17 +228,18 @@ async def _enrich_admin_achievement(
 def create_achievement(data: AchCreate, db: Annotated[Session, Depends(
         get_db)], admin: Annotated[User, Depends(get_admin_user)]):
     target_val, val, t_img, meta_text = anyio.from_thread.run(_enrich_admin_achievement, data, admin)
-    db.add(
-        Achievement(
-            name=data.name,
-            description=data.description,
-            icon=data.icon,
-            rule_type=data.rule_type,
-            rule_value=val,
-            rule_target=target_val,
-            target_image=t_img,
-            reward_xp=data.reward_xp,
-            rule_meta=meta_text))
+    ach = Achievement(
+        name=data.name,
+        description=data.description,
+        icon=data.icon,
+        rule_type=data.rule_type,
+        rule_value=val,
+        rule_target=target_val,
+        target_image=t_img,
+        reward_xp=data.reward_xp,
+        rule_meta=meta_text)
+    _apply_english_texts(ach, data)
+    db.add(ach)
     audit.record(db, admin, "achievement.create", data.name, rule=data.rule_type, value=val)
     db.commit()
     return {"status": "ok"}
@@ -243,6 +262,7 @@ def update_achievement(ach_id: int,
         raise HTTPException(404)
     target_val, val, t_img, meta_text = anyio.from_thread.run(_enrich_admin_achievement, data, admin)
     ach.name, ach.description, ach.icon, ach.rule_type, ach.rule_value, ach.rule_target, ach.target_image, ach.reward_xp, ach.rule_meta = data.name, data.description, data.icon, data.rule_type, val, target_val, t_img, data.reward_xp, meta_text  # type: ignore[assignment]
+    _apply_english_texts(ach, data)
     audit.record(db, admin, "achievement.update", data.name, rule=data.rule_type, value=val)
     db.commit()
     return {"status": "ok"}

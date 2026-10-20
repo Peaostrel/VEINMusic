@@ -1,12 +1,14 @@
 import html
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.constants import ACTIVE_PLAYBACK_WINDOW_SEC
+from app.core.i18n import normalize_lang, request_lang, tr, user_lang
+from app.core.security import get_current_user
 from app.database import get_db
 from app.models import Scrobble, Track, User
 from app.services.privacy import is_public_section
@@ -19,6 +21,30 @@ SVG_UTF8_MEDIA_TYPE = "image/svg+xml; charset=utf-8"
 DEFAULT_ARTIST = "VEIN Music"
 USERNAME_LIMIT = 32
 NO_CACHE = {"Cache-Control": "no-cache"}
+# Share cards are drawn in the language of whoever opens them
+VARY_LANG = {"Vary": "Accept-Language, X-VEIN-Lang"}
+
+
+# Texts of the embeddable widgets, shown on other sites. They have always been
+# drawn in English for every owner; ?lang=ru draws them in Russian.
+WIDGET_TEXTS = {
+    "en": {"now": "LISTENING NOW ON VEIN", "last": "LAST PLAYED ON VEIN", "top": "TOP ARTISTS",
+           "hidden": "Listening is hidden", "empty": "No scrobbles yet", "missing": "User not found",
+           "private": "Private Profile", "track": "Unknown Track", "artist": "Unknown Artist"},
+    "ru": {"now": "СЕЙЧАС ИГРАЕТ НА VEIN", "last": "НЕДАВНО НА VEIN", "top": "ТОП ИСПОЛНИТЕЛЕЙ",
+           "hidden": "Прослушивания скрыты", "empty": "Пока нет прослушиваний", "missing": "Пользователь не найден",
+           "private": "Приватный профиль", "track": "Без названия", "artist": "Неизвестный артист"},
+}
+
+
+def _widget_lang(lang: str | None, user=None) -> str:
+    """?lang=ru|en, else the owner's language (English for unknown users)."""
+    return normalize_lang(lang) or (user_lang(user) if user else "en")
+
+
+def _card_lang(request: Request, lang: str | None) -> str:
+    """Language of a share card: ?lang=ru|en, else the visitor's (Accept-Language)."""
+    return normalize_lang(lang) or request_lang(request)
 
 
 def _find_user(db: Session, username: str) -> User | None:
@@ -66,12 +92,13 @@ def _truncate_escape(text: str | None, limit: int) -> str:
     return _escape(raw)
 
 
-def _render_now_playing_svg(username: str, title: str, artist: str, is_playing: bool) -> str:
+def _render_now_playing_svg(username: str, title: str, artist: str, is_playing: bool,
+                            lang: str = "en") -> str:
     escaped_user = _escape(username)
     escaped_title = _truncate_escape(title, 32)
     escaped_artist = _truncate_escape(artist, 36)
 
-    status_text = "LISTENING NOW ON VEIN" if is_playing else "LAST PLAYED ON VEIN"
+    status_text = WIDGET_TEXTS[lang]["now" if is_playing else "last"]
     badge_color = "#ef4444" if is_playing else "#71717a"
     pulse_dot = f'''
         <circle cx="28" cy="24" r="4" fill="{badge_color}">
@@ -152,7 +179,7 @@ def _render_now_playing_svg(username: str, title: str, artist: str, is_playing: 
     return svg
 
 
-def _render_top_artists_svg(username: str, top_artists: list[tuple[str, int]]) -> str:
+def _render_top_artists_svg(username: str, top_artists: list[tuple[str, int]], lang: str = "en") -> str:
     escaped_user = _escape(username)
     rows_svg = []
     max_count = max([c for _, c in top_artists], default=1) or 1
@@ -184,7 +211,7 @@ def _render_top_artists_svg(username: str, top_artists: list[tuple[str, int]]) -
     <rect width="420" height="{height}" rx="16" fill="url(#top_bg)"/>
     <rect width="420" height="{height}" rx="16" stroke="rgba(255,255,255,0.08)" stroke-width="1.2"/>
 
-    <text x="24" y="26" fill="#ef4444" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="800" letter-spacing="1.2">TOP ARTISTS</text>
+    <text x="24" y="26" fill="#ef4444" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="800" letter-spacing="1.2">{WIDGET_TEXTS[lang]["top"]}</text>
     <text x="396" y="26" text-anchor="end" fill="#71717a" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="600">@{escaped_user}</text>
 
     {"".join(rows_svg)}
@@ -192,7 +219,7 @@ def _render_top_artists_svg(username: str, top_artists: list[tuple[str, int]]) -
     return svg
 
 
-def _now_playing_text(db: Session, user: User) -> tuple[str, str, bool]:
+def _now_playing_text(db: Session, user: User, lang: str = "en") -> tuple[str, str, bool]:
     """Title, artist and "playing now" for the widget, by the profile's rules:
     the current track only when it and the online status are public, past
     plays only when the history is."""
@@ -209,8 +236,9 @@ def _now_playing_text(db: Session, user: User) -> tuple[str, str, bool]:
     shown, is_playing = _visible_play(recent, show_current, show_history)
     if shown is None or not shown.track:
         hidden = recent and not show_history
-        return ("Listening is hidden" if hidden else "No scrobbles yet"), DEFAULT_ARTIST, False
-    return shown.track.title or "Unknown Track", shown.track.artist or "Unknown Artist", is_playing
+        return WIDGET_TEXTS[lang]["hidden" if hidden else "empty"], DEFAULT_ARTIST, False
+    return (shown.track.title or WIDGET_TEXTS[lang]["track"], shown.track.artist or WIDGET_TEXTS[lang]["artist"],
+            is_playing)
 
 
 def _visible_play(recent: list[Scrobble], show_current: bool,
@@ -227,18 +255,20 @@ def _visible_play(recent: list[Scrobble], show_current: bool,
 
 
 @router.get("/now-playing/{username}.svg")
-def get_now_playing_widget(username: str, db: Annotated[Session, Depends(get_db)]):
+def get_now_playing_widget(username: str, db: Annotated[Session, Depends(get_db)], lang: str | None = None):
     user = _find_user(db, username)
+    lang = _widget_lang(lang, user)
     if not user:
-        svg_content = _render_now_playing_svg(_shown_name(username), "User not found", DEFAULT_ARTIST, False)
+        svg_content = _render_now_playing_svg(_shown_name(username), WIDGET_TEXTS[lang]["missing"], DEFAULT_ARTIST,
+                                              False, lang)
         return Response(content=svg_content, media_type=SVG_MEDIA_TYPE, headers=NO_CACHE)
 
     if user.profile.is_private:
-        svg_content = _render_now_playing_svg(username, "Private Profile", DEFAULT_ARTIST, False)
+        svg_content = _render_now_playing_svg(username, WIDGET_TEXTS[lang]["private"], DEFAULT_ARTIST, False, lang)
         return Response(content=svg_content, media_type=SVG_MEDIA_TYPE, headers=NO_CACHE)
 
-    title, artist, is_playing = _now_playing_text(db, user)
-    svg_content = _render_now_playing_svg(username, title, artist, is_playing)
+    title, artist, is_playing = _now_playing_text(db, user, lang)
+    svg_content = _render_now_playing_svg(username, title, artist, is_playing, lang)
     return Response(
         content=svg_content,
         media_type=SVG_UTF8_MEDIA_TYPE,
@@ -250,10 +280,11 @@ def get_now_playing_widget(username: str, db: Annotated[Session, Depends(get_db)
 
 
 @router.get("/top-artists/{username}.svg")
-def get_top_artists_widget(username: str, db: Annotated[Session, Depends(get_db)]):
+def get_top_artists_widget(username: str, db: Annotated[Session, Depends(get_db)], lang: str | None = None):
     user = _find_user(db, username)
+    lang = _widget_lang(lang, user)
     if not user or not is_public_section(user.profile, "statistics"):
-        svg_content = _render_top_artists_svg(_shown_name(username), [])
+        svg_content = _render_top_artists_svg(_shown_name(username), [], lang)
         return Response(content=svg_content, media_type=SVG_MEDIA_TYPE, headers=NO_CACHE)
 
     top_artists = (
@@ -267,7 +298,7 @@ def get_top_artists_widget(username: str, db: Annotated[Session, Depends(get_db)
     )
 
     artist_list = [(str(row.artist), int(row[1])) for row in top_artists]
-    svg_content = _render_top_artists_svg(username, artist_list)
+    svg_content = _render_top_artists_svg(username, artist_list, lang)
     return Response(
         content=svg_content,
         media_type=SVG_UTF8_MEDIA_TYPE,
@@ -279,25 +310,28 @@ def get_top_artists_widget(username: str, db: Annotated[Session, Depends(get_db)
 
 
 @router.get("/og/recap/{username}.svg")
-def get_og_recap_card(username: str, period: str = "week", db: Annotated[Session, Depends(get_db)] = None):  # type: ignore[assignment]
+def get_og_recap_card(request: Request, username: str, period: str = "week",
+                      db: Annotated[Session, Depends(get_db)] = None,  # type: ignore[assignment]
+                      lang: str | None = None):
     """Generate 1200x630 social share card for Weekly/Monthly recap."""
     from datetime import UTC, datetime, timedelta
 
     from app.services.og_image import generate_recap_card_svg
 
+    lang = _card_lang(request, lang)
     user = _find_user(db, username)
     if not user:
-        svg_content = generate_recap_card_svg(_shown_name(username), "User Not Found", 0, 0.0, [])
-        return Response(content=svg_content, media_type=SVG_UTF8_MEDIA_TYPE)
+        svg_content = generate_recap_card_svg(_shown_name(username), "User Not Found", 0, 0.0, [], lang=lang)
+        return Response(content=svg_content, media_type=SVG_UTF8_MEDIA_TYPE, headers=VARY_LANG)
 
     if not is_public_section(user.profile, "statistics"):
-        svg_content = generate_recap_card_svg(username, "Private Profile", 0, 0.0, [])
-        return Response(content=svg_content, media_type=SVG_UTF8_MEDIA_TYPE, headers=NO_CACHE)
+        svg_content = generate_recap_card_svg(username, "Private Profile", 0, 0.0, [], lang=lang)
+        return Response(content=svg_content, media_type=SVG_UTF8_MEDIA_TYPE, headers={**NO_CACHE, **VARY_LANG})
 
     now = datetime.now(UTC)
     delta_days = 30 if period == "month" else 7
     since_date = now - timedelta(days=delta_days)
-    period_title = "ИТОГИ МЕСЯЦА" if period == "month" else "ИТОГИ НЕДЕЛИ"
+    period_title = tr(lang, "ИТОГИ МЕСЯЦА" if period == "month" else "ИТОГИ НЕДЕЛИ")
 
     scrobbles_query = db.query(Scrobble).filter(
         *_listening(user.id),
@@ -346,24 +380,29 @@ def get_og_recap_card(username: str, period: str = "week", db: Annotated[Session
         total_hours=total_hours,
         top_artists=artist_list,
         top_genre=top_genre or "Various",
+        lang=lang,
     )
     return Response(
         content=svg_content,
         media_type=SVG_UTF8_MEDIA_TYPE,
-        headers={"Cache-Control": "public, max-age=300, s-maxage=300"},
+        headers={"Cache-Control": "public, max-age=300, s-maxage=300", **VARY_LANG},
     )
 
 
 @router.get("/og/achievement/{username}/{achievement_id}.svg")
 def get_og_achievement_card(
+    request: Request,
     username: str,
     achievement_id: int,
     db: Annotated[Session, Depends(get_db)],
+    lang: str | None = None,
 ):
     """Generate 1200x630 social share card for an unlocked achievement."""
     from app.models import Achievement, UserAchievement
+    from app.services.achievements import achievement_texts
     from app.services.og_image import generate_achievement_card_svg
 
+    lang = _card_lang(request, lang)
     user = _find_user(db, username)
     ach = db.query(Achievement).filter(Achievement.id == achievement_id).first()
     # Only a public profile that really unlocked the achievement gets a
@@ -378,18 +417,75 @@ def get_og_achievement_card(
     )
 
     if not unlocked or ach is None:
-        svg_content = generate_achievement_card_svg(_shown_name(username), "Достижение", "VEIN Music Gamification", "🏆", 0)
-        return Response(content=svg_content, media_type=SVG_UTF8_MEDIA_TYPE)
+        svg_content = generate_achievement_card_svg(
+            _shown_name(username), tr(lang, "Достижение"), "VEIN Music Gamification", "🏆", 0, lang=lang)
+        return Response(content=svg_content, media_type=SVG_UTF8_MEDIA_TYPE, headers=VARY_LANG)
 
+    texts = achievement_texts(ach, lang)
     svg_content = generate_achievement_card_svg(
         username=username,
-        title=str(ach.name),
-        description=str(ach.description),
+        title=texts["name"],
+        description=texts["description"],
         icon=str(ach.icon or "🏆"),
         reward_xp=int(ach.reward_xp or 50),
+        lang=lang,
     )
     return Response(
         content=svg_content,
         media_type=SVG_UTF8_MEDIA_TYPE,
-        headers={"Cache-Control": "public, max-age=600, s-maxage=600"},
+        headers={"Cache-Control": "public, max-age=600, s-maxage=600", **VARY_LANG},
     )
+
+
+@router.get("/me/summary")
+def get_my_widget_summary(current_user: Annotated[User, Depends(get_current_user)],
+                          db: Annotated[Session, Depends(get_db)]):
+    """What the iPhone widget (docs/iphone-widget.md) shows: the newest play
+    and the last 7 days. Read with the owner's API key, so it works for
+    private profiles too."""
+    latest = (
+        db.query(Scrobble)
+        .filter(Scrobble.user_id == current_user.id, Scrobble.deleted_at.is_(None))
+        .order_by(Scrobble.id.desc())
+        .first()
+    )
+    now = None
+    if latest is not None and latest.track is not None:
+        now = {
+            "title": latest.track.title,
+            "artist": latest.track.artist,
+            "cover_url": latest.track.cover_url,
+            "is_playing": _is_active(latest),
+            "played_at": latest.played_at.isoformat() if latest.played_at else None,
+        }
+
+    since = datetime.now(UTC) - timedelta(days=7)
+    week = (*_listening(current_user.id), Scrobble.played_at >= since)
+    plays, seconds = (
+        db.query(func.count(Scrobble.id), func.coalesce(func.sum(Scrobble.listened_sec), 0))
+        .filter(*week)
+        .one()
+    )
+
+    def top(*columns):
+        return (
+            db.query(*columns, func.count(Scrobble.id))
+            .join(Track, Scrobble.track_id == Track.id)
+            .filter(*week, Track.artist.isnot(None))
+            .group_by(*columns)
+            .order_by(func.count(Scrobble.id).desc())
+            .first()
+        )
+
+    artist = top(Track.artist)
+    track = top(Track.title, Track.artist)
+    return {
+        "username": current_user.username,
+        "now": now,
+        "week": {
+            "plays": int(plays or 0),
+            "minutes": int(seconds or 0) // 60,
+            "top_artist": artist[0] if artist else None,
+            "top_track": {"title": track[0], "artist": track[1]} if track else None,
+        },
+    }

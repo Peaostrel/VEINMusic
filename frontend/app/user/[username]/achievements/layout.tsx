@@ -1,11 +1,15 @@
 import type { Metadata } from "next";
+import { getT } from "@/app/lib/i18n/server";
 
 export async function generateMetadata({
   params,
 }: Readonly<{ params: Promise<{ username: string }> }>): Promise<Metadata> {
   const { username } = await params;
   // The profile layout's own title stops the root template, so spell it out
-  return { title: { absolute: `Достижения @${username} — VEINMusic` } };
+  const t = await getT();
+  return {
+    title: { absolute: t("Достижения @{username} — VEINMusic", { username }) },
+  };
 }
 
 export default function Layout({

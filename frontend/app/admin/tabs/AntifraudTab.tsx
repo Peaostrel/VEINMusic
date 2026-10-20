@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/app/lib/i18n/client";
 import { ShieldAlert, CheckCircle, RotateCcw } from "lucide-react";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import type { AdminPanelState } from "../useAdminPanel";
@@ -10,6 +11,7 @@ export default function AntifraudTab({
   handleResetSuspiciousXp,
   handleUnflagAntifraud,
 }: Readonly<AdminPanelState>) {
+  const t = useT();
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between p-5 bg-surface border border-danger-line rounded-xl">
@@ -17,16 +19,17 @@ export default function AntifraudTab({
           <ShieldAlert className="w-6 h-6 text-danger" />
           <div>
             <h3 className="font-medium text-fg text-sm">
-              Система автоматического обнаружения накрутки
+              {t("Система автоматического обнаружения накрутки")}
             </h3>
             <p className="text-fg-2 text-xs">
-              Алгоритм анализирует скорость скробблинга (&gt;70 треков/час) и
-              короткие треки (&lt;20с).
+              {t(
+                "Алгоритм анализирует скорость скробблинга (>70 треков/час) и короткие треки (<20с).",
+              )}
             </p>
           </div>
         </div>
         <span className="px-3 py-1 text-danger font-mono text-xs font-medium rounded-lg">
-          {suspiciousUsers.length} флагов
+          {t("{n} флагов", { n: suspiciousUsers.length })}
         </span>
       </div>
 
@@ -34,7 +37,7 @@ export default function AntifraudTab({
         <div className="text-center py-16 bg-surface border border-line-soft rounded-xl">
           <CheckCircle className="w-12 h-12 text-ok mx-auto mb-3 opacity-60" />
           <p className="text-sm text-fg-2">
-            Подозрительных аккаунтов не обнаружено. Система чиста!
+            {t("Подозрительных аккаунтов не обнаружено. Система чиста!")}
           </p>
         </div>
       ) : (
@@ -57,27 +60,31 @@ export default function AntifraudTab({
                   <div>
                     <div className="font-medium text-fg">@{su.username}</div>
                     <div className="text-xs text-fg-2 font-mono">
-                      {su.total_scrobbles} скробблов • {su.total_xp} XP
+                      {t("{n} скробблов", { n: su.total_scrobbles })} •{" "}
+                      {su.total_xp} XP
                     </div>
                   </div>
                 </div>
 
                 <div className="text-right">
                   <span className="px-2.5 py-1 border border-danger-line text-danger text-xs font-mono font-medium rounded-lg">
-                    Риск: {su.risk_score}%
+                    {t("Риск: {n}%", { n: su.risk_score })}
                   </span>
                 </div>
               </div>
 
               <div className="p-3 bg-bg rounded-xl border border-line-soft text-xs text-danger space-y-1">
                 <div className="font-medium text-fg-2 text-[10px] font-mono">
-                  Причины срабатывания:
+                  {t("Причины срабатывания:")}
                 </div>
                 {su.reasons.length > 0 ? (
-                  su.reasons.map((r) => <div key={r}>• {r}</div>)
+                  su.reasons.map((r) => <div key={r}>• {t(r)}</div>)
                 ) : (
                   <div>
-                    • {su.antifraud_reason || "Флаг установлен администратором"}
+                    •{" "}
+                    {su.antifraud_reason
+                      ? t(su.antifraud_reason)
+                      : t("Флаг установлен администратором")}
                   </div>
                 )}
               </div>
@@ -89,7 +96,7 @@ export default function AntifraudTab({
                   className="flex-1 py-2 bg-accent text-on-accent hover:brightness-110 rounded-xl text-xs font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  Сбросить XP и стрик
+                  {t("Сбросить XP и стрик")}
                 </button>
                 <button
                   type="button"
@@ -100,15 +107,15 @@ export default function AntifraudTab({
                       : "border border-danger-line text-danger hover:bg-[#2a1b1b]"
                   }`}
                 >
-                  {su.is_banned ? "Разбан" : "Бан"}
+                  {su.is_banned ? t("Разбан") : t("Бан")}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleUnflagAntifraud(su.username)}
                   className="px-3 py-2 bg-surface-2 hover:bg-line text-fg-2 rounded-xl text-xs font-medium transition cursor-pointer"
-                  title="Снять подозрение"
+                  title={t("Снять подозрение")}
                 >
-                  Снять флаг
+                  {t("Снять флаг")}
                 </button>
               </div>
             </div>

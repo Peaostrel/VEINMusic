@@ -52,7 +52,8 @@ def build(output: Path, development: bool = False) -> str:
     if not re.fullmatch(r'\d+\.\d+\.\d+', version):
         raise ValueError('Extension version must have three numeric components')
     output.mkdir(parents=True, exist_ok=True)
-    assets = FILES + sorted(str(p.relative_to(SOURCE)) for p in (SOURCE / 'icons').glob('*.png'))
+    assets = FILES + sorted(str(p.relative_to(SOURCE)) for p in (SOURCE / 'icons').glob('*.png')) \
+        + sorted(str(p.relative_to(SOURCE)) for p in (SOURCE / '_locales').glob('*/messages.json'))
     hashes = []
     for browser in ['chromium', 'firefox']:
         directory = output / browser

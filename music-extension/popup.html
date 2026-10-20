@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>VEIN Tracker</title>
@@ -114,37 +114,37 @@
     <div class="card">
         <label class="toggle">
             <span class="toggle-text">
-                <span class="toggle-title">Передавать прослушивания</span><br>
-                <span class="muted">в ваш аккаунт VEIN</span>
+                <span class="toggle-title" data-i18n="popup_trackingTitle">Send listening activity</span><br>
+                <span class="muted" data-i18n="popup_trackingSubtitle">to your VEIN account</span>
             </span>
             <input type="checkbox" id="tracking-enabled">
         </label>
         <p class="privacy">
-            Отправляются трек, исполнитель, обложка, ссылка и время воспроизведения.
-            <a href="https://music.vein.guru/privacy" target="_blank" rel="noopener noreferrer">Конфиденциальность</a>
+            <span data-i18n="popup_privacyNote">Track, artist, artwork, link and playback time are sent.</span>
+            <a href="https://music.vein.guru/privacy" target="_blank" rel="noopener noreferrer" data-i18n="popup_privacyLink">Privacy</a>
         </p>
     </div>
 
     <div id="pair-box" class="card">
-        <div class="label">Подключение</div>
-        <div class="muted" style="margin-bottom: 10px;">Подтвердите это устройство на сайте VEIN. Пароль вводить не нужно.</div>
-        <button id="pair-btn" class="btn btn-primary">Подключить через сайт</button>
-        <div id="pair-hint" class="muted" style="margin-top: 6px;">Сначала включите передачу выше.</div>
+        <div class="label" data-i18n="popup_pairLabel">Connection</div>
+        <div class="muted" style="margin-bottom: 10px;" data-i18n="popup_pairIntro">Confirm this device on the VEIN website. No password needed.</div>
+        <button id="pair-btn" class="btn btn-primary" data-i18n="popup_pairButton">Connect via website</button>
+        <div id="pair-hint" class="muted" style="margin-top: 6px;" data-i18n="popup_pairHint">Turn on sending above first.</div>
         <div id="pair-code-box" style="display: none; margin-top: 10px;">
-            <div class="muted">Код для подтверждения</div>
+            <div class="muted" data-i18n="popup_pairCodeLabel">Confirmation code</div>
             <div id="pair-code" class="code"></div>
-            <button id="pair-open-btn" class="btn">Открыть страницу подтверждения</button>
-            <div class="waiting muted"><span class="spinner"></span>Ждём подтверждения на сайте…</div>
+            <button id="pair-open-btn" class="btn" data-i18n="popup_pairOpenButton">Open confirmation page</button>
+            <div class="waiting muted"><span class="spinner"></span><span data-i18n="popup_pairWaiting">Waiting for confirmation on the website…</span></div>
         </div>
         <div id="pair-status"></div>
     </div>
 
     <div id="unauth-box">
         <details>
-            <summary>Подключить по API-ключу</summary>
-            <input type="password" autocomplete="off" id="api-key-input" class="field" aria-label="API-ключ" placeholder="API-ключ из настроек VEIN">
-            <input type="text" id="username-input" class="field" aria-label="Никнейм" placeholder="Никнейм">
-            <div class="row"><button id="save-btn" class="btn">Сохранить</button></div>
+            <summary data-i18n="popup_apiKeySummary">Connect with an API key</summary>
+            <input type="password" autocomplete="off" id="api-key-input" class="field" aria-label="API key" placeholder="API key from VEIN settings" data-i18n-aria-label="popup_apiKeyLabel" data-i18n-placeholder="popup_apiKeyPlaceholder">
+            <input type="text" id="username-input" class="field" aria-label="Username" placeholder="Username" data-i18n-aria-label="popup_usernameLabel" data-i18n-placeholder="popup_usernameLabel">
+            <div class="row"><button id="save-btn" class="btn" data-i18n="popup_saveButton">Save</button></div>
         </details>
     </div>
 
@@ -159,7 +159,7 @@
             </div>
         </div>
         <div class="card">
-            <div class="label">Последнее событие</div>
+            <div class="label" data-i18n="popup_lastEventLabel">Latest event</div>
             <div class="now">
                 <div class="now-icon" aria-hidden="true">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6 12.5a2 2 0 1 1-1-1.73V3.2a.6.6 0 0 1 .46-.58l6-1.4A.6.6 0 0 1 12.2 1.8v8.7a2 2 0 1 1-1-1.73V4.4L6 5.6v6.9Z"/></svg>
@@ -172,15 +172,15 @@
             </div>
         </div>
         <div class="row">
-            <button id="test-btn" class="btn">Проверить связь</button>
-            <button id="logout-btn" class="btn btn-danger">Отключить</button>
+            <button id="test-btn" class="btn" data-i18n="popup_testButton">Check connection</button>
+            <button id="logout-btn" class="btn btn-danger" data-i18n="popup_logoutButton">Disconnect</button>
         </div>
         <div id="log-box"></div>
     </div>
 
     <div class="footer">
         <a href="https://music.vein.guru" target="_blank" rel="noopener noreferrer">music.vein.guru</a>
-        <a href="https://music.vein.guru/extension" target="_blank" rel="noopener noreferrer">Поддерживаемые сервисы</a>
+        <a href="https://music.vein.guru/extension" target="_blank" rel="noopener noreferrer" data-i18n="popup_supportedServices">Supported services</a>
     </div>
 
     <script src="pairing.js"></script>

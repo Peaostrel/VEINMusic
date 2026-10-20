@@ -5,7 +5,7 @@ import {
   previewJson,
   type ArtistPreview,
 } from "@/app/lib/preview";
-import { formatNumber, plural } from "@/app/lib/plural";
+import { getT } from "@/app/lib/i18n/server";
 
 export const alt = "Исполнитель на VEINMusic";
 export const size = { width: 1200, height: 630 };
@@ -15,6 +15,7 @@ export default async function Image({
   params,
 }: Readonly<{ params: Promise<{ name: string }> }>) {
   const { name } = await params;
+  const t = await getT();
   const path = `/artist/${encodeURIComponent(name)}`;
   const [a, image] = await Promise.all([
     previewJson<ArtistPreview>(path),
@@ -22,20 +23,20 @@ export default async function Image({
   ]);
   if (!a)
     return renderCard({
-      kicker: "ИСПОЛНИТЕЛЬ",
-      title: "Исполнитель на VEINMusic",
+      kicker: t("ИСПОЛНИТЕЛЬ"),
+      title: t("Исполнитель на VEINMusic"),
       logo: true,
     });
   return renderCard({
-    kicker: "ИСПОЛНИТЕЛЬ",
+    kicker: t("ИСПОЛНИТЕЛЬ"),
     title: clip(a.name, 40),
     subtitle: a.top_track
-      ? `Самый популярный трек — «${clip(a.top_track, 36)}»`
+      ? t("Самый популярный трек — «{title}»", { title: clip(a.top_track, 36) })
       : null,
     stats: [
       {
-        value: formatNumber(a.plays),
-        label: plural(
+        value: t.number(a.plays),
+        label: t.plural(
           a.plays,
           "прослушивание",
           "прослушивания",
@@ -43,8 +44,8 @@ export default async function Image({
         ),
       },
       {
-        value: formatNumber(a.tracks),
-        label: plural(a.tracks, "трек", "трека", "треков"),
+        value: t.number(a.tracks),
+        label: t.plural(a.tracks, "трек", "трека", "треков"),
       },
     ],
     image,

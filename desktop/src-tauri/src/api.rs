@@ -6,13 +6,16 @@ use std::time::Duration;
 use serde::Deserialize;
 use serde_json::json;
 
+use crate::i18n::{ru, tr};
 use crate::tracker::{is_newer, version_key, Report};
 
 const DEFAULT_API: &str = "https://api.music.vein.guru";
 const DEFAULT_SITE: &str = "https://music.vein.guru";
 const RELEASES_URL: &str = "https://api.github.com/repos/Peaostrel/VEINMusic/releases?per_page=20";
 const RELEASE_TAG_PREFIX: &str = "desktop-v";
-pub const CLIENT_NAME: &str = "VEINMusic для Windows";
+pub fn client_name() -> &'static str {
+    tr("VEINMusic для Windows", "VEINMusic for Windows")
+}
 
 /// VEIN_API_URL / VEIN_SITE_URL point a build at a local server.
 pub fn api_base() -> String {
@@ -39,7 +42,14 @@ pub enum ApiError {
 impl std::fmt::Display for ApiError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ApiError::Unauthorized => write!(f, "Ключ приложения больше не действует"),
+            ApiError::Unauthorized => write!(
+                f,
+                "{}",
+                tr(
+                    "Ключ приложения больше не действует",
+                    "The app key is no longer valid"
+                )
+            ),
             ApiError::Other(message) => write!(f, "{message}"),
         }
     }
@@ -104,12 +114,12 @@ impl Api {
         let res = self
             .client
             .post(self.url("/api/devices/code"))
-            .json(&json!({ "client_name": CLIENT_NAME }))
+            .json(&json!({ "client_name": client_name() }))
             .send()
             .await
             .map_err(network)?;
         if !res.status().is_success() {
-            return Err(ApiError::Other(format!("Сервер ответил {}", res.status())));
+            return Err(server_error(res.status()));
         }
         res.json().await.map_err(network)
     }
@@ -140,7 +150,7 @@ impl Api {
             return Err(ApiError::Unauthorized);
         }
         if !status.is_success() {
-            return Err(ApiError::Other(format!("Сервер ответил {status}")));
+            return Err(server_error(status));
         }
         let body: serde_json::Value = res.json().await.map_err(network)?;
         Ok(body
@@ -192,8 +202,22 @@ impl Api {
 
 fn network(e: reqwest::Error) -> ApiError {
     ApiError::Other(if e.is_timeout() || e.is_connect() {
-        "Нет связи с сервером VEINMusic".to_string()
-    } else {
+        tr(
+            "Нет связи с сервером VEINMusic",
+            "Cannot reach the VEINMusic server",
+        )
+        .to_string()
+    } else if ru() {
         format!("Ошибка сети: {e}")
+    } else {
+        format!("Network error: {e}")
+    })
+}
+
+fn server_error(status: reqwest::StatusCode) -> ApiError {
+    ApiError::Other(if ru() {
+        format!("Сервер ответил {status}")
+    } else {
+        format!("The server answered {status}")
     })
 }

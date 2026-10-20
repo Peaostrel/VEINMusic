@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { API_URL } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/client";
 import { LogoTile } from "@/components/brand";
 
 const POLL_MS = 5000;
@@ -41,6 +42,7 @@ function requestUrl(input: RequestInfo | URL): string {
  * normally again, the page reloads to pick up the new version.
  */
 export default function MaintenanceOverlay() {
+  const t = useT();
   const [updating, setUpdating] = useState(false);
   const checking = useRef(false);
 
@@ -91,11 +93,12 @@ export default function MaintenanceOverlay() {
       <div className="flex max-w-sm flex-col items-center gap-4 rounded-2xl border border-line bg-surface px-8 py-10 text-center shadow-[0_24px_64px_rgba(0,0,0,0.5)]">
         <LogoTile size={44} />
         <h2 id="maintenance-title" className="text-lg font-semibold">
-          Идёт обновление
+          {t("Идёт обновление")}
         </h2>
         <p id="maintenance-text" className="text-sm leading-relaxed text-fg-2">
-          Мы выкатываем новую версию VEINMusic. Пожалуйста, подождите — это
-          займёт около минуты, страница обновится сама.
+          {t(
+            "Мы выкатываем новую версию VEINMusic. Пожалуйста, подождите — это займёт около минуты, страница обновится сама.",
+          )}
         </p>
         <span className="flex gap-1.5" aria-hidden="true">
           {[0, 1, 2].map((i) => (

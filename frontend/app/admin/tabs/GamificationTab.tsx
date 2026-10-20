@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/app/lib/i18n/client";
 import { Trash2, Sparkles } from "lucide-react";
 import type { AdminPanelState } from "../useAdminPanel";
 import AchievementsManager from "../components/AchievementsManager";
@@ -13,13 +14,14 @@ export default function GamificationTab({
   handleDeleteFrame,
   loadAllData,
 }: Readonly<AdminPanelState>) {
+  const t = useT();
   return (
     <div className="space-y-8">
       {/* Avatar Frames Management */}
       <div className="space-y-4">
         <h3 className="text-sm font-semibold text-fg flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-accent" />
-          Коллекционные рамки аватара
+          {t("Коллекционные рамки аватара")}
         </h3>
 
         <form
@@ -28,7 +30,7 @@ export default function GamificationTab({
         >
           <div>
             <span className="block text-[10px] font-mono text-fg-2">
-              Название
+              {t("Название")}
             </span>
             <input
               type="text"
@@ -44,7 +46,7 @@ export default function GamificationTab({
 
           <div>
             <span className="block text-[10px] font-mono text-fg-2">
-              Код (slug)
+              {t("Код (slug)")}
             </span>
             <input
               type="text"
@@ -60,7 +62,7 @@ export default function GamificationTab({
 
           <div>
             <span className="block text-[10px] font-mono text-fg-2">
-              Редкость
+              {t("Редкость")}
             </span>
             <select
               value={newFrame.rarity}
@@ -78,7 +80,7 @@ export default function GamificationTab({
 
           <div>
             <span className="block text-[10px] font-mono text-fg-2">
-              Мин. уровень
+              {t("Мин. уровень")}
             </span>
             <input
               type="number"
@@ -98,7 +100,7 @@ export default function GamificationTab({
             type="submit"
             className="py-2.5 bg-accent text-on-accent hover:brightness-110 font-medium rounded-xl text-xs transition cursor-pointer"
           >
-            + Добавить рамку
+            {t("+ Добавить рамку")}
           </button>
         </form>
 
@@ -118,9 +120,10 @@ export default function GamificationTab({
               </div>
               <div className="text-xs text-fg-2 font-mono">
                 <div>
-                  Код: <span className="text-fg font-medium">{frame.code}</span>
+                  {t("Код:")}{" "}
+                  <span className="text-fg font-medium">{frame.code}</span>
                 </div>
-                <div>Требует: Lvl {frame.required_level}+</div>
+                <div>{t("Требует: Lvl {n}+", { n: frame.required_level })}</div>
               </div>
               <button
                 type="button"
@@ -128,7 +131,7 @@ export default function GamificationTab({
                 className="w-full py-1.5 bg-surface-2 hover:bg-[#2a1b1b] text-fg-2 hover:text-danger rounded-lg text-xs transition flex items-center justify-center gap-1 cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                Удалить
+                {t("Удалить")}
               </button>
             </div>
           ))}

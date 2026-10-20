@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { currentLocale } from "./i18n/active";
 
 /** Achievement descriptions: Markdown links and the names from the goal
  * become links (the achievements page and the profile use the same text). */
@@ -15,7 +16,7 @@ export function formatAchievementDate(
   const iso = /(Z|[+-]\d\d:?\d\d)$/.test(value) ? value : `${value}Z`;
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString("ru-RU", {
+  return date.toLocaleDateString(currentLocale(), {
     day: "numeric",
     month,
     year: "numeric",

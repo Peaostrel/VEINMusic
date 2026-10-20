@@ -1,5 +1,8 @@
 "use client";
 
+import { useT } from "@/app/lib/i18n/client";
+import { msg } from "@/app/lib/i18n/core";
+import { tr } from "@/app/lib/i18n/active";
 import { useId, useRef, useState } from "react";
 import { Pencil, Plus, Trash2, Trophy, X } from "lucide-react";
 import type { Achievement } from "../types";
@@ -15,17 +18,19 @@ import {
 } from "../ui";
 
 const RULES: Record<string, string> = {
-  manual: "Вручную (выдаёт админ)",
-  total_scrobbles: "Число прослушиваний",
-  night_scrobbles: "Ночные прослушивания (00–06)",
-  specific_artist: "Исполнитель",
-  specific_track: "Трек",
-  specific_album: "Альбом (уникальные треки)",
+  manual: msg("Вручную (выдаёт админ)"),
+  total_scrobbles: msg("Число прослушиваний"),
+  night_scrobbles: msg("Ночные прослушивания (00–06)"),
+  specific_artist: msg("Исполнитель"),
+  specific_track: msg("Трек"),
+  specific_album: msg("Альбом (уникальные треки)"),
 };
 
 type Form = {
   name: string;
   description: string;
+  name_en: string;
+  description_en: string;
   icon: string;
   rule_type: string;
   rule_value: string;
@@ -39,6 +44,8 @@ type Form = {
 const EMPTY: Form = {
   name: "",
   description: "",
+  name_en: "",
+  description_en: "",
   icon: "🏆",
   rule_type: "manual",
   rule_value: "1",
@@ -66,6 +73,8 @@ function toForm(a: Achievement): Form {
   return {
     name: a.name,
     description: textValue(a.description),
+    name_en: textValue(a.name_en),
+    description_en: textValue(a.description_en),
     icon: textValue(a.icon),
     rule_type: a.rule_type,
     rule_value: numberValue(a.rule_value),
@@ -91,6 +100,8 @@ function toPayload(form: Form) {
     ...form,
     rule_value: Number(form.rule_value || 0),
     reward_xp: Number(form.reward_xp || 0),
+    name_en: emptyAsNull(form.name_en.trim()),
+    description_en: emptyAsNull(form.description_en.trim()),
     rule_target: emptyAsNull(form.rule_target),
     artist_targets: artistTargetsPayload(form),
     rule_meta: emptyAsNull(form.rule_meta),
@@ -100,22 +111,23 @@ function toPayload(form: Form) {
 
 function formHeading(editingId: number | null): string {
   return editingId === null
-    ? "Новое достижение"
-    : `Редактирование #${editingId}`;
+    ? tr("Новое достижение")
+    : tr("Редактирование #{id}", { id: editingId });
 }
 
 function submitLabel(editingId: number | null): string {
-  return editingId === null ? "Создать" : "Сохранить";
+  return editingId === null ? tr("Создать") : tr("Сохранить");
 }
 
 function CancelEditButton({
   editingId,
   onCancel,
 }: Readonly<{ editingId: number | null; onCancel: () => void }>) {
+  const t = useT();
   if (editingId === null) return null;
   return (
     <button type="button" className={buttonClass.secondary} onClick={onCancel}>
-      Отмена
+      {t("Отмена")}
     </button>
   );
 }
@@ -135,23 +147,24 @@ function ArtistTargetsEditor({
   onChange,
   onRemove,
 }: Readonly<ArtistTargetsEditorProps>) {
+  const t = useT();
   return (
     <fieldset className="sm:col-span-4 space-y-2">
-      <legend className={labelClass}>Артисты</legend>
+      <legend className={labelClass}>{t("Артисты")}</legend>
       {targets.map((target, index) => (
         <div key={ids[index]} className="flex items-center gap-2">
           <input
             value={target}
             onChange={(event) => onChange(index, event.target.value)}
             required
-            placeholder="Имя или ссылка на артиста Яндекс Музыки"
-            aria-label={`Артист ${index + 1}`}
+            placeholder={t("Имя или ссылка на артиста Яндекс Музыки")}
+            aria-label={t("Артист {n}", { n: index + 1 })}
             className={inputClass}
           />
           <button
             type="button"
             onClick={() => onRemove(index)}
-            aria-label={`Удалить артиста ${index + 1}`}
+            aria-label={t("Удалить артиста {n}", { n: index + 1 })}
             className="rounded-lg p-2 text-fg-3 hover:bg-line hover:text-danger"
           >
             <X className="h-4 w-4" aria-hidden="true" />
@@ -165,12 +178,12 @@ function ArtistTargetsEditor({
         className="inline-flex items-center gap-1.5 text-xs text-accent hover:underline disabled:text-fg-3 disabled:no-underline"
       >
         <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-        Добавить артиста
+        {t("Добавить артиста")}
       </button>
       <p className="text-[11px] text-fg-3">
-        Все добавленные артисты войдут в одно достижение. В описании{" "}
-        <code className="font-mono text-fg-2">{"{artists}"}</code> превратится в
-        кликабельный список имён.
+        {t("Все добавленные артисты войдут в одно достижение. В описании")}{" "}
+        <code className="font-mono text-fg-2">{"{artists}"}</code>{" "}
+        {t("превратится в кликабельный список имён.")}
       </p>
     </fieldset>
   );
@@ -181,6 +194,7 @@ export default function AchievementsManager({
   achievements,
   onChanged,
 }: Readonly<{ achievements: Achievement[]; onChanged: () => void }>) {
+  const t = useT();
   const artistFieldPrefix = useId();
   const nextArtistField = useRef(1);
   const [form, setForm] = useState<Form>(EMPTY);
@@ -231,7 +245,7 @@ export default function AchievementsManager({
       ...form,
       description: description
         ? `${description} {artists}`
-        : "Прослушать все треки {artists}",
+        : t("Прослушать все треки {artists}"),
     });
   };
 
@@ -246,7 +260,7 @@ export default function AchievementsManager({
               method: "PUT",
               json,
             }),
-      editingId === null ? "Достижение создано" : "Достижение обновлено",
+      editingId === null ? t("Достижение создано") : t("Достижение обновлено"),
     );
     if (ok) {
       setForm(EMPTY);
@@ -257,13 +271,19 @@ export default function AchievementsManager({
   };
 
   const remove = async (a: Achievement) => {
-    if (!confirm(`Удалить «${a.name}»? Оно пропадёт у всех, кто его получил.`))
+    if (
+      !confirm(
+        t("Удалить «{name}»? Оно пропадёт у всех, кто его получил.", {
+          name: a.name,
+        }),
+      )
+    )
       return;
     if (
       await run(
         () =>
           adminRequest(`/api/admin/achievements/${a.id}`, { method: "DELETE" }),
-        "Достижение удалено",
+        t("Достижение удалено"),
       )
     )
       onChanged();
@@ -285,7 +305,7 @@ export default function AchievementsManager({
         </PanelTitle>
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <label className="sm:col-span-2">
-            <span className={labelClass}>Название</span>
+            <span className={labelClass}>{t("Название")}</span>
             <input
               value={form.name}
               onChange={set("name")}
@@ -294,7 +314,7 @@ export default function AchievementsManager({
             />
           </label>
           <label>
-            <span className={labelClass}>Иконка</span>
+            <span className={labelClass}>{t("Иконка")}</span>
             <input
               value={form.icon}
               onChange={set("icon")}
@@ -303,7 +323,7 @@ export default function AchievementsManager({
             />
           </label>
           <label>
-            <span className={labelClass}>Награда, XP</span>
+            <span className={labelClass}>{t("Награда, XP")}</span>
             <input
               type="number"
               min={0}
@@ -318,7 +338,7 @@ export default function AchievementsManager({
                 htmlFor="achievement-description"
                 className="text-[11px] text-fg-2"
               >
-                Описание (ссылки: [текст](https://…))
+                {t("Описание (ссылки: [текст](https://…))")}
               </label>
               {form.rule_type === "specific_artist" && (
                 <button
@@ -327,7 +347,7 @@ export default function AchievementsManager({
                   className="text-[11px] text-accent hover:underline disabled:text-fg-3 disabled:no-underline"
                   disabled={form.description.includes("{artists}")}
                 >
-                  Вставить список артистов
+                  {t("Вставить список артистов")}
                 </button>
               )}
             </span>
@@ -340,7 +360,27 @@ export default function AchievementsManager({
             />
           </div>
           <label className="sm:col-span-2">
-            <span className={labelClass}>Правило</span>
+            <span className={labelClass}>{t("Название (английский)")}</span>
+            <input
+              value={form.name_en}
+              onChange={set("name_en")}
+              placeholder={t("Необязательно")}
+              lang="en"
+              className={inputClass}
+            />
+          </label>
+          <label className="sm:col-span-2">
+            <span className={labelClass}>{t("Описание (английский)")}</span>
+            <input
+              value={form.description_en}
+              onChange={set("description_en")}
+              placeholder={t("Необязательно — иначе покажем русское")}
+              lang="en"
+              className={inputClass}
+            />
+          </label>
+          <label className="sm:col-span-2">
+            <span className={labelClass}>{t("Правило")}</span>
             <select
               value={form.rule_type}
               onChange={(event) => {
@@ -359,14 +399,14 @@ export default function AchievementsManager({
             >
               {Object.entries(RULES).map(([id, label]) => (
                 <option key={id} value={id}>
-                  {label}
+                  {t(label)}
                 </option>
               ))}
             </select>
           </label>
           {form.rule_type !== "manual" && (
             <label>
-              <span className={labelClass}>Нужно раз / треков</span>
+              <span className={labelClass}>{t("Нужно раз / треков")}</span>
               <input
                 type="number"
                 min={1}
@@ -386,7 +426,9 @@ export default function AchievementsManager({
                 onRemove={removeArtistTarget}
               />
               <label className="sm:col-span-2">
-                <span className={labelClass}>Подпись (необязательно)</span>
+                <span className={labelClass}>
+                  {t("Подпись (необязательно)")}
+                </span>
                 <input
                   value={form.rule_meta}
                   onChange={set("rule_meta")}
@@ -394,7 +436,9 @@ export default function AchievementsManager({
                 />
               </label>
               <label className="sm:col-span-2">
-                <span className={labelClass}>Обложка достижения (URL)</span>
+                <span className={labelClass}>
+                  {t("Обложка достижения (URL)")}
+                </span>
                 <input
                   type="url"
                   value={form.target_image}
@@ -408,7 +452,7 @@ export default function AchievementsManager({
             <>
               <label className="sm:col-span-2">
                 <span className={labelClass}>
-                  Цель: «Исполнитель - Трек», имя или ссылка
+                  {t("Цель: «Исполнитель - Трек», имя или ссылка")}
                 </span>
                 <input
                   value={form.rule_target}
@@ -418,7 +462,9 @@ export default function AchievementsManager({
                 />
               </label>
               <label>
-                <span className={labelClass}>Подпись (необязательно)</span>
+                <span className={labelClass}>
+                  {t("Подпись (необязательно)")}
+                </span>
                 <input
                   value={form.rule_meta}
                   onChange={set("rule_meta")}
@@ -426,7 +472,7 @@ export default function AchievementsManager({
                 />
               </label>
               <label>
-                <span className={labelClass}>Картинка (URL)</span>
+                <span className={labelClass}>{t("Картинка (URL)")}</span>
                 <input
                   type="url"
                   value={form.target_image}
@@ -439,9 +485,9 @@ export default function AchievementsManager({
         </div>
         {needsTarget && (
           <p className="text-[11px] text-fg-2">
-            Название и обложка подтянутся по ссылке автоматически. Количество
-            треков — для альбомов и исполнителей Яндекс Музыки и альбомов
-            Spotify.
+            {t(
+              "Название и обложка подтянутся по ссылке автоматически. Количество треков — для альбомов и исполнителей Яндекс Музыки и альбомов Spotify.",
+            )}
           </p>
         )}
         <Notice text={notice} />
@@ -467,13 +513,13 @@ export default function AchievementsManager({
             </div>
             <div className="min-w-0 flex-1">
               <div className="font-medium text-fg text-xs truncate">
-                {a.name}
+                {t(a.name)}
               </div>
               <div className="text-[11px] text-fg-2 truncate">
-                {a.rendered_description ?? a.description}
+                {t(a.rendered_description ?? a.description)}
               </div>
               <div className="text-[10px] font-mono mt-0.5 text-fg-2">
-                {RULES[a.rule_type] ?? a.rule_type}
+                {RULES[a.rule_type] ? t(RULES[a.rule_type]) : a.rule_type}
                 {a.rule_type !== "manual" && ` ≥ ${a.rule_value}`} ·{" "}
                 <span className="text-ok">+{a.reward_xp} XP</span>
               </div>
@@ -481,7 +527,7 @@ export default function AchievementsManager({
             <div className="flex flex-col gap-1">
               <button
                 type="button"
-                aria-label={`Изменить ${a.name}`}
+                aria-label={t("Изменить {name}", { name: a.name })}
                 className="p-1.5 hover:bg-line rounded-lg text-fg-2"
                 onClick={() => {
                   const nextForm = toForm(a);
@@ -498,7 +544,7 @@ export default function AchievementsManager({
               </button>
               <button
                 type="button"
-                aria-label={`Удалить ${a.name}`}
+                aria-label={t("Удалить {name}", { name: a.name })}
                 className="p-1.5 hover:bg-[#2a1b1b] rounded-lg text-danger"
                 onClick={() => remove(a)}
               >

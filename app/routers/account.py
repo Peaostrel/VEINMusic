@@ -3,13 +3,14 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.core.i18n import user_lang
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user, verify_password
 from app.database import get_db
@@ -35,7 +36,7 @@ from app.models import (
     Webhook,
 )
 from app.services import notifications
-from app.services.achievements import render_achievement_description
+from app.services.achievements import achievement_texts
 
 router = APIRouter(prefix="/api/account", tags=["account"])
 
@@ -59,7 +60,7 @@ def build_account_export(user: User, db: Session, include_history: bool = True) 
     followers = [u for (u,) in db.query(User.username).join(Follow, Follow.follower_id == User.id)
                  .filter(Follow.following_id == user.id)]
     achievements = [
-        {"name": a.name, "description": render_achievement_description(a),
+        {**achievement_texts(a, user_lang(user)),
          "earned_at": _iso(ua.earned_at)}
         for ua, a in db.query(UserAchievement, Achievement).join(Achievement)
         .filter(UserAchievement.user_id == user.id)
@@ -152,6 +153,21 @@ def stream_account_export(bind, user_id):
             yield separator + json.dumps(item, ensure_ascii=False)
             separator = ","
         yield "]}"
+
+
+class LanguageUpdate(BaseModel):
+    lang: Literal["ru", "en"]
+
+
+@router.put("/lang")
+def set_language(payload: LanguageUpdate,
+                 current_user: Annotated[User, Depends(get_current_user)],
+                 db: Annotated[Session, Depends(get_db)]):
+    """Interface language chosen on the site; emails, push and notifications
+    are written in it."""
+    current_user.lang = payload.lang  # type: ignore[assignment]
+    db.commit()
+    return {"lang": payload.lang}
 
 
 @router.get("/export")

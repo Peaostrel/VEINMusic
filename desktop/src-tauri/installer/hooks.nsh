@@ -6,7 +6,7 @@
 !define MUI_BGCOLOR "0E0F10"
 !define MUI_TEXTCOLOR "EDEDEB"
 ; Themed checkboxes ignore MUI_TEXTCOLOR and would draw black text on the
-; dark finish page ("Запустить VEINMusic")
+; dark finish page ("Run VEINMusic" / "Запустить VEINMusic")
 !define MUI_FORCECLASSICCONTROLS
 ; Logo on the right of the header, page title on the left
 !define MUI_HEADERIMAGE_RIGHT

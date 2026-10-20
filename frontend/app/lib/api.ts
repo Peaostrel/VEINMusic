@@ -8,6 +8,9 @@
  *   (with the server's `detail` message) for non-2xx responses.
  */
 
+import { currentLang, tr } from "./i18n/active";
+import { LANG_HEADER } from "./i18n/core";
+
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
@@ -41,6 +44,9 @@ export type ApiInit = Omit<RequestInit, "body"> & {
 export function apiFetch(path: string, init: ApiInit = {}): Promise<Response> {
   const { json, headers, ...rest } = init;
   const finalHeaders = new Headers(headers);
+  // The API writes its own texts (labels, stories, errors) in this language
+  if (!finalHeaders.has(LANG_HEADER))
+    finalHeaders.set(LANG_HEADER, currentLang());
   let body = rest.body;
   if (json !== undefined) {
     finalHeaders.set("Content-Type", "application/json");
@@ -54,15 +60,43 @@ export function apiFetch(path: string, init: ApiInit = {}): Promise<Response> {
   });
 }
 
+/**
+ * Adds the language header to the many direct `fetch(API_URL…)` calls too,
+ * so the site's RU/EN switch wins over the browser's Accept-Language.
+ */
+export function installLangHeader() {
+  if (typeof window === "undefined") return;
+  const marked = window as Window & { __veinLangFetch?: boolean };
+  if (marked.__veinLangFetch) return;
+  marked.__veinLangFetch = true;
+  const original = window.fetch.bind(window);
+  window.fetch = (input, init) => {
+    let url: string;
+    if (typeof input === "string") url = input;
+    else if (input instanceof URL) url = input.href;
+    else url = input.url;
+    if (!url.startsWith(API_URL)) return original(input, init);
+    const headers = new Headers(
+      init?.headers ?? (input instanceof Request ? input.headers : undefined),
+    );
+    if (headers.has(LANG_HEADER)) return original(input, init);
+    headers.set(LANG_HEADER, currentLang());
+    return original(input, { ...init, headers });
+  };
+}
+
 async function errorMessage(res: Response): Promise<string> {
   try {
     const data = await res.json();
-    if (typeof data?.detail === "string") return data.detail;
+    if (typeof data?.detail === "string") return tr(data.detail);
+    // { code, message }: captcha_required, mfa_required
+    if (typeof data?.detail?.message === "string")
+      return tr(data.detail.message);
     // FastAPI validation errors: [{ loc, msg, type }, …]
     if (Array.isArray(data?.detail)) {
       const messages = data.detail
         .map((d: { msg?: unknown }) =>
-          typeof d?.msg === "string" ? d.msg : "",
+          typeof d?.msg === "string" ? tr(d.msg) : "",
         )
         .filter(Boolean);
       if (messages.length > 0) return messages.join("; ");
@@ -70,7 +104,7 @@ async function errorMessage(res: Response): Promise<string> {
   } catch {
     // not JSON
   }
-  return `Ошибка сервера (${res.status})`;
+  return tr("Ошибка сервера ({status})", { status: res.status });
 }
 
 export async function apiJson<T>(path: string, init: ApiInit = {}): Promise<T> {

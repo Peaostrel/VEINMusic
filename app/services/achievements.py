@@ -24,6 +24,7 @@ from app.core.constants import (
     YANDEX_MUSIC_DOMAIN,
 )
 from app.core.cover_urls import public_cover_url
+from app.core.i18n import tr, user_lang
 from app.database import SessionLocal
 from app.models import (
     Achievement,
@@ -33,7 +34,7 @@ from app.models import (
     UserAchievement,
 )
 from app.services.cache import get_from_cache, set_to_cache
-from app.services.notifications import push_allowed
+from app.services.notifications import achievement_push, push_allowed
 from app.services.og_parser import parse_og_meta, yandex_api_meta
 from app.services.user_stats import get_user_timezone_offset
 
@@ -243,14 +244,15 @@ def check_auto_achievements(user, db: Session) -> list[Achievement]:
                 user.integration.bonus_xp or 0) + (ach.reward_xp or 0)
             try:
                 from app.services import notifications
+                lang = user_lang(user)
                 notifications.create(
                     db,
                     recipient_id=int(user.id),
                     actor_id=int(user.id),
                     kind=notifications.KIND_ACHIEVEMENT,
-                    message=(
-                        f"{ach.icon or '🏆'} {ach.name} (+{ach.reward_xp or 0} XP)"
-                    )[:200],
+                    message=notifications.achievement_message(
+                        cast(str | None, ach.icon), achievement_name(ach, lang),
+                        cast(int | None, ach.reward_xp)),
                 )
                 db.commit()
                 awarded.append(ach)
@@ -298,18 +300,23 @@ async def notify_achievements_unlocked(user_id: int, achievements: list[dict]) -
     try:
         user = db.query(User).filter(User.id == user_id).first()
         push_enabled = not user or push_allowed(user, "achievements")
+        lang = user_lang(user)
         if user:
             from app.core.websockets import manager
             await manager.broadcast_to_user(str(user.username), {
-                "type": "ACHIEVEMENTS_UNLOCKED", "achievements": achievements
+                "type": "ACHIEVEMENTS_UNLOCKED",
+                "achievements": [
+                    {**ach, "name": _summary_name(ach, lang)} for ach in achievements],
             })
         for ach in achievements:
             await dispatch_webhook_event("achievement.unlocked", ach, user_id, db)
             if push_enabled:
+                title, body = achievement_push(
+                    lang, ach.get("icon"), _summary_name(ach, lang), ach.get("reward_xp"))
                 await notify_user_push(
                     user_id=user_id,
-                    title=f"{ach.get('icon') or '🏆'} Новое достижение!",
-                    body=f"{ach['name']} (+{ach.get('reward_xp') or 0} XP)",
+                    title=title,
+                    body=body,
                     url="/",
                     db=db,
                 )
@@ -319,8 +326,16 @@ async def notify_achievements_unlocked(user_id: int, achievements: list[dict]) -
         db.close()
 
 
+def _summary_name(ach: dict, lang: str) -> str:
+    """Name from an award summary in the recipient's language."""
+    if lang == "en" and ach.get("name_en"):
+        return str(ach["name_en"])
+    return tr(lang, str(ach.get("name") or ""))
+
+
 def _achievement_summary(ach: Achievement) -> dict:
-    return {"id": ach.id, "name": ach.name, "icon": ach.icon, "reward_xp": ach.reward_xp}
+    return {"id": ach.id, "name": ach.name, "name_en": ach.name_en,
+            "icon": ach.icon, "reward_xp": ach.reward_xp}
 
 
 def award_achievements_for_user(user_id: int) -> list[dict]:
@@ -487,24 +502,51 @@ def _artist_target_values(value: str | None) -> list[str]:
             for item in _artist_targets(value)]
 
 
-def _artist_links(value: str | None) -> str:
+def _artist_links(value: str | None, lang: str = "ru") -> str:
     items = []
     for artist in _artist_targets(value):
         name = str(artist.get("name") or "").strip()
         url = str(artist.get("url") or "").strip()
         items.append(f"[{name}]({url})" if url.startswith("http") else name)
     if len(items) > 1:
-        return f"{', '.join(items[:-1])} и {items[-1]}"
+        return tr(lang, "{items} и {last}", items=", ".join(items[:-1]), last=items[-1])
     return items[0] if items else ""
 
 
-def render_achievement_description(a: Achievement) -> str:
+def achievement_name(a: Achievement, lang: str = "ru") -> str:
+    """Name in `lang`: the admin's English name, else the Russian one
+    (through the dictionary, for names it happens to know)."""
+    english = str(a.name_en or "").strip()
+    if lang == "en" and english:
+        return english
+    return tr(lang, str(a.name or ""))
+
+
+def _description_source(a: Achievement, lang: str) -> str:
+    english = str(a.description_en or "").strip()
+    if lang == "en" and english:
+        return english
+    return tr(lang, str(a.description or ""))
+
+
+def render_achievement_description(a: Achievement, lang: str = "ru") -> str:
     """Expand admin-friendly placeholders before returning public data."""
-    description = str(a.description or "")
+    description = _description_source(a, lang)
     if "{artists}" in description and a.rule_type == SPECIFIC_ARTIST_RULE:
         description = description.replace(
-            "{artists}", _artist_links(str(a.rule_target or "")))
+            "{artists}", _artist_links(str(a.rule_target or ""), lang))
     return description
+
+
+def achievement_texts(a: Achievement, lang: str = "ru") -> dict[str, str]:
+    """The public `name` and `description` of an achievement in `lang`."""
+    return {"name": achievement_name(a, lang),
+            "description": render_achievement_description(a, lang)}
+
+
+def achievement_admin_texts(a: Achievement) -> dict[str, str | None]:
+    """English fields as stored, for the admin form to edit."""
+    return {"name_en": cast(str | None, a.name_en), "description_en": cast(str | None, a.description_en)}
 
 
 def _calculate_specific_artist_progress(
@@ -1002,7 +1044,8 @@ def calculate_achievement_progresses(
 
 def _format_achievement_data(db: Session, user: User, a: Achievement, ua: UserAchievement | None,
                              total_users: int, *, earned_count: int | None = None,
-                             current_progress: int | None = None) -> dict:
+                             current_progress: int | None = None,
+                             lang: str = "ru") -> dict:
     if earned_count is None:
         earned_count = db.query(UserAchievement).filter_by(achievement_id=a.id).count()
     rarity = round((earned_count / total_users * 100), 1) if total_users > 0 else 0
@@ -1017,8 +1060,7 @@ def _format_achievement_data(db: Session, user: User, a: Achievement, ua: UserAc
 
     return {
         "id": a.id,
-        "name": a.name,
-        "description": render_achievement_description(a),
+        **achievement_texts(a, lang),
         "icon": a.icon,
         "target_image": public_cover_url(cast(str | None, a.target_image)),
         "reward_xp": a.reward_xp,

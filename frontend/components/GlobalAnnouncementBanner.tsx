@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { AlertCircle, Info, AlertTriangle, X } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/client";
 
 interface Announcement {
   id: number;
@@ -12,6 +13,7 @@ interface Announcement {
 }
 
 export default function GlobalAnnouncementBanner() {
+  const t = useT();
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [dismissed, setDismissed] = useState<number[]>([]);
 
@@ -47,7 +49,7 @@ export default function GlobalAnnouncementBanner() {
         return (
           <aside
             key={ann.id}
-            aria-label="Системное оповещение"
+            aria-label={t("Системное оповещение")}
             className="flex items-center gap-3 border-b border-line bg-surface px-4 py-2.5 sm:px-6"
           >
             <Icon
@@ -62,8 +64,8 @@ export default function GlobalAnnouncementBanner() {
               type="button"
               onClick={() => setDismissed((prev) => [...prev, ann.id])}
               className="rounded p-1 text-fg-3 transition-colors hover:text-fg"
-              aria-label="Закрыть оповещение"
-              title="Закрыть"
+              aria-label={t("Закрыть оповещение")}
+              title={t("Закрыть")}
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
