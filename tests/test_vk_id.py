@@ -222,6 +222,14 @@ def test_one_tap_in_two_tabs(client):
     assert vk_id._code_challenge(exchange.call_args.args[3]) == second["code_challenge"]
 
 
+def test_flow_cookie_drops_what_the_server_did_not_write(client):
+    client.cookies.set(vk_id.FLOW_COOKIE, f"abc:{int(time.time())}:x")
+    resp = client.get("/auth/vk/widget?mode=login")
+    flows = resp.cookies[vk_id.FLOW_COOKIE]
+    assert flows.startswith(resp.json()["state"].split(".")[2])
+    assert "." not in flows
+
+
 def test_flow_cookie_keeps_the_newest_flows(client):
     states = [client.get("/auth/vk/widget?mode=login").json()["state"]
               for _ in range(vk_id.MAX_FLOWS + 1)]

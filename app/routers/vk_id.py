@@ -18,6 +18,7 @@ import base64
 import hashlib
 import hmac
 import os
+import re
 import secrets
 import time
 import urllib.parse
@@ -61,6 +62,8 @@ VK_SCOPE = "vkid.personal_info"
 # button open in another tab keeps working: "nonce:started:verifier.nonce:..."
 FLOW_COOKIE = "vk_auth_flows"
 MAX_FLOWS = 5
+# What _begin writes; anything else in the cookie is dropped, not written back
+FLOW_ENTRY = re.compile(r"([0-9a-f]{32}):([0-9]{10}):([A-Za-z0-9_-]{86})")
 TICKET_COOKIE = "vk_login_ticket"
 FLOW_TTL_SEC = 600
 TICKET_TTL_SEC = 300
@@ -88,10 +91,9 @@ def _flows(request: Request) -> list[tuple[str, str, str]]:
     """This browser's flows not expired yet, oldest first."""
     flows = []
     for entry in (request.cookies.get(FLOW_COOKIE) or "").split("."):
-        nonce, _, rest = entry.partition(":")
-        started, _, verifier = rest.partition(":")
-        if nonce and verifier and started.isdigit() and int(started) + FLOW_TTL_SEC > time.time():
-            flows.append((nonce, started, verifier))
+        match = FLOW_ENTRY.fullmatch(entry)
+        if match and int(match[2]) + FLOW_TTL_SEC > time.time():
+            flows.append((match[1], match[2], match[3]))
     return flows
 
 
