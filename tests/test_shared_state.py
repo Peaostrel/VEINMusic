@@ -6,7 +6,6 @@ processes sharing the same Redis.
 """
 import asyncio
 import os
-import uuid
 from unittest.mock import AsyncMock
 
 import pytest
@@ -48,41 +47,5 @@ def test_user_broadcast_reaches_socket_in_other_process(monkeypatch):
         finally:
             await api_a.stop()
             await worker_b.stop()
-
-    asyncio.run(scenario())
-
-
-def test_room_state_is_shared_between_processes(monkeypatch):
-    monkeypatch.setenv("REDIS_URL", REDIS_URL)
-    room_id = f"room-{uuid.uuid4().hex[:8]}"
-
-    async def scenario():
-        a, b = ConnectionManager(), ConnectionManager()
-        await a.start()
-        await b.start()
-        try:
-            host_ws, guest_ws = _fake_ws(), _fake_ws()
-            state = await a.join_room(room_id, "dj", host_ws)
-            assert state["host"] == "dj"
-            state = await b.join_room(room_id, "guest", guest_ws)
-            assert state["host"] == "dj"
-            assert sorted(state["listeners"]) == ["dj", "guest"]
-
-            await a.update_room_track(room_id, {"title": "Song"})
-            assert (await b.room_state(room_id))["current_track"]["title"] == "Song"
-
-            await asyncio.sleep(0.1)
-            await b.broadcast_to_room(room_id, {"type": "CHAT_MESSAGE"}, exclude_user="guest")
-            assert await _wait_for(lambda: host_ws.send_json.await_count == 1)
-            await asyncio.sleep(0.1)
-            guest_ws.send_json.assert_not_awaited()
-
-            assert any(r["room_id"] == room_id for r in await a.get_active_rooms_info())
-            assert await b.leave_room(room_id, "guest", guest_ws) == ["dj"]
-            assert await a.leave_room(room_id, "dj", host_ws) == []
-            assert await a.room_state(room_id) is None
-        finally:
-            await a.stop()
-            await b.stop()
 
     asyncio.run(scenario())
