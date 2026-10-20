@@ -16,7 +16,7 @@ type History = {
 };
 const statuses: Record<string, string> = {
   pending: "В очереди",
-  sent: "Передано Brevo",
+  sent: "Передано Resend",
   failed: "Ошибка",
   cancelled: "Отменено",
   expired: "Истекло",
@@ -57,8 +57,8 @@ export default function EmailManager() {
       <h3 className="font-semibold">Письма пользователям</h3>
       <p className="text-sm text-fg-2">
         {history?.configured
-          ? "Brevo подключён. Письма доступны пользователям с подтверждённой почтой и включённым согласием."
-          : "Brevo пока не подключён: настройте отправителя и ключ сервиса."}
+          ? "Resend подключён. Письма доступны пользователям с подтверждённой почтой и включённым согласием."
+          : "Resend пока не подключён: настройте отправителя и ключ сервиса."}
       </p>
       <form
         className="space-y-3"
