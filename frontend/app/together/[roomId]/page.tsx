@@ -2,8 +2,8 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Pause, Play, Send } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Lock, Pause, Play, Save, Send, Trash2 } from "lucide-react";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { openSocket } from "@/app/lib/api";
 import { isValidUser } from "@/app/lib/theme";
@@ -35,13 +35,20 @@ interface PageProps {
 export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
   const t = useT();
   const { roomId } = use(params);
+  const router = useRouter();
   const searchParams = useSearchParams();
   const roomNameParam = searchParams.get("name") || t("Музыкальная комната");
+  const initialRoomNameRef = useRef(roomNameParam);
 
   const [connected, setConnected] = useState(false);
   const [listeners, setListeners] = useState<string[]>([]);
   const [host, setHost] = useState("");
   const [me, setMe] = useState("");
+  const [roomName, setRoomName] = useState(roomNameParam);
+  const [roomNameDraft, setRoomNameDraft] = useState(roomNameParam);
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [privateDraft, setPrivateDraft] = useState(false);
+  const [roomNotice, setRoomNotice] = useState("");
   // The server names unauthenticated listeners "Guest_…" (real usernames are lowercase)
   const isGuest = me.startsWith("Guest_");
   const [track, setTrack] = useState<TrackState>({
@@ -76,6 +83,11 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
             setListeners(data.listeners || []);
             setHost(data.host || "");
             setMe(data.you || "");
+            const nextName = data.name || initialRoomNameRef.current;
+            setRoomName(nextName);
+            setRoomNameDraft(nextName);
+            setIsPrivate(Boolean(data.is_private));
+            setPrivateDraft(Boolean(data.is_private));
             if (data.current_track) {
               setTrack({
                 ...data.current_track,
@@ -104,6 +116,14 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
               ...prev,
               { from: data.from, text: data.text, timestamp: data.timestamp },
             ]);
+          } else if (data.type === "ROOM_SETTINGS") {
+            setRoomName(data.name);
+            setRoomNameDraft(data.name);
+            setIsPrivate(Boolean(data.is_private));
+            setPrivateDraft(Boolean(data.is_private));
+            setRoomNotice(t("Настройки комнаты сохранены"));
+          } else if (data.type === "ROOM_DELETED") {
+            router.replace("/together");
           }
         } catch (e) {
           console.warn("WS error:", e);
@@ -113,10 +133,13 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
       ws.onclose = () => setConnected(false);
     };
     // Signed-in listeners are identified by name; guests join anonymously
-    return openSocket(`/ws/together/${safeRoomId}`, setup, {
-      authed: isValidUser(localStorage.getItem("username")),
-    });
-  }, [roomId]);
+    const initialName = encodeURIComponent(initialRoomNameRef.current);
+    return openSocket(
+      `/ws/together/${safeRoomId}?name=${initialName}`,
+      setup,
+      { authed: isValidUser(localStorage.getItem("username")) },
+    );
+  }, [roomId, router, t]);
 
   // Smooth progress bar calculation
   useEffect(() => {
@@ -160,16 +183,53 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
 
   const isHost = !!me && me === host;
 
-  const handleTogglePlay = () => {
+  const sendPlayback = (isPlaying: boolean, progressSec: number) => {
     if (socketRef.current?.readyState !== WebSocket.OPEN || !isHost) return;
-    const nextPlay = !track.is_playing;
     socketRef.current.send(
       JSON.stringify({
         type: "PLAYBACK_CONTROL",
-        is_playing: nextPlay,
-        progress_sec: currentProgress,
+        is_playing: isPlaying,
+        progress_sec: progressSec,
       }),
     );
+  };
+
+  const handleTogglePlay = () =>
+    sendPlayback(!track.is_playing, currentProgress);
+
+  const handleSeek = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const position = Number(event.target.value);
+    setCurrentProgress(position);
+    setTrack((previous) => ({
+      ...previous,
+      progress_sec: position,
+      updated_at: Date.now() / 1000,
+    }));
+    sendPlayback(track.is_playing, position);
+  };
+
+  const handleSaveRoom = () => {
+    const name = roomNameDraft.trim();
+    if (!name || socketRef.current?.readyState !== WebSocket.OPEN || !isHost)
+      return;
+    setRoomNotice("");
+    socketRef.current.send(
+      JSON.stringify({
+        type: "ROOM_SETTINGS",
+        name,
+        is_private: privateDraft,
+      }),
+    );
+  };
+
+  const handleDeleteRoom = () => {
+    if (
+      !isHost ||
+      socketRef.current?.readyState !== WebSocket.OPEN ||
+      !window.confirm(t("Удалить комнату для всех участников?"))
+    )
+      return;
+    socketRef.current.send(JSON.stringify({ type: "DELETE_ROOM" }));
   };
 
   const formatTime = (sec: number) => {
@@ -200,7 +260,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
         </Link>
         <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2">
           <h1 className="text-[28px] font-semibold tracking-[-0.02em]">
-            {roomNameParam}
+            {roomName}
           </h1>
           <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-line px-2 font-mono text-[11px] text-fg-2">
             <span
@@ -213,7 +273,60 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
             {plural(listeners.length, "слушатель", "слушателя", "слушателей")}
           </span>
         </div>
+        {isPrivate && (
+          <span className="inline-flex w-fit items-center gap-1.5 text-xs text-fg-2">
+            <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+            {t("Приватная комната — доступ по ссылке")}
+          </span>
+        )}
       </header>
+
+      {isHost && (
+        <section
+          aria-label={t("Настройки комнаты")}
+          className="grid gap-3 rounded-xl border border-line bg-surface p-4 md:grid-cols-[minmax(0,1fr)_auto_auto]"
+        >
+          <input
+            type="text"
+            value={roomNameDraft}
+            onChange={(event) => setRoomNameDraft(event.target.value)}
+            maxLength={60}
+            aria-label={t("Название комнаты")}
+            className={inputOnCard}
+          />
+          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-line px-3 text-sm">
+            <input
+              type="checkbox"
+              checked={privateDraft}
+              onChange={(event) => setPrivateDraft(event.target.checked)}
+            />
+            {t("Приватная")}
+          </label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleSaveRoom}
+              disabled={!connected || !roomNameDraft.trim()}
+              className={`${btn.primary} ${btn.md}`}
+            >
+              <Save className="h-4 w-4" aria-hidden="true" />
+              {t("Сохранить")}
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteRoom}
+              disabled={!connected}
+              className={`${btn.secondary} ${btn.md} text-danger`}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+              {t("Удалить")}
+            </button>
+          </div>
+          {roomNotice && (
+            <p className="text-xs text-ok md:col-span-3">{roomNotice}</p>
+          )}
+        </section>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex min-w-0 flex-col gap-6">
@@ -264,7 +377,21 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
             </div>
 
             <div className="flex flex-col gap-2">
-              <Meter value={progressPct} height={4} />
+              {isHost ? (
+                <input
+                  type="range"
+                  min={0}
+                  max={Math.max(1, track.duration || 180)}
+                  step={1}
+                  value={Math.min(currentProgress, track.duration || 180)}
+                  onChange={handleSeek}
+                  disabled={!connected}
+                  aria-label={t("Перемотка")}
+                  className="music-progress block h-2 w-full cursor-pointer"
+                />
+              ) : (
+                <Meter value={progressPct} height={4} />
+              )}
               <div className="flex justify-between font-mono text-xs text-fg-3">
                 <span>{formatTime(currentProgress)}</span>
                 <span>{formatTime(track.duration || 180)}</span>
