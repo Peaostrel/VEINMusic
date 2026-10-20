@@ -57,8 +57,10 @@ VK_TOKEN_URL = "https://id.vk.ru/oauth2/auth"
 
 # Only the id is needed; VK ID asks for nothing beyond the basic scope
 VK_SCOPE = "vkid.personal_info"
-STATE_COOKIE = "vk_auth_state"
-PKCE_COOKIE = "vk_pkce_verifier"
+# The nonce and PKCE verifier of each flow this browser started, so a
+# button open in another tab keeps working: "nonce:started:verifier.nonce:..."
+FLOW_COOKIE = "vk_auth_flows"
+MAX_FLOWS = 5
 TICKET_COOKIE = "vk_login_ticket"
 FLOW_TTL_SEC = 600
 TICKET_TTL_SEC = 300
@@ -82,20 +84,43 @@ def _code_challenge(verifier: str) -> str:
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
-def _parse_state(state: str, cookie_nonce: str | None) -> tuple[str, str] | None:
-    """Mode and subject (who started linking; "0" when signing in) of a state
-    started by this browser."""
+def _flows(request: Request) -> list[tuple[str, str, str]]:
+    """This browser's flows not expired yet, oldest first."""
+    flows = []
+    for entry in (request.cookies.get(FLOW_COOKIE) or "").split("."):
+        nonce, _, rest = entry.partition(":")
+        started, _, verifier = rest.partition(":")
+        if nonce and verifier and started.isdigit() and int(started) + FLOW_TTL_SEC > time.time():
+            flows.append((nonce, started, verifier))
+    return flows
+
+
+def _store_flows(response: Response, flows: list[tuple[str, str, str]]) -> None:
+    if not flows:
+        response.delete_cookie(FLOW_COOKIE)
+        return
+    # Lax so it comes back with the top-level redirect from VK
+    response.set_cookie(FLOW_COOKIE, ".".join(":".join(f) for f in flows[-MAX_FLOWS:]),
+                        httponly=True, secure=_secure_cookies(), samesite="lax", max_age=FLOW_TTL_SEC)
+
+
+def _take_flow(state: str, request: Request, response: Response) -> tuple[str, str, str] | None:
+    """Mode, subject (who started linking; "0" when signing in) and PKCE
+    verifier of a state this browser started. The flow is used up."""
     try:
         mode, subject, nonce, signature = state.split(".", 3)
     except ValueError:
         return None
-    if mode not in (MODE_LOGIN, MODE_LINK) or not cookie_nonce:
-        return None
-    if not secrets.compare_digest(nonce, cookie_nonce):
+    if mode not in (MODE_LOGIN, MODE_LINK):
         return None
     if not hmac.compare_digest(signature, _sign("state", mode, subject, nonce)):
         return None
-    return mode, subject
+    flows = _flows(request)
+    found = next((f for f in flows if secrets.compare_digest(f[0], nonce)), None)
+    if found is None:
+        return None
+    _store_flows(response, [f for f in flows if f is not found])
+    return mode, subject, found[2]
 
 
 def _link_subject(user: User, session_id: str | None) -> str:
@@ -141,24 +166,21 @@ def _ticket_user(ticket: str | None, db: Session) -> User | None:
     return user
 
 
-def _begin(mode: str, subject: str, response: Response) -> tuple[str, str]:
+def _begin(mode: str, subject: str, request: Request, response: Response) -> tuple[str, str]:
     """Start a flow: the signed state and the PKCE challenge to send to VK,
-    with the nonce and the verifier kept in this browser's cookies."""
+    with the nonce and the verifier kept in this browser's cookie."""
     if not VK_CLIENT_ID:
         raise HTTPException(503, "Вход через VK ID не настроен на сервере")
     nonce = secrets.token_hex(16)
     verifier = secrets.token_urlsafe(64)
-    for name, value in ((STATE_COOKIE, nonce), (PKCE_COOKIE, verifier)):
-        # Lax so they come back with the top-level redirect from VK
-        response.set_cookie(name, value, httponly=True, secure=_secure_cookies(),
-                            samesite="lax", max_age=FLOW_TTL_SEC)
+    _store_flows(response, [*_flows(request), (nonce, str(int(time.time())), verifier)])
     state = f"{mode}.{subject}.{nonce}.{_sign('state', mode, subject, nonce)}"
     return state, _code_challenge(verifier)
 
 
-def _start(mode: str, subject: str) -> RedirectResponse:
+def _start(mode: str, subject: str, request: Request) -> RedirectResponse:
     redirect = RedirectResponse(VK_AUTHORIZE_URL)
-    state, challenge = _begin(mode, subject, redirect)
+    state, challenge = _begin(mode, subject, request, redirect)
     redirect.headers["location"] = f"{VK_AUTHORIZE_URL}?" + urllib.parse.urlencode({
         "response_type": "code",
         "client_id": VK_CLIENT_ID,
@@ -202,33 +224,29 @@ def vk_config(db: Annotated[Session, Depends(get_db)]):
             responses={503: {"description": "VK ID is not configured"}})
 @limiter.limit("10/minute")
 def vk_login(request: Request):
-    return _start(MODE_LOGIN, "0")
+    return _start(MODE_LOGIN, "0", request)
 
 
 @router.get("/link", dependencies=[require_vk],
             responses={503: {"description": "VK ID is not configured"}})
 def vk_link(request: Request, current_user: Annotated[User, Depends(get_current_user)]):
-    return _start(MODE_LINK, _link_subject(current_user, current_session_id(request)))
+    return _start(MODE_LINK, _link_subject(current_user, current_session_id(request)), request)
 
 
 @router.get("/callback", dependencies=[require_vk])
 def vk_callback(request: Request, db: Annotated[Session, Depends(get_db)],
                 state: str = "", code: str = "", device_id: str = ""):
-    parsed = _parse_state(state, request.cookies.get(STATE_COOKIE))
-    verifier = request.cookies.get(PKCE_COOKIE)
-    mode = parsed[0] if parsed else MODE_LOGIN
+    redirect = RedirectResponse(FRONTEND_URL)
+    flow = _take_flow(state, request, redirect)
     vk_user = None
-    if parsed and verifier and code and device_id:
-        vk_user = _vk_user_id(code, device_id, state, verifier)
+    if flow and code and device_id:
+        vk_user = _vk_user_id(code, device_id, state, flow[2])
 
-    if mode == MODE_LINK:
-        result = _link(db, parsed[1], vk_user) if parsed else "error"
-        redirect = RedirectResponse(f"{FRONTEND_URL}/settings?tab=security&vk={result}")
+    if flow and flow[0] == MODE_LINK:
+        result = _link(db, flow[1], vk_user)
+        redirect.headers["location"] = f"{FRONTEND_URL}/settings?tab=security&vk={result}"
     else:
-        redirect = RedirectResponse(FRONTEND_URL)
         redirect.headers["location"] = f"{FRONTEND_URL}/auth?vk={_login(db, vk_user, redirect)}"
-    redirect.delete_cookie(STATE_COOKIE)
-    redirect.delete_cookie(PKCE_COOKIE)
     return redirect
 
 
@@ -247,7 +265,7 @@ def vk_widget(request: Request, response: Response,
         subject = _link_subject(current_user, current_session_id(request))
     else:
         subject = "0"
-    state, challenge = _begin(mode, subject, response)
+    state, challenge = _begin(mode, subject, request, response)
     return {"app_id": int(VK_CLIENT_ID or 0), "redirect_url": VK_REDIRECT_URI, "state": state,
             "code_challenge": challenge, "scope": VK_SCOPE}
 
@@ -265,13 +283,10 @@ def vk_widget_exchange(request: Request, data: VkWidgetCode, response: Response,
     """Finish what the One Tap button started: link the account, or leave a
     sign-in ticket for /finish. Returns the same results as the redirect flow."""
     _check_csrf(request, True)
-    parsed = _parse_state(data.state, request.cookies.get(STATE_COOKIE))
-    verifier = request.cookies.get(PKCE_COOKIE)
-    vk_user = _vk_user_id(data.code, data.device_id, data.state, verifier) if parsed and verifier else None
-    response.delete_cookie(STATE_COOKIE)
-    response.delete_cookie(PKCE_COOKIE)
-    if parsed and parsed[0] == MODE_LINK:
-        return {"result": _link(db, parsed[1], vk_user)}
+    flow = _take_flow(data.state, request, response)
+    vk_user = _vk_user_id(data.code, data.device_id, data.state, flow[2]) if flow else None
+    if flow and flow[0] == MODE_LINK:
+        return {"result": _link(db, flow[1], vk_user)}
     return {"result": _login(db, vk_user, response)}
 
 

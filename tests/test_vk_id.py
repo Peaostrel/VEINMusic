@@ -1,5 +1,6 @@
 """Signing in and linking the account through VK ID."""
 import secrets
+import time
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -33,10 +34,10 @@ def _through_vk(client, start: str, vk_user: str, headers: dict | None = None) -
     assert params["code_challenge_method"] == "S256"
     state = params["state"]
     # The redirect from VK is cross-site: only the Lax flow cookies come back
-    nonce, verifier = resp.cookies[vk_id.STATE_COOKIE], resp.cookies[vk_id.PKCE_COOKIE]
+    flows = resp.cookies[vk_id.FLOW_COOKIE]
+    verifier = flows.rsplit(":", 1)[1]
     client.cookies.clear()
-    client.cookies.set(vk_id.STATE_COOKIE, nonce)
-    client.cookies.set(vk_id.PKCE_COOKIE, verifier)
+    client.cookies.set(vk_id.FLOW_COOKIE, flows)
 
     token = MagicMock(status_code=200)
     token.json.return_value = {"access_token": "at", "user_id": int(vk_user)}
@@ -83,8 +84,7 @@ def test_vk_account_linked_elsewhere_is_refused(client, db):
 
 
 def test_forged_state_is_rejected(client):
-    client.cookies.set(vk_id.STATE_COOKIE, "abc")
-    client.cookies.set(vk_id.PKCE_COOKIE, "verifier")
+    client.cookies.set(vk_id.FLOW_COOKIE, f"abc:{int(time.time())}:verifier")
     with patch.object(httpx.Client, "post") as post:
         resp = client.get("/auth/vk/callback?code=c&device_id=d&state=login.0.abc.forged",
                           follow_redirects=False)
@@ -135,12 +135,11 @@ def test_logging_out_everywhere_cancels_a_pending_link(client, db):
     key = _register(client, "vkrevoked")
     resp = client.get("/auth/vk/link", headers={"X-API-Key": key}, follow_redirects=False)
     state = httpx.URL(resp.headers["location"]).params["state"]
-    nonce, verifier = resp.cookies[vk_id.STATE_COOKIE], resp.cookies[vk_id.PKCE_COOKIE]
+    flows = resp.cookies[vk_id.FLOW_COOKIE]
     assert client.post("/auth/logout-all", headers={"X-API-Key": key, **ORIGIN}).status_code == 200
 
     client.cookies.clear()
-    client.cookies.set(vk_id.STATE_COOKIE, nonce)
-    client.cookies.set(vk_id.PKCE_COOKIE, verifier)
+    client.cookies.set(vk_id.FLOW_COOKIE, flows)
     token = MagicMock(status_code=200)
     token.json.return_value = {"user_id": 6161}
     with patch.object(httpx.Client, "post", return_value=token):
@@ -191,8 +190,7 @@ def test_one_tap_links_and_signs_in(client, db):
 def test_one_tap_rejects_a_state_from_another_browser(client):
     widget = client.get("/auth/vk/widget?mode=login").json()
     client.cookies.clear()
-    client.cookies.set(vk_id.STATE_COOKIE, "other")
-    client.cookies.set(vk_id.PKCE_COOKIE, "verifier")
+    client.cookies.set(vk_id.FLOW_COOKIE, f"other:{int(time.time())}:verifier")
     with patch.object(vk_id, "_vk_user_id") as exchange:
         resp = client.post("/auth/vk/widget/exchange", headers=ORIGIN,
                            json={"code": "c", "device_id": "d", "state": widget["state"]})
@@ -202,3 +200,31 @@ def test_one_tap_rejects_a_state_from_another_browser(client):
 
 def test_one_tap_linking_needs_a_signed_in_user(client):
     assert client.get("/auth/vk/widget?mode=link").status_code == 401
+
+
+def test_one_tap_in_two_tabs(client):
+    first = client.get("/auth/vk/widget?mode=login").json()
+    second = client.get("/auth/vk/widget?mode=login").json()
+    with patch.object(vk_id, "_vk_user_id", return_value="9191") as exchange:
+        resp = client.post("/auth/vk/widget/exchange", headers=ORIGIN,
+                           json={"code": "c", "device_id": "d", "state": first["state"]})
+    assert resp.json() == {"result": "unknown"}
+    verifier = exchange.call_args.args[3]
+    assert vk_id._code_challenge(verifier) == first["code_challenge"]
+
+    # Each flow is used once; the other tab's flow is still there
+    with patch.object(vk_id, "_vk_user_id", return_value="9191") as exchange:
+        client.post("/auth/vk/widget/exchange", headers=ORIGIN,
+                    json={"code": "c", "device_id": "d", "state": first["state"]})
+        exchange.assert_not_called()
+        client.post("/auth/vk/widget/exchange", headers=ORIGIN,
+                    json={"code": "c", "device_id": "d", "state": second["state"]})
+    assert vk_id._code_challenge(exchange.call_args.args[3]) == second["code_challenge"]
+
+
+def test_flow_cookie_keeps_the_newest_flows(client):
+    states = [client.get("/auth/vk/widget?mode=login").json()["state"]
+              for _ in range(vk_id.MAX_FLOWS + 1)]
+    flows = client.cookies.get(vk_id.FLOW_COOKIE)
+    nonces = [entry.split(":")[0] for entry in flows.split(".")]
+    assert nonces == [state.split(".")[2] for state in states[1:]]
