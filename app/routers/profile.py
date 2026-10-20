@@ -186,10 +186,7 @@ def _update_profile_fields(profile, data: ProfileUpdate):
         if val is not None:
             setattr(profile, field, sanitize_text(val) if sanitize else val)
 
-    other_fields = [
-        'is_private',
-        'sync_privacy'
-    ]
+    other_fields = ['is_private']
     for field in other_fields:
         val = getattr(data, field)
         if val is not None:
@@ -236,8 +233,6 @@ def update_privacy(request: Request, data: PrivacyUpdate, db: Annotated[Session,
         current_user.profile.is_private = data.is_private
     if data.hidden_artists is not None:
         current_user.profile.hidden_artists = str(data.hidden_artists)
-    if data.sync_privacy is not None:
-        current_user.profile.sync_privacy = data.sync_privacy
     db.commit()
     if privacy_changed:
         invalidate_user(str(current_user.username))
