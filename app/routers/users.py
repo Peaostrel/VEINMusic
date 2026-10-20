@@ -118,13 +118,12 @@ def _visible_location(user: User, request: Request, db: Session, is_owner: bool)
 def _owner_fields(user: User, is_owner: bool) -> dict:
     """Account settings and connected services are the owner's business."""
     if not is_owner:
-        return {"hidden_artists": "", "sync_privacy": None, "spotify_linked": False,
+        return {"hidden_artists": "", "spotify_linked": False,
                 "yandex_linked": False, "soundcloud_linked": False, "lastfm_username": None,
                 "last_sync": None, "has_api_key": False}
     integration = user.integration
     return {
         "hidden_artists": user.profile.hidden_artists,
-        "sync_privacy": user.profile.sync_privacy or "all",
         "spotify_linked": bool(integration.spotify_refresh_token),
         "yandex_linked": bool(integration.yandex_token),
         "soundcloud_linked": bool(integration.soundcloud_refresh_token),
