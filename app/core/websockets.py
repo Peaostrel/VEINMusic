@@ -62,20 +62,31 @@ class _MemoryRoomStore:
     def __init__(self) -> None:
         self.rooms: dict[str, dict[str, Any]] = {}
 
-    def create_if_absent(self, room_id: str, name: str, host: str) -> bool:
+    def create_if_absent(self, room_id: str, name: str, host: str, is_private: bool = False) -> bool:
         if room_id in self.rooms:
             return True
         if len(self.rooms) >= MAX_TOGETHER_ROOMS:
             return False
-        self.rooms[room_id] = {"name": name, "host": host, "track": _default_track(host),
-                               "listeners": {}, "chat": []}
+        self.rooms[room_id] = {
+            "name": name,
+            "host": host,
+            "private": is_private,
+            "track": _default_track(host),
+            "listeners": {},
+            "chat": [],
+        }
         return True
 
     def get(self, room_id: str) -> Optional[dict[str, Any]]:
         room = self.rooms.get(room_id)
         if room is None:
             return None
-        return {"name": room["name"], "host": room["host"], "track": dict(room["track"])}
+        return {
+            "name": room["name"],
+            "host": room["host"],
+            "private": bool(room.get("private", False)),
+            "track": dict(room["track"]),
+        }
 
     def listener_count(self, room_id: str) -> int:
         room = self.rooms.get(room_id)
@@ -103,6 +114,12 @@ class _MemoryRoomStore:
         track = self.rooms[room_id]["track"]
         track.update(fields)
         return dict(track)
+
+    def update_settings(self, room_id: str, name: str, is_private: bool) -> dict[str, Any]:
+        room = self.rooms[room_id]
+        room["name"] = name
+        room["private"] = is_private
+        return {"name": name, "is_private": is_private}
 
     def add_chat(self, room_id: str, message: dict[str, Any]) -> None:
         chat = self.rooms[room_id]["chat"]
@@ -138,7 +155,8 @@ class _RedisRoomStore:
             pipe.expire(self._k(room_id, suffix), ROOM_TTL_SEC)
         await pipe.execute()
 
-    async def create_if_absent(self, room_id: str, name: str, host: str) -> bool:
+    async def create_if_absent(
+            self, room_id: str, name: str, host: str, is_private: bool = False) -> bool:
         if await self.r.exists(self._k(room_id)):
             await self._touch(room_id)
             return True
@@ -151,7 +169,10 @@ class _RedisRoomStore:
         created = await self.r.hsetnx(self._k(room_id), "host", host)
         if created:
             await self.r.hset(self._k(room_id), mapping={
-                "name": name, "track": json.dumps(_default_track(host))})
+                "name": name,
+                "private": "1" if is_private else "0",
+                "track": json.dumps(_default_track(host)),
+            })
             await self.r.sadd(self.INDEX, room_id)
         await self._touch(room_id)
         return True
@@ -161,7 +182,12 @@ class _RedisRoomStore:
         if not data or "host" not in data:
             return None
         track = json.loads(data.get("track") or "{}") or _default_track(data["host"])
-        return {"name": data.get("name", ""), "host": data["host"], "track": track}
+        return {
+            "name": data.get("name", ""),
+            "host": data["host"],
+            "private": data.get("private", "0") == "1",
+            "track": track,
+        }
 
     async def listener_count(self, room_id: str) -> int:
         return int(await self.r.hlen(self._k(room_id, LISTENERS_SUFFIX)))
@@ -185,6 +211,15 @@ class _RedisRoomStore:
         await self.r.hset(self._k(room_id), "track", json.dumps(track))
         await self._touch(room_id)
         return track
+
+    async def update_settings(
+            self, room_id: str, name: str, is_private: bool) -> dict[str, Any]:
+        await self.r.hset(self._k(room_id), mapping={
+            "name": name,
+            "private": "1" if is_private else "0",
+        })
+        await self._touch(room_id)
+        return {"name": name, "is_private": is_private}
 
     async def add_chat(self, room_id: str, message: dict[str, Any]) -> None:
         key = self._k(room_id, CHAT_SUFFIX)
@@ -355,11 +390,15 @@ class ConnectionManager:
 
     # --- Listen Together rooms -----------------------------------------
 
-    async def join_room(self, room_id: str, username: str, websocket: WebSocket) -> Optional[dict[str, Any]]:
+    async def join_room(
+            self, room_id: str, username: str, websocket: WebSocket,
+            name: str | None = None, is_private: bool = False) -> Optional[dict[str, Any]]:
         """Create the room if needed (first joiner becomes host) and register
         the listener. Returns the room state, or None if limits are reached."""
         store = await self._store()
-        if not await _invoke_store(store, "create_if_absent", room_id, f"Комната {room_id}", username):
+        room_name = (name or "").strip()[:60] or f"Комната {room_id}"
+        if not await _invoke_store(
+                store, "create_if_absent", room_id, room_name, username, is_private):
             return None
         if await _invoke_store(store, "listener_count", room_id) >= MAX_ROOM_LISTENERS:
             return None
@@ -394,6 +433,7 @@ class ConnectionManager:
             "room_id": room_id,
             "name": room["name"],
             "host": room["host"],
+            "is_private": bool(room.get("private", False)),
             "current_track": room["track"],
             "listeners": await _invoke_store(store, "listeners", room_id),
             "chat_history": await _invoke_store(store, "chat", room_id, 30),
@@ -402,6 +442,35 @@ class ConnectionManager:
     async def update_room_track(self, room_id: str, fields: dict[str, Any]) -> dict[str, Any]:
         store = await self._store()
         return await _invoke_store(store, "update_track", room_id, fields)
+
+    async def update_room_settings(
+            self, room_id: str, name: str, is_private: bool) -> dict[str, Any]:
+        store = await self._store()
+        clean_name = name.strip()[:60]
+        if not clean_name:
+            room = await _invoke_store(store, "get", room_id)
+            clean_name = room["name"] if room else f"Комната {room_id}"
+        return await _invoke_store(
+            store, "update_settings", room_id, clean_name, is_private)
+
+    async def delete_room(self, room_id: str) -> None:
+        await self.broadcast_to_room(room_id, {"type": "ROOM_DELETED"})
+        store = await self._store()
+        await _invoke_store(store, "delete", room_id)
+
+    async def sync_host_track(self, username: str, fields: dict[str, Any]) -> None:
+        """Mirror a DJ's live scrobble into every room they currently host."""
+        store = await self._store()
+        for room_id in await _invoke_store(store, "room_ids"):
+            room = await _invoke_store(store, "get", room_id)
+            if room is None or room["host"] != username:
+                continue
+            track = await _invoke_store(store, "update_track", room_id, fields)
+            await self.broadcast_to_room(room_id, {
+                "type": "TRACK_SYNC",
+                "track": track,
+                "from": username,
+            })
 
     async def add_room_chat(self, room_id: str, message: dict[str, Any]) -> None:
         store = await self._store()
@@ -423,6 +492,7 @@ class ConnectionManager:
                 "room_id": room_id,
                 "name": room["name"],
                 "host_username": room["host"],
+                "is_private": bool(room.get("private", False)),
                 "listeners_count": len(listeners),
                 "listeners": listeners,
                 "current_track": room["track"],
