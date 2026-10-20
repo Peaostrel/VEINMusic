@@ -9,6 +9,10 @@ Signing in never sets the session cookie on the redirect back from VK: the
 callback leaves a short-lived signed ticket in a cookie and sends the browser
 to /auth, whose page finishes the sign-in with an ordinary same-site request
 (and asks for the 2FA code there when the account has one).
+
+The pages can also show VK's One Tap button (the @vkid/sdk widget): it runs
+the same flow in a VK popup with the state and PKCE challenge from /widget,
+and the page posts the code it gets to /widget/exchange.
 """
 import base64
 import hashlib
@@ -25,17 +29,18 @@ from fastapi import (
     BackgroundTasks,
     Depends,
     HTTPException,
+    Query,
     Request,
     Response,
 )
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from slowapi.util import get_remote_address
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.rate_limit import limiter
-from app.core.security import SECRET_KEY, _check_csrf, get_current_user
+from app.core.security import SECRET_KEY, _check_csrf, get_current_user, get_current_user_optional
 from app.database import get_db
 from app.models import User, UserSession
 from app.routers.auth import FRONTEND_URL, set_session_cookie
@@ -50,6 +55,8 @@ VK_REDIRECT_URI = os.getenv("VK_REDIRECT_URI", "http://127.0.0.1:8000/auth/vk/ca
 VK_AUTHORIZE_URL = "https://id.vk.ru/authorize"
 VK_TOKEN_URL = "https://id.vk.ru/oauth2/auth"
 
+# Only the id is needed; VK ID asks for nothing beyond the basic scope
+VK_SCOPE = "vkid.personal_info"
 STATE_COOKIE = "vk_auth_state"
 PKCE_COOKIE = "vk_pkce_verifier"
 TICKET_COOKIE = "vk_login_ticket"
@@ -134,27 +141,33 @@ def _ticket_user(ticket: str | None, db: Session) -> User | None:
     return user
 
 
-def _start(mode: str, subject: str) -> RedirectResponse:
+def _begin(mode: str, subject: str, response: Response) -> tuple[str, str]:
+    """Start a flow: the signed state and the PKCE challenge to send to VK,
+    with the nonce and the verifier kept in this browser's cookies."""
     if not VK_CLIENT_ID:
         raise HTTPException(503, "Вход через VK ID не настроен на сервере")
     nonce = secrets.token_hex(16)
     verifier = secrets.token_urlsafe(64)
+    for name, value in ((STATE_COOKIE, nonce), (PKCE_COOKIE, verifier)):
+        # Lax so they come back with the top-level redirect from VK
+        response.set_cookie(name, value, httponly=True, secure=_secure_cookies(),
+                            samesite="lax", max_age=FLOW_TTL_SEC)
     state = f"{mode}.{subject}.{nonce}.{_sign('state', mode, subject, nonce)}"
-    query = urllib.parse.urlencode({
+    return state, _code_challenge(verifier)
+
+
+def _start(mode: str, subject: str) -> RedirectResponse:
+    redirect = RedirectResponse(VK_AUTHORIZE_URL)
+    state, challenge = _begin(mode, subject, redirect)
+    redirect.headers["location"] = f"{VK_AUTHORIZE_URL}?" + urllib.parse.urlencode({
         "response_type": "code",
         "client_id": VK_CLIENT_ID,
         "redirect_uri": VK_REDIRECT_URI,
         "state": state,
-        "code_challenge": _code_challenge(verifier),
+        "code_challenge": challenge,
         "code_challenge_method": "S256",
-        # Only the id is needed; VK ID asks for nothing beyond the basic scope
-        "scope": "vkid.personal_info",
+        "scope": VK_SCOPE,
     })
-    redirect = RedirectResponse(f"{VK_AUTHORIZE_URL}?{query}")
-    for name, value in ((STATE_COOKIE, nonce), (PKCE_COOKIE, verifier)):
-        # Lax so they come back with the top-level redirect from VK
-        redirect.set_cookie(name, value, httponly=True, secure=_secure_cookies(),
-                            samesite="lax", max_age=FLOW_TTL_SEC)
     return redirect
 
 
@@ -212,10 +225,54 @@ def vk_callback(request: Request, db: Annotated[Session, Depends(get_db)],
         result = _link(db, parsed[1], vk_user) if parsed else "error"
         redirect = RedirectResponse(f"{FRONTEND_URL}/settings?tab=security&vk={result}")
     else:
-        redirect = _login_redirect(db, vk_user)
+        redirect = RedirectResponse(FRONTEND_URL)
+        redirect.headers["location"] = f"{FRONTEND_URL}/auth?vk={_login(db, vk_user, redirect)}"
     redirect.delete_cookie(STATE_COOKIE)
     redirect.delete_cookie(PKCE_COOKIE)
     return redirect
+
+
+@router.get("/widget", dependencies=[require_vk],
+            responses={401: {"description": "Linking needs a signed-in user"},
+                       503: {"description": "VK ID is not configured"}})
+@limiter.limit("20/minute")
+def vk_widget(request: Request, response: Response,
+              current_user: Annotated[User | None, Depends(get_current_user_optional)],
+              mode: Annotated[str, Query(pattern="^(login|link)$")] = MODE_LOGIN):
+    """Settings for the VK ID One Tap button on the page: the button runs
+    the sign-in in a VK popup, and the page hands the code to /widget/exchange."""
+    if mode == MODE_LINK:
+        if current_user is None:
+            raise HTTPException(401, "Войдите, чтобы привязать VK ID")
+        subject = _link_subject(current_user, current_session_id(request))
+    else:
+        subject = "0"
+    state, challenge = _begin(mode, subject, response)
+    return {"app_id": int(VK_CLIENT_ID or 0), "redirect_url": VK_REDIRECT_URI, "state": state,
+            "code_challenge": challenge, "scope": VK_SCOPE}
+
+
+class VkWidgetCode(BaseModel):
+    code: str = Field(min_length=1, max_length=2048)
+    device_id: str = Field(min_length=1, max_length=512)
+    state: str = Field(min_length=1, max_length=512)
+
+
+@router.post("/widget/exchange", dependencies=[require_vk])
+@limiter.limit("10/minute")
+def vk_widget_exchange(request: Request, data: VkWidgetCode, response: Response,
+                       db: Annotated[Session, Depends(get_db)]):
+    """Finish what the One Tap button started: link the account, or leave a
+    sign-in ticket for /finish. Returns the same results as the redirect flow."""
+    _check_csrf(request, True)
+    parsed = _parse_state(data.state, request.cookies.get(STATE_COOKIE))
+    verifier = request.cookies.get(PKCE_COOKIE)
+    vk_user = _vk_user_id(data.code, data.device_id, data.state, verifier) if parsed and verifier else None
+    response.delete_cookie(STATE_COOKIE)
+    response.delete_cookie(PKCE_COOKIE)
+    if parsed and parsed[0] == MODE_LINK:
+        return {"result": _link(db, parsed[1], vk_user)}
+    return {"result": _login(db, vk_user, response)}
 
 
 def _link(db: Session, subject: str, vk_user: str | None) -> str:
@@ -234,18 +291,19 @@ def _link(db: Session, subject: str, vk_user: str | None) -> str:
     return "linked"
 
 
-def _login_redirect(db: Session, vk_user: str | None) -> RedirectResponse:
-    user = db.query(User).filter(User.vk_id == vk_user).first() if vk_user else None
+def _login(db: Session, vk_user: str | None, response: Response) -> str:
+    """Result of signing in as the VK account: "finish" leaves the ticket
+    for /finish in the response's cookies."""
     if vk_user is None:
-        return RedirectResponse(f"{FRONTEND_URL}/auth?vk=error")
+        return "error"
+    user = db.query(User).filter(User.vk_id == vk_user).first()
     if user is None:
-        return RedirectResponse(f"{FRONTEND_URL}/auth?vk=unknown")
+        return "unknown"
     if user.is_banned:
-        return RedirectResponse(f"{FRONTEND_URL}/auth?vk=banned")
-    redirect = RedirectResponse(f"{FRONTEND_URL}/auth?vk=finish")
-    redirect.set_cookie(TICKET_COOKIE, _issue_ticket(user), httponly=True, secure=_secure_cookies(),
+        return "banned"
+    response.set_cookie(TICKET_COOKIE, _issue_ticket(user), httponly=True, secure=_secure_cookies(),
                         samesite="lax", max_age=TICKET_TTL_SEC)
-    return redirect
+    return "finish"
 
 
 class VkFinish(BaseModel):

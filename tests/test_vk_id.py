@@ -157,3 +157,46 @@ def test_unlinking_voids_a_pending_sign_in(client, db):
     user.vk_id = None
     db.commit()
     assert client.post("/auth/vk/finish", json={}, headers=ORIGIN).status_code == 400
+
+
+def _through_widget(client, mode: str, vk_user: str, headers: dict | None = None) -> httpx.Response:
+    """The One Tap button: settings from /widget, then the code from VK's popup."""
+    resp = client.get(f"/auth/vk/widget?mode={mode}", headers=headers or {})
+    assert resp.status_code == 200, resp.text
+    widget = resp.json()
+    assert widget["app_id"] == 54000000 and widget["code_challenge"]
+    # The test client is an httpx.Client itself, so the exchange is replaced
+    # one level up; the redirect-flow tests above cover the request to VK
+    with patch.object(vk_id, "_vk_user_id", return_value=vk_user) as exchange:
+        resp = client.post("/auth/vk/widget/exchange", headers={**ORIGIN, **(headers or {})},
+                           json={"code": "c", "device_id": "d", "state": widget["state"]})
+    code, device, state, verifier = exchange.call_args.args
+    assert (code, device, state) == ("c", "d", widget["state"]) and verifier
+    return resp
+
+
+def test_one_tap_links_and_signs_in(client, db):
+    key = _register(client, "onetap")
+    assert _through_widget(client, "link", "8181", {"X-API-Key": key}).json() == {"result": "linked"}
+    assert db.query(User).filter_by(username="onetap").one().vk_id == "8181"
+
+    client.cookies.clear()
+    assert _through_widget(client, "login", "8181").json() == {"result": "finish"}
+    resp = client.post("/auth/vk/finish", json={}, headers=ORIGIN)
+    assert resp.json() == {"username": "onetap"}
+
+
+def test_one_tap_rejects_a_state_from_another_browser(client):
+    widget = client.get("/auth/vk/widget?mode=login").json()
+    client.cookies.clear()
+    client.cookies.set(vk_id.STATE_COOKIE, "other")
+    client.cookies.set(vk_id.PKCE_COOKIE, "verifier")
+    with patch.object(vk_id, "_vk_user_id") as exchange:
+        resp = client.post("/auth/vk/widget/exchange", headers=ORIGIN,
+                           json={"code": "c", "device_id": "d", "state": widget["state"]})
+    exchange.assert_not_called()
+    assert resp.json() == {"result": "error"}
+
+
+def test_one_tap_linking_needs_a_signed_in_user(client):
+    assert client.get("/auth/vk/widget?mode=link").status_code == 401
