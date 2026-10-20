@@ -1,4 +1,7 @@
 "use client";
+import { useT } from "@/app/lib/i18n/client";
+import { msg } from "@/app/lib/i18n/core";
+import { tr } from "@/app/lib/i18n/active";
 
 import { useCallback, useEffect, useState } from "react";
 import StatusText from "@/components/StatusText";
@@ -18,8 +21,8 @@ const input =
   "h-10 min-w-0 flex-grow rounded-lg border border-line bg-bg px-3 text-sm text-fg outline-none focus:border-fg-3";
 
 const WEBHOOK_EVENTS = [
-  { id: "scrobble.created", label: "Новое прослушивание" },
-  { id: "achievement.unlocked", label: "Новое достижение" },
+  { id: "scrobble.created", label: msg("Новое прослушивание") },
+  { id: "achievement.unlocked", label: msg("Новое достижение") },
 ];
 
 const EMPTY_CONFIG: ExportConfig = {
@@ -33,7 +36,7 @@ const EMPTY_CONFIG: ExportConfig = {
 
 function errorText(e: unknown): string {
   if (e instanceof ApiError || e instanceof Error) return e.message;
-  return "Ошибка сети";
+  return tr("Ошибка сети");
 }
 
 interface ServiceRowProps {
@@ -55,6 +58,7 @@ function ServiceRow({
   onDisconnect,
   children,
 }: Readonly<ServiceRowProps>) {
+  const t = useT();
   const toggleId = `export-${title.toLowerCase().replace(/\W+/g, "-")}`;
   return (
     <div className="bg-bg border border-line-soft rounded-lg p-4 flex flex-col gap-3">
@@ -66,7 +70,7 @@ function ServiceRow({
         <span
           className={`text-xs font-medium shrink-0 ${connected ? "text-ok" : "text-fg-2"}`}
         >
-          {connected ? "Подключено" : "Не подключено"}
+          {connected ? t("Подключено") : t("Не подключено")}
         </span>
       </div>
       {connected ? (
@@ -82,14 +86,14 @@ function ServiceRow({
               onChange={(e) => onToggle(e.target.checked)}
               className="w-4 h-4 accent-[var(--accent)]"
             />
-            <span>Отправлять прослушивания</span>
+            <span>{t("Отправлять прослушивания")}</span>
           </label>
           <button
             type="button"
             onClick={onDisconnect}
             className={`${buttonBase} text-danger border border-danger-line`}
           >
-            Отключить
+            {t("Отключить")}
           </button>
         </div>
       ) : (
@@ -103,6 +107,7 @@ function ServiceRow({
 export default function ExportTab({
   initialStatus = "",
 }: Readonly<{ initialStatus?: string }>) {
+  const t = useT();
   const [message, setMessage] = useState(initialStatus);
   const [config, setConfig] = useState<ExportConfig>(EMPTY_CONFIG);
   const [listenbrainzToken, setListenbrainzToken] = useState("");
@@ -161,7 +166,7 @@ export default function ExportTab({
       });
       setNewSecret(created);
       setHookUrl("");
-      setMessage("✅ Вебхук создан");
+      setMessage(t("✅ Вебхук создан"));
       await load();
     } catch (err) {
       setMessage(`❌ ${errorText(err)}`);
@@ -176,17 +181,17 @@ export default function ExportTab({
         `/api/developer/webhooks/${id}/test`,
         { method: "POST" },
       );
-      setMessage(`✅ ${res.message}`);
+      setMessage(`✅ ${t(res.message)}`);
     } catch (e) {
       setMessage(`❌ ${errorText(e)}`);
     }
   };
 
   const deleteWebhook = async (id: number) => {
-    if (!confirm("Удалить вебхук?")) return;
+    if (!confirm(t("Удалить вебхук?"))) return;
     try {
       await apiJson(`/api/developer/webhooks/${id}`, { method: "DELETE" });
-      setMessage("✅ Вебхук удалён");
+      setMessage(t("✅ Вебхук удалён"));
       await load();
     } catch (e) {
       setMessage(`❌ ${errorText(e)}`);
@@ -200,32 +205,38 @@ export default function ExportTab({
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-fg">Экспорт и вебхуки</h2>
+      <h2 className="text-lg font-semibold text-fg">
+        {t("Экспорт и вебхуки")}
+      </h2>
       {message && <StatusText text={message} />}
 
       <section className={card} aria-labelledby="export-heading">
         <div>
           <h3 id="export-heading" className="font-medium text-fg">
-            Экспорт прослушиваний
+            {t("Экспорт прослушиваний")}
           </h3>
           <p className="text-xs text-fg-2">
-            Каждое засчитанное прослушивание будет дополнительно отправляться в
-            выбранные сервисы.
+            {t(
+              "Каждое засчитанное прослушивание будет дополнительно отправляться в выбранные сервисы.",
+            )}
           </p>
         </div>
 
         <ServiceRow
           title="Last.fm"
-          description="Вход через сайт Last.fm, пароль не передаётся VEIN."
+          description={t("Вход через сайт Last.fm, пароль не передаётся VEIN.")}
           connected={config.has_lastfm_session}
           enabled={config.is_lastfm_enabled}
           onToggle={(v) =>
-            saveConfig({ is_lastfm_enabled: v }, "Настройки Last.fm сохранены")
+            saveConfig(
+              { is_lastfm_enabled: v },
+              t("Настройки Last.fm сохранены"),
+            )
           }
           onDisconnect={() =>
             saveConfig(
               { lastfm_session_key: "", is_lastfm_enabled: false },
-              "Last.fm отключён",
+              t("Last.fm отключён"),
             )
           }
         >
@@ -233,25 +244,25 @@ export default function ExportTab({
             href={`${API_URL}/api/integrations/lastfm/connect`}
             className={`${buttonBase} self-start bg-accent text-on-accent hover:brightness-110`}
           >
-            Подключить Last.fm
+            {t("Подключить Last.fm")}
           </a>
         </ServiceRow>
 
         <ServiceRow
           title="ListenBrainz"
-          description="Нужен токен со страницы listenbrainz.org/settings."
+          description={t("Нужен токен со страницы listenbrainz.org/settings.")}
           connected={config.has_listenbrainz_token}
           enabled={config.is_listenbrainz_enabled}
           onToggle={(v) =>
             saveConfig(
               { is_listenbrainz_enabled: v },
-              "Настройки ListenBrainz сохранены",
+              t("Настройки ListenBrainz сохранены"),
             )
           }
           onDisconnect={() =>
             saveConfig(
               { listenbrainz_token: "", is_listenbrainz_enabled: false },
-              "ListenBrainz отключён",
+              t("ListenBrainz отключён"),
             )
           }
         >
@@ -265,7 +276,7 @@ export default function ExportTab({
                   listenbrainz_token: listenbrainzToken.trim(),
                   is_listenbrainz_enabled: true,
                 },
-                "ListenBrainz подключён",
+                t("ListenBrainz подключён"),
               );
               setListenbrainzToken("");
             }}
@@ -274,36 +285,38 @@ export default function ExportTab({
               name="listenbrainz-token"
               value={listenbrainzToken}
               onChange={(e) => setListenbrainzToken(e.target.value)}
-              placeholder="Токен ListenBrainz"
-              aria-label="Токен ListenBrainz"
+              placeholder={t("Токен ListenBrainz")}
+              aria-label={t("Токен ListenBrainz")}
               className={input}
             />
             <button
               type="submit"
               disabled={busy || !listenbrainzToken.trim()}
-              aria-label="Подключить ListenBrainz"
+              aria-label={t("Подключить ListenBrainz")}
               className={`${buttonBase} bg-accent text-on-accent`}
             >
-              Подключить
+              {t("Подключить")}
             </button>
           </form>
         </ServiceRow>
 
         <ServiceRow
           title="Libre.fm"
-          description="Для опытных пользователей: ключ сессии Libre.fm (GNU FM)."
+          description={t(
+            "Для опытных пользователей: ключ сессии Libre.fm (GNU FM).",
+          )}
           connected={config.has_librefm_session}
           enabled={config.is_librefm_enabled}
           onToggle={(v) =>
             saveConfig(
               { is_librefm_enabled: v },
-              "Настройки Libre.fm сохранены",
+              t("Настройки Libre.fm сохранены"),
             )
           }
           onDisconnect={() =>
             saveConfig(
               { librefm_session_key: "", is_librefm_enabled: false },
-              "Libre.fm отключён",
+              t("Libre.fm отключён"),
             )
           }
         >
@@ -317,7 +330,7 @@ export default function ExportTab({
                   librefm_session_key: librefmKey.trim(),
                   is_librefm_enabled: true,
                 },
-                "Libre.fm подключён",
+                t("Libre.fm подключён"),
               );
               setLibrefmKey("");
             }}
@@ -326,17 +339,17 @@ export default function ExportTab({
               name="librefm-session-key"
               value={librefmKey}
               onChange={(e) => setLibrefmKey(e.target.value)}
-              placeholder="Ключ сессии Libre.fm"
-              aria-label="Ключ сессии Libre.fm"
+              placeholder={t("Ключ сессии Libre.fm")}
+              aria-label={t("Ключ сессии Libre.fm")}
               className={input}
             />
             <button
               type="submit"
               disabled={busy || !librefmKey.trim()}
-              aria-label="Подключить Libre.fm"
+              aria-label={t("Подключить Libre.fm")}
               className={`${buttonBase} bg-accent text-on-accent`}
             >
-              Подключить
+              {t("Подключить")}
             </button>
           </form>
         </ServiceRow>
@@ -345,17 +358,20 @@ export default function ExportTab({
       <section className={card} aria-labelledby="webhooks-heading">
         <div>
           <h3 id="webhooks-heading" className="font-medium text-fg">
-            Вебхуки
+            {t("Вебхуки")}
           </h3>
           <p className="text-xs text-fg-2">
-            VEIN отправит POST-запрос на ваш адрес при каждом событии. Запросы
-            подписаны заголовком <code>X-VEIN-Signature</code> (HMAC-SHA256
-            секретом вебхука). До 10 вебхуков.
+            {t(
+              "VEIN отправит POST-запрос на ваш адрес при каждом событии. Запросы подписаны заголовком",
+            )}{" "}
+            <code>X-VEIN-Signature</code>{" "}
+            {t("(HMAC-SHA256 секретом вебхука). До 10 вебхуков.")}
           </p>
           {!webhooksEnabled && (
             <p className="text-xs font-medium text-accent mt-2">
-              Вебхуки временно отключены администратором: события не
-              отправляются, новые вебхуки создать нельзя.
+              {t(
+                "Вебхуки временно отключены администратором: события не отправляются, новые вебхуки создать нельзя.",
+              )}
             </p>
           )}
         </div>
@@ -365,13 +381,13 @@ export default function ExportTab({
             className="border border-line rounded-lg p-3 text-xs text-fg break-all"
             role="alert"
           >
-            Секрет для проверки подписи (показывается один раз):{" "}
+            {t("Секрет для проверки подписи (показывается один раз):")}{" "}
             <code className="font-medium">{newSecret.secret}</code>
           </div>
         )}
 
         {webhooks.length === 0 ? (
-          <p className="text-xs text-fg-2">Вебхуков пока нет.</p>
+          <p className="text-xs text-fg-2">{t("Вебхуков пока нет.")}</p>
         ) : (
           <ul className="space-y-2">
             {webhooks.map((w) => (
@@ -384,7 +400,7 @@ export default function ExportTab({
                     {w.url}
                   </p>
                   <p className="text-xs text-fg-2">
-                    {w.events.filter(Boolean).join(", ") || "все события"}
+                    {w.events.filter(Boolean).join(", ") || t("все события")}
                   </p>
                 </div>
                 <div className="flex gap-2 shrink-0">
@@ -393,14 +409,14 @@ export default function ExportTab({
                     onClick={() => testWebhook(w.id)}
                     className={`${buttonBase} bg-surface-2 border border-line text-fg hover:bg-line`}
                   >
-                    Проверить
+                    {t("Проверить")}
                   </button>
                   <button
                     type="button"
                     onClick={() => deleteWebhook(w.id)}
                     className={`${buttonBase} text-danger border border-danger-line`}
                   >
-                    Удалить
+                    {t("Удалить")}
                   </button>
                 </div>
               </li>
@@ -416,7 +432,7 @@ export default function ExportTab({
               value={hookUrl}
               onChange={(e) => setHookUrl(e.target.value)}
               placeholder="https://example.com/vein-webhook"
-              aria-label="Адрес вебхука"
+              aria-label={t("Адрес вебхука")}
               className={input}
             />
             <button
@@ -429,11 +445,11 @@ export default function ExportTab({
               }
               className={`${buttonBase} bg-accent text-on-accent`}
             >
-              Добавить вебхук
+              {t("Добавить вебхук")}
             </button>
           </div>
           <fieldset className="flex flex-wrap gap-4">
-            <legend className="sr-only">События вебхука</legend>
+            <legend className="sr-only">{t("События вебхука")}</legend>
             {WEBHOOK_EVENTS.map((ev) => (
               <label
                 key={ev.id}
@@ -445,7 +461,7 @@ export default function ExportTab({
                   onChange={(e) => toggleEvent(ev.id, e.target.checked)}
                   className="w-4 h-4 accent-[var(--accent)]"
                 />
-                {ev.label}
+                {t(ev.label)}
               </label>
             ))}
           </fieldset>

@@ -50,6 +50,8 @@ class User(Base):
     totp_setup_expires_at = Column(DateTime(timezone=True), nullable=True)
     totp_recovery_codes = Column(String, nullable=True)
     antifraud_reason = Column(String, nullable=True)
+    # Interface language ("ru" / "en") for emails, push and notifications
+    lang = Column(String(2), default="ru", server_default="ru", nullable=False)
     # NULL for accounts created before this column existed
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=True, index=True)
 
@@ -219,6 +221,8 @@ class Scrobble(Base):
         Index("ix_scrobbles_user_played_at", "user_id", "played_at"),
         # "online now" and activity queries
         Index("ix_scrobbles_updated_at", "updated_at"),
+        # Site-wide period queries: rankings, admin statistics
+        Index("ix_scrobbles_played_at", "played_at"),
         Index("ix_scrobbles_user_time_id", "user_id", "played_at", "id"),
         Index("ix_scrobbles_user_track", "user_id", "excluded_from_stats", "deleted_at", "track_id"),
     )
@@ -270,6 +274,9 @@ class Achievement(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
     description = Column(String)
+    # English name and description, shown to English-speaking visitors
+    name_en = Column(String, nullable=True)
+    description_en = Column(String, nullable=True)
     icon = Column(String)
     rule_type = Column(String, default="manual")
     rule_value = Column(Integer, default=0)

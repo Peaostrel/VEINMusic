@@ -7,8 +7,12 @@ import { Meter } from "@/components/ui";
 import { fallbackOnce } from "@/app/lib/img";
 import { formatNumber, plural } from "@/app/lib/plural";
 import type { getNextRankInfo } from "@/app/lib/ranks";
+import { useT } from "@/app/lib/i18n/client";
 import { AchievementChip } from "./AchievementChip";
 import type { AchievementInfo, MoodInfo, UserInfo } from "@/app/lib/types";
+
+/** The server's placeholder bio (shown translated; real bios are not). */
+const DEFAULT_BIO = "Этот пользователь пока ничего о себе не рассказал.";
 
 export interface ProfileHeaderSectionProps {
   u: UserInfo;
@@ -43,6 +47,7 @@ export function ProfileHeaderSection({
   actions,
   hasBanner = false,
 }: Readonly<ProfileHeaderSectionProps>) {
+  const t = useT();
   const frame = u.avatar_frame
     ? `avatar-frame-wrapper avatar-frame-${u.avatar_frame}`
     : "";
@@ -71,7 +76,9 @@ export function ProfileHeaderSection({
       onClick: () => openFollowModal("following"),
     },
     {
-      label: `${plural(u.streak || 0, "день", "дня", "дней")} подряд`,
+      label: t("{days} подряд", {
+        days: plural(u.streak || 0, "день", "дня", "дней"),
+      }),
       value: u.streak || 0,
     },
   ];
@@ -111,20 +118,20 @@ export function ProfileHeaderSection({
             {mood && (
               <span
                 className="rounded border border-line px-1.5 py-px text-[11px] text-fg-2"
-                title="Настроение по последним прослушиваниям"
+                title={t("Настроение по последним прослушиваниям")}
               >
-                настроение: {mood.mood}
+                {t("настроение: {mood}", { mood: t(mood.mood) })}
               </span>
             )}
           </div>
           {u.bio && (
             <p className="max-w-[600px] whitespace-pre-line text-sm leading-relaxed text-fg-2">
-              {u.bio}
+              {u.bio === DEFAULT_BIO ? t(u.bio) : u.bio}
             </p>
           )}
           <div className="mt-1 flex max-w-[460px] items-center gap-3">
             <span className="shrink-0 font-mono text-xs">
-              ур. {currentLevel} · {rankTitle}
+              {t("ур. {level}", { level: currentLevel })} · {t(rankTitle)}
             </span>
             <Meter
               value={xpInCurrentLevel}
@@ -138,12 +145,12 @@ export function ProfileHeaderSection({
           </div>
           <p className="text-xs text-fg-3">
             {nextRank
-              ? `Следующий ранг — ${nextRank.name}`
-              : "Максимальный ранг"}
+              ? t("Следующий ранг — {rank}", { rank: t(nextRank.name) })
+              : t("Максимальный ранг")}
             {u.streak >= 7 && (
               <span className="ml-2 inline-flex items-center gap-1 text-accent">
                 <Flame className="h-3 w-3" aria-hidden="true" />
-                серия {u.streak} дней: +10% опыта
+                {t("серия {n} дней: +10% опыта", { n: u.streak })}
               </span>
             )}
           </p>
@@ -165,7 +172,10 @@ export function ProfileHeaderSection({
                   type="button"
                   onClick={n.onClick}
                   className="rounded hover:text-accent"
-                  aria-label={`${n.value} ${n.label} — показать список`}
+                  aria-label={t("{n} {label} — показать список", {
+                    n: n.value,
+                    label: n.label,
+                  })}
                 >
                   {formatNumber(n.value)}
                 </button>
@@ -189,10 +199,11 @@ export function ProfileAchievements({
   displayedAchs: AchievementInfo[];
   total: number;
 }>) {
+  const t = useT();
   if (!total) return null;
   return (
-    <section aria-label="Достижения" className="space-y-3">
-      <h2 className="text-lg font-semibold">Достижения</h2>
+    <section aria-label={t("Достижения")} className="space-y-3">
+      <h2 className="text-lg font-semibold">{t("Достижения")}</h2>
       {displayedAchs.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 border-t border-line-soft pt-4">
           {displayedAchs.map((a) => (
@@ -202,7 +213,7 @@ export function ProfileAchievements({
             href={`/user/${username}/achievements`}
             className="ml-1 text-xs text-fg-2 hover:text-fg"
           >
-            Все достижения →
+            {t("Все достижения →")}
           </Link>
         </div>
       )}
@@ -211,7 +222,7 @@ export function ProfileAchievements({
           href={`/user/${username}/achievements`}
           className="self-start text-xs text-fg-2 hover:text-fg"
         >
-          Достижения · {total} →
+          {t("Достижения · {total} →", { total })}
         </Link>
       )}
     </section>

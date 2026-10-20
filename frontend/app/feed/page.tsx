@@ -8,6 +8,7 @@ import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { API_URL } from "@/app/lib/api";
 import { isHiddenSource, storedPreferences } from "@/app/lib/preferences";
 import { useVisiblePolling } from "@/app/lib/usePolling";
+import { playbackTimestamp } from "@/app/lib/playback";
 import { sourceLabel } from "@/utils/formatters";
 import {
   Avatar,
@@ -18,6 +19,8 @@ import {
   Segmented,
 } from "@/components/ui";
 import { coverAt } from "@/app/lib/coverSize";
+import { msg } from "@/app/lib/i18n/core";
+import { useT } from "@/app/lib/i18n/client";
 
 interface FeedItem {
   id: number;
@@ -30,6 +33,28 @@ interface FeedItem {
   artist: string;
   source?: string;
   is_playing?: boolean;
+}
+
+/** "5 minutes ago" in the interface language, from the play's timestamp. */
+function relativeTime(item: FeedItem, locale: string, english: boolean) {
+  if (!english || !item.time) return item.relative_time;
+  const seconds = (playbackTimestamp(item.time) - Date.now()) / 1000;
+  if (!Number.isFinite(seconds)) return item.relative_time;
+  const format = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  const steps: [Intl.RelativeTimeFormatUnit, number][] = [
+    ["second", 60],
+    ["minute", 60],
+    ["hour", 24],
+    ["day", 7],
+    ["week", 4.35],
+    ["month", 12],
+  ];
+  let value = seconds;
+  for (const [unit, size] of steps) {
+    if (Math.abs(value) < size) return format.format(Math.round(value), unit);
+    value /= size;
+  }
+  return format.format(Math.round(value), "year");
 }
 
 function matchesSource(source: string, selectedSource: string): boolean {
@@ -51,18 +76,19 @@ function matchesSearchQuery(item: FeedItem, query: string): boolean {
 }
 
 const SOURCES = [
-  { id: "all", label: "Все" },
-  { id: "yandex", label: "Яндекс" },
+  { id: "all", label: msg("Все") },
+  { id: "yandex", label: msg("Яндекс") },
   { id: "spotify", label: "Spotify" },
   { id: "soundcloud", label: "SoundCloud" },
   { id: "youtube", label: "YouTube Music" },
   { id: "vk", label: "VK" },
   { id: "lastfm", label: "Last.fm" },
-  { id: "desktop", label: "Приложение" },
-  { id: "extension", label: "Браузер" },
+  { id: "desktop", label: msg("Приложение") },
+  { id: "extension", label: msg("Браузер") },
 ];
 
 export default function GlobalFeed() {
+  const t = useT();
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSource, setSelectedSource] = useState<string>("all");
@@ -109,11 +135,11 @@ export default function GlobalFeed() {
   }, [feed, selectedSource, searchQuery, hiddenSources]);
 
   let list: React.ReactNode;
-  if (loading) list = <Loading label="Загружаем ленту…" />;
+  if (loading) list = <Loading label={t("Загружаем ленту…")} />;
   else if (filteredFeed.length === 0)
     list = (
-      <EmptyState title="Ничего не найдено">
-        Попробуйте другой фильтр или запрос.
+      <EmptyState title={t("Ничего не найдено")}>
+        {t("Попробуйте другой фильтр или запрос.")}
       </EmptyState>
     );
   else
@@ -145,7 +171,7 @@ export default function GlobalFeed() {
                   <span className="flex min-w-0 items-center gap-2">
                     {s.is_playing && (
                       <span className="flex shrink-0 items-center gap-1.5 font-mono text-[11px] text-accent">
-                        <PlayingBars /> играет
+                        <PlayingBars /> {t("играет")}
                       </span>
                     )}
                     <span className="truncate text-base font-semibold">
@@ -164,7 +190,8 @@ export default function GlobalFeed() {
                   <span className="hidden min-w-0 flex-col sm:flex">
                     <span className="truncate text-[13px]">{s.username}</span>
                     <span className="truncate font-mono text-[11px] text-fg-3">
-                      {sourceLabel(s.source)} · {s.relative_time}
+                      {sourceLabel(s.source)} ·{" "}
+                      {relativeTime(s, t.locale, t.lang === "en")}
                     </span>
                   </span>
                 </Link>
@@ -178,8 +205,8 @@ export default function GlobalFeed() {
   return (
     <div className="mx-auto flex w-full max-w-[920px] flex-col gap-6 px-4 py-8 sm:px-8 lg:py-10">
       <PageHeader
-        title="Вся лента"
-        subtitle="Прослушивания открытых профилей в реальном времени"
+        title={t("Вся лента")}
+        subtitle={t("Прослушивания открытых профилей в реальном времени")}
         actions={
           <button
             type="button"
@@ -195,7 +222,7 @@ export default function GlobalFeed() {
                 className={`absolute top-[3px] h-4 w-4 rounded-full transition-all ${autoRefresh ? "left-[21px] bg-on-accent" : "left-[3px] bg-fg-2"}`}
               />
             </span>
-            <span>Автообновление</span>
+            <span>{t("Автообновление")}</span>
           </button>
         }
       />
@@ -208,17 +235,17 @@ export default function GlobalFeed() {
             type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Трек, артист или ник"
-            aria-label="Поиск по ленте"
+            placeholder={t("Трек, артист или ник")}
+            aria-label={t("Поиск по ленте")}
             className="min-w-0 flex-1 bg-transparent text-sm text-fg placeholder:text-fg-3 outline-none"
           />
         </label>
         <Segmented
-          label="Источник"
+          label={t("Источник")}
           role="radiogroup"
           value={selectedSource}
           onChange={setSelectedSource}
-          options={SOURCES}
+          options={SOURCES.map((s) => ({ ...s, label: t(s.label) }))}
           className="overflow-x-auto"
         />
       </div>

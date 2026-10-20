@@ -1,6 +1,7 @@
 "use client";
 
 import { API_URL } from "@/app/lib/api";
+import { countryMatches } from "@/app/lib/geo";
 import {
   getSocialNetwork,
   getSocialUrl as buildSocialUrl,
@@ -34,6 +35,8 @@ export const getArtistUrl = (artist: string, source: string) => {
       return `https://soundcloud.com/search/people?q=${q}`;
     case "apple_music":
       return `https://music.apple.com/search?term=${q}`;
+    case "zvuk":
+      return `https://zvuk.com/search?query=${q}`;
     default:
       // Для Яндекс.Музыки и всех остальных импортированных/неизвестных источников используем умный редирект бэкенда
       return `${API_URL}/api/redirect?source=yandex&type=artist&q=${q}`;
@@ -56,6 +59,8 @@ export const getTrackUrl = (t: TrackLinkSource | null | undefined) => {
       return `https://soundcloud.com/search?q=${query}`;
     case "apple_music":
       return `https://music.apple.com/search?term=${query}`;
+    case "zvuk":
+      return `https://zvuk.com/search?query=${query}`;
     default:
       // Для Яндекс.Музыки и всех остальных источников используем умный редирект бэкенда
       // Он найдет трек через API Яндекса и перенаправит прямо на страницу трека
@@ -187,7 +192,7 @@ export function getCountryCode(
   }
 
   // 2. Поиск по загруженному списку стран (если restcountries ответил)
-  const found = countries.find((c) => c.name.toLowerCase() === cleaned);
+  const found = countries.find((c) => countryMatches(c, cleaned));
   if (found) {
     return found.code;
   }

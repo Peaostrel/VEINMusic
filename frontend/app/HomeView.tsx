@@ -6,6 +6,8 @@ import { Heart, MessageCircle, Users } from "lucide-react";
 import { FeedDay, feedDay } from "@/components/FeedDay";
 import GoalsCard from "./goals/GoalsCard";
 import { API_URL } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/client";
+import type { Translator } from "@/app/lib/i18n/core";
 import { formatNumber, plural } from "@/app/lib/plural";
 import { isHiddenSource, storedPreferences } from "@/app/lib/preferences";
 import { isValidUser } from "@/app/lib/theme";
@@ -26,6 +28,28 @@ import { coverAt } from "@/app/lib/coverSize";
 
 const FEED_POLL_MS = 15000;
 const WEEKDAYS = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+
+/** Short weekday: the Russian list, or Intl for other languages. */
+function weekday(d: Date, t: Translator): string {
+  if (t.lang === "ru") return WEEKDAYS[d.getDay()];
+  return new Intl.DateTimeFormat(t.locale, { weekday: "short" }).format(d);
+}
+
+/** The API sends a Russian "5м назад"; other languages count it from `time`. */
+function relativeTime(item: FeedItem, t: Translator): string {
+  if (t.lang === "ru" || !item.time) return item.relative_time ?? "";
+  const then = Date.parse(item.time);
+  if (Number.isNaN(then)) return "";
+  const minutes = Math.round((then - Date.now()) / 60_000);
+  const format = new Intl.RelativeTimeFormat(t.locale, {
+    numeric: "auto",
+    style: "short",
+  });
+  if (Math.abs(minutes) < 60) return format.format(minutes, "minute");
+  const hours = Math.round(minutes / 60);
+  if (Math.abs(hours) < 24) return format.format(hours, "hour");
+  return format.format(Math.round(hours / 24), "day");
+}
 
 interface FeedItem {
   id: number;
@@ -84,6 +108,8 @@ function FeedRow({
   liked,
   onLike,
 }: Readonly<{ item: FeedItem; liked: boolean; onLike: () => void }>) {
+  const t = useT();
+  const when = relativeTime(item, t);
   return (
     <li className="grid grid-cols-[48px_minmax(0,1fr)] items-center gap-x-4 gap-y-2 rounded-xl px-3 py-4 transition-colors hover:bg-surface/80 sm:grid-cols-[48px_minmax(0,1fr)_170px_110px]">
       <Cover src={item.cover_url} />
@@ -91,7 +117,7 @@ function FeedRow({
         <div className="flex min-w-0 items-center gap-2">
           {item.is_playing && (
             <span className="flex shrink-0 items-center gap-1.5 font-mono text-[11px] text-accent">
-              <PlayingBars /> играет
+              <PlayingBars /> {t("играет")}
             </span>
           )}
           <span className="truncate text-base font-semibold">{item.title}</span>
@@ -100,7 +126,7 @@ function FeedRow({
         {item.listening_with && item.listening_with.length > 0 && (
           <span className="flex items-center gap-1 text-xs text-fg-3">
             <Users className="h-3 w-3" aria-hidden="true" />
-            вместе с {item.listening_with[0]}
+            {t("вместе с {name}", { name: item.listening_with[0] })}
           </span>
         )}
       </div>
@@ -113,7 +139,7 @@ function FeedRow({
           <span className="truncate text-[13px]">{item.username}</span>
           <span className="truncate font-mono text-[11px] text-fg-3">
             {sourceLabel(item.source)}
-            {item.relative_time ? ` · ${item.relative_time}` : ""}
+            {when ? ` · ${when}` : ""}
           </span>
         </span>
       </Link>
@@ -123,10 +149,10 @@ function FeedRow({
           onClick={onLike}
           disabled={item.can_like === false}
           aria-pressed={liked}
-          aria-label={`Нравится: ${item.likes_count || 0}`}
+          aria-label={t("Нравится: {n}", { n: item.likes_count || 0 })}
           title={
             item.can_like === false
-              ? "Пользователь отключил реакции"
+              ? t("Пользователь отключил реакции")
               : undefined
           }
           className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2 font-mono text-xs transition-colors hover:bg-surface-2 ${
@@ -141,7 +167,7 @@ function FeedRow({
         </button>
         {item.can_comment === false ? (
           <span
-            title="Пользователь отключил комментарии"
+            title={t("Пользователь отключил комментарии")}
             className="inline-flex h-8 cursor-not-allowed items-center gap-1.5 rounded-md px-2 font-mono text-xs text-fg-2 opacity-35"
           >
             <MessageCircle className="h-4 w-4" aria-hidden="true" />
@@ -150,7 +176,7 @@ function FeedRow({
         ) : (
           <Link
             href={`/user/${item.username}`}
-            aria-label={`Комментарии: ${item.comments_count || 0}`}
+            aria-label={t("Комментарии: {n}", { n: item.comments_count || 0 })}
             className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 font-mono text-xs text-fg-2 transition-colors hover:bg-surface-2"
           >
             <MessageCircle className="h-4 w-4" aria-hidden="true" />
@@ -166,13 +192,14 @@ function YourWeek({
   username,
   stats,
 }: Readonly<{ username: string; stats: WeekStats | null }>) {
+  const t = useT();
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - (6 - i));
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     return {
       key,
-      label: WEEKDAYS[d.getDay()],
+      label: weekday(d, t),
       plays: stats?.activity_graph?.[key] ?? 0,
     };
   });
@@ -188,7 +215,7 @@ function YourWeek({
         "прослушиваний",
       ),
     },
-    { value: `${hours} ч`, label: "музыки" },
+    { value: t("{n} ч", { n: hours }), label: t("музыки") },
     {
       value: formatNumber(stats?.unique_artists ?? 0),
       label: plural(
@@ -209,7 +236,7 @@ function YourWeek({
       className="flex flex-col gap-3.5 rounded-xl border border-line bg-surface p-5"
     >
       <h2 id="week-title" className="text-sm font-semibold">
-        Ваша неделя
+        {t("Ваша неделя")}
       </h2>
       <dl className="grid grid-cols-2 gap-4">
         {cells.map((c) => (
@@ -221,9 +248,9 @@ function YourWeek({
       </dl>
       <div
         role="img"
-        aria-label={
-          "По дням: " + days.map((d) => d.label + " " + d.plays).join(", ")
-        }
+        aria-label={t("По дням: {days}", {
+          days: days.map((d) => d.label + " " + d.plays).join(", "),
+        })}
         className="flex h-12 items-end gap-1.5"
       >
         {days.map((d, i) => (
@@ -240,40 +267,41 @@ function YourWeek({
         href={`/user/${username}/stats`}
         className="text-[13px] text-accent"
       >
-        Вся статистика →
+        {t("Вся статистика →")}
       </Link>
     </section>
   );
 }
 
 function Twins({ twins }: Readonly<{ twins: TasteTwin[] }>) {
+  const t = useT();
   return (
     <section aria-labelledby="twins-title" className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between">
         <h2 id="twins-title" className="text-sm font-semibold">
-          Музыкальные двойники
+          {t("Музыкальные двойники")}
         </h2>
-        <span className="text-xs text-fg-3">по общим артистам</span>
+        <span className="text-xs text-fg-3">{t("по общим артистам")}</span>
       </div>
       <ul className="flex flex-col gap-2.5">
-        {twins.map((t) => (
-          <li key={t.username}>
+        {twins.map((twin) => (
+          <li key={twin.username}>
             <Link
-              href={`/user/${t.username}`}
+              href={`/user/${twin.username}`}
               className="grid grid-cols-[32px_minmax(0,1fr)_44px] items-center gap-2.5 rounded-md"
             >
-              <Avatar src={t.avatar_url} seed={t.username} size={32} />
+              <Avatar src={twin.avatar_url} seed={twin.username} size={32} />
               <span className="flex min-w-0 flex-col gap-1.5">
                 <span className="truncate text-[13px]">
-                  {t.display_name || t.username}{" "}
+                  {twin.display_name || twin.username}{" "}
                   <span className="text-fg-3">
-                    · {t.common_artists.slice(0, 2).join(", ")}
+                    · {twin.common_artists.slice(0, 2).join(", ")}
                   </span>
                 </span>
-                <Meter value={t.match} />
+                <Meter value={twin.match} />
               </span>
               <span className="text-right font-mono text-[13px]">
-                {t.match}%
+                {twin.match}%
               </span>
             </Link>
           </li>
@@ -288,30 +316,36 @@ function DashboardStatus({
 }: Readonly<{
   integrations: IntegrationSummary | null;
 }>) {
+  const t = useT();
   const connected =
     integrations?.services.filter((service) => service.linked) ?? [];
   const problems = connected.filter(
     (service) => !service.admin_enabled || !service.user_enabled,
   ).length;
-  let integrationMessage = "Проверяем подключения…";
+  let integrationMessage = t("Проверяем подключения…");
   if (integrations) {
     if (connected.length === 0)
-      integrationMessage = "Облачные сервисы пока не подключены";
+      integrationMessage = t("Облачные сервисы пока не подключены");
     else if (problems)
-      integrationMessage = `${problems} подключений требуют внимания`;
-    else integrationMessage = `${connected.length} подключений работают`;
+      integrationMessage = t("{n} подключений требуют внимания", {
+        n: problems,
+      });
+    else
+      integrationMessage = t("{n} подключений работают", {
+        n: connected.length,
+      });
   }
   return (
     <section className="rounded-xl border border-line bg-surface p-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Состояние VEIN</h2>
+        <h2 className="text-sm font-semibold">{t("Состояние VEIN")}</h2>
         <Link
           href={
             connected.length ? "/settings?tab=integrations" : "/library/connect"
           }
           className="text-xs text-fg-3 hover:text-accent"
         >
-          {connected.length ? "Интеграции →" : "Подключить музыку →"}
+          {connected.length ? t("Интеграции →") : t("Подключить музыку →")}
         </Link>
       </div>
       <p className={`mt-3 text-sm ${problems ? "text-fg-2" : "text-ok"}`}>
@@ -343,6 +377,7 @@ function SkeletonRows() {
 export default function Home({
   landing,
 }: Readonly<{ landing: React.ReactNode }>) {
+  const t = useT();
   const [globalHistory, setGlobalHistory] = useState<FeedItem[]>([]);
   const [friendsHistory, setFriendsHistory] = useState<FeedItem[]>([]);
   const [twins, setTwins] = useState<TasteTwin[]>([]);
@@ -445,7 +480,7 @@ export default function Home({
           credentials: "include",
         },
       );
-      if (!response.ok) throw new Error("Реакции отключены");
+      if (!response.ok) throw new Error(t("Реакции отключены"));
       await fetchFeed();
     } catch (e) {
       console.error(e);
@@ -484,18 +519,18 @@ export default function Home({
     feedBody =
       activeFeed === "friends" ? (
         <EmptyState
-          title="Тут пока пусто"
+          title={t("Тут пока пусто")}
           action={
             <Link href="/leaderboard" className={`${btn.secondary} ${btn.sm}`}>
-              Найти слушателей
+              {t("Найти слушателей")}
             </Link>
           }
         >
-          Подпишитесь на кого-нибудь, чтобы видеть здесь их треки.
+          {t("Подпишитесь на кого-нибудь, чтобы видеть здесь их треки.")}
         </EmptyState>
       ) : (
         <EmptyState
-          title="Пока тихо"
+          title={t("Пока тихо")}
           action={
             integrationSummary?.services.some((service) => service.linked) ===
             false ? (
@@ -503,12 +538,12 @@ export default function Home({
                 href="/library/connect"
                 className={`${btn.primary} ${btn.sm}`}
               >
-                Подключить музыку
+                {t("Подключить музыку")}
               </Link>
             ) : undefined
           }
         >
-          Включите музыку — ваш трек появится здесь первым.
+          {t("Включите музыку — ваш трек появится здесь первым.")}
         </EmptyState>
       );
   else
@@ -539,19 +574,19 @@ export default function Home({
       >
         <PageHeader
           id="feed-title"
-          title="Лента"
-          subtitle="Что слушают прямо сейчас"
+          title={t("Лента")}
+          subtitle={t("Что слушают прямо сейчас")}
           actions={
             <Segmented
-              label="Чья лента"
+              label={t("Чья лента")}
               value={activeFeed}
               onChange={(v) => {
                 setLoading(true);
                 setActiveFeed(v);
               }}
               options={[
-                { id: "global", label: "Все" },
-                { id: "friends", label: "Подписки" },
+                { id: "global", label: t("Все") },
+                { id: "friends", label: t("Подписки") },
               ]}
             />
           }
@@ -561,7 +596,7 @@ export default function Home({
           href="/feed"
           className="self-start text-[13px] text-fg-2 hover:text-fg"
         >
-          Вся лента с фильтрами →
+          {t("Вся лента с фильтрами →")}
         </Link>
       </section>
 

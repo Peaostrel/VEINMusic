@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { jsonRequest, qualityRequest } from "@/app/lib/qualityApi";
 import { btn, input } from "@/components/ui";
+import { useT } from "@/app/lib/i18n/client";
+import { tr } from "@/app/lib/i18n/active";
 
 interface Listen {
   id: number;
@@ -27,6 +29,7 @@ interface Preview {
 type Action = "exclude" | "restore" | "delete" | "edit";
 
 export default function HistoryManager() {
+  const t = useT();
   const [page, setPage] = useState<Page>({ items: [], next_cursor: null });
   const [q, setQ] = useState("");
   const [source, setSource] = useState("");
@@ -66,7 +69,7 @@ export default function HistoryManager() {
         .catch((cause: unknown) => {
           if (!controller.signal.aborted)
             setMessage(
-              cause instanceof Error ? cause.message : "Ошибка загрузки",
+              cause instanceof Error ? cause.message : tr("Ошибка загрузки"),
             );
         });
     }, 250);
@@ -97,7 +100,7 @@ export default function HistoryManager() {
           jsonRequest("POST", {}),
         );
         setUndo(null);
-        setMessage("Изменение отменено.");
+        setMessage(t("Изменение отменено."));
         setRevision((value) => value + 1);
       } else {
         const result = await qualityRequest<{ count: number; undo_id: string }>(
@@ -107,7 +110,9 @@ export default function HistoryManager() {
         setUndo(result.undo_id);
         setPreview(null);
         setMessage(
-          `Изменено записей: ${result.count}. Отмена доступна 24 часа.`,
+          t("Изменено записей: {n}. Отмена доступна 24 часа.", {
+            n: result.count,
+          }),
         );
         setRevision((value) => value + 1);
       }
@@ -115,7 +120,7 @@ export default function HistoryManager() {
       setMessage(
         cause instanceof Error
           ? cause.message
-          : "Не удалось выполнить действие",
+          : t("Не удалось выполнить действие"),
       );
     } finally {
       setBusy(false);
@@ -128,13 +133,15 @@ export default function HistoryManager() {
   };
   return (
     <section className="space-y-4">
-      <h2 className="text-lg font-semibold">История и зачёт прослушиваний</h2>
+      <h2 className="text-lg font-semibold">
+        {t("История и зачёт прослушиваний")}
+      </h2>
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="text-sm">
-          <span>Поиск</span>
+          <span>{t("Поиск")}</span>
           <input
             autoComplete="off"
-            aria-label="Поиск в истории"
+            aria-label={t("Поиск в истории")}
             className={input}
             value={q}
             onChange={(event) => {
@@ -144,11 +151,11 @@ export default function HistoryManager() {
           />
         </label>
         <label className="text-sm">
-          <span>Источник</span>
+          <span>{t("Источник")}</span>
           <input
             autoComplete="off"
-            aria-label="Источник истории"
-            placeholder="Точное название из записи"
+            aria-label={t("Источник истории")}
+            placeholder={t("Точное название из записи")}
             className={input}
             value={source}
             onChange={(event) => {
@@ -158,7 +165,7 @@ export default function HistoryManager() {
           />
         </label>
         <label className="text-sm">
-          <span>Состояние</span>
+          <span>{t("Состояние")}</span>
           <select
             className={input}
             value={status}
@@ -167,15 +174,15 @@ export default function HistoryManager() {
               reset();
             }}
           >
-            <option value="all">Все</option>
-            <option value="counted">Засчитанные</option>
-            <option value="incomplete">Незавершённые</option>
-            <option value="excluded">Исключённые</option>
-            <option value="metadata">Без полных метаданных</option>
+            <option value="all">{t("Все")}</option>
+            <option value="counted">{t("Засчитанные")}</option>
+            <option value="incomplete">{t("Незавершённые")}</option>
+            <option value="excluded">{t("Исключённые")}</option>
+            <option value="metadata">{t("Без полных метаданных")}</option>
           </select>
         </label>
         <label className="text-sm">
-          <span>С даты</span>
+          <span>{t("С даты")}</span>
           <input
             type="date"
             className={input}
@@ -187,7 +194,7 @@ export default function HistoryManager() {
           />
         </label>
         <label className="text-sm">
-          <span>По дату</span>
+          <span>{t("По дату")}</span>
           <input
             type="date"
             className={input}
@@ -210,7 +217,7 @@ export default function HistoryManager() {
             void perform("undo");
           }}
         >
-          Отменить изменение
+          {t("Отменить изменение")}
         </button>
       )}
       <label className="flex gap-2 text-sm">
@@ -226,13 +233,13 @@ export default function HistoryManager() {
             setPreview(null);
           }}
         />{" "}
-        Выбрать записи этой страницы
+        {t("Выбрать записи этой страницы")}
       </label>
       <div className="divide-y divide-line rounded-xl border border-line">
         {page.items.map((item) => (
           <label key={item.id} className="flex items-start gap-3 p-4">
             <input
-              aria-label={`Выбрать ${item.track.title}`}
+              aria-label={t("Выбрать {title}", { title: item.track.title })}
               type="checkbox"
               checked={selected.includes(item.id)}
               onChange={(event) => {
@@ -249,21 +256,30 @@ export default function HistoryManager() {
                 {item.track.artist} — {item.track.title}
               </span>
               <span className="block text-xs text-fg-3">
-                {new Date(item.played_at).toLocaleString("ru-RU")} ·{" "}
-                {item.confirmed_sources.join(", ")}
+                {new Date(item.played_at).toLocaleString(t.locale)} ·{" "}
+                {item.confirmed_sources
+                  .map((value) => {
+                    // "<source> · клиент|облако|живое подключение"
+                    const [name, kind] = value.split(" · ");
+                    return kind ? `${name} · ${t(kind)}` : value;
+                  })
+                  .join(", ")}
               </span>
               <span className="block text-sm">
-                {item.status.label} · {item.status.listened_sec} /{" "}
-                {item.status.required_sec} с
+                {t(item.status.label)} ·{" "}
+                {t("{listened} / {required} с", {
+                  listened: item.status.listened_sec,
+                  required: item.status.required_sec,
+                })}
               </span>
               <span className="block text-xs text-fg-3">
-                {item.status.explanation}
+                {t(item.status.explanation)}
               </span>
             </span>
           </label>
         ))}
         {!page.items.length && (
-          <p className="p-4 text-sm">Записей не найдено.</p>
+          <p className="p-4 text-sm">{t("Записей не найдено.")}</p>
         )}
       </div>
       <div className="flex flex-wrap gap-3">
@@ -275,7 +291,7 @@ export default function HistoryManager() {
               setSelected([]);
             }}
           >
-            К последним
+            {t("К последним")}
           </button>
         )}
         {page.next_cursor && (
@@ -286,14 +302,14 @@ export default function HistoryManager() {
               setSelected([]);
             }}
           >
-            Следующие 50
+            {t("Следующие 50")}
           </button>
         )}
       </div>
       <div className="space-y-3 rounded-xl border border-line bg-surface p-4">
-        <p>Выбрано: {selected.length}</p>
+        <p>{t("Выбрано: {n}", { n: selected.length })}</p>
         <label>
-          <span>Действие</span>
+          <span>{t("Действие")}</span>
           <select
             className={input}
             value={action}
@@ -302,16 +318,16 @@ export default function HistoryManager() {
               setPreview(null);
             }}
           >
-            <option value="exclude">Исключить из статистики</option>
-            <option value="restore">Вернуть в статистику</option>
-            <option value="delete">Удалить</option>
-            <option value="edit">Исправить метаданные</option>
+            <option value="exclude">{t("Исключить из статистики")}</option>
+            <option value="restore">{t("Вернуть в статистику")}</option>
+            <option value="delete">{t("Удалить")}</option>
+            <option value="edit">{t("Исправить метаданные")}</option>
           </select>
         </label>
         {action === "edit" && (
           <div className="grid gap-3 sm:grid-cols-2">
             <label>
-              <span>Новое название</span>
+              <span>{t("Новое название")}</span>
               <input
                 autoComplete="off"
                 className={input}
@@ -323,7 +339,7 @@ export default function HistoryManager() {
               />
             </label>
             <label>
-              <span>Новый исполнитель</span>
+              <span>{t("Новый исполнитель")}</span>
               <input
                 autoComplete="off"
                 className={input}
@@ -343,13 +359,14 @@ export default function HistoryManager() {
             void perform("preview");
           }}
         >
-          Предварительный просмотр
+          {t("Предварительный просмотр")}
         </button>
         {preview && (
           <div className="space-y-3">
             <p>
-              Будет изменено записей: {preview.count}. Отмена — в течение 24
-              часов.
+              {t("Будет изменено записей: {n}. Отмена — в течение 24 часов.", {
+                n: preview.count,
+              })}
             </p>
             <ul className="text-sm">
               {preview.sample.map((item) => (
@@ -365,7 +382,7 @@ export default function HistoryManager() {
                 void perform("apply");
               }}
             >
-              Применить к {preview.count} записям
+              {t("Применить к {n} записям", { n: preview.count })}
             </button>
           </div>
         )}

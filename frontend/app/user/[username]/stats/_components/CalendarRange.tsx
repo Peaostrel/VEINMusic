@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiJson } from "@/app/lib/api";
 import { btn, input } from "@/components/ui";
+import { useT } from "@/app/lib/i18n/client";
 
 interface Range {
   scrobbles: number;
@@ -21,6 +22,7 @@ export default function CalendarRange({
   username,
   date,
 }: Readonly<{ username: string; date: string }>) {
+  const t = useT();
   const [from, setFrom] = useState(date);
   const [to, setTo] = useState(date);
   const [data, setData] = useState<Range | null>(null);
@@ -45,14 +47,14 @@ export default function CalendarRange({
           setError(
             cause instanceof Error
               ? cause.message
-              : "Не удалось загрузить историю",
+              : t("Не удалось загрузить историю"),
           );
       })
       .finally(() => {
         if (!controller.signal.aborted) setBusy(false);
       });
     return () => controller.abort();
-  }, [path, from, to]);
+  }, [path, from, to, t]);
   const more = async () => {
     if (!data?.next) return;
     setBusy(true);
@@ -60,7 +62,7 @@ export default function CalendarRange({
       const result = await apiJson<Range>(`${path}&before=${data.next}`);
       setData({ ...result, history: [...data.history, ...result.history] });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Ошибка загрузки");
+      setError(cause instanceof Error ? cause.message : t("Ошибка загрузки"));
     } finally {
       setBusy(false);
     }
@@ -71,15 +73,16 @@ export default function CalendarRange({
       aria-labelledby="calendar-range-title"
     >
       <h3 id="calendar-range-title" className="font-semibold">
-        История выбранного периода
+        {t("История выбранного периода")}
       </h3>
       <p className="text-xs text-fg-3">
-        Выберите один день или период до 366 дней. Даты учитывают часовой пояс
-        владельца профиля.
+        {t(
+          "Выберите один день или период до 366 дней. Даты учитывают часовой пояс владельца профиля.",
+        )}
       </p>
       <div className="grid grid-cols-2 gap-3">
         <label className="text-sm">
-          <span>Начало периода</span>
+          <span>{t("Начало периода")}</span>
           <input
             type="date"
             min="2000-01-01"
@@ -89,7 +92,7 @@ export default function CalendarRange({
           />
         </label>
         <label className="text-sm">
-          <span>Конец периода</span>
+          <span>{t("Конец периода")}</span>
           <input
             type="date"
             min={from}
@@ -100,14 +103,17 @@ export default function CalendarRange({
         </label>
       </div>
       <output aria-live="polite" className="block text-sm">
-        {error || (busy ? "Загружаем историю…" : "")}
+        {error || (busy ? t("Загружаем историю…") : "")}
       </output>
       {data && (
         <>
           <p className="text-sm">
-            {data.scrobbles} прослушиваний · {data.minutes} минут
+            {t("{plays} прослушиваний · {minutes} минут", {
+              plays: data.scrobbles,
+              minutes: data.minutes,
+            })}
           </p>
-          <h4 className="text-sm font-medium">Топ исполнителей</h4>
+          <h4 className="text-sm font-medium">{t("Топ исполнителей")}</h4>
           <ul className="flex flex-wrap gap-3 text-sm text-fg-2">
             {data.artists.map((artist) => (
               <li key={artist.artist}>
@@ -123,7 +129,7 @@ export default function CalendarRange({
               >
                 {row.track.artist} — {row.track.title}
                 <span className="block text-xs text-fg-3">
-                  {new Date(row.played_at).toLocaleString("ru-RU")} ·{" "}
+                  {new Date(row.played_at).toLocaleString(t.locale)} ·{" "}
                   {row.source}
                 </span>
               </li>
@@ -131,7 +137,7 @@ export default function CalendarRange({
           </ol>
           {!data.history.length && (
             <p className="text-sm text-fg-3">
-              В выбранном периоде нет засчитанных прослушиваний.
+              {t("В выбранном периоде нет засчитанных прослушиваний.")}
             </p>
           )}
           {data.next && (
@@ -142,7 +148,7 @@ export default function CalendarRange({
                 void more();
               }}
             >
-              Показать ещё
+              {t("Показать ещё")}
             </button>
           )}
         </>

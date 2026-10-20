@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { apiJson } from "@/app/lib/api";
 import { AccountUsername } from "@/components/autofill";
 import { btn, input, label } from "@/components/ui";
+import { useT } from "@/app/lib/i18n/client";
 
 type Settings = {
   configured: boolean;
@@ -12,6 +13,7 @@ type Settings = {
   messages_enabled: boolean;
 };
 export default function EmailSettings() {
+  const t = useT();
   const [data, setData] = useState<Settings | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -31,34 +33,38 @@ export default function EmailSettings() {
         method,
         json,
       });
-      setMessage(result.message);
+      setMessage(t(result.message));
       setPassword("");
       setOtp("");
       await load();
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Ошибка сети");
+      setMessage(e instanceof Error ? e.message : t("Ошибка сети"));
     } finally {
       setBusy(false);
     }
   }
   return (
     <section className="space-y-4 rounded-xl border border-line bg-surface p-6">
-      <h3 className="font-semibold">Почта и письма</h3>
-      {!data && !message && <p>Загружаем…</p>}
+      <h3 className="font-semibold">{t("Почта и письма")}</h3>
+      {!data && !message && <p>{t("Загружаем…")}</p>}
       {data && (
         <>
           <p className="text-sm text-fg-2">
             {data.email
-              ? `Подтверждённый адрес: ${data.email}`
-              : "Привяжите почту для восстановления пароля и предупреждений о новых входах."}
+              ? t("Подтверждённый адрес: {email}", { email: data.email })
+              : t(
+                  "Привяжите почту для восстановления пароля и предупреждений о новых входах.",
+                )}
           </p>
           {!data.configured && (
             <p className="text-sm text-fg-2">
-              Отправка писем пока не подключена.
+              {t("Отправка писем пока не подключена.")}
             </p>
           )}
           {data.pending_email && (
-            <p className="text-sm">Ждём подтверждения: {data.pending_email}</p>
+            <p className="text-sm">
+              {t("Ждём подтверждения: {email}", { email: data.pending_email })}
+            </p>
           )}
           {data.email && (
             <div className="space-y-2">
@@ -74,7 +80,7 @@ export default function EmailSettings() {
                     })
                   }
                 />
-                <span>Предупреждать о входах с новых устройств</span>
+                <span>{t("Предупреждать о входах с новых устройств")}</span>
               </label>
               <label className="flex gap-2 text-sm">
                 <input
@@ -88,7 +94,7 @@ export default function EmailSettings() {
                     })
                   }
                 />
-                <span>Получать письма от администрации VEIN</span>
+                <span>{t("Получать письма от администрации VEIN")}</span>
               </label>
             </div>
           )}
@@ -101,7 +107,7 @@ export default function EmailSettings() {
           >
             <AccountUsername />
             <label className={label}>
-              <span>Адрес почты</span>
+              <span>{t("Адрес почты")}</span>
               <input
                 className={`${input} mt-1`}
                 type="email"
@@ -116,7 +122,7 @@ export default function EmailSettings() {
               />
             </label>
             <label className={label}>
-              <span>Текущий пароль</span>
+              <span>{t("Текущий пароль")}</span>
               <input
                 className={`${input} mt-1`}
                 type="password"
@@ -129,7 +135,7 @@ export default function EmailSettings() {
               />
             </label>
             <label className={label}>
-              <span>Код 2FA, если защита включена</span>
+              <span>{t("Код 2FA, если защита включена")}</span>
               <input
                 className={`${input} mt-1`}
                 name="one-time-code"
@@ -146,7 +152,7 @@ export default function EmailSettings() {
                 className={`${btn.primary} ${btn.md}`}
                 disabled={busy || !data.configured}
               >
-                Отправить подтверждение
+                {t("Отправить подтверждение")}
               </button>
               {(data.email || data.pending_email) && (
                 <button
@@ -156,13 +162,15 @@ export default function EmailSettings() {
                   onClick={() => {
                     if (
                       confirm(
-                        "Отвязать почту? Восстановление пароля по ней станет недоступно.",
+                        t(
+                          "Отвязать почту? Восстановление пароля по ней станет недоступно.",
+                        ),
                       )
                     )
                       void act("DELETE", { password, otp_code: otp || null });
                   }}
                 >
-                  Отвязать
+                  {t("Отвязать")}
                 </button>
               )}
             </div>

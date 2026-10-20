@@ -36,6 +36,7 @@ function getPlatformSource(hostname) {
         return 'soundcloud';
     }
     if (isHostOrSubdomain(hostname, 'music.apple.com')) return 'apple_music';
+    if (isHostOrSubdomain(hostname, 'zvuk.com')) return 'zvuk';
     if (isHostOrSubdomain(hostname, 'vk.com') || isHostOrSubdomain(hostname, 'vk.ru')) {
         const isVideoPlaying = Array.from(document.querySelectorAll('video')).some(v => !v.paused && v.offsetHeight > 150 && v.offsetWidth > 150);
         if (!isVideoPlaying) return 'vk';

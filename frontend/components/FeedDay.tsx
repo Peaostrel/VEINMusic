@@ -1,9 +1,11 @@
+import { currentLocale } from "@/app/lib/i18n/active";
+
 /** Group successive feed records by their date in the viewer's timezone. */
 export function feedDay(value?: string): string | null {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString("ru-RU", {
+  return date.toLocaleDateString(currentLocale(), {
     day: "numeric",
     month: "long",
     year: "numeric",

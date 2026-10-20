@@ -5,10 +5,12 @@ import { useState } from "react";
 import { API_URL, apiJson } from "@/app/lib/api";
 import {
   historyBatches,
-  readHistoryFile,
+  MAX_TRANSFER_BATCHES,
+  readHistoryFiles,
   sequentialMap,
 } from "@/app/lib/historyTransfer";
 import { btn, input, PageHeader } from "@/components/ui";
+import { useT } from "@/app/lib/i18n/client";
 
 interface Preview {
   new: number;
@@ -22,7 +24,8 @@ interface Batch {
 }
 
 export default function TransferPage() {
-  const [file, setFile] = useState<File | null>(null);
+  const t = useT();
+  const [files, setFiles] = useState<File[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -33,13 +36,20 @@ export default function TransferPage() {
     ...(exportTo ? { date_to: exportTo } : {}),
   }).toString();
   const preview = async () => {
-    if (!file) return;
+    if (!files.length) return;
     setBusy(true);
     setBatches([]);
-    setMessage("Проверяем файл…");
+    setMessage(t("Читаем файлы…"));
     try {
-      const rows = await readHistoryFile(file);
+      const rows = await readHistoryFiles(files, t);
       const chunks = historyBatches(rows);
+      if (chunks.length > MAX_TRANSFER_BATCHES)
+        throw new Error(
+          t(
+            "За один перенос помещается {max} частей, а здесь {count}. Выберите меньше файлов и перенесите остальное следующим заходом.",
+            { max: MAX_TRANSFER_BATCHES, count: chunks.length },
+          ),
+        );
       let checked = 0;
       const results = await sequentialMap(
         chunks,
@@ -49,17 +59,24 @@ export default function TransferPage() {
             { method: "POST", json: { scrobbles: chunk } },
           );
           checked += chunk.length;
-          setMessage(`Проверено ${checked} из ${rows.length}`);
+          setMessage(
+            t("Проверено {checked} из {total}", {
+              checked,
+              total: rows.length,
+            }),
+          );
           return { rows: chunk, preview };
         },
       );
       setBatches(results);
       setMessage(
-        "Проверьте образец и подтвердите импорт. Предпросмотр действует 15 минут.",
+        t(
+          "Проверьте образец и подтвердите импорт. Предпросмотр действует 15 минут.",
+        ),
       );
     } catch (cause) {
       setMessage(
-        cause instanceof Error ? cause.message : "Не удалось прочитать файл",
+        cause instanceof Error ? cause.message : t("Не удалось прочитать файл"),
       );
     } finally {
       setBusy(false);
@@ -69,6 +86,7 @@ export default function TransferPage() {
     setBusy(true);
     let imported = 0;
     let duplicates = 0;
+    let done = 0;
     try {
       await sequentialMap(batches, async (batch) => {
         const result = await apiJson<{ imported: number; duplicates: number }>(
@@ -83,16 +101,32 @@ export default function TransferPage() {
         );
         imported += result.imported;
         duplicates += result.duplicates;
-        setMessage(`Перенесено ${imported}, пропущено дублей ${duplicates}…`);
+        done += 1;
+        setMessage(
+          t("Перенесено {imported}, пропущено дублей {duplicates}…", {
+            imported,
+            duplicates,
+          }),
+        );
       });
       setBatches([]);
       setMessage(
-        `Импорт завершён: ${imported} новых прослушиваний, ${duplicates} дублей пропущено.`,
+        t(
+          "Импорт завершён: {imported} новых прослушиваний, {duplicates} дублей пропущено.",
+          { imported, duplicates },
+        ),
       );
     } catch (cause) {
-      setBatches([]);
+      // Keep what is left, so a retry does not resend finished parts
+      setBatches(batches.slice(done));
       setMessage(
-        `Уже перенесено: ${imported}. ${cause instanceof Error ? cause.message : "Ошибка импорта"} Проверьте файл и повторите: уже добавленные записи будут пропущены.`,
+        t(
+          "Уже перенесено: {imported}. {error} Нажмите «Подтвердить импорт» ещё раз, чтобы продолжить, или проверьте файлы заново: уже добавленные записи будут пропущены.",
+          {
+            imported,
+            error: cause instanceof Error ? cause.message : t("Ошибка импорта"),
+          },
+        ),
       );
     } finally {
       setBusy(false);
@@ -101,17 +135,19 @@ export default function TransferPage() {
   return (
     <main className="mx-auto max-w-[800px] space-y-6 px-4 py-8 sm:px-8">
       <PageHeader
-        title="Перенос истории"
-        subtitle="Выгрузка и восстановление собственной музыкальной истории"
+        title={t("Перенос истории")}
+        subtitle={t(
+          "Выгрузка и восстановление собственной музыкальной истории",
+        )}
       />
       <Link href="/library" className="text-sm text-accent">
-        ← Библиотека
+        {t("← Библиотека")}
       </Link>
       <section className="space-y-3 rounded-xl border border-line p-4">
-        <h2 className="font-semibold">Скачать данные</h2>
+        <h2 className="font-semibold">{t("Скачать данные")}</h2>
         <div className="grid grid-cols-2 gap-3">
           <label>
-            <span>CSV с даты</span>
+            <span>{t("CSV с даты")}</span>
             <input
               className={input}
               type="date"
@@ -120,7 +156,7 @@ export default function TransferPage() {
             />
           </label>
           <label>
-            <span>CSV по дату</span>
+            <span>{t("CSV по дату")}</span>
             <input
               className={input}
               type="date"
@@ -134,68 +170,106 @@ export default function TransferPage() {
             className={`${btn.secondary} ${btn.md}`}
             href={`${API_URL}/api/account/export`}
           >
-            Все данные JSON
+            {t("Все данные JSON")}
           </a>
           <a
             className={`${btn.secondary} ${btn.md}`}
             href={`${API_URL}/api/account/history.csv?${exportQuery}`}
           >
-            История CSV
+            {t("История CSV")}
           </a>
         </div>
         <p className="text-xs text-fg-3">
-          История передаётся потоком. Исключённые записи сохраняются с отметкой;
-          удалённые записи не выгружаются. Для большой истории скачивайте CSV по
-          месяцам или годам; JSON содержит весь аккаунт.
+          {t(
+            "История передаётся потоком. Исключённые записи сохраняются с отметкой; удалённые записи не выгружаются. Для большой истории скачивайте CSV по месяцам или годам; JSON содержит весь аккаунт.",
+          )}
         </p>
       </section>
       <section className="space-y-4 rounded-xl border border-line p-4">
-        <h2 className="font-semibold">Импортировать историю VEIN</h2>
+        <h2 className="font-semibold">{t("Импортировать историю")}</h2>
         <p className="text-sm text-fg-2">
-          JSON или CSV, до 20 МБ и 50 000 записей за один перенос. Импорт
-          сохраняет даты, источник и отметки исключения. XP и награды за него не
-          начисляются; настройки аккаунта не меняются.
+          {t(
+            "Подходят выгрузка VEIN (JSON или CSV), архив Spotify и экспорт ListenBrainz. Можно выбрать сразу несколько файлов или ZIP целиком, до 100 000 прослушиваний за один перенос. Повторы пропускаются, XP и награды за импорт не начисляются.",
+          )}
         </p>
+        <details className="text-sm text-fg-2">
+          <summary className="cursor-pointer text-fg">
+            {t("Где взять историю Spotify и ListenBrainz")}
+          </summary>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            <li>
+              {t("Spotify: в")}{" "}
+              <a
+                className="text-accent"
+                href="https://www.spotify.com/account/privacy/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                {t("настройках приватности")}
+              </a>{" "}
+              {t(
+                "запросите «Extended streaming history». Архив придёт на почту через несколько дней; загрузите его сюда без распаковки. Прослушивания короче 30 секунд, подкасты и видео не переносятся.",
+              )}
+            </li>
+            <li>
+              {t("ListenBrainz: на")}{" "}
+              <a
+                className="text-accent"
+                href="https://listenbrainz.org/settings/export/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                {t("странице экспорта")}
+              </a>{" "}
+              {t("скачайте архив прослушиваний и загрузите его сюда.")}
+            </li>
+            <li>
+              {t(
+                "Last.fm переносится отдельно, через подключение в настройках.",
+              )}
+            </li>
+          </ul>
+        </details>
         <label className="block">
-          <span>Файл истории</span>
+          <span>{t("Файлы истории")}</span>
           <input
             type="file"
-            accept=".json,.csv,application/json,text/csv"
+            multiple
+            accept=".json,.jsonl,.csv,.zip,application/json,text/csv,application/zip"
             disabled={busy}
             className={`${input} mt-2 h-auto py-3`}
             onChange={(event) => {
-              setFile(event.target.files?.[0] ?? null);
+              setFiles(Array.from(event.target.files ?? []));
               setBatches([]);
               setMessage("");
             }}
           />
         </label>
         <button
-          disabled={!file || busy}
+          disabled={!files.length || busy}
           className={`${btn.secondary} ${btn.md}`}
           onClick={() => {
             void preview();
           }}
         >
-          Проверить файл
+          {t("Проверить файлы")}
         </button>
         {!!batches.length && (
           <div className="space-y-3">
             <p>
-              Новых:{" "}
-              {batches.reduce((sum, batch) => sum + batch.preview.new, 0)}.
-              Дублей:{" "}
-              {batches.reduce(
-                (sum, batch) => sum + batch.preview.duplicates,
-                0,
-              )}
-              .
+              {t("Новых: {n}. Дублей: {d}.", {
+                n: batches.reduce((sum, batch) => sum + batch.preview.new, 0),
+                d: batches.reduce(
+                  (sum, batch) => sum + batch.preview.duplicates,
+                  0,
+                ),
+              })}
             </p>
             <ul className="space-y-2 text-sm">
               {batches[0].preview.sample.map((row, index) => (
                 <li className="break-words" key={`${row.played_at}-${index}`}>
                   {row.artist} — {row.title} ·{" "}
-                  {new Date(row.played_at).toLocaleString("ru-RU")}
+                  {new Date(row.played_at).toLocaleString(t.locale)}
                 </li>
               ))}
             </ul>
@@ -206,7 +280,7 @@ export default function TransferPage() {
                 void apply();
               }}
             >
-              Подтвердить импорт
+              {t("Подтвердить импорт")}
             </button>
           </div>
         )}

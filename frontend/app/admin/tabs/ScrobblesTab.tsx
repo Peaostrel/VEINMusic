@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/app/lib/i18n/client";
 import { useState } from "react";
 import { Check, ListMusic, Pencil, Trash2, UserRound, X } from "lucide-react";
 import type { AdminScrobble, BulkDeleteResult, ScrobblePage } from "../types";
@@ -43,6 +44,7 @@ function Row({
   onChanged: () => void;
   run: ReturnType<typeof useNotice>["run"];
 }>) {
+  const t = useT();
   const [editing, setEditing] = useState(false);
   const [artist, setArtist] = useState(s.artist);
   const [title, setTitle] = useState(s.title);
@@ -55,7 +57,7 @@ function Row({
             method: "PUT",
             json: { title, artist },
           }),
-        "Трек исправлен",
+        t("Трек исправлен"),
       )
     ) {
       setEditing(false);
@@ -66,7 +68,14 @@ function Row({
   const remove = async () => {
     if (
       !confirm(
-        `Удалить прослушивание @${s.username}: «${s.artist} — ${s.title}»? Опыт за него (${s.xp_earned} XP) пропадёт.`,
+        t(
+          "Удалить прослушивание @{username}: «{track}»? Опыт за него ({xp} XP) пропадёт.",
+          {
+            username: s.username,
+            track: `${s.artist} — ${s.title}`,
+            xp: s.xp_earned,
+          },
+        ),
       )
     )
       return;
@@ -74,7 +83,7 @@ function Row({
       await run(
         () =>
           adminRequest(`/api/admin/scrobbles/${s.id}`, { method: "DELETE" }),
-        "Прослушивание удалено",
+        t("Прослушивание удалено"),
       )
     )
       onChanged();
@@ -98,14 +107,14 @@ function Row({
               autoComplete="off"
               value={artist}
               onChange={(e) => setArtist(e.target.value)}
-              aria-label="Исполнитель"
+              aria-label={t("Исполнитель")}
               className={inputClass}
             />
             <input
               autoComplete="off"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              aria-label="Название"
+              aria-label={t("Название")}
               className={inputClass}
             />
           </div>
@@ -126,12 +135,12 @@ function Row({
         </button>
         <span className="rounded bg-surface-2 px-1.5 font-mono text-[11px]">
           {s.source ?? "—"}
-          {s.is_imported && " · импорт"}
+          {s.is_imported && ` · ${t("импорт")}`}
         </span>
         <span className="font-mono">{formatDateTime(s.played_at)}</span>
         <span
           className={`font-mono ${s.counted ? "text-ok" : "text-fg-3"}`}
-          title={s.counted ? "Засчитано" : "Не засчитано (меньше 85%)"}
+          title={s.counted ? t("Засчитано") : t("Не засчитано (меньше 85%)")}
         >
           {mmss(s.listened_sec)} / {s.duration ? mmss(s.duration) : "?"}
           {s.counted && ` · ${s.xp_earned} XP`}
@@ -146,13 +155,13 @@ function Row({
               className={buttonClass.primary}
             >
               <Check className="h-3.5 w-3.5" aria-hidden="true" />
-              Сохранить
+              {t("Сохранить")}
             </button>
             <button
               type="button"
               onClick={() => setEditing(false)}
               className={buttonClass.secondary}
-              aria-label="Отмена"
+              aria-label={t("Отмена")}
             >
               <X className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
@@ -163,8 +172,8 @@ function Row({
               type="button"
               onClick={() => setEditing(true)}
               className={buttonClass.secondary}
-              title="Исправить трек"
-              aria-label="Исправить трек"
+              title={t("Исправить трек")}
+              aria-label={t("Исправить трек")}
             >
               <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
@@ -172,8 +181,8 @@ function Row({
               type="button"
               onClick={remove}
               className={buttonClass.danger}
-              title="Удалить"
-              aria-label="Удалить"
+              title={t("Удалить")}
+              aria-label={t("Удалить")}
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
@@ -189,6 +198,7 @@ function BulkDelete({
   filters,
   onDone,
 }: Readonly<{ filters: Filters; onDone: () => void }>) {
+  const t = useT();
   const [preview, setPreview] = useState<BulkDeleteResult | null>(null);
   const { notice, setNotice, run } = useNotice();
   const body = {
@@ -207,13 +217,16 @@ function BulkDelete({
           { method: "POST", json: { ...body, dry_run: true } },
         ),
       );
-    }, "Посчитано");
+    }, t("Посчитано"));
 
   const remove = async () => {
     if (!preview) return;
     if (
       !confirm(
-        `Удалить ${preview.matched} прослушиваний @${filters.username}? Пропадёт ${preview.xp} XP. Это необратимо.`,
+        t(
+          "Удалить {n} прослушиваний @{username}? Пропадёт {xp} XP. Это необратимо.",
+          { n: preview.matched, username: filters.username, xp: preview.xp },
+        ),
       )
     )
       return;
@@ -223,20 +236,20 @@ function BulkDelete({
         { method: "POST", json: { ...body, dry_run: false } },
       );
       setPreview(null);
-      setNotice(`✅ Удалено: ${r.deleted}`);
+      setNotice(`✅ ${t("Удалено: {n}", { n: r.deleted })}`);
       onDone();
-    }, "Удалено");
+    }, t("Удалено"));
   };
 
   return (
     <div className={panelClass}>
       <PanelTitle icon={<Trash2 aria-hidden="true" />}>
-        Массовое удаление
+        {t("Массовое удаление")}
       </PanelTitle>
       <p className="text-xs text-fg-2">
-        Удаляет прослушивания одного пользователя по фильтрам выше: текст,
-        источник и период. Например, фантомные треки после бага. Сначала
-        посчитайте, сколько попадёт под удаление.
+        {t(
+          "Удаляет прослушивания одного пользователя по фильтрам выше: текст, источник и период. Например, фантомные треки после бага. Сначала посчитайте, сколько попадёт под удаление.",
+        )}
       </p>
       {filters.username ? (
         <div className="flex flex-wrap items-center gap-2">
@@ -245,12 +258,12 @@ function BulkDelete({
             onClick={count}
             className={buttonClass.secondary}
           >
-            Посчитать для @{filters.username}
+            {t("Посчитать для @{username}", { username: filters.username })}
           </button>
           {preview && (
             <>
               <span className="font-mono text-xs text-fg-2">
-                найдено {preview.matched} · {preview.xp} XP
+                {t("найдено {n}", { n: preview.matched })} · {preview.xp} XP
               </span>
               {preview.matched > 0 && (
                 <button
@@ -258,7 +271,7 @@ function BulkDelete({
                   onClick={remove}
                   className={buttonClass.danger}
                 >
-                  Удалить {preview.matched}
+                  {t("Удалить {n}", { n: preview.matched })}
                 </button>
               )}
             </>
@@ -266,8 +279,9 @@ function BulkDelete({
         </div>
       ) : (
         <p className="text-xs text-fg-3">
-          Укажите пользователя в фильтре — удалять можно только у одного
-          пользователя за раз.
+          {t(
+            "Укажите пользователя в фильтре — удалять можно только у одного пользователя за раз.",
+          )}
         </p>
       )}
       <Notice text={notice} />
@@ -283,6 +297,7 @@ export default function ScrobblesTab({
   onOpenUser: (username: string) => void;
   initialUsername?: string;
 }>) {
+  const t = useT();
   const [filters, setFilters] = useState<Filters>({
     username: initialUsername,
     q: "",
@@ -305,7 +320,7 @@ export default function ScrobblesTab({
     <div className="space-y-4">
       <div className={panelClass}>
         <PanelTitle icon={<ListMusic aria-hidden="true" />}>
-          Прослушивания
+          {t("Прослушивания")}
           {data && (
             <span className="font-mono text-xs font-normal text-fg-3">
               {data.total}
@@ -314,33 +329,33 @@ export default function ScrobblesTab({
         </PanelTitle>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <label>
-            <span className={labelClass}>Пользователь</span>
+            <span className={labelClass}>{t("Пользователь")}</span>
             <input
               autoComplete="off"
               value={filters.username}
               onChange={(e) => set("username")(e.target.value.trim())}
-              placeholder="ник"
+              placeholder={t("ник")}
               className={inputClass}
             />
           </label>
           <label>
-            <span className={labelClass}>Трек или исполнитель</span>
+            <span className={labelClass}>{t("Трек или исполнитель")}</span>
             <input
               autoComplete="off"
               value={filters.q}
               onChange={(e) => set("q")(e.target.value)}
-              placeholder="поиск"
+              placeholder={t("поиск")}
               className={inputClass}
             />
           </label>
           <label>
-            <span className={labelClass}>Источник</span>
+            <span className={labelClass}>{t("Источник")}</span>
             <select
               value={filters.source}
               onChange={(e) => set("source")(e.target.value)}
               className={inputClass}
             >
-              <option value="">Все</option>
+              <option value="">{t("Все")}</option>
               {(data?.sources ?? []).map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -349,7 +364,7 @@ export default function ScrobblesTab({
             </select>
           </label>
           <label>
-            <span className={labelClass}>С</span>
+            <span className={labelClass}>{t("С")}</span>
             <input
               type="date"
               value={filters.date_from}
@@ -358,7 +373,7 @@ export default function ScrobblesTab({
             />
           </label>
           <label>
-            <span className={labelClass}>По</span>
+            <span className={labelClass}>{t("По")}</span>
             <input
               type="date"
               value={filters.date_to}
@@ -382,7 +397,7 @@ export default function ScrobblesTab({
         ))}
         {!loading && data?.items.length === 0 && (
           <li className="py-6 text-center text-xs text-fg-2">
-            Ничего не найдено
+            {t("Ничего не найдено")}
           </li>
         )}
       </ul>

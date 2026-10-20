@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.constants import USER_AGENT_MOZILLA, YANDEX_MUSIC_DOMAIN
 from app.core.cover_urls import public_cover_url
+from app.core.i18n import request_lang, tr
 from app.core.rate_limit import HEAVY_READ_LIMIT, OUTBOUND_LIMIT, limiter
 from app.core.security import get_current_user
 from app.database import get_db
@@ -114,7 +115,7 @@ def get_recommendations(
     recs = db.execute(sql, {"twins": twin_names, "my_id": user.id}).fetchall()
     # Raw SQL skips the TrackCoverURL column type: proxy partner artwork here
     data = [{"artist": r[0], "cover_url": public_cover_url(r[1]),
-             "reason": "Слушают ваши вкусовые близнецы"} for r in recs]
+             "reason": tr(request_lang(request), "Слушают ваши вкусовые близнецы")} for r in recs]
     return data
 
 
@@ -241,7 +242,7 @@ def get_user_taste_compatibility(
     u1 = _get_visible_user(username, request, db, "statistics")
     u2 = _get_visible_user(target_username, request, db, "statistics")
 
-    result = calculate_compatibility(int(u1.id), int(u2.id), db)
+    result = calculate_compatibility(int(u1.id), int(u2.id), db, request_lang(request))
     return {
         "user1": username,
         "user2": target_username,
@@ -266,11 +267,12 @@ def get_user_recommendations(
 
     user = _get_visible_user(username, request, db, "statistics")
 
-    return generate_smart_recommendations(user, db, limit=limit, use_feedback=False)
+    return generate_smart_recommendations(user, db, limit=limit, use_feedback=False, lang=request_lang(request))
 
 
 @router.get("/api/recommendations/me")
 def get_my_recommendations(
+    request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
     limit: Annotated[int, Query(ge=1, le=50)] = 15,
@@ -281,4 +283,5 @@ def get_my_recommendations(
     """Get personalized smart recommendations for the authenticated user."""
     from app.services.recommendations import generate_smart_recommendations
 
-    return generate_smart_recommendations(current_user, db, limit=limit, novelty=novelty, avoid_recent=avoid_recent, recent_interest=recent_interest)
+    return generate_smart_recommendations(current_user, db, limit=limit, novelty=novelty, avoid_recent=avoid_recent, recent_interest=recent_interest,
+                                          lang=request_lang(request, current_user))

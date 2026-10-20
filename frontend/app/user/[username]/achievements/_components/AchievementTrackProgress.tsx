@@ -9,6 +9,8 @@ import {
   Music2,
 } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
+import { plural } from "@/app/lib/plural";
+import { useT } from "@/app/lib/i18n/client";
 
 interface ProgressTrack {
   id: string | null;
@@ -46,13 +48,13 @@ interface Props {
 }
 
 function uniqueTrackPhrase(value: number): string {
-  const mod100 = value % 100;
-  const mod10 = value % 10;
-  if (mod10 === 1 && mod100 !== 11) return `${value} уникальный трек`;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
-    return `${value} уникальных трека`;
-  }
-  return `${value} уникальных треков`;
+  const word = plural(
+    value,
+    "уникальный трек",
+    "уникальных трека",
+    "уникальных треков",
+  );
+  return `${value} ${word}`;
 }
 
 function TrackLink({ track }: Readonly<{ track: ProgressTrack }>) {
@@ -97,6 +99,7 @@ function trackKey(track: ProgressTrack): string {
 function ArtistGroups({
   artists,
 }: Readonly<{ artists: ArtistProgressGroup[] }>) {
+  const t = useT();
   if (artists.length <= 1) return null;
   return (
     <ul className="grid gap-1.5 sm:grid-cols-2">
@@ -126,7 +129,7 @@ function ArtistGroups({
             className="mt-1 block h-1 w-full overflow-hidden rounded-full accent-accent"
             value={artist.listened_count}
             max={Math.max(artist.total_count, 1)}
-            aria-label={`Прогресс по артисту ${artist.name}`}
+            aria-label={t("Прогресс по артисту {name}", { name: artist.name })}
           />
         </li>
       ))}
@@ -135,8 +138,9 @@ function ArtistGroups({
 }
 
 function TrackList({ tracks }: Readonly<{ tracks: ProgressTrack[] }>) {
+  const t = useT();
   if (tracks.length === 0) {
-    return <p className="text-xs text-accent">Все треки прослушаны.</p>;
+    return <p className="text-xs text-accent">{t("Все треки прослушаны.")}</p>;
   }
   return (
     <ul className="flex max-h-48 flex-col overflow-y-auto rounded-md border border-line-soft bg-surface/50">
@@ -157,10 +161,13 @@ function ProgressDetails({
   data,
   kind,
 }: Readonly<{ data: TrackProgressResponse; kind: Props["kind"] }>) {
+  const t = useT();
   const missing = data.tracks.filter((track) => !track.listened);
   const listened = data.tracks.filter((track) => track.listened);
   const isArtist = kind === "artist";
-  const remainingLabel = isArtist ? "Ещё не засчитаны" : "Осталось послушать";
+  const remainingLabel = isArtist
+    ? t("Ещё не засчитаны")
+    : t("Осталось послушать");
   const remainingCount = isArtist ? missing.length : data.remaining_count;
   return (
     <>
@@ -171,14 +178,16 @@ function ProgressDetails({
       </div>
       {isArtist && (
         <p className="text-[11px] text-fg-3">
-          Для достижения нужно ещё {uniqueTrackPhrase(data.remaining_count)}.
+          {t("Для достижения нужно ещё {count}.", {
+            count: uniqueTrackPhrase(data.remaining_count),
+          })}
         </p>
       )}
       <TrackList tracks={missing} />
       {listened.length > 0 && (
         <details className="group">
           <summary className="cursor-pointer list-none text-[11px] text-fg-3 hover:text-fg-2">
-            Уже засчитано: {listened.length}
+            {t("Уже засчитано: {n}", { n: listened.length })}
           </summary>
           <ul className="mt-1 flex max-h-32 flex-col overflow-y-auto">
             {listened.map((track) => (
@@ -197,8 +206,8 @@ function ProgressDetails({
         </details>
       )}
       <p className="text-[10px] leading-relaxed text-fg-3">
-        {isArtist && "Каждая композиция считается только один раз. "}
-        Трек засчитывается после прослушивания не менее 85%.
+        {isArtist && `${t("Каждая композиция считается только один раз.")} `}
+        {t("Трек засчитывается после прослушивания не менее 85%.")}
       </p>
     </>
   );
@@ -210,6 +219,7 @@ export function AchievementTrackProgress({
   remaining,
   kind,
 }: Readonly<Props>) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<TrackProgressResponse | null>(null);
@@ -251,7 +261,9 @@ export function AchievementTrackProgress({
       >
         <span className="inline-flex items-center gap-1.5">
           <Music2 className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
-          {kind === "artist" ? "Незасчитанные треки" : "Какие треки остались"}
+          {kind === "artist"
+            ? t("Незасчитанные треки")
+            : t("Какие треки остались")}
           <span className="font-mono text-fg-3">
             · {data?.remaining_count ?? remaining}
           </span>
@@ -270,25 +282,26 @@ export function AchievementTrackProgress({
                 className="h-3.5 w-3.5 animate-spin"
                 aria-hidden="true"
               />
-              Получаем трек-лист…
+              {t("Получаем трек-лист…")}
             </span>
           )}
           {error && (
             <div className="flex items-center justify-between gap-3 py-1 text-xs text-fg-3">
-              <span>Не удалось загрузить треки.</span>
+              <span>{t("Не удалось загрузить треки.")}</span>
               <button
                 type="button"
                 onClick={() => void load()}
                 className="text-accent hover:underline"
               >
-                Повторить
+                {t("Повторить")}
               </button>
             </div>
           )}
           {data && !data.available && (
             <p className="py-1 text-xs leading-relaxed text-fg-3">
-              Музыкальный сервис пока не отдал трек-лист. Общий прогресс
-              продолжает считаться.
+              {t(
+                "Музыкальный сервис пока не отдал трек-лист. Общий прогресс продолжает считаться.",
+              )}
             </p>
           )}
           {data?.available && <ProgressDetails data={data} kind={kind} />}

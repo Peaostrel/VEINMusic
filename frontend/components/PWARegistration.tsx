@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
+import { useT } from "@/app/lib/i18n/client";
 import { LogoTile } from "@/components/brand";
 import { SERVICE_WORKER_URL } from "@/app/lib/offline";
 
@@ -15,6 +16,7 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 export default function PWARegistration() {
+  const t = useT();
   const [installPrompt, setInstallPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
@@ -102,21 +104,25 @@ export default function PWARegistration() {
         <div className="flex items-center gap-3 rounded-xl border border-line bg-surface-2 p-4 shadow-[0_12px_32px_rgba(0,0,0,0.45)]">
           <LogoTile size={40} />
           <div className="flex-grow min-w-0">
-            <p className="text-sm font-medium text-fg">Установить VEINMusic</p>
-            <p className="text-xs text-fg-2">Быстрый доступ и оффлайн-режим</p>
+            <p className="text-sm font-medium text-fg">
+              {t("Установить VEINMusic")}
+            </p>
+            <p className="text-xs text-fg-2">
+              {t("Быстрый доступ и оффлайн-режим")}
+            </p>
           </div>
           <button
             type="button"
             onClick={handleInstallClick}
             className="h-8 shrink-0 rounded-lg bg-accent px-3 text-xs font-medium text-on-accent hover:brightness-110"
           >
-            Установить
+            {t("Установить")}
           </button>
           <button
             type="button"
             onClick={dismiss}
             className="shrink-0 rounded p-1 text-fg-3 hover:text-fg"
-            aria-label="Закрыть"
+            aria-label={t("Закрыть")}
           >
             <X className="w-4 h-4" aria-hidden="true" />
           </button>

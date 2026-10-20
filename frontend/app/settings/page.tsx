@@ -23,6 +23,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/client";
 import StatusText from "@/components/StatusText";
 import { Loading, PageHeader, btn } from "@/components/ui";
 import GeneralTab from "./tabs/GeneralTab";
@@ -63,11 +64,12 @@ const TAB_ICONS: Record<SettingsTab, LucideIcon> = {
 };
 
 function SettingsContent() {
+  const t = useT();
   const s = useSettingsPage();
   const { data, updateData, activeTab, status } = s;
   const [settingsSearch, setSettingsSearch] = useState("");
 
-  if (s.loading) return <Loading label="Загружаем настройки…" />;
+  if (s.loading) return <Loading label={t("Загружаем настройки…")} />;
 
   let content: React.ReactNode;
   if (activeTab === "security") content = <SecurityTab />;
@@ -151,21 +153,23 @@ function SettingsContent() {
 
         <div className="sticky bottom-[var(--tabbar-offset)] z-10 -mx-1 mt-8 flex items-center justify-between gap-4 border-t border-line-soft bg-bg/95 px-1 py-4">
           <StatusText
-            text={status || (s.isDirty ? "Есть несохранённые изменения" : "")}
+            text={
+              status || (s.isDirty ? t("Есть несохранённые изменения") : "")
+            }
           />
           <button
             type="button"
             onClick={s.resetPreferences}
             className={`${btn.ghost} ${btn.sm} ml-auto`}
           >
-            По умолчанию
+            {t("По умолчанию")}
           </button>
           <button
             type="submit"
             disabled={!s.isDirty}
             className={`${btn.primary} ${btn.md}`}
           >
-            Сохранить всё
+            {t("Сохранить всё")}
           </button>
         </div>
       </form>
@@ -187,7 +191,7 @@ function SettingsContent() {
         />
       )}
       <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-7 px-4 py-8 sm:px-8 lg:px-12 lg:py-10">
-        <PageHeader title="Настройки" />
+        <PageHeader title={t("Настройки")} />
         <div className="flex flex-col gap-8 md:flex-row md:gap-10">
           <div className="shrink-0 md:sticky md:top-6 md:w-[230px] md:self-start">
             <label className="mb-3 flex h-9 items-center gap-2 rounded-lg border border-line bg-surface px-3 text-fg-3 focus-within:border-fg-3">
@@ -197,18 +201,22 @@ function SettingsContent() {
                 type="search"
                 value={settingsSearch}
                 onChange={(event) => setSettingsSearch(event.target.value)}
-                placeholder="Найти раздел"
-                aria-label="Поиск по настройкам"
+                placeholder={t("Найти раздел")}
+                aria-label={t("Поиск по настройкам")}
                 className="min-w-0 flex-1 bg-transparent text-xs text-fg outline-none placeholder:text-fg-3"
               />
             </label>
             <nav
-              aria-label="Разделы настроек"
+              aria-label={t("Разделы настроек")}
               className="hide-scrollbar flex gap-1 overflow-x-auto md:max-h-[calc(100vh-8rem)] md:flex-col md:gap-0.5 md:overflow-y-auto"
             >
-              {SETTINGS_TABS.filter((tab) =>
-                tab.label.toLowerCase().includes(settingsSearch.toLowerCase()),
-              ).map((tab) => {
+              {SETTINGS_TABS.filter((tab) => {
+                const query = settingsSearch.toLowerCase();
+                return (
+                  tab.label.toLowerCase().includes(query) ||
+                  t(tab.label).toLowerCase().includes(query)
+                );
+              }).map((tab) => {
                 const Icon = TAB_ICONS[tab.id];
                 return (
                   <button
@@ -223,7 +231,7 @@ function SettingsContent() {
                     }`}
                   >
                     <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                    {tab.label}
+                    {t(tab.label)}
                   </button>
                 );
               })}
@@ -231,7 +239,7 @@ function SettingsContent() {
           </div>
 
           <section
-            aria-label="Настройки"
+            aria-label={t("Настройки")}
             className="min-w-0 max-w-[760px] flex-1"
           >
             {content}
@@ -250,8 +258,9 @@ function SettingsContent() {
 }
 
 export default function Settings() {
+  const t = useT();
   return (
-    <Suspense fallback={<Loading label="Загружаем настройки…" />}>
+    <Suspense fallback={<Loading label={t("Загружаем настройки…")} />}>
       <SettingsContent />
     </Suspense>
   );

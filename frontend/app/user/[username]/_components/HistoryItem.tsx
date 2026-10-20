@@ -13,6 +13,7 @@ import {
   playbackTimestamp,
 } from "@/app/lib/playback";
 import { coverAt } from "@/app/lib/coverSize";
+import { useT } from "@/app/lib/i18n/client";
 
 const mmss = (sec: number) =>
   `${Math.floor(sec / 60)
@@ -76,13 +77,14 @@ function PlayState({
   item,
   isNowPlaying,
 }: Readonly<{ item: HistoryEntry; isNowPlaying: boolean }>) {
+  const t = useT();
   const [now, setNow] = useState(0);
   const tick = useCallback(() => setNow(Date.now()), []);
   useVisiblePolling(tick, 1000, isNowPlaying && item.is_playing);
   const fresh = freshPlayback(item.updated_at, now);
   const active = item.is_playing && fresh;
-  let stateLabel = "пауза";
-  if (item.is_playing) stateLabel = active ? "сейчас" : "нет связи";
+  let stateLabel = t("пауза");
+  if (item.is_playing) stateLabel = active ? t("сейчас") : t("нет связи");
   if (isNowPlaying) {
     return (
       <span
@@ -101,14 +103,14 @@ function PlayState({
     );
   }
   const timeStr = new Date(playbackTimestamp(item.time)).toLocaleTimeString(
-    "ru-RU",
+    t.locale,
     {
       hour: "2-digit",
       minute: "2-digit",
     },
   );
   let note: string | null = null;
-  if (item.is_imported) note = "импорт";
+  if (item.is_imported) note = t("импорт");
   else if (item.listened_sec > 0) note = mmss(item.listened_sec);
   return (
     <span className="flex flex-col items-end gap-0.5 font-mono text-[11px] text-fg-3">

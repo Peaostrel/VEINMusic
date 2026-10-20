@@ -104,6 +104,33 @@ def test_import_rejects_changed_preview_and_does_not_resurrect_deleted(client, d
     assert db.query(Scrobble).execution_options(include_deleted=True).filter_by(id=row.id).one().deleted_at
 
 
+def test_import_skips_plays_already_tracked_live(client, db, owner):
+    add_play(db, owner, when=datetime(2024, 3, 1, 12, 0, 0, tzinfo=UTC))
+    near = {"title": "Own song", "artist": "Own artist", "played_at": "2024-03-01T12:00:40Z"}
+    later = dict(near, played_at="2024-03-01T12:05:00Z")
+    other = dict(near, title="Other song")
+    preview = client.post("/api/account/history/preview", json={"scrobbles": [near, later, other]}).json()
+    assert preview["new"] == 2
+    assert [row["played_at"][11:16] for row in preview["sample"]] == ["12:05", "12:00"]
+
+
+def test_import_keeps_short_repeats_and_reuses_the_catalog_track(client, db, owner):
+    live = add_play(db, owner, when=datetime(2024, 3, 1, 10, 0, tzinfo=UTC))
+    rows = [{"title": "Own song", "artist": "Own artist", "played_at": f"2024-03-02T12:00:{second}Z",
+             "listened_sec": 40, "source": "spotify_import"} for second in ("00", "45")]
+    lb = {"title": "Own song", "artist": "Own artist", "played_at": "2024-03-03T12:00:00Z",
+          "source": "listenbrainz_import"}
+    payload = {"scrobbles": [*rows, lb]}
+    preview = client.post("/api/account/history/preview", json=payload).json()
+    assert preview["new"] == 3
+    payload["preview_token"] = preview["preview_token"]
+    assert client.post("/api/account/history/import", json=payload).json()["imported"] == 3
+    imported = db.query(Scrobble).filter_by(is_imported=True).order_by(Scrobble.played_at).all()
+    assert {row.track_id for row in imported} == {live.track_id}
+    # ListenBrainz keeps only counted listens: counted whole here too
+    assert imported[-1].listened_sec == 180
+
+
 def test_csv_neutralizes_spreadsheet_formula(client, db, owner):
     add_play(db, owner, title='=HYPERLINK("https://example.org")')
     response = client.get("/api/account/history.csv")

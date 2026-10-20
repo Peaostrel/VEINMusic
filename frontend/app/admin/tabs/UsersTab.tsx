@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/app/lib/i18n/client";
 import {
   Trash2,
   Edit,
@@ -25,6 +26,7 @@ export default function UsersTab({
   filteredUsers,
   onOpenUser,
 }: AdminPanelState & { onOpenUser: (username: string) => void }) {
+  const t = useT();
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
@@ -33,14 +35,14 @@ export default function UsersTab({
           <input
             autoComplete="off"
             type="text"
-            placeholder="Поиск по нику или имени..."
+            placeholder={t("Поиск по нику или имени...")}
             value={userSearch}
             onChange={(e) => setUserSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 bg-surface border border-line rounded-xl text-sm text-fg placeholder:text-fg-3 focus:outline-none focus:border-fg-3"
           />
         </div>
         <span className="text-xs text-fg-2 font-mono">
-          Найдено: {filteredUsers.length}
+          {t("Найдено: {n}", { n: filteredUsers.length })}
         </span>
       </div>
 
@@ -49,11 +51,11 @@ export default function UsersTab({
           <table className="w-full text-left text-xs text-fg-2">
             <thead className="bg-[#0f0f12] text-fg-2 font-mono text-[11px] border-b border-line-soft">
               <tr>
-                <th className="py-3.5 px-4">Пользователь</th>
-                <th className="py-3.5 px-4">Роль</th>
-                <th className="py-3.5 px-4">Скробблы / XP</th>
-                <th className="py-3.5 px-4">Статус</th>
-                <th className="py-3.5 px-4 text-right">Действия</th>
+                <th className="py-3.5 px-4">{t("Пользователь")}</th>
+                <th className="py-3.5 px-4">{t("Роль")}</th>
+                <th className="py-3.5 px-4">{t("Скробблы / XP")}</th>
+                <th className="py-3.5 px-4">{t("Статус")}</th>
+                <th className="py-3.5 px-4 text-right">{t("Действия")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
@@ -84,7 +86,7 @@ export default function UsersTab({
                           )}
                         </button>
                         <div className="text-[11px] text-fg-2">
-                          {u.display_name || "Без имени"}
+                          {u.display_name || t("Без имени")}
                         </div>
                       </div>
                     </div>
@@ -97,23 +99,23 @@ export default function UsersTab({
                     </span>
                   </td>
                   <td className="py-3.5 px-4 font-mono">
-                    <div>{u.scrobbles} треков</div>
+                    <div>{t("{n} треков", { n: u.scrobbles })}</div>
                     <div className="text-ok font-medium">{u.total_xp} XP</div>
                   </td>
                   <td className="py-3.5 px-4">
                     {u.is_banned && (
                       <span className="px-2 py-0.5 rounded border border-danger-line text-danger text-[10px] font-medium">
-                        ЗАБЛОКИРОВАН
+                        {t("ЗАБЛОКИРОВАН")}
                       </span>
                     )}
                     {!u.is_banned && u.is_flagged_antifraud && (
                       <span className="px-2 py-0.5 rounded border border-line text-accent text-[10px] font-medium">
-                        ФЛАГ АНТИФРОД
+                        {t("ФЛАГ АНТИФРОД")}
                       </span>
                     )}
                     {!u.is_banned && !u.is_flagged_antifraud && (
                       <span className="text-ok font-mono text-[11px]">
-                        Активен
+                        {t("Активен")}
                       </span>
                     )}
                   </td>
@@ -123,8 +125,10 @@ export default function UsersTab({
                         type="button"
                         onClick={() => onOpenUser(u.username)}
                         className="p-2 hover:bg-line rounded-lg text-fg transition"
-                        title="Карточка пользователя"
-                        aria-label={`Карточка @${u.username}`}
+                        title={t("Карточка пользователя")}
+                        aria-label={t("Карточка @{username}", {
+                          username: u.username,
+                        })}
                       >
                         <IdCard className="w-4 h-4" aria-hidden="true" />
                       </button>
@@ -135,7 +139,9 @@ export default function UsersTab({
                         }
                         className="p-2 hover:bg-line rounded-lg text-fg-2 transition"
                         title={
-                          u.is_verified ? "Снять галочку" : "Выдать верификацию"
+                          u.is_verified
+                            ? t("Снять галочку")
+                            : t("Выдать верификацию")
                         }
                       >
                         <CheckCircle className="w-4 h-4" />
@@ -146,7 +152,7 @@ export default function UsersTab({
                           handleChangeRole(u.username, u.role || "user")
                         }
                         className="p-2 hover:bg-line rounded-lg text-fg-2 transition"
-                        title="Изменить роль"
+                        title={t("Изменить роль")}
                       >
                         <Edit className="w-4 h-4" />
                       </button>
@@ -154,7 +160,7 @@ export default function UsersTab({
                         type="button"
                         onClick={() => handleResetProfile(u.username)}
                         className="p-2 hover:bg-line rounded-lg text-accent transition"
-                        title="Очистить профиль (аватар/био)"
+                        title={t("Очистить профиль (аватар/био)")}
                       >
                         <RotateCcw className="w-4 h-4" />
                       </button>
@@ -166,7 +172,9 @@ export default function UsersTab({
                         className={`p-2 hover:bg-line rounded-lg transition ${
                           u.is_banned ? "text-ok" : "text-fg-2"
                         }`}
-                        title={u.is_banned ? "Разблокировать" : "Заблокировать"}
+                        title={
+                          u.is_banned ? t("Разблокировать") : t("Заблокировать")
+                        }
                       >
                         <Ban className="w-4 h-4" />
                       </button>
@@ -174,7 +182,7 @@ export default function UsersTab({
                         type="button"
                         onClick={() => handleDeleteUser(u.username)}
                         className="p-2 hover:bg-[#2a1b1b] text-danger rounded-lg transition"
-                        title="Удалить пользователя навсегда"
+                        title={t("Удалить пользователя навсегда")}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

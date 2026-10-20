@@ -517,6 +517,8 @@ export interface Country {
   name: string;
   code: string;
   flag: string;
+  /** Russian name, sent with the English list so older Russian locations still match. */
+  name_ru?: string;
 }
 
 /** Anything that can be turned into a link to a track on its service. */

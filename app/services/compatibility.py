@@ -4,6 +4,7 @@ from typing import Any, cast
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.i18n import tr
 from app.models import Scrobble, Track, User
 
 
@@ -74,15 +75,15 @@ def _get_tier(final_score: int) -> str:
     return "Разные галактики"
 
 
-def calculate_compatibility(user1_id: int, user2_id: int, db: Session) -> dict[str, Any]:
+def calculate_compatibility(user1_id: int, user2_id: int, db: Session, lang: str = "ru") -> dict[str, Any]:
     """Calculate musical compatibility score (0-100%) and common interests between two users."""
     if user1_id == user2_id:
         return {
             "score": 100,
-            "tier": "Идеальное совпадение (Self)",
+            "tier": tr(lang, "Идеальное совпадение (Self)"),
             "common_artists": [],
             "common_genres": [],
-            "summary": "Вы слушаете точно такую же музыку!",
+            "summary": tr(lang, "Вы слушаете точно такую же музыку!"),
         }
 
     u1_artist_map = _get_artist_map(user1_id, db)
@@ -105,7 +106,7 @@ def calculate_compatibility(user1_id: int, user2_id: int, db: Session) -> dict[s
 
     raw_score = (artist_sim * 0.65) + (genre_sim * 0.25) + bonus
     final_score = min(100, max(0, int(round(raw_score * 100))))
-    tier = _get_tier(final_score)
+    tier = tr(lang, _get_tier(final_score))
 
     common_artist_list: list[dict[str, Any]] = [
         {

@@ -1,9 +1,10 @@
 """Explain the current counting rule without changing credit semantics."""
 from datetime import UTC, datetime
 from app.core.constants import ACTIVE_PLAYBACK_WINDOW_SEC
+from app.core.i18n import tr
 
 
-def listen_status(listen, track):
+def listen_status(listen, track, lang: str = "ru"):
     duration = int(track.duration or 180)
     listened = int(listen.listened_sec or 0)
     updated = listen.updated_at or listen.played_at
@@ -18,5 +19,6 @@ def listen_status(listen, track):
         code, label = "playing", "Ещё играет"
     else:
         code, label = "too_short", "Недостаточно времени для зачёта"
-    return {"code": code, "label": label, "required_sec": (duration * 85 + 99) // 100,
-            "listened_sec": listened, "explanation": "Для зачёта нужно подтвердить 85% длительности. Импорт хранится отдельно от живого прослушивания."}
+    explanation = "Для зачёта нужно подтвердить 85% длительности. Импорт хранится отдельно от живого прослушивания."
+    return {"code": code, "label": tr(lang, label), "required_sec": (duration * 85 + 99) // 100,
+            "listened_sec": listened, "explanation": tr(lang, explanation)}

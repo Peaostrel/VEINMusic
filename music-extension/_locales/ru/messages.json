@@ -1,0 +1,348 @@
+{
+  "locale": {
+    "message": "ru",
+    "description": "Locale code of this catalog; selects plural rules. Do not translate."
+  },
+  "extName": {
+    "message": "VEIN Music Tracker",
+    "description": "Extension name (store listing, toolbar)."
+  },
+  "extDescription": {
+    "message": "История прослушиваний из музыкальных веб-плееров в вашем аккаунте VEINMusic.",
+    "description": "Extension description (store listing, max 132 chars)."
+  },
+  "clientName": {
+    "message": "Расширение VEIN",
+    "description": "Device name sent to the server during pairing; shown on the VEIN website."
+  },
+  "popup_trackingTitle": {
+    "message": "Передавать прослушивания",
+    "description": "Popup: main toggle title."
+  },
+  "popup_trackingSubtitle": {
+    "message": "в ваш аккаунт VEIN",
+    "description": "Popup: main toggle subtitle."
+  },
+  "popup_privacyNote": {
+    "message": "Отправляются трек, исполнитель, обложка, ссылка и время воспроизведения.",
+    "description": "Popup: what data is sent."
+  },
+  "popup_privacyLink": {
+    "message": "Конфиденциальность",
+    "description": "Popup: privacy policy link."
+  },
+  "popup_pairLabel": {
+    "message": "Подключение",
+    "description": "Popup: pairing card heading."
+  },
+  "popup_pairIntro": {
+    "message": "Подтвердите это устройство на сайте VEIN. Пароль вводить не нужно.",
+    "description": "Popup: pairing explanation."
+  },
+  "popup_pairButton": {
+    "message": "Подключить через сайт",
+    "description": "Popup: start pairing button."
+  },
+  "popup_pairHint": {
+    "message": "Сначала включите передачу выше.",
+    "description": "Popup: shown while sending is off."
+  },
+  "popup_pairCodeLabel": {
+    "message": "Код для подтверждения",
+    "description": "Popup: label above the pairing code."
+  },
+  "popup_pairOpenButton": {
+    "message": "Открыть страницу подтверждения",
+    "description": "Popup: opens the confirmation page."
+  },
+  "popup_pairWaiting": {
+    "message": "Ждём подтверждения на сайте…",
+    "description": "Popup: waiting for approval."
+  },
+  "popup_pairRequesting": {
+    "message": "Получаем код…",
+    "description": "Popup: requesting a pairing code."
+  },
+  "popup_pairApproved": {
+    "message": "Подключено!",
+    "description": "Popup: pairing succeeded."
+  },
+  "popup_pairDenied": {
+    "message": "Подключение отклонено на сайте.",
+    "description": "Popup: pairing declined."
+  },
+  "popup_pairExpired": {
+    "message": "Код устарел. Попробуйте ещё раз.",
+    "description": "Popup: pairing code expired."
+  },
+  "popup_apiKeySummary": {
+    "message": "Подключить по API-ключу",
+    "description": "Popup: collapsible manual API key section."
+  },
+  "popup_apiKeyLabel": {
+    "message": "API-ключ",
+    "description": "Popup: API key field accessible name."
+  },
+  "popup_apiKeyPlaceholder": {
+    "message": "API-ключ из настроек VEIN",
+    "description": "Popup: API key field placeholder."
+  },
+  "popup_usernameLabel": {
+    "message": "Никнейм",
+    "description": "Popup: username field name and placeholder."
+  },
+  "popup_saveButton": {
+    "message": "Сохранить",
+    "description": "Popup: save manual credentials."
+  },
+  "popup_credentialsRequired": {
+    "message": "Введите ключ и никнейм.",
+    "description": "Popup: manual credentials missing."
+  },
+  "popup_settingSaveFailed": {
+    "message": "Не удалось сохранить настройку.",
+    "description": "Popup: storage write failed."
+  },
+  "popup_trackingOn": {
+    "message": "Передача включена",
+    "description": "Popup: account status, sending on."
+  },
+  "popup_trackingOff": {
+    "message": "Передача приостановлена",
+    "description": "Popup: account status, sending paused."
+  },
+  "popup_lastEventLabel": {
+    "message": "Последнее событие",
+    "description": "Popup: last delivery card heading."
+  },
+  "popup_deliveryEmpty": {
+    "message": "Включите трек в музыкальной вкладке. Здесь появится результат приёма.",
+    "description": "Popup: no delivery yet."
+  },
+  "popup_testButton": {
+    "message": "Проверить связь",
+    "description": "Popup: connection test button."
+  },
+  "popup_logoutButton": {
+    "message": "Отключить",
+    "description": "Popup: disconnect button."
+  },
+  "popup_testRunning": {
+    "message": "Проверяем связь…",
+    "description": "Popup: connection test in progress."
+  },
+  "popup_testNeedAccount": {
+    "message": "Сначала подключите аккаунт",
+    "description": "Popup: connection test without an account."
+  },
+  "popup_testOk": {
+    "message": "Связь с VEIN работает.",
+    "description": "Popup: connection test succeeded."
+  },
+  "popup_testHttpError": {
+    "message": "Ошибка $STATUS$: $HINT$",
+    "description": "Popup: connection test failed with an HTTP status.",
+    "placeholders": {
+      "status": {
+        "content": "$1",
+        "example": "401"
+      },
+      "hint": {
+        "content": "$2",
+        "example": "connect your account again."
+      }
+    }
+  },
+  "popup_hintReconnect": {
+    "message": "подключите аккаунт заново.",
+    "description": "Popup: hint after HTTP 401/403."
+  },
+  "popup_hintLater": {
+    "message": "попробуйте позже.",
+    "description": "Popup: hint after other HTTP errors."
+  },
+  "popup_errorDetail": {
+    "message": "Ошибка: $DETAIL$",
+    "description": "Popup: generic error with details.",
+    "placeholders": {
+      "detail": {
+        "content": "$1",
+        "example": "Server responded with 500"
+      }
+    }
+  },
+  "popup_supportedServices": {
+    "message": "Поддерживаемые сервисы",
+    "description": "Popup footer link."
+  },
+  "playback_playing": {
+    "message": "играет",
+    "description": "Delivery details: track is playing."
+  },
+  "playback_paused": {
+    "message": "пауза",
+    "description": "Delivery details: track is paused."
+  },
+  "playback_seconds_one": {
+    "message": "$COUNT$ секунда",
+    "description": "Delivery details: playback position, plural \"one\".",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "playback_seconds_few": {
+    "message": "$COUNT$ секунды",
+    "description": "Delivery details: playback position, plural \"few\" (Russian 2-4).",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "playback_seconds_many": {
+    "message": "$COUNT$ секунд",
+    "description": "Delivery details: playback position, plural \"many\" (Russian 5-20).",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "5"
+      }
+    }
+  },
+  "playback_seconds_other": {
+    "message": "$COUNT$ секунды",
+    "description": "Delivery details: playback position, plural \"other\".",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "32"
+      }
+    }
+  },
+  "detail_deliveryMs": {
+    "message": "доставка $MS$ мс",
+    "description": "Delivery details: network delivery time.",
+    "placeholders": {
+      "ms": {
+        "content": "$1",
+        "example": "120"
+      }
+    }
+  },
+  "detail_serverMs": {
+    "message": "сервер $MS$ мс",
+    "description": "Delivery details: server processing time.",
+    "placeholders": {
+      "ms": {
+        "content": "$1",
+        "example": "15"
+      }
+    }
+  },
+  "source_yandex": {
+    "message": "Яндекс Музыка",
+    "description": "Music service name."
+  },
+  "source_zvuk": {
+    "message": "Звук",
+    "description": "Music service name."
+  },
+  "error_invalidApiUrl": {
+    "message": "Недопустимый адрес API",
+    "description": "Pairing error: API URL not allowed."
+  },
+  "error_serverStatus": {
+    "message": "Сервер ответил $STATUS$",
+    "description": "Pairing error: HTTP status.",
+    "placeholders": {
+      "status": {
+        "content": "$1",
+        "example": "500"
+      }
+    }
+  },
+  "error_invalidVerificationPage": {
+    "message": "Сервер вернул недопустимую страницу подтверждения",
+    "description": "Pairing error: bad confirmation URL."
+  },
+  "delivery_ok": {
+    "message": "Событие принято. Зачёт прослушивания зависит от реально прослушанного времени.",
+    "description": "Delivery status."
+  },
+  "delivery_confirmed_duplicate": {
+    "message": "Событие принято: этот трек уже отслеживается другим подключением.",
+    "description": "Delivery status."
+  },
+  "delivery_integration_paused": {
+    "message": "Приём этого сервиса выключен в настройках VEIN.",
+    "description": "Delivery status."
+  },
+  "delivery_source_ignored": {
+    "message": "Этот сервис исключён из записи в настройках VEIN.",
+    "description": "Delivery status."
+  },
+  "delivery_artist_ignored": {
+    "message": "Исполнитель исключён из записи в настройках VEIN.",
+    "description": "Delivery status."
+  },
+  "delivery_track_ignored": {
+    "message": "Трек исключён из записи в настройках VEIN.",
+    "description": "Delivery status."
+  },
+  "delivery_short_track_ignored": {
+    "message": "Короткие треки исключены в настройках VEIN.",
+    "description": "Delivery status."
+  },
+  "delivery_private_session": {
+    "message": "В VEIN включена приватная сессия: запись приостановлена.",
+    "description": "Delivery status."
+  },
+  "delivery_blacklisted": {
+    "message": "Событие отклонено правилами VEIN.",
+    "description": "Delivery status."
+  },
+  "delivery_link_ignored": {
+    "message": "В названии или исполнителе обнаружена ссылка.",
+    "description": "Delivery status."
+  },
+  "delivery_rate_limited": {
+    "message": "Сервер просит подождать. Передача повторится автоматически.",
+    "description": "Delivery status."
+  },
+  "delivery_ignored_spam_protection": {
+    "message": "Смена трека отложена сервером. Передача повторится автоматически.",
+    "description": "Delivery status."
+  },
+  "delivery_flagged": {
+    "message": "Сервер ограничил приём. Проверьте диагностику интеграции в VEIN.",
+    "description": "Delivery status."
+  },
+  "delivery_ignored_inactive": {
+    "message": "Остановленная вкладка пропущена: в другом плеере сейчас играет музыка.",
+    "description": "Delivery status."
+  },
+  "delivery_auth_required": {
+    "message": "Ключ недействителен или не имеет доступа. Подключите расширение заново.",
+    "description": "Delivery status."
+  },
+  "delivery_invalid_payload": {
+    "message": "Сервис передал неполные данные трека. Обновите расширение и страницу плеера.",
+    "description": "Delivery status."
+  },
+  "delivery_network_error": {
+    "message": "Нет связи с VEIN. Текущее состояние будет отправлено повторно.",
+    "description": "Delivery status."
+  },
+  "delivery_server_error": {
+    "message": "VEIN временно недоступен. Передача повторится автоматически.",
+    "description": "Delivery status."
+  },
+  "delivery_invalid_response": {
+    "message": "Сервер не подтвердил приём события. Передача повторится автоматически.",
+    "description": "Delivery status."
+  }
+}

@@ -6,7 +6,11 @@
 import type { Metadata } from "next";
 import { cache } from "react";
 import { API_URL } from "./api";
-import { formatNumber, plural } from "./plural";
+import { makeTranslator, type Lang, type Translator } from "./i18n/core";
+
+/** Russian translator: the default of the helpers below for callers that
+ * pass none (server code gets the visitor's one from `getT()`). */
+const RU = makeTranslator("ru", null);
 
 /** Public address of the site, for absolute links in metadata and sitemap. */
 export const SITE_URL = (
@@ -127,11 +131,11 @@ export async function previewImage(path: string): Promise<string | null> {
   }
 }
 
-export const plays = (n: number) =>
-  `${formatNumber(n)} ${plural(n, "прослушивание", "прослушивания", "прослушиваний")}`;
+export const plays = (n: number, t: Translator = RU) =>
+  `${t.number(n)} ${t.plural(n, "прослушивание", "прослушивания", "прослушиваний")}`;
 
-export const tracksCount = (n: number) =>
-  `${formatNumber(n)} ${plural(n, "трек", "трека", "треков")}`;
+export const tracksCount = (n: number, t: Translator = RU) =>
+  `${t.number(n)} ${t.plural(n, "трек", "трека", "треков")}`;
 
 /** Open Graph fields every page repeats (child metadata replaces the parent's). */
 export function openGraph(
@@ -139,13 +143,14 @@ export function openGraph(
   description: string,
   path: string,
   type: "website" | "profile" | "music.song" = "website",
+  lang: Lang = "ru",
 ): NonNullable<Metadata["openGraph"]> {
   return {
     title,
     description,
     url: `${SITE_URL}${path}`,
     siteName: "VEINMusic",
-    locale: "ru_RU",
+    locale: lang === "en" ? "en_US" : "ru_RU",
     type,
   };
 }
@@ -155,12 +160,13 @@ export function pageMetadata(
   title: string,
   description: string,
   path: string,
+  lang: Lang = "ru",
 ): Metadata {
   return {
     title,
     description,
     alternates: { canonical: path },
-    openGraph: openGraph(title, description, path),
+    openGraph: openGraph(title, description, path, "website", lang),
   };
 }
 

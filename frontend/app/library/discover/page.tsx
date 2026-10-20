@@ -8,6 +8,16 @@ import SaveForLater from "@/components/SaveForLater";
 import { useCallback, useEffect, useState } from "react";
 import { jsonRequest, qualityRequest } from "@/app/lib/qualityApi";
 import { btn, EmptyState, input, Loading, PageHeader } from "@/components/ui";
+import { useT } from "@/app/lib/i18n/client";
+import { tr } from "@/app/lib/i18n/active";
+import { msg } from "@/app/lib/i18n/core";
+import { plural } from "@/app/lib/plural";
+
+const FEEDBACK_ACTIONS = [
+  ["known", msg("Уже знаю")],
+  ["like", msg("Больше такого")],
+  ["block_artist", msg("Не рекомендовать артиста")],
+];
 
 interface Track {
   id: number;
@@ -58,18 +68,18 @@ function downloadStory(story: Story) {
   canvas.width = 1080;
   canvas.height = 1080;
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Браузер не поддерживает создание карточки");
+  if (!ctx) throw new Error(tr("Браузер не поддерживает создание карточки"));
   ctx.fillStyle = "#11121a";
   ctx.fillRect(0, 0, 1080, 1080);
   ctx.fillStyle = "#bda3ff";
   ctx.font = "bold 40px sans-serif";
-  ctx.fillText("VEIN · МОЯ МУЗЫКАЛЬНАЯ НЕДЕЛЯ", 70, 110);
+  ctx.fillText(tr("VEIN · МОЯ МУЗЫКАЛЬНАЯ НЕДЕЛЯ"), 70, 110);
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 110px sans-serif";
-  ctx.fillText(`${story.minutes} мин`, 70, 290);
+  ctx.fillText(tr("{n} мин", { n: story.minutes }), 70, 290);
   ctx.font = "32px sans-serif";
   ctx.fillText(
-    `${story.plays} прослушиваний · ${story.new_artists_count} новых исполнителей`,
+    `${story.plays} ${plural(story.plays, "прослушивание", "прослушивания", "прослушиваний")} · ${story.new_artists_count} ${plural(story.new_artists_count, "новый исполнитель", "новых исполнителя", "новых исполнителей")}`,
     70,
     370,
   );
@@ -93,6 +103,7 @@ function downloadStory(story: Story) {
 }
 
 export default function DiscoverPage() {
+  const t = useT();
   const [novelty, setNovelty] = useState(50);
   const [recentInterest, setRecentInterest] = useState(50);
   const [blocked, setBlocked] = useState<
@@ -151,7 +162,7 @@ export default function DiscoverPage() {
           setMessage(
             cause instanceof Error
               ? cause.message
-              : "Не удалось загрузить данные",
+              : tr("Не удалось загрузить данные"),
           );
       })
       .finally(() => {
@@ -176,11 +187,15 @@ export default function DiscoverPage() {
         ),
       );
       setMessage(
-        value === "reset" ? "Выбор отменён." : "Учли ваш выбор в подборке.",
+        value === "reset"
+          ? t("Выбор отменён.")
+          : t("Учли ваш выбор в подборке."),
       );
     } catch (cause) {
       setMessage(
-        cause instanceof Error ? cause.message : "Не удалось сохранить выбор",
+        cause instanceof Error
+          ? cause.message
+          : t("Не удалось сохранить выбор"),
       );
     } finally {
       setBusy(false);
@@ -198,34 +213,36 @@ export default function DiscoverPage() {
       setMessage("");
     } catch (cause) {
       setMessage(
-        cause instanceof Error ? cause.message : "Не удалось создать подборку",
+        cause instanceof Error
+          ? cause.message
+          : t("Не удалось создать подборку"),
       );
     } finally {
       setBusy(false);
     }
   };
-  if (loading) return <Loading label="Собираем музыкальные открытия…" />;
+  if (loading) return <Loading label={t("Собираем музыкальные открытия…")} />;
   return (
     <main className="mx-auto max-w-[980px] space-y-9 px-4 py-8 sm:px-8">
       <PageHeader
-        title="Открытия и ваш вкус"
-        subtitle="Рекомендации, изменения вкуса и музыка для двоих"
+        title={t("Открытия и ваш вкус")}
+        subtitle={t("Рекомендации, изменения вкуса и музыка для двоих")}
       />
       <Link href="/library" className="text-sm text-fg-2">
-        ← Библиотека
+        {t("← Библиотека")}
       </Link>
       <output aria-live="polite" className="block text-sm">
         {message}
       </output>
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold">Что послушать дальше</h2>
+        <h2 className="text-lg font-semibold">{t("Что послушать дальше")}</h2>
         <Link href="/library/later" className="text-sm text-accent">
-          Мой список «Послушать позже» →
+          {t("Мой список «Послушать позже» →")}
         </Link>
         <label className="block text-sm">
-          Разнообразие: {novelty}%
+          {t("Разнообразие: {n}%", { n: novelty })}
           <input
-            aria-label="Разнообразие рекомендаций"
+            aria-label={t("Разнообразие рекомендаций")}
             type="range"
             min="0"
             max="100"
@@ -235,14 +252,15 @@ export default function DiscoverPage() {
             className="block w-full"
           />
           <span className="text-xs text-fg-3">
-            0 — ближе к любимым исполнителям; 100 — больше новых. Не больше двух
-            треков одного артиста.
+            {t(
+              "0 — ближе к любимым исполнителям; 100 — больше новых. Не больше двух треков одного артиста.",
+            )}
           </span>
         </label>
         <label className="block text-sm">
-          Недавние интересы: {recentInterest}%
+          {t("Недавние интересы: {n}%", { n: recentInterest })}
           <input
-            aria-label="Вес недавних интересов"
+            aria-label={t("Вес недавних интересов")}
             type="range"
             min="0"
             max="100"
@@ -252,13 +270,16 @@ export default function DiscoverPage() {
             className="block w-full"
           />
           <span className="text-xs text-fg-3">
-            0 — общий вкус; 100 — сильнее учитываем последние 30 дней.
-            Применяется кнопкой ниже.
+            {t(
+              "0 — общий вкус; 100 — сильнее учитываем последние 30 дней. Применяется кнопкой ниже.",
+            )}
           </span>
         </label>
         {!!blocked.length && (
           <section className="space-y-2">
-            <h3 className="text-sm font-medium">Исключённые исполнители</h3>
+            <h3 className="text-sm font-medium">
+              {t("Исключённые исполнители")}
+            </h3>
             <ul>
               {blocked.map((row) => (
                 <li
@@ -274,7 +295,7 @@ export default function DiscoverPage() {
                       void feedback(row.track_id, "reset");
                     }}
                   >
-                    Вернуть {row.artist}
+                    {t("Вернуть {artist}", { artist: row.artist })}
                   </button>
                 </li>
               ))}
@@ -290,13 +311,15 @@ export default function DiscoverPage() {
               void loadRecommendations()
                 .catch((cause: unknown) =>
                   setMessage(
-                    cause instanceof Error ? cause.message : "Ошибка подборки",
+                    cause instanceof Error
+                      ? cause.message
+                      : t("Ошибка подборки"),
                   ),
                 )
                 .finally(() => setBusy(false));
             }}
           >
-            Применить разнообразие
+            {t("Применить разнообразие")}
           </button>
           <button
             className={`${btn.secondary} ${btn.md}`}
@@ -306,13 +329,15 @@ export default function DiscoverPage() {
               void loadRecommendations(true)
                 .catch((cause: unknown) =>
                   setMessage(
-                    cause instanceof Error ? cause.message : "Ошибка подборки",
+                    cause instanceof Error
+                      ? cause.message
+                      : t("Ошибка подборки"),
                   ),
                 )
                 .finally(() => setBusy(false));
             }}
           >
-            Новая подборка
+            {t("Новая подборка")}
           </button>
           <button
             className={`${btn.secondary} ${btn.md}`}
@@ -327,12 +352,14 @@ export default function DiscoverPage() {
                 )
                 .catch((cause: unknown) =>
                   setMessage(
-                    cause instanceof Error ? cause.message : "Ошибка истории",
+                    cause instanceof Error
+                      ? cause.message
+                      : t("Ошибка истории"),
                   ),
                 );
             }}
           >
-            История рекомендаций
+            {t("История рекомендаций")}
           </button>
         </div>
         {!!recommendationHistory.length && (
@@ -353,23 +380,24 @@ export default function DiscoverPage() {
               void feedback(lastFeedback, "reset");
             }}
           >
-            Отменить последний выбор
+            {t("Отменить последний выбор")}
           </button>
         )}
         {!tracks.length && (
           <EmptyState
-            title="Пока нет новых рекомендаций"
+            title={t("Пока нет новых рекомендаций")}
             action={
               <Link
                 href="/library/connect"
                 className={`${btn.secondary} ${btn.sm}`}
               >
-                Проверить подключение
+                {t("Проверить подключение")}
               </Link>
             }
           >
-            Продолжайте слушать музыку, чтобы появилась подборка. Если
-            прослушивания не появляются, проверьте подключение сервиса.
+            {t(
+              "Продолжайте слушать музыку, чтобы появилась подборка. Если прослушивания не появляются, проверьте подключение сервиса.",
+            )}
           </EmptyState>
         )}
         <div className="grid gap-3 sm:grid-cols-2">
@@ -403,9 +431,9 @@ export default function DiscoverPage() {
               </div>
               <p className="text-sm leading-relaxed text-fg-2">
                 <span className="mb-1 block text-xs font-medium text-accent">
-                  Почему этот трек
+                  {t("Почему этот трек")}
                 </span>
-                {track.reason}
+                {t(track.reason)}
               </p>
               <div className="mt-auto flex flex-wrap items-start gap-2">
                 <SaveForLater trackId={track.id} />
@@ -417,18 +445,14 @@ export default function DiscoverPage() {
                     void feedback(track.id, "dislike");
                   }}
                 >
-                  Скрыть
+                  {t("Скрыть")}
                 </button>
                 <details className="w-full">
                   <summary className="cursor-pointer py-2 text-xs text-fg-2">
-                    Ещё действия
+                    {t("Ещё действия")}
                   </summary>
                   <div className="flex flex-wrap gap-2 pt-2">
-                    {[
-                      ["known", "Уже знаю"],
-                      ["like", "Больше такого"],
-                      ["block_artist", "Не рекомендовать артиста"],
-                    ].map(([value, label]) => (
+                    {FEEDBACK_ACTIONS.map(([value, label]) => (
                       <button
                         type="button"
                         key={value}
@@ -438,7 +462,7 @@ export default function DiscoverPage() {
                           void feedback(track.id, value);
                         }}
                       >
-                        {label}
+                        {t(label)}
                       </button>
                     ))}
                   </div>
@@ -449,44 +473,53 @@ export default function DiscoverPage() {
         </div>
       </section>
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold">Как меняется вкус · 30 дней</h2>
+        <h2 className="text-lg font-semibold">
+          {t("Как меняется вкус · 30 дней")}
+        </h2>
         <p className="text-xs text-fg-3">
-          Сравниваем последние 30 дней с предыдущими 30. Возвращения —
-          исполнители из более ранней истории.
+          {t(
+            "Сравниваем последние 30 дней с предыдущими 30. Возвращения — исполнители из более ранней истории.",
+          )}
         </p>
         <div className="grid gap-3 sm:grid-cols-3">
           {(
             [
-              ["Новые", evolution?.new],
-              ["Вернулись", evolution?.returning],
-              ["Стали звучать реже", evolution?.faded],
+              [msg("Новые"), evolution?.new],
+              [msg("Вернулись"), evolution?.returning],
+              [msg("Стали звучать реже"), evolution?.faded],
             ] as const
           ).map(([label, artists]) => (
             <div
               key={label}
               className="rounded-xl border border-line bg-surface p-4"
             >
-              <h3 className="mb-3 font-medium">{label}</h3>
+              <h3 className="mb-3 font-medium">{t(label)}</h3>
               {artists?.length ? (
                 <ul className="space-y-2 text-sm">
                   {artists.map((artist) => (
                     <li key={artist.artist}>
                       {artist.artist}
                       <span className="block text-xs text-fg-3">
-                        {artist.previous_plays} → {artist.plays} прослушиваний
+                        {artist.previous_plays} → {artist.plays}{" "}
+                        {plural(
+                          artist.plays,
+                          "прослушивание",
+                          "прослушивания",
+                          "прослушиваний",
+                        )}
                       </span>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-fg-3">Пока нет изменений</p>
+                <p className="text-sm text-fg-3">{t("Пока нет изменений")}</p>
               )}
             </div>
           ))}
         </div>
         {!!evolution?.genres.length && (
           <p className="text-sm text-fg-2">
-            Жанры:{" "}
+            {t("Жанры:")}{" "}
             {evolution.genres
               .map(
                 (genre) =>
@@ -498,7 +531,9 @@ export default function DiscoverPage() {
       </section>
       {story && (
         <section className="space-y-4 rounded-xl border border-line bg-surface p-5">
-          <h2 className="text-lg font-semibold">Ваша музыкальная неделя</h2>
+          <h2 className="text-lg font-semibold">
+            {t("Ваша музыкальная неделя")}
+          </h2>
           <p className="leading-relaxed text-fg-2">{story.story}</p>
           <div className="flex flex-wrap gap-2">
             <button
@@ -511,12 +546,12 @@ export default function DiscoverPage() {
                   setMessage(
                     cause instanceof Error
                       ? cause.message
-                      : "Не удалось создать карточку",
+                      : t("Не удалось создать карточку"),
                   );
                 }
               }}
             >
-              Скачать карточку PNG
+              {t("Скачать карточку PNG")}
             </button>
             <button
               type="button"
@@ -524,28 +559,30 @@ export default function DiscoverPage() {
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(story.story);
-                  setMessage("Итоги скопированы.");
+                  setMessage(t("Итоги скопированы."));
                 } catch {
                   setMessage(
-                    "Не удалось скопировать. Можно выделить текст итогов.",
+                    t("Не удалось скопировать. Можно выделить текст итогов."),
                   );
                 }
               }}
             >
-              Скопировать итоги
+              {t("Скопировать итоги")}
             </button>
           </div>
           <p className="text-xs text-fg-3">
-            Карточка скачивается на ваше устройство. Вы сами выбираете, с кем
-            поделиться.
+            {t(
+              "Карточка скачивается на ваше устройство. Вы сами выбираете, с кем поделиться.",
+            )}
           </p>
         </section>
       )}
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold">Музыка для двоих</h2>
+        <h2 className="text-lg font-semibold">{t("Музыка для двоих")}</h2>
         <p className="text-sm text-fg-2">
-          Подборка по общим исполнителям. Доступ зависит от настроек истории и
-          статистики второго участника.
+          {t(
+            "Подборка по общим исполнителям. Доступ зависит от настроек истории и статистики второго участника.",
+          )}
         </p>
         <form
           className="flex flex-wrap gap-3"
@@ -557,10 +594,10 @@ export default function DiscoverPage() {
           <input
             autoComplete="off"
             required
-            aria-label="Имя второго участника"
+            aria-label={t("Имя второго участника")}
             value={username}
             onChange={(event) => setUsername(event.target.value)}
-            placeholder="@имя пользователя"
+            placeholder={t("@имя пользователя")}
             className={input}
           />
           <button
@@ -568,14 +605,16 @@ export default function DiscoverPage() {
             disabled={busy}
             className={`${btn.primary} ${btn.sm}`}
           >
-            Собрать подборку
+            {t("Собрать подборку")}
           </button>
         </form>
         {mix && (
           <div className="space-y-3">
             {!mix.tracks.length && (
-              <EmptyState title="Общих исполнителей пока нет">
-                Попробуйте другого участника или послушайте больше музыки.
+              <EmptyState title={t("Общих исполнителей пока нет")}>
+                {t(
+                  "Попробуйте другого участника или послушайте больше музыки.",
+                )}
               </EmptyState>
             )}
             {mix.tracks.map((track) => (
@@ -586,11 +625,13 @@ export default function DiscoverPage() {
                 >
                   {track.artist} — {track.title}
                 </Link>
-                <span className="block text-xs text-fg-3">{track.reason}</span>
+                <span className="block text-xs text-fg-3">
+                  {t(track.reason)}
+                </span>
               </p>
             ))}
             <Link className={`${btn.secondary} ${btn.sm}`} href="/together">
-              Открыть Together
+              {t("Открыть Together")}
             </Link>
           </div>
         )}

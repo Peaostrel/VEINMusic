@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core import login_guard
+from app.core.i18n import request_lang, tr
 from app.core.rate_limit import limiter
 from app.core.security import (
     SECRET_KEY,
@@ -80,7 +81,8 @@ def register(request: Request, data: UserRegister, response: Response,
     if len(data.username) < 3:
         raise HTTPException(400, "Никнейм слишком короткий")
     if len(data.password) < MIN_PASSWORD_LENGTH:
-        raise HTTPException(400, f"Пароль должен быть не менее {MIN_PASSWORD_LENGTH} символов")
+        raise HTTPException(400, tr(request_lang(request), "Пароль должен быть не менее {n} символов",
+                                    n=MIN_PASSWORD_LENGTH))
     if db.query(User).filter(User.username == data.username).first():
         raise HTTPException(400, "Никнейм занят")
 
@@ -92,7 +94,8 @@ def register(request: Request, data: UserRegister, response: Response,
         username=data.username,
         hashed_password=get_password_hash(
             data.password),
-        api_key=hashed_api_key)
+        api_key=hashed_api_key,
+        lang=request_lang(request))
     if data.pd_consent:
         new_user.pd_consent_at = datetime.now(UTC)  # type: ignore[assignment]
         new_user.pd_consent_version = PD_CONSENT_VERSION  # type: ignore[assignment]
@@ -130,7 +133,8 @@ def login(request: Request, data: UserLogin, response: Response, background_task
     locked_for = login_guard.seconds_until_unlocked(data.username, client_ip)
     if locked_for:
         raise HTTPException(
-            429, f"Слишком много неудачных попыток входа. Попробуйте через {max(locked_for // 60, 1)} мин.")
+            429, tr(request_lang(request), "Слишком много неудачных попыток входа. Попробуйте через {minutes} мин.",
+                    minutes=max(locked_for // 60, 1)))
 
     # After a few failures, a captcha before the password is even checked
     if login_guard.captcha_needed(data.username, client_ip):

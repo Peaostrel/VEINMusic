@@ -1,15 +1,17 @@
 "use client";
 
 import { Meter } from "@/components/ui";
+import { useT } from "@/app/lib/i18n/client";
+import { msg } from "@/app/lib/i18n/core";
 import { sourceLabel } from "@/utils/formatters";
 
 type CountMap = Record<string, number>;
 
 const SOURCE_NAMES: Record<string, string> = {
   spotify: "Spotify",
-  yandex: "Яндекс Музыка",
-  yandex_music: "Яндекс Музыка",
-  vk: "VK Музыка",
+  yandex: msg("Яндекс Музыка"),
+  yandex_music: msg("Яндекс Музыка"),
+  vk: msg("VK Музыка"),
   youtube_music: "YouTube Music",
   soundcloud: "SoundCloud",
   apple_music: "Apple Music",
@@ -72,14 +74,16 @@ export function BarStrip({
 
 /** Share of plays per platform as labelled meters. */
 export function PlatformDistribution({ data }: Readonly<{ data: CountMap }>) {
+  const t = useT();
   const rows = Object.entries(data)
     .map(([k, v]) => ({
-      name: SOURCE_NAMES[k] || sourceLabel(k),
+      name: SOURCE_NAMES[k] ? t(SOURCE_NAMES[k]) : sourceLabel(k),
       value: Number(v),
     }))
     .sort((a, b) => b.value - a.value);
   const total = rows.reduce((s, r) => s + r.value, 0) || 1;
-  if (rows.length === 0) return <p className="text-sm text-fg-3">Нет данных</p>;
+  if (rows.length === 0)
+    return <p className="text-sm text-fg-3">{t("Нет данных")}</p>;
   return (
     <ul className="flex flex-col gap-3.5">
       {rows.map((r, i) => {
@@ -100,14 +104,15 @@ export function PlatformDistribution({ data }: Readonly<{ data: CountMap }>) {
 
 /** Genres as one stacked bar with a legend (top five + "Другое"). */
 export function GenreCloud({ data }: Readonly<{ data: CountMap }>) {
+  const t = useT();
   const sorted = Object.entries(data)
     .map(([name, value]) => ({ name, value: Number(value) }))
     .sort((a, b) => b.value - a.value);
   if (sorted.length === 0)
-    return <p className="text-sm text-fg-3">Нет данных о жанрах</p>;
+    return <p className="text-sm text-fg-3">{t("Нет данных о жанрах")}</p>;
   const top = sorted.slice(0, 4);
   const rest = sorted.slice(4).reduce((s, g) => s + g.value, 0);
-  if (rest > 0) top.push({ name: "Другое", value: rest });
+  if (rest > 0) top.push({ name: t("Другое"), value: rest });
   const total = top.reduce((s, g) => s + g.value, 0) || 1;
   const parts = top.map((g, i) => ({
     ...g,

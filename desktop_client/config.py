@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from desktop_client.i18n import tr
+
 CONFIG_DIR = Path.home() / ".veinmusic"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
@@ -37,7 +39,8 @@ def load_config() -> dict[str, Any]:
             config.update(data)
             return config
     except Exception as e:
-        print(f"[Config] Error loading config: {e}. Using defaults.")
+        print(f"[Config] {tr('Ошибка чтения настроек', 'Error loading config')}: {e}. "
+              + tr("Использую настройки по умолчанию.", "Using defaults."))
         return dict(DEFAULT_CONFIG)
 
 
@@ -51,7 +54,7 @@ def _restrict_permissions() -> None:
         if CONFIG_FILE.exists():
             os.chmod(CONFIG_FILE, 0o600)
     except OSError as e:
-        print(f"[Config] Could not restrict permissions: {e}")
+        print(f"[Config] {tr('Не удалось ограничить права доступа', 'Could not restrict permissions')}: {e}")
 
 
 def save_config(config: dict[str, Any]) -> None:
@@ -64,4 +67,4 @@ def save_config(config: dict[str, Any]) -> None:
             json.dump(config, f, indent=2, ensure_ascii=False)
         _restrict_permissions()
     except Exception as e:
-        print(f"[Config] Error saving config: {e}")
+        print(f"[Config] {tr('Ошибка сохранения настроек', 'Error saving config')}: {e}")

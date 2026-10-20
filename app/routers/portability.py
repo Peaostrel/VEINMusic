@@ -5,6 +5,7 @@ import hmac
 import io
 import json
 import time
+from bisect import bisect_left
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any
 
@@ -66,27 +67,51 @@ def _signature(data, user_id, expiry):
     return hmac.new(SECRET_KEY.encode(), message, hashlib.sha256).hexdigest()
 
 
-def _key(played_at, artist, title):
-    if played_at.tzinfo is None:
-        played_at = played_at.replace(tzinfo=UTC)
-    return (played_at.astimezone(UTC).isoformat(), artist.strip().casefold(), title.strip().casefold())
+# Spotify and ListenBrainz exports put a play a few seconds away from the
+# moment VEIN tracked it live, so a play this close to the same track already
+# in the history is that play. Within one upload only exact repeats are
+# dropped: two short plays in a row are both real.
+SAME_PLAY = timedelta(seconds=90)
+# Exports that hold only listens their service already counted
+COMPLETED_LISTENS_SOURCE = "listenbrainz_import"
+# Length assumed for a track of unknown duration, as in the statistics
+DEFAULT_TRACK_SEC = 180
+
+
+def _utc(played_at):
+    return played_at.replace(tzinfo=UTC) if played_at.tzinfo is None else played_at.astimezone(UTC)
+
+
+def _track(artist, title):
+    return artist.strip().casefold(), title.strip().casefold()
 
 
 def _new_items(db, user_id, items):
-    first = min(item.played_at for item in items)
-    last = max(item.played_at for item in items)
+    first = min(item.played_at for item in items) - SAME_PLAY
+    last = max(item.played_at for item in items) + SAME_PLAY
     rows = db.query(Scrobble.played_at, Track.artist, Track.title).execution_options(
         include_excluded=True, include_deleted=True).join(Track).filter(
         Scrobble.user_id == user_id, Scrobble.played_at >= first, Scrobble.played_at <= last).yield_per(500)
-    wanted = {_key(item.played_at, item.artist, item.title) for item in items}
+    wanted = {_track(item.artist, item.title) for item in items}
     # Memory stays proportional to this upload, even for a huge existing history.
-    seen = {_key(when, artist, title) for when, artist, title in rows if _key(when, artist, title) in wanted}
-    result = []
+    existing: dict[tuple[str, str], list[datetime]] = {}
+    for when, artist, title in rows:
+        key = _track(artist, title)
+        if key in wanted:
+            existing.setdefault(key, []).append(_utc(when))
+    for times in existing.values():
+        times.sort()
+    result, uploaded = [], set()
     for item in items:
-        key = _key(item.played_at, item.artist, item.title)
-        if key not in seen:
-            result.append(item)
-            seen.add(key)
+        key = _track(item.artist, item.title)
+        when = _utc(item.played_at)
+        times = existing.get(key, [])
+        index = bisect_left(times, when)
+        if (key, when) in uploaded or any(
+                abs(times[near] - when) <= SAME_PLAY for near in (index - 1, index) if 0 <= near < len(times)):
+            continue
+        result.append(item)
+        uploaded.add((key, when))
     return result
 
 
@@ -115,11 +140,20 @@ def _insert_history(db, user_id, items):
         track = db.query(Track).filter_by(
             title=item.title, artist=item.artist, album=item.album, duration=item.duration).first()
         if not track:
+            # Spotify and ListenBrainz exports often lack a duration (and
+            # an album): reuse the catalog entry the live plays already have.
+            same = db.query(Track).filter_by(title=item.title, artist=item.artist)
+            track = (same.filter_by(album=item.album).first() if item.album else None) or same.first()
+        if not track:
             track = Track(title=item.title, artist=item.artist, album=item.album, duration=item.duration)
             db.add(track)
             db.flush()
+        listened = item.listened_sec
+        if item.source == COMPLETED_LISTENS_SOURCE:
+            # Every ListenBrainz listen was counted there: count it whole
+            listened = max(listened, int(track.duration or 0) or DEFAULT_TRACK_SEC)
         db.add(Scrobble(user_id=user_id, track_id=track.id, played_at=item.played_at,
-                        updated_at=item.played_at, source=item.source or "transfer", listened_sec=item.listened_sec,
+                        updated_at=item.played_at, source=item.source or "transfer", listened_sec=listened,
                         xp_earned=0, is_imported=True, is_playing=False,
                         excluded_from_stats=item.excluded_from_stats))
 

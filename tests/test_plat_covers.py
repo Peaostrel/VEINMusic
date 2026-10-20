@@ -98,3 +98,24 @@ def test_recommendations_proxy_partner_artwork(client, db, monkeypatch):
     recs = client.get("/api/recommendations", params={"username": "cover_me"}).json()
     assert recs == [{"artist": "Partner Artist", "cover_url": "https://api.music.vein.guru" + PROXY_PATH,
                      "reason": "Слушают ваши вкусовые близнецы"}]
+
+
+def test_pictures_from_unknown_hosts_go_through_the_signed_proxy(client, monkeypatch):
+    from app.core.cover_urls import image_signature, proxied_image_url
+    assert proxied_image_url("https://i.scdn.co/image/abc") == "https://i.scdn.co/image/abc"
+    assert proxied_image_url("https://avatars.yandex.net/get-music-content/1/400x400") .startswith("https://avatars")
+    assert proxied_image_url("/uploads/a.png") == "/uploads/a.png"
+    tracker = proxied_image_url("https://evil.example/pixel.png")
+    assert tracker.endswith(f"/api/media/image?url=https%3A%2F%2Fevil.example%2Fpixel.png&sig={image_signature('https://evil.example/pixel.png')}")
+    assert proxied_image_url("https://i.scdn.co.evil.example/x").startswith("http://localhost:8000/api/media/image")
+
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 32
+
+    async def download(url, max_bytes):
+        assert url == "https://evil.example/pixel.png"
+        return png
+    monkeypatch.setattr("app.routers.media.pinned_download", download)
+    path = tracker.removeprefix("http://localhost:8000")
+    response = client.get(path)
+    assert response.status_code == 200 and response.content == png
+    assert client.get("/api/media/image?url=https%3A%2F%2Fevil.example%2Fother.png&sig=" + "0" * 32).status_code == 403

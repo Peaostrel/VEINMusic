@@ -303,6 +303,27 @@ def test_timeseries(admin_client):
     assert admin_client.get("/api/admin/analytics/timeseries?days=3").status_code == 422
 
 
+def test_retention_cohorts(admin_client):
+    now = datetime.now(UTC).replace(hour=12)
+    joined = now - timedelta(days=40)
+
+    def backdate(s):
+        s.query(User).filter_by(username="target").one().created_at = joined
+        s.commit()
+    _session(backdate)
+    _play("target", played_at=joined + timedelta(days=8))
+    _play("target", title="Later", played_at=joined + timedelta(days=36))  # after week 4
+
+    cohorts = admin_client.get("/api/admin/analytics/retention").json()["cohorts"]
+    assert len(cohorts) == 12
+    old = next(row for row in cohorts if row["registered"] and row["week"] <= joined.date().isoformat())
+    assert (old["registered"], old["connected"], old["listened"]) == (1, 1, 1)
+    assert (old["week_1"], old["week_1_of"], old["week_4"], old["week_4_of"]) == (1, 1, 0, 1)
+    current = cohorts[-1]
+    assert current["registered"] == 2 and current["listened"] == 0  # boss and other, today
+    assert current["week_1"] is None and current["week_1_of"] == 0
+
+
 # --- broadcast ----------------------------------------------------------------------
 
 def test_broadcast_inapp_and_push(admin_client):

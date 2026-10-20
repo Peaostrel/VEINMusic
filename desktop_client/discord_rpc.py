@@ -4,6 +4,8 @@ from __future__ import annotations
 import time
 from typing import Optional
 
+from desktop_client.i18n import tr
+
 DISCORD_CLIENT_ID = "120000000000000000"  # Default fallback client ID
 
 
@@ -24,7 +26,7 @@ class DiscordRPCManager:
             self._rpc = Presence(self.client_id)
             self._rpc.connect()
             self._connected = True
-            print("[Discord RPC] 🎮 Connected to Discord Rich Presence.")
+            print("[Discord RPC] 🎮 " + tr("Подключено к Discord.", "Connected to Discord Rich Presence."))
             return True
         except Exception:
             self._connected = False
@@ -50,7 +52,7 @@ class DiscordRPCManager:
         try:
             buttons = []
             if username:
-                buttons.append({"label": "VEIN Profile", "url": f"https://music.vein.guru/user/{username}"})
+                buttons.append({"label": tr("Профиль VEIN", "VEIN Profile"), "url": f"https://music.vein.guru/user/{username}"})
             else:
                 buttons.append({"label": "VEIN Music", "url": "https://music.vein.guru"})
 
@@ -59,12 +61,12 @@ class DiscordRPCManager:
 
             if self._rpc:
                 self._rpc.update(
-                    state=f"by {artist[:64]}",
+                    state=tr(artist[:64], f"by {artist[:64]}"),
                     details=f"🎵 {title[:64]}",
                     large_image="vein_logo",
-                    large_text=f"VEINMusic - {album or 'Listening to music'}",
+                    large_text=f"VEINMusic - {album or tr('Слушает музыку', 'Listening to music')}",
                     small_image="play" if is_playing else "pause",
-                    small_text="Playing" if is_playing else "Paused",
+                    small_text=tr("Играет", "Playing") if is_playing else tr("Пауза", "Paused"),
                     start=start_time,
                     end=end_time,
                     buttons=buttons[:2],

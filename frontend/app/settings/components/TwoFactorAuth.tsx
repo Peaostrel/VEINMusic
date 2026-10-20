@@ -3,6 +3,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useState } from "react";
 import { apiJson } from "@/app/lib/api";
 import { AccountUsername } from "@/components/autofill";
+import { useT } from "@/app/lib/i18n/client";
 
 function chooseAction(
   hasSecret: boolean,
@@ -13,6 +14,7 @@ function chooseAction(
 }
 
 export default function TwoFactorAuth() {
+  const t = useT();
   const [status, setStatus] = useState<{
     enabled: boolean;
     required: boolean;
@@ -31,12 +33,13 @@ export default function TwoFactorAuth() {
         if (!cancelled) setStatus(value);
       })
       .catch(() => {
-        if (!cancelled) setMessage("Не удалось проверить двухфакторную защиту");
+        if (!cancelled)
+          setMessage(t("Не удалось проверить двухфакторную защиту"));
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
   async function submit(action: "setup" | "enable" | "disable") {
     setBusy(true);
     setMessage("");
@@ -66,13 +69,15 @@ export default function TwoFactorAuth() {
         setRecoveryCodes(result.recovery_codes ?? []);
         setMessage(
           action === "enable"
-            ? "Защита включена. Остальные сеансы завершены."
-            : "Защита отключена. Остальные сеансы завершены.",
+            ? t("Защита включена. Остальные сеансы завершены.")
+            : t("Защита отключена. Остальные сеансы завершены."),
         );
       }
     } catch (error) {
       setMessage(
-        error instanceof Error ? error.message : "Не удалось изменить защиту",
+        error instanceof Error
+          ? error.message
+          : t("Не удалось изменить защиту"),
       );
     } finally {
       setBusy(false);
@@ -82,7 +87,7 @@ export default function TwoFactorAuth() {
     const url = URL.createObjectURL(
       new Blob(
         [
-          `VEINMusic — одноразовые резервные коды\n\n${recoveryCodes.join("\n")}\n`,
+          `${t("VEINMusic — одноразовые резервные коды")}\n\n${recoveryCodes.join("\n")}\n`,
         ],
         { type: "text/plain;charset=utf-8" },
       ),
@@ -98,17 +103,19 @@ export default function TwoFactorAuth() {
     "self-start rounded-lg bg-accent px-4 py-2 text-sm text-on-accent disabled:opacity-50";
   const action = chooseAction(Boolean(secret), Boolean(status?.enabled));
   const labels = {
-    setup: "Настроить защиту",
-    enable: "Подтвердить и включить",
-    disable: "Отключить защиту",
+    setup: t("Настроить защиту"),
+    enable: t("Подтвердить и включить"),
+    disable: t("Отключить защиту"),
   };
   return (
     <section className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-6">
       <div>
-        <h3 className="font-medium text-fg">Двухфакторная защита</h3>
+        <h3 className="font-medium text-fg">{t("Двухфакторная защита")}</h3>
         <p className="text-xs text-fg-2">
-          Код из Google Authenticator, Aegis или другого приложения при входе.{" "}
-          {status?.required && "Для администратора обязательна."}
+          {t(
+            "Код из Google Authenticator, Aegis или другого приложения при входе.",
+          )}{" "}
+          {status?.required && t("Для администратора обязательна.")}
         </p>
       </div>
       {message && (
@@ -116,15 +123,15 @@ export default function TwoFactorAuth() {
       )}
       {status && (
         <p className="text-sm text-fg">
-          {status.enabled ? "Включена" : "Не включена"}
+          {status.enabled ? t("Включена") : t("Не включена")}
         </p>
       )}
       {secret && (
         <div className="space-y-2 text-sm text-fg-2">
           <p>
-            Отсканируйте QR-код в Google Authenticator, Aegis или другом
-            приложении. Затем введите шестизначный код. Ключ действителен 10
-            минут.
+            {t(
+              "Отсканируйте QR-код в Google Authenticator, Aegis или другом приложении. Затем введите шестизначный код. Ключ действителен 10 минут.",
+            )}
           </p>
           {provisioningUri && (
             <QRCodeSVG
@@ -135,13 +142,14 @@ export default function TwoFactorAuth() {
               bgColor="#ffffff"
               fgColor="#000000"
               role="img"
-              aria-label="QR-код для подключения двухфакторной защиты"
+              aria-label={t("QR-код для подключения двухфакторной защиты")}
               className="max-w-full rounded-lg"
             />
           )}
           <p>
-            Для ручного подключения введите этот ключ и выберите коды по
-            времени:
+            {t(
+              "Для ручного подключения введите этот ключ и выберите коды по времени:",
+            )}
           </p>
           <code className="block break-all select-all rounded-lg bg-bg p-3 text-fg">
             {secret}
@@ -159,19 +167,19 @@ export default function TwoFactorAuth() {
           <AccountUsername />
           {!secret && (
             <input
-              aria-label="Пароль для двухфакторной защиты"
+              aria-label={t("Пароль для двухфакторной защиты")}
               type="password"
               name="current-password"
               autoComplete="current-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="Текущий пароль"
+              placeholder={t("Текущий пароль")}
               className={input}
             />
           )}
           {(secret || status.enabled) && (
             <input
-              aria-label="Код двухфакторной защиты"
+              aria-label={t("Код двухфакторной защиты")}
               name="one-time-code"
               autoComplete="one-time-code"
               spellCheck={false}
@@ -180,8 +188,8 @@ export default function TwoFactorAuth() {
               onChange={(event) => setCode(event.target.value)}
               placeholder={
                 secret
-                  ? "Код из приложения"
-                  : "Код из приложения или резервный код"
+                  ? t("Код из приложения")
+                  : t("Код из приложения или резервный код")
               }
               className={input}
             />
@@ -203,14 +211,15 @@ export default function TwoFactorAuth() {
       {recoveryCodes.length > 0 && (
         <div className="space-y-3">
           <p className="text-sm text-fg-2">
-            Сохраните резервные коды вне этого устройства. Каждый работает один
-            раз вместо кода из приложения. Повторно показать их нельзя.
+            {t(
+              "Сохраните резервные коды вне этого устройства. Каждый работает один раз вместо кода из приложения. Повторно показать их нельзя.",
+            )}
           </p>
           <pre className="overflow-auto rounded-lg bg-bg p-3 text-xs text-fg">
             {recoveryCodes.join("\n")}
           </pre>
           <button type="button" onClick={downloadCodes} className={button}>
-            Скачать резервные коды
+            {t("Скачать резервные коды")}
           </button>
         </div>
       )}

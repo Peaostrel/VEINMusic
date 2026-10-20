@@ -1,4 +1,5 @@
 import { API_URL } from "./api";
+import { tr } from "./i18n/active";
 
 export async function qualityRequest<T>(
   path: string,
@@ -9,13 +10,13 @@ export async function qualityRequest<T>(
     ...init,
   });
   if (response.status === 401)
-    throw new Error("Войдите в аккаунт, чтобы продолжить.");
+    throw new Error(tr("Войдите в аккаунт, чтобы продолжить."));
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
     throw new Error(
       typeof payload?.detail === "string"
-        ? payload.detail
-        : "Не удалось выполнить запрос. Попробуйте ещё раз.",
+        ? tr(payload.detail)
+        : tr("Не удалось выполнить запрос. Попробуйте ещё раз."),
     );
   }
   return response.json() as Promise<T>;

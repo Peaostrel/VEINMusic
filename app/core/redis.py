@@ -52,18 +52,13 @@ async def redis_lock(lock_key: str, expire_sec: int = 10):
     use_fallback = False
 
     try:
-        try:
-            await client.ping()
-        except Exception as e:
-            use_fallback = True
-            logging.warning(f"Redis connection failed for lock '{lock_key}' ({e}). Falling back to local lock.")
-
-        if not use_fallback:
-            redis_lock_obj = client.lock(lock_key, timeout=expire_sec)
-            # Try to acquire the lock with a timeout of 5 seconds
-            acquired = await redis_lock_obj.acquire(blocking=True, blocking_timeout=5)
-            if not acquired:
-                raise HTTPException(status_code=409, detail="Ресурс временно заблокирован, попробуйте позже")
+        # No PING first: acquiring fails just as fast when Redis is down, and
+        # every scrobble takes this lock.
+        redis_lock_obj = client.lock(lock_key, timeout=expire_sec)
+        # Try to acquire the lock with a timeout of 5 seconds
+        acquired = await redis_lock_obj.acquire(blocking=True, blocking_timeout=5)
+        if not acquired:
+            raise HTTPException(status_code=409, detail="Ресурс временно заблокирован, попробуйте позже")
     except HTTPException:
         raise
     except Exception as e:

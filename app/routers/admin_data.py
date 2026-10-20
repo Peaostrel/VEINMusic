@@ -8,12 +8,13 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated, Any
 
 import anyio
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Query as SAQuery, Session
 
 from app.core.constants import USER_NOT_FOUND
+from app.core.i18n import request_lang, tr, user_lang
 from app.core.security import get_admin_user
 from app.database import get_db
 from app.models import (
@@ -159,7 +160,7 @@ class BulkDelete(BaseModel):
 
 @router.post("/scrobbles/bulk-delete", responses={
     400: {"description": "Too many scrobbles at once"}, 404: {"description": USER_NOT_FOUND}})
-def bulk_delete_scrobbles(data: BulkDelete, db: DB, admin: AdminUser):
+def bulk_delete_scrobbles(request: Request, data: BulkDelete, db: DB, admin: AdminUser):
     """Delete one user's scrobbles matching the filters (for example the
     phantom plays left by a bug). Always limited to one user."""
     if not db.query(User.id).filter(User.username == data.username).first():
@@ -172,7 +173,9 @@ def bulk_delete_scrobbles(data: BulkDelete, db: DB, admin: AdminUser):
     if data.dry_run or not matched:
         return result
     if matched > BULK_DELETE_MAX:
-        raise HTTPException(400, f"За раз можно удалить не больше {BULK_DELETE_MAX} прослушиваний: сузьте период")
+        raise HTTPException(400, tr(request_lang(request, admin),
+                                    "За раз можно удалить не больше {max} прослушиваний: сузьте период",
+                                    max=BULK_DELETE_MAX))
     ids = [i for (i,) in query.with_entities(Scrobble.id).all()]
     audit.record(db, admin, "scrobble.bulk_delete", data.username, count=len(ids), xp=xp,
                  q=data.q, source=data.source, date_from=data.date_from, date_to=data.date_to)
@@ -596,8 +599,10 @@ class ReportResolve(BaseModel):
     delete_comment: bool = False
 
 
-def _notify_reporters(db, reports, status: str, label: str, admin) -> list:
-    """Tell everyone who reported it what came of it (never who decided)."""
+def _notify_reporters(db, reports, status: str, report, admin) -> list:
+    """Tell everyone who reported it what came of it (never who decided),
+    each in their own language."""
+    from app.routers.reports import _target_label
     from app.services import notifications
     # Notifications are cut at 120 characters: the outcome goes first
     text = "приняты меры, спасибо!" if status == "resolved" else "нарушений не нашли, спасибо!"
@@ -606,9 +611,11 @@ def _notify_reporters(db, reports, status: str, label: str, admin) -> list:
         if not r.reporter_id or r.reporter_id in sent:
             continue
         sent.add(r.reporter_id)
+        lang = user_lang(db.query(User).filter(User.id == r.reporter_id).first())
         alerts.append(notifications.create(
             db, recipient_id=int(r.reporter_id), actor_id=int(admin.id), kind=notifications.KIND_SYSTEM,
-            message=f"Жалоба рассмотрена: {text} ({label})"))
+            message=tr(lang, "Жалоба рассмотрена: {outcome} ({target})",
+                       outcome=tr(lang, text), target=_target_label(report, db, lang))))
     return [a for a in alerts if a]
 
 
@@ -720,7 +727,7 @@ def resolve_report(report_id: int, data: ReportResolve, background_tasks: Backgr
         done = _delete_reported_track(db, admin, report, data.block_artist)
     audit.record(db, admin, "report.resolve", target_name, status=data.status, reports=sorted(closing),
                  resolution=data.resolution, measure=action)
-    alerts = _notify_reporters(db, closing.values(), data.status, label, admin)
+    alerts = _notify_reporters(db, closing.values(), data.status, report, admin)
     db.commit()
     for alert in alerts:
         notifications.schedule_push(background_tasks, alert)

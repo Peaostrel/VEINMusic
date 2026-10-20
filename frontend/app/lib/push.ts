@@ -1,4 +1,5 @@
 import { apiFetch, apiJson } from "./api";
+import { tr } from "./i18n/active";
 import type { VapidKeyResponse } from "./types";
 
 function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
@@ -32,11 +33,11 @@ export async function currentSubscription(): Promise<PushSubscription | null> {
 export async function enablePush(): Promise<void> {
   const config = await getPushConfig();
   if (!config.enabled || !config.vapid_public_key) {
-    throw new Error("Push-уведомления не настроены на сервере");
+    throw new Error(tr("Push-уведомления не настроены на сервере"));
   }
   const permission = await Notification.requestPermission();
   if (permission !== "granted") {
-    throw new Error("Браузер запретил уведомления");
+    throw new Error(tr("Браузер запретил уведомления"));
   }
   const reg =
     (await navigator.serviceWorker.getRegistration()) ||

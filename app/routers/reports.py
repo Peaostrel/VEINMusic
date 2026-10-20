@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
 from app.core.constants import USER_NOT_FOUND
+from app.core.i18n import tr, user_lang
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.database import get_db
@@ -74,17 +75,18 @@ def _shorten(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[:limit - 1].rstrip() + "…"
 
 
-def _target_label(report: Report, db: Session) -> str:
+def _target_label(report: Report, db: Session, lang: str = "ru") -> str:
     """Short enough for a notification (cut at 120 characters)."""
     data = _snapshot_data(report)
     if report.target_type == "track":
         name = f"{data.get('artist')} — {data.get('title')}"
-        return f"трек «{_shorten(name, 50)}»"
+        return tr(lang, "трек «{name}»", name=_shorten(name, 50))
     username = db.query(User.username).filter(User.id == report.target_user_id).scalar() \
         if report.target_user_id else None
     known = username or data.get("username")
-    who = f"@{known}" if known else "удалённого пользователя"
-    return f"комментарий {who}" if report.target_type == "comment" else f"профиль {who}"
+    if report.target_type == "comment":
+        return tr(lang, "комментарий @{name}", name=known) if known else tr(lang, "комментарий удалённого пользователя")
+    return tr(lang, "профиль @{name}", name=known) if known else tr(lang, "профиль удалённого пользователя")
 
 
 def _same_target(query, target_type: str, track_id, comment_id, target_user_id):
@@ -106,13 +108,17 @@ def _alert_moderators(db: Session, report: Report) -> list:
                         report.target_user_id)
     if same.first():
         return []
-    message = f"Новая жалоба: {_target_label(report, db)}, {REASON_LABELS[str(report.reason)]}"
+    messages: dict[str, str] = {}  # one text per moderator language
     alerts = []
-    for (admin_id,) in db.query(User.id).filter(User.role == "admin", User.is_banned.isnot(True),
-                                                User.id != report.reporter_id):
+    for admin in db.query(User).filter(User.role == "admin", User.is_banned.isnot(True),
+                                       User.id != report.reporter_id):
+        lang = user_lang(admin)
+        if lang not in messages:
+            messages[lang] = tr(lang, "Новая жалоба: {target}, {reason}", target=_target_label(report, db, lang),
+                                reason=tr(lang, REASON_LABELS[str(report.reason)]))
         alerts.append(notifications.create(
-            db, recipient_id=int(admin_id), actor_id=int(admin_id), kind=KIND_MODERATION,
-            message=message))
+            db, recipient_id=int(admin.id), actor_id=int(admin.id), kind=KIND_MODERATION,
+            message=messages[lang]))
     return [a for a in alerts if a]
 
 

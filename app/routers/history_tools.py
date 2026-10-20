@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, literal, or_, tuple_
 from sqlalchemy.orm import Session
 
+from app.core.i18n import request_lang
 from app.core.rate_limit import credential_key, limiter
 from app.core.security import get_current_user
 from app.database import get_db
@@ -15,6 +16,7 @@ from app.models import HistoryChange, Scrobble, Track, User
 from app.routers.library import _track_dict
 from app.services.cache import invalidate_user
 from app.services.listen_status import listen_status
+from app.services.localized import source_label
 
 router = APIRouter(tags=["library"])
 DB = Annotated[Session, Depends(get_db)]
@@ -67,7 +69,7 @@ def _apply(row, data, db):
 
 
 @router.get("/api/me/history", responses=ERRORS)
-def history_page(db: DB, user: Owner, q: Annotated[str, Query(max_length=100)] = "",
+def history_page(request: Request, db: DB, user: Owner, q: Annotated[str, Query(max_length=100)] = "",
                  source: Annotated[str, Query(max_length=100)] = "", start: datetime | None = None,
                  end: datetime | None = None, status: Literal["all", "excluded", "counted", "incomplete", "metadata"] = "all",
                  cursor: Annotated[str | None, Query(max_length=120)] = None,
@@ -99,10 +101,12 @@ def history_page(db: DB, user: Owner, q: Annotated[str, Query(max_length=100)] =
         query = query.filter(tuple_(Scrobble.played_at, Scrobble.id) < tuple_(literal(stamp), literal(last_id)))
     rows = query.order_by(Scrobble.played_at.desc(), Scrobble.id.desc()).limit(limit + 1).all()
     visible = rows[:limit]
+    lang = request_lang(request, user)
     last = visible[-1][0] if len(rows) > limit else None
     return {"items": [{"id": int(row.id), "played_at": row.played_at, "source": row.source,
-                       "confirmed_sources": row.confirmed_sources or [row.source], "excluded_from_stats": bool(row.excluded_from_stats),
-                       "status": listen_status(row, track), "track": _track_dict(track)} for row, track in visible],
+                       "confirmed_sources": [source_label(label, lang) for label in row.confirmed_sources or [row.source]],
+                       "excluded_from_stats": bool(row.excluded_from_stats),
+                       "status": listen_status(row, track, lang), "track": _track_dict(track)} for row, track in visible],
             "next_cursor": f"{last.played_at.isoformat()}|{last.id}" if last else None}
 
 

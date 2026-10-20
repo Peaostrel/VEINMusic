@@ -8,18 +8,34 @@ from typing import Any
 import redis
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+# While Redis is down, try to reconnect at most this often
+RECONNECT_INTERVAL_SEC = 30
 redis_client = None
-try:
-    redis_client = redis.Redis.from_url(
-        REDIS_URL,
-        decode_responses=True,
-        socket_connect_timeout=2)
-    redis_client.ping()
-except Exception as e:
-    import logging
-    logging.warning(
-        f"Redis is not available, falling back to in-memory cache: {e}")
-    redis_client = None
+_reconnect_at = 0.0
+
+
+def _connect():
+    """Connect to Redis, or set the next reconnect attempt. Other modules read
+    `redis_client` at call time, so they pick up a restored connection too."""
+    global redis_client, _reconnect_at
+    try:
+        client = redis.Redis.from_url(REDIS_URL, decode_responses=True, socket_connect_timeout=2)
+        client.ping()
+        redis_client = client
+    except Exception as e:
+        import logging
+        logging.warning(f"Redis is not available, falling back to in-memory cache: {e}")
+        redis_client = None
+        _reconnect_at = time.time() + RECONNECT_INTERVAL_SEC
+
+
+def _redis():
+    if redis_client is None and time.time() >= _reconnect_at:
+        _connect()
+    return redis_client
+
+
+_connect()
 
 CACHE: dict[str, Any] = {}
 MAX_CACHE_SIZE = 500
@@ -28,6 +44,7 @@ KEY_PREFIX = "cache:"
 
 
 def _get_from_redis(key: str, ttl: int):
+    redis_client = _redis()
     if not redis_client:
         return None
     try:
@@ -68,6 +85,7 @@ def set_to_cache(key: str, data: Any, expire: int = 3600):
     ttl decides freshness, so expire should be at least that ttl)."""
     now = time.time()
     entry = {'data': data, 'ts': now}
+    redis_client = _redis()
     if redis_client:
         try:
             redis_client.set(KEY_PREFIX + key, json.dumps(entry), ex=expire)
@@ -89,6 +107,7 @@ def set_to_cache(key: str, data: Any, expire: int = 3600):
 
 def delete_from_cache(key: str) -> None:
     CACHE.pop(key, None)
+    redis_client = _redis()
     if redis_client:
         try:
             redis_client.delete(KEY_PREFIX + key)
@@ -101,6 +120,7 @@ def clear_all() -> int:
     """Drop every cached entry (Redis and in-memory). Returns the count."""
     removed = len(CACHE)
     CACHE.clear()
+    redis_client = _redis()
     if redis_client:
         keys = list(redis_client.scan_iter(match=KEY_PREFIX + "*", count=500))
         if keys:

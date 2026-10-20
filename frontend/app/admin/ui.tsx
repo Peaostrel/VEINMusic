@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiJson, type ApiInit } from "@/app/lib/api";
 import StatusText from "@/components/StatusText";
+import { useT } from "@/app/lib/i18n/client";
+import { currentLocale, tr } from "@/app/lib/i18n/active";
 
 // Shared building blocks of the admin panel tabs
 
@@ -34,7 +36,7 @@ export function PanelTitle({
 
 export function formatBytes(bytes: number | null | undefined): string {
   if (bytes === null || bytes === undefined) return "—";
-  const units = ["Б", "КБ", "МБ", "ГБ", "ТБ"];
+  const units = [tr("Б"), tr("КБ"), tr("МБ"), tr("ГБ"), tr("ТБ")];
   let value = bytes;
   let unit = 0;
   while (value >= 1024 && unit < units.length - 1) {
@@ -46,7 +48,7 @@ export function formatBytes(bytes: number | null | undefined): string {
 
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleString("ru-RU", {
+  return new Date(iso).toLocaleString(currentLocale(), {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -65,7 +67,7 @@ export function useNotice() {
         setNotice(`✅ ${success}`);
         return true;
       } catch (e) {
-        setNotice(`❌ ${e instanceof Error ? e.message : "Ошибка"}`);
+        setNotice(`❌ ${e instanceof Error ? e.message : tr("Ошибка")}`);
         return false;
       }
     },
@@ -98,7 +100,7 @@ export function useAdminResource<T>(path: string | null) {
         }
       })
       .catch((e) => {
-        if (active) setError(e instanceof Error ? e.message : "Ошибка");
+        if (active) setError(e instanceof Error ? e.message : tr("Ошибка"));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -127,12 +129,13 @@ export function Pager({
   offset: number;
   onChange: (offset: number) => void;
 }>) {
+  const t = useT();
   if (total <= limit) return null;
   const page = Math.floor(offset / limit) + 1;
   const pages = Math.ceil(total / limit);
   return (
     <nav
-      aria-label="Страницы"
+      aria-label={t("Страницы")}
       className="flex items-center justify-end gap-2 text-xs text-fg-2"
     >
       <button
@@ -141,7 +144,7 @@ export function Pager({
         disabled={offset === 0}
         onClick={() => onChange(Math.max(0, offset - limit))}
       >
-        ← Назад
+        {t("← Назад")}
       </button>
       <span className="font-mono">
         {page} / {pages}
@@ -152,7 +155,7 @@ export function Pager({
         disabled={offset + limit >= total}
         onClick={() => onChange(offset + limit)}
       >
-        Далее →
+        {t("Далее →")}
       </button>
     </nav>
   );

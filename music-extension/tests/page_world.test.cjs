@@ -186,7 +186,7 @@ test('does not scrobble YouTube Music advertisements', () => {
 });
 
 for (const [hostname, sourceName] of [['music.yandex.ru', 'yandex'], ['music.yandex.com', 'yandex'],
-    ['open.spotify.com', 'spotify'], ['music.apple.com', 'apple_music'], ['vk.ru', 'vk']]) {
+    ['open.spotify.com', 'spotify'], ['music.apple.com', 'apple_music'], ['vk.ru', 'vk'], ['zvuk.com', 'zvuk']]) {
     test(`reads MediaSession playback on ${hostname}`, () => {
         const {context, messages, runInterval} = runPageWorld({nodes: {}, hostname, href: `https://${hostname}/`, media: [{paused: false, currentTime: 24, duration: 180}]});
         context.navigator.mediaSession = {metadata: {title: 'Fixture Song', artist: 'Fixture Artist', album: 'Album', artwork: []}, playbackState: 'playing'};

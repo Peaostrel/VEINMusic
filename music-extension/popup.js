@@ -5,30 +5,64 @@ const DELIVERY_TONES = {
     auth_required: 'danger', invalid_payload: 'danger', flagged: 'danger', blacklisted: 'danger'
 };
 
+// Brand names stay as is; services with a localized name have a source_<id> message.
 const SOURCE_LABELS = {
-    yandex: 'Яндекс Музыка', spotify: 'Spotify', youtube_music: 'YouTube Music',
-    vk: 'VK', soundcloud: 'SoundCloud', apple_music: 'Apple Music'
+    yandex: 'Yandex Music', spotify: 'Spotify', youtube_music: 'YouTube Music',
+    vk: 'VK', soundcloud: 'SoundCloud', apple_music: 'Apple Music', zvuk: 'Zvuk'
 };
+
+function sourceLabel(source) {
+    return veinT(`source_${source}`) || SOURCE_LABELS[source] || source;
+}
 
 function playbackDetail(delivery) {
     if (delivery.position == null) return '';
-    const state = delivery.playing ? 'играет' : 'пауза';
-    return `${state}, ${Math.round(delivery.position)} с`;
+    const state = veinT(delivery.playing ? 'playback_playing' : 'playback_paused');
+    return [state, veinPlural('playback_seconds', Math.round(delivery.position))].filter(Boolean).join(', ');
 }
 
 function deliveryDetails(delivery) {
     if (!delivery) return '';
     return [
-        SOURCE_LABELS[delivery.source] || delivery.source,
+        sourceLabel(delivery.source),
         playbackDetail(delivery),
-        delivery.deliveryMs == null ? '' : `доставка ${delivery.deliveryMs} мс`,
-        delivery.processingMs == null ? '' : `сервер ${delivery.processingMs} мс`
+        delivery.deliveryMs == null ? '' : veinT('detail_deliveryMs', [String(delivery.deliveryMs)]),
+        delivery.processingMs == null ? '' : veinT('detail_serverMs', [String(delivery.processingMs)])
     ].filter(Boolean).join(' · ');
+}
+
+// Status text in the current browser language; the stored message is a
+// fallback for statuses this version does not know.
+function deliveryStatusText(delivery) {
+    if (!delivery) return veinT('popup_deliveryEmpty');
+    return (delivery.status && veinT(`delivery_${delivery.status}`)) || delivery.message || '';
+}
+
+// popup.html ships English text; replace it with the browser language at load.
+// Elements keep their built-in text when a message is missing.
+function localizePage(root = document) {
+    const lang = veinLocale();
+    document.documentElement.lang = lang;
+    for (const el of root.querySelectorAll('[data-i18n]')) {
+        const text = veinT(el.dataset.i18n);
+        if (text) el.textContent = text;
+    }
+    for (const attr of ['placeholder', 'aria-label', 'title']) {
+        for (const el of root.querySelectorAll(`[data-i18n-${attr}]`)) {
+            const text = veinT(el.getAttribute(`data-i18n-${attr}`));
+            if (text) el.setAttribute(attr, text);
+        }
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     const $ = (id) => document.getElementById(id);
     let pollTimer;
+    localizePage();
+
+    function errorText(error) {
+        return veinT('popup_errorDetail', [error.message]) || error.message;
+    }
 
     function setPairStatus(text, tone = '') {
         $('pair-status').innerText = text;
@@ -49,11 +83,10 @@ document.addEventListener('DOMContentLoaded', () => {
         $('username-display').innerText = data.username || '';
         $('avatar').innerText = (data.username || '?').slice(0, 1);
         $('tracking-dot').toggleAttribute('data-off', data.trackingEnabled !== true);
-        $('tracking-status').innerText = data.trackingEnabled === true ?
-            'Передача включена' : 'Передача приостановлена';
+        $('tracking-status').innerText = veinT(data.trackingEnabled === true ? 'popup_trackingOn' : 'popup_trackingOff');
         const delivery = data.last_delivery;
         $('delivery-track').innerText = delivery?.title ? `${delivery.artist} — ${delivery.title}` : '';
-        $('delivery-status').innerText = delivery?.message || 'Включите трек в музыкальной вкладке. Здесь появится результат приёма.';
+        $('delivery-status').innerText = deliveryStatusText(delivery);
         $('delivery-status').dataset.tone = DELIVERY_TONES[delivery?.status] || '';
         $('delivery-details').innerText = deliveryDetails(delivery);
     }
@@ -73,7 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             refreshState();
         } catch {
-            setPairStatus('Не удалось сохранить настройку.', 'danger');
+            setPairStatus(veinT('popup_settingSaveFailed'), 'danger');
         }
     });
 
@@ -89,14 +122,14 @@ document.addEventListener('DOMContentLoaded', () => {
             // Keep popup and minute-alarm polling in one background context.
             const status = await chrome.runtime.sendMessage({ type: 'PAIRING_POLL' }).catch(() => 'error');
             if (status === 'approved') {
-                setPairStatus('Подключено!', 'ok');
+                setPairStatus(veinT('popup_pairApproved'), 'ok');
                 refreshState();
             } else if (status === 'pending' || status === 'error') {
                 pollLoop(intervalSec);
             } else {
                 $('pair-code-box').style.display = 'none';
-                if (status !== 'none') setPairStatus(status === 'denied' ?
-                    'Подключение отклонено на сайте.' : 'Код устарел. Попробуйте ещё раз.', 'danger');
+                if (status !== 'none') setPairStatus(veinT(status === 'denied' ?
+                    'popup_pairDenied' : 'popup_pairExpired'), 'danger');
             }
         }, intervalSec * 1000);
     }
@@ -113,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
     $('pair-btn').addEventListener('click', async () => {
         if (!$('tracking-enabled').checked) return;
         $('pair-btn').disabled = true;
-        setPairStatus('Получаем код…');
+        setPairStatus(veinT('popup_pairRequesting'));
         try {
             const pairing = await veinStartPairing();
             setPairStatus('');
@@ -121,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
             chrome.tabs.create({ url: pairing.url });
             pollLoop(pairing.interval);
         } catch (error) {
-            setPairStatus(`Ошибка: ${error.message}`, 'danger');
+            setPairStatus(errorText(error), 'danger');
         } finally {
             refreshState();
         }
@@ -131,7 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!$('tracking-enabled').checked) return;
         const apiKey = $('api-key-input').value.trim();
         const username = $('username-input').value.trim();
-        if (!apiKey || !username) return setPairStatus('Введите ключ и никнейм.', 'danger');
+        if (!apiKey || !username) return setPairStatus(veinT('popup_credentialsRequired'), 'danger');
         await veinStorageSet({ apiKey, username, offline_scrobbles: [], last_delivery: null });
         $('api-key-input').value = '';
         refreshState();
@@ -145,22 +178,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     $('test-btn').addEventListener('click', async () => {
         const logBox = $('log-box');
-        logBox.innerText = 'Проверяем связь…';
+        logBox.innerText = veinT('popup_testRunning');
         logBox.dataset.tone = '';
         try {
             const settings = await veinStorageGet(['apiUrl', 'apiKey']);
-            if (!settings.apiKey) throw new Error('Сначала подключите аккаунт');
+            if (!settings.apiKey) throw new Error(veinT('popup_testNeedAccount'));
             // Read-only endpoint: testing must not create a fictitious play.
             const response = await fetch(`${veinApiBase(settings)}/api/profile/preferences`, {
                 headers: { Authorization: `Bearer ${settings.apiKey}` },
                 signal: AbortSignal.timeout(15000)
             });
-            const hint = response.status === 401 || response.status === 403 ?
-                'подключите аккаунт заново.' : 'попробуйте позже.';
-            logBox.innerText = response.ok ? 'Связь с VEIN работает.' : `Ошибка ${response.status}: ${hint}`;
+            const hint = veinT(response.status === 401 || response.status === 403 ?
+                'popup_hintReconnect' : 'popup_hintLater');
+            logBox.innerText = response.ok ? veinT('popup_testOk') :
+                veinT('popup_testHttpError', [String(response.status), hint]);
             logBox.dataset.tone = response.ok ? 'ok' : 'danger';
         } catch (error) {
-            logBox.innerText = `Ошибка: ${error.message}`;
+            logBox.innerText = errorText(error);
             logBox.dataset.tone = 'danger';
         }
     });

@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { WifiOff } from "lucide-react";
+import { useT } from "@/app/lib/i18n/client";
 
 /** Says that the page shows saved data while the device is offline. */
 export default function OfflineBanner() {
+  const t = useT();
   const [offline, setOffline] = useState(false);
   useEffect(() => {
     const update = () => setOffline(!navigator.onLine);
@@ -23,8 +25,9 @@ export default function OfflineBanner() {
       className="flex items-center justify-center gap-2 border-b border-line-soft bg-surface px-4 py-2 text-center text-xs text-fg-2"
     >
       <WifiOff className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-      Нет соединения: показаны сохранённые данные, новые прослушивания появятся,
-      когда интернет вернётся.
+      {t(
+        "Нет соединения: показаны сохранённые данные, новые прослушивания появятся, когда интернет вернётся.",
+      )}
     </output>
   );
 }

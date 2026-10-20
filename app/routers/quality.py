@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.i18n import request_lang, tr
 from app.core.performance import latency_snapshot
 from app.core.security import get_admin_user, get_current_user
 from app.database import get_db
@@ -136,7 +137,7 @@ def undo_import(job_id: int, db: DB, user: Owner):
 
 
 @router.get("/api/me/connection-check")
-def connection_check(db: DB, user: Owner, source: Annotated[Literal["spotify", "yandex", "youtube", "soundcloud", "lastfm", "plat", "extension"], Query()] = "extension", since: datetime | None = None):
+def connection_check(request: Request, db: DB, user: Owner, source: Annotated[Literal["spotify", "yandex", "youtube", "soundcloud", "lastfm", "plat", "extension"], Query()] = "extension", since: datetime | None = None):
     cutoff = max(_aware(since), datetime.now(UTC) - timedelta(minutes=10)) if since else datetime.now(UTC) - timedelta(minutes=10)
     health = db.query(SourceHealth).filter_by(user_id=user.id, source=source).first()
     recent = db.query(Scrobble).filter(
@@ -147,7 +148,8 @@ def connection_check(db: DB, user: Owner, source: Annotated[Literal["spotify", "
     status = str(health.status) if health and not stale else "waiting"
     return {"source": source, "received": bool(listen), "counted": bool(listen and
             int(listen.listened_sec or 0) * 100 >= int(listen.track.duration or 180) * 85),
-            "status": status, "message": MESSAGES.get(status, "Включите музыку. Если событие не появится, проверьте подключение и разрешения расширения."),
+            "status": status, "message": tr(request_lang(request, user), MESSAGES.get(
+                status, "Включите музыку. Если событие не появится, проверьте подключение и разрешения расширения.")),
             "last_event_at": health.received_at if health else None,
             "track": _track_dict(listen.track) if listen else None}
 
@@ -206,17 +208,19 @@ def shared_mix(username: str, request: Request, db: DB, user: Owner):
     _get_visible_user(username, request, db, "history")
     rows = db.query(Track, func.count(Scrobble.id)).join(Scrobble, Scrobble.track_id == Track.id).filter(
         Scrobble.user_id.in_([user.id, other.id]), Track.artist.in_(common)).group_by(Track.id).order_by(func.count(Scrobble.id).desc(), Track.id).limit(30).all()
+    lang = request_lang(request, user)
     return {"users": [user.username, other.username], "common_artists": common,
-            "tracks": [{**_track_dict(track), "reason": f"Вы оба слушаете {track.artist}"} for track, _ in rows]}
+            "tracks": [{**_track_dict(track), "reason": tr(lang, "Вы оба слушаете {artist}", artist=track.artist)}
+                       for track, _ in rows]}
 
 
 @router.get("/api/me/weekly-story")
-def weekly_story(db: DB, user: Owner):
-    return build_weekly_story(user, db)
+def weekly_story(request: Request, db: DB, user: Owner):
+    return build_weekly_story(user, db, lang=request_lang(request, user))
 
 
 @router.get("/api/admin/quality")
-def quality_metrics(db: DB, admin: Admin):
+def quality_metrics(request: Request, db: DB, admin: Admin):
     cutoff = datetime.now(UTC) - timedelta(days=7)
     new_users = db.query(User.id).filter(User.created_at >= cutoff, User.is_banned.isnot(True)).subquery()
     registered = db.query(func.count()).select_from(new_users).scalar() or 0
@@ -231,4 +235,4 @@ def quality_metrics(db: DB, admin: Admin):
                          "errors": int(errors or 0), "average_processing_ms": round(float(ms or 0), 1),
                          "verified_accounts": verified} for source, accounts, events, errors, ms, verified in rows],
             "api_latency": latency_snapshot()[:12],
-            "note": "Счётчики источников накопительные с момента установки. API-процентили считаются для текущего процесса с момента запуска."}
+            "note": tr(request_lang(request, admin), "Счётчики источников накопительные с момента установки. API-процентили считаются для текущего процесса с момента запуска.")}

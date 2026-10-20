@@ -3,11 +3,12 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated, cast
 
 import anyio
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.cover_urls import public_cover_url
+from app.core.i18n import request_lang, tr
 from app.core.security import get_admin_user, revoke_all_sessions
 from app.core.websockets import manager
 from app.database import get_db
@@ -41,6 +42,7 @@ from app.schemas import (
 from app.services import audit, cache, runtime_settings
 from app.services.achievements import (
     _artist_target_values,
+    achievement_admin_texts,
     render_achievement_description,
 )
 from app.services.antifraud import get_all_suspicious_users
@@ -103,6 +105,7 @@ def get_admin_stats(db: Annotated[Session, Depends(get_db)], admin: Annotated[Us
             "name": a.name,
             "description": a.description,
             "rendered_description": render_achievement_description(a),
+            **achievement_admin_texts(a),
             "icon": a.icon,
             "rule_type": a.rule_type,
             "rule_value": a.rule_value,
@@ -149,7 +152,7 @@ def list_suspicious_users(db: Annotated[Session, Depends(get_db)], admin: Annota
 
 @router.post("/antifraud/{target_username}/reset-xp", responses={404: {"description": "Not Found"}})
 def reset_fraudulent_xp(
-    target_username: str, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]
+    request: Request, target_username: str, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]
 ):
     target = db.query(User).filter(User.username == target_username).first()
     if not target:
@@ -165,12 +168,13 @@ def reset_fraudulent_xp(
     target.antifraud_reason = f"Сброс опыта администратором @{admin.username} за накрутку"  # type: ignore[assignment]
     audit.record(db, admin, "antifraud.reset_xp", target_username)
     db.commit()
-    return {"status": "ok", "message": f"Опыт пользователя @{target_username} успешно сброшен"}
+    return {"status": "ok", "message": tr(request_lang(request, admin), "Опыт пользователя @{username} успешно сброшен",
+                                          username=target_username)}
 
 
 @router.post("/antifraud/{target_username}/unflag", responses={404: {"description": "Not Found"}})
 def unflag_user_antifraud(
-    target_username: str, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]
+    request: Request, target_username: str, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]
 ):
     target = db.query(User).filter(User.username == target_username).first()
     if not target:
@@ -179,7 +183,8 @@ def unflag_user_antifraud(
     target.antifraud_reason = None  # type: ignore[assignment]
     audit.record(db, admin, "antifraud.unflag", target_username)
     db.commit()
-    return {"status": "ok", "message": f"Флаг подозрительного аккаунта снят с @{target_username}"}
+    return {"status": "ok", "message": tr(request_lang(request, admin), "Флаг подозрительного аккаунта снят с @{username}",
+                                          username=target_username)}
 
 
 @router.post("/users/{target_username}/ban", responses={404: {"description": "Not Found"}, 400: {"description": "Bad Request"}})
@@ -278,7 +283,7 @@ def delete_user(target_username: str, db: Annotated[Session, Depends(get_db)], a
 
 @router.post("/catalog/merge", responses={400: {"description": "Bad Request"}, 404: {"description": "Not Found"}})
 def merge_catalog_items(
-    data: CatalogMergeRequest, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]
+    request: Request, data: CatalogMergeRequest, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]
 ):
     """Merge duplicate tracks or entire artists and register an alias for future scrobbles."""
     if data.source_track_id and data.target_track_id:
@@ -314,7 +319,10 @@ def merge_catalog_items(
 
         return {
             "status": "ok",
-            "message": f"Скробблы ({reassigned_count}) перенесены на трек #{target_track.id} ({target_track.artist} - {target_track.title})",
+            "message": tr(request_lang(request, admin),
+                          "Скробблы ({count}) перенесены на трек #{id} ({artist} - {title})",
+                          count=reassigned_count, id=target_track.id, artist=target_track.artist,
+                          title=target_track.title),
             "reassigned_scrobbles": reassigned_count,
         }
 
@@ -332,14 +340,16 @@ def merge_catalog_items(
 
         return {
             "status": "ok",
-            "message": f"Исполнитель '{src_art}' объединен с '{tgt_art}'. Обновлено треков: {len(tracks_to_update)}",
+            "message": tr(request_lang(request, admin),
+                          "Исполнитель '{source}' объединен с '{target}'. Обновлено треков: {count}",
+                          source=src_art, target=tgt_art, count=len(tracks_to_update)),
         }
 
     raise HTTPException(400, "Необходимо указать (source_track_id, target_track_id) или (source_artist, target_artist)")
 
 
 @router.post("/cache/flush", responses={500: {"description": "Internal Server Error"}})
-def flush_system_cache(db: Annotated[Session, Depends(get_db)],
+def flush_system_cache(request: Request, db: Annotated[Session, Depends(get_db)],
                              admin: Annotated[User, Depends(get_admin_user)]):
     """Drop cached responses (leaderboard, discovery, taste twins…) and the
     cached runtime settings, so the next requests are computed afresh."""
@@ -350,7 +360,7 @@ def flush_system_cache(db: Annotated[Session, Depends(get_db)],
     runtime_settings.invalidate()
     audit.record(db, admin, "system.cache_flush", removed=removed)
     db.commit()
-    return {"status": "ok", "removed": removed, "message": f"Кэш сброшен (записей: {removed})"}
+    return {"status": "ok", "removed": removed, "message": tr(request_lang(request, admin), "Кэш сброшен (записей: {count})", count=removed)}
 
 
 # ─── GAMIFICATION: AVATAR FRAMES & ECONOMY ────────────────────────────────────
@@ -364,11 +374,11 @@ def list_avatar_frames(db: Annotated[Session, Depends(get_db)], admin: Annotated
 
 @router.post("/frames", responses={400: {"description": "Bad Request"}})
 def create_avatar_frame(
-    data: FrameCreate, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]
+    request: Request, data: FrameCreate, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]
 ):
     existing = db.query(AvatarFrame).filter(AvatarFrame.code == data.code).first()
     if existing:
-        raise HTTPException(400, f"Рамка с кодом '{data.code}' уже существует")
+        raise HTTPException(400, tr(request_lang(request, admin), "Рамка с кодом '{code}' уже существует", code=data.code))
 
     frame = AvatarFrame(
         name=data.name,
@@ -438,13 +448,14 @@ def get_xp_multiplier(db: Annotated[Session, Depends(get_db)], admin: Annotated[
 
 @router.post("/economy/multiplier")
 def set_xp_multiplier(
-    data: EconomyMultiplierRequest, db: Annotated[Session, Depends(get_db)],
+    request: Request, data: EconomyMultiplierRequest, db: Annotated[Session, Depends(get_db)],
     admin: Annotated[User, Depends(get_admin_user)],
 ):
     """Scales the XP of plays counted from now on (already earned XP is kept)."""
     audit.record(db, admin, "economy.multiplier", multiplier=data.multiplier)
     value = runtime_settings.set_xp_multiplier(db, data.multiplier)
-    return {"status": "ok", "multiplier": value, "message": f"Множитель опыта установлен на x{value:g}"}
+    return {"status": "ok", "multiplier": value, "message": tr(request_lang(request, admin), "Множитель опыта установлен на x{value}",
+                                                                     value=f"{value:g}")}
 
 
 # ─── SYSTEM HEALTH & METRICS ──────────────────────────────────────────────────
@@ -605,11 +616,11 @@ def list_admin_feature_flags(db: Annotated[Session, Depends(get_db)], admin: Ann
 
 @router.post("/feature-flags", responses={400: {"description": "Bad Request"}})
 def create_feature_flag(
-    data: FeatureFlagCreate, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]
+    request: Request, data: FeatureFlagCreate, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_admin_user)]
 ):
     existing = db.query(FeatureFlag).filter(FeatureFlag.key == data.key).first()
     if existing:
-        raise HTTPException(400, f"Флаг с ключом '{data.key}' уже существует")
+        raise HTTPException(400, tr(request_lang(request, admin), "Флаг с ключом '{key}' уже существует", key=data.key))
 
     flag = FeatureFlag(key=data.key, description=data.description, is_enabled=data.is_enabled)
     db.add(flag)
@@ -720,6 +731,7 @@ def list_lastfm_import_jobs(
 @router.post("/jobs/lastfm/{job_id}/retry",
              responses={404: {"description": "Not Found"}, 400: {"description": "Bad Request"}})
 def retry_lastfm_import_job(
+    request: Request,
     job_id: int,
     db: Annotated[Session, Depends(get_db)],
     admin: Annotated[User, Depends(get_admin_user)],
@@ -738,7 +750,8 @@ def retry_lastfm_import_job(
     # Resumes from the last imported page
     from app.services.lastfm_import import enqueue_import
     anyio.from_thread.run(enqueue_import, job_id)
-    return {"status": "ok", "message": f"Задача импорта #{job_id} поставлена в очередь на повтор"}
+    return {"status": "ok", "message": tr(request_lang(request, admin), "Задача импорта #{id} поставлена в очередь на повтор",
+                                          id=job_id)}
 
 
 # ─── LISTEN TOGETHER ROOMS MONITORING ─────────────────────────────────────────

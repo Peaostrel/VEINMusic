@@ -1,4 +1,6 @@
 "use client";
+import { useT } from "@/app/lib/i18n/client";
+import { msg } from "@/app/lib/i18n/core";
 
 import { Clock3 } from "lucide-react";
 import { btn, inputOnCard } from "@/components/ui";
@@ -12,20 +14,22 @@ import {
 } from "../components/PreferenceControls";
 
 const SOURCES = [
-  { value: "yandex", label: "Яндекс Музыка" },
+  { value: "yandex", label: msg("Яндекс Музыка") },
   { value: "spotify", label: "Spotify" },
-  { value: "vk", label: "VK Музыка" },
+  { value: "vk", label: msg("VK Музыка") },
   { value: "youtube", label: "YouTube Music" },
   { value: "apple", label: "Apple Music" },
+  { value: "zvuk", label: msg("Звук") },
   { value: "soundcloud", label: "SoundCloud" },
   { value: "plat", label: "Plat Music" },
-  { value: "desktop", label: "Десктопный клиент" },
+  { value: "desktop", label: msg("Десктопный клиент") },
 ];
 
 export default function ListeningTab({
   data,
   updatePreference,
 }: Readonly<{ data: SettingsData; updatePreference: UpdatePreference }>) {
+  const t = useT();
   const settings = data.preferences.listening;
   const update = (patch: Partial<typeof settings>) =>
     updatePreference("listening", { ...settings, ...patch });
@@ -43,8 +47,10 @@ export default function ListeningTab({
   return (
     <div className="space-y-6">
       <SettingsIntro
-        title="Прослушивания"
-        description="Решите, какие события VEIN должен записывать. Эти фильтры применяются до добавления трека в историю и статистику."
+        title={t("Прослушивания")}
+        description={t(
+          "Решите, какие события VEIN должен записывать. Эти фильтры применяются до добавления трека в историю и статистику.",
+        )}
       />
 
       <section className={`${settingsCard} p-5`}>
@@ -52,15 +58,18 @@ export default function ListeningTab({
           <div>
             <h3 className="flex items-center gap-2 text-sm font-medium">
               <Clock3 className="h-4 w-4 text-accent" aria-hidden="true" />
-              Приватная сессия
+              {t("Приватная сессия")}
             </h3>
             <p className="mt-1 text-xs text-fg-2">
-              Во время сессии новые прослушивания не сохраняются и не приносят
-              XP.
+              {t(
+                "Во время сессии новые прослушивания не сохраняются и не приносят XP.",
+              )}
             </p>
             {privateActive && privateUntil && (
               <p className="mt-2 font-mono text-xs text-accent">
-                Активна до {privateUntil.toLocaleString("ru-RU")}
+                {t("Активна до {time}", {
+                  time: privateUntil.toLocaleString(t.locale),
+                })}
               </p>
             )}
           </div>
@@ -70,14 +79,14 @@ export default function ListeningTab({
               onClick={() => startPrivate(1)}
               className={`${btn.secondary} ${btn.sm}`}
             >
-              На час
+              {t("На час")}
             </button>
             <button
               type="button"
               onClick={() => startPrivate(8)}
               className={`${btn.secondary} ${btn.sm}`}
             >
-              На 8 часов
+              {t("На 8 часов")}
             </button>
             {privateActive && (
               <button
@@ -85,7 +94,7 @@ export default function ListeningTab({
                 onClick={() => update({ private_session_until: null })}
                 className={`${btn.danger} ${btn.sm}`}
               >
-                Выключить
+                {t("Выключить")}
               </button>
             )}
           </div>
@@ -93,25 +102,30 @@ export default function ListeningTab({
       </section>
 
       <TagEditor
-        title="Игнорируемые исполнители"
-        description="Прослушивания этих исполнителей не попадут в историю, статистику и ленту. Используется точное совпадение имени."
+        title={t("Игнорируемые исполнители")}
+        description={t(
+          "Прослушивания этих исполнителей не попадут в историю, статистику и ленту. Используется точное совпадение имени.",
+        )}
         values={settings.ignored_artists}
-        placeholder="Имя исполнителя"
+        placeholder={t("Имя исполнителя")}
         onChange={(ignored_artists) => update({ ignored_artists })}
       />
       <TagEditor
-        title="Игнорируемые треки"
-        description="Можно указать название или строку «Исполнитель — Трек»."
+        title={t("Игнорируемые треки")}
+        description={t(
+          "Можно указать название или строку «Исполнитель — Трек».",
+        )}
         values={settings.ignored_tracks}
-        placeholder="Исполнитель — название трека"
+        placeholder={t("Исполнитель — название трека")}
         onChange={(ignored_tracks) => update({ ignored_tracks })}
       />
 
       <section className={`${settingsCard} p-5`}>
-        <h3 className="text-sm font-medium">Отключённые источники</h3>
+        <h3 className="text-sm font-medium">{t("Отключённые источники")}</h3>
         <p className="mb-4 mt-1 text-xs text-fg-2">
-          VEIN будет принимать соединение, но не станет записывать треки из
-          выбранных источников.
+          {t(
+            "VEIN будет принимать соединение, но не станет записывать треки из выбранных источников.",
+          )}
         </p>
         <CheckboxGrid
           values={settings.ignored_sources}
@@ -122,8 +136,10 @@ export default function ListeningTab({
 
       <section className={settingsCard}>
         <ToggleRow
-          title="Игнорировать короткие треки"
-          description="Полезно для джинглов, уведомлений и случайно определённых звуков."
+          title={t("Игнорировать короткие треки")}
+          description={t(
+            "Полезно для джинглов, уведомлений и случайно определённых звуков.",
+          )}
           checked={settings.ignore_short_tracks}
           onChange={(ignore_short_tracks) => update({ ignore_short_tracks })}
         />
@@ -134,10 +150,10 @@ export default function ListeningTab({
                 htmlFor="short-track-seconds"
                 className="block text-sm font-medium"
               >
-                Максимальная длительность
+                {t("Максимальная длительность")}
               </label>
               <span id="short-track-seconds-hint" className="text-xs text-fg-2">
-                От 15 до 120 секунд
+                {t("От 15 до 120 секунд")}
               </span>
             </span>
             <input
@@ -156,8 +172,10 @@ export default function ListeningTab({
           </div>
         )}
         <ToggleRow
-          title="Дополнять метаданные автоматически"
-          description="VEIN попробует найти длительность и жанр, если источник их не передал."
+          title={t("Дополнять метаданные автоматически")}
+          description={t(
+            "VEIN попробует найти длительность и жанр, если источник их не передал.",
+          )}
           checked={settings.auto_metadata}
           onChange={(auto_metadata) => update({ auto_metadata })}
         />

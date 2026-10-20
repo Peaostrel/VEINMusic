@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "VEIN Music Tracker",
-  "version": "1.5.4",
-  "description": "История прослушиваний из музыкальных веб-плееров в вашем аккаунте VEINMusic.",
+  "name": "__MSG_extName__",
+  "version": "1.5.6",
+  "description": "__MSG_extDescription__",
+  "default_locale": "en",
   "browser_specific_settings": {
     "gecko": {
       "id": "vein-tracker@vein.music",
@@ -53,7 +54,8 @@
         "https://vk.com/*",
         "https://vk.ru/*",
         "https://soundcloud.com/*",
-        "https://music.apple.com/*"
+        "https://music.apple.com/*",
+        "https://zvuk.com/*"
       ],
       "js": [
         "page_world.js"
@@ -71,7 +73,8 @@
         "https://vk.com/*",
         "https://vk.ru/*",
         "https://soundcloud.com/*",
-        "https://music.apple.com/*"
+        "https://music.apple.com/*",
+        "https://zvuk.com/*"
       ],
       "js": [
         "content.js"

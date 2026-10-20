@@ -4,6 +4,8 @@ import type { DetailedStats } from "@/app/lib/types";
 import { Meter } from "@/components/ui";
 import { getAlbumUrl, getArtistUrl, getTrackUrl } from "./links";
 import { coverAt } from "@/app/lib/coverSize";
+import { msg } from "@/app/lib/i18n/core";
+import { useT } from "@/app/lib/i18n/client";
 
 /** Comma-separated artists, each linking to a search on the service. */
 function ArtistLinks({
@@ -52,17 +54,22 @@ function Section({
   title,
   children,
 }: Readonly<{ id: string; title: string; children: React.ReactNode }>) {
+  const t = useT();
   return (
     <section aria-labelledby={id} className="flex min-w-0 flex-col gap-3">
       <h2 id={id} className="text-base font-semibold">
-        {title}
+        {t(title)}
       </h2>
       {children}
     </section>
   );
 }
 
-const empty = <p className="text-sm text-fg-3">Нет данных</p>;
+function Empty() {
+  const t = useT();
+  return <p className="text-sm text-fg-3">{t("Нет данных")}</p>;
+}
+const empty = <Empty />;
 const row =
   "grid grid-cols-[20px_40px_minmax(0,1fr)_auto] items-center gap-3 border-b border-line-soft py-2.5";
 
@@ -70,7 +77,7 @@ export function TopTracksCard({
   tracks,
 }: Readonly<{ tracks: DetailedStats["top_tracks"] }>) {
   return (
-    <Section id="top-tracks" title="Треки">
+    <Section id="top-tracks" title={msg("Треки")}>
       {tracks.length === 0 ? (
         empty
       ) : (
@@ -105,7 +112,7 @@ export function TopArtistsCard({
 }: Readonly<{ artists: DetailedStats["top_artists"]; topSource: string }>) {
   const max = artists[0]?.plays || 1;
   return (
-    <Section id="top-artists" title="Артисты">
+    <Section id="top-artists" title={msg("Артисты")}>
       {artists.length === 0 ? (
         empty
       ) : (
@@ -143,7 +150,7 @@ export function TopAlbumsCard({
   albums,
 }: Readonly<{ albums: DetailedStats["top_albums"] }>) {
   return (
-    <Section id="top-albums" title="Альбомы">
+    <Section id="top-albums" title={msg("Альбомы")}>
       {albums.length === 0 ? (
         empty
       ) : (

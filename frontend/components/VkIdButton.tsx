@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { API_URL } from "@/app/lib/api";
 import { btn } from "@/components/ui";
+import { useT } from "@/app/lib/i18n/client";
 
 type Mode = "login" | "link";
 type WidgetConfig = {
@@ -26,6 +27,8 @@ export default function VkIdButton({
   mode,
   onResult,
 }: Readonly<{ mode: Mode; onResult: (result: VkResult) => void }>) {
+  const t = useT();
+  const lang = t.lang;
   const container = useRef<HTMLDivElement>(null);
   const onResultRef = useRef(onResult);
   const [failed, setFailed] = useState(false);
@@ -100,7 +103,7 @@ export default function VkIdButton({
           .render({
             container: container.current,
             scheme: light ? VKID.Scheme.LIGHT : VKID.Scheme.DARK,
-            lang: VKID.Languages.RUS,
+            lang: lang === "en" ? VKID.Languages.ENG : VKID.Languages.RUS,
             showAlternativeLogin: true,
             oauthList: [VKID.OAuthName.OK, VKID.OAuthName.MAIL],
             styles: { height: 44, borderRadius: 8 },
@@ -122,7 +125,7 @@ export default function VkIdButton({
       cancelled = true;
       widget?.close();
     };
-  }, [mode, round]);
+  }, [mode, round, lang]);
 
   if (failed) {
     return (
@@ -130,7 +133,7 @@ export default function VkIdButton({
         href={`${API_URL}/auth/vk/${mode}`}
         className={`${btn.secondary} ${btn.lg}`}
       >
-        {mode === "login" ? "Войти через VK ID" : "Привязать VK ID"}
+        {mode === "login" ? t("Войти через VK ID") : t("Привязать VK ID")}
       </a>
     );
   }

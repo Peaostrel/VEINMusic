@@ -1,6 +1,46 @@
 // VEIN Music - device pairing shared by the popup and the background worker.
 // The extension asks the server for a short code, the user approves it on
 // the website (/link) and the extension receives its own revocable API key.
+// It also holds the small i18n helpers, since pairing.js is the one script
+// loaded by both the popup and the background in Chrome and Firefox.
+
+// Localized text from _locales/<lang>/messages.json (English by default).
+// Returns '' when the i18n API is unavailable, so callers can fall back.
+function veinT(key, substitutions) {
+    try {
+        return globalThis.chrome?.i18n?.getMessage(key, substitutions) || '';
+    } catch {
+        return '';
+    }
+}
+
+// The language of the catalog the browser actually chose, so plural rules
+// match the text (a Ukrainian browser gets English text and English plurals).
+function veinLocale() {
+    return veinT('locale') || 'en';
+}
+
+// Plural category for a count: one/few/many/other in Russian, one/other in
+// English. Intl.PluralRules is built into every supported browser; the
+// explicit rules are a fallback for environments without it.
+function veinPluralCategory(count, locale = veinLocale()) {
+    try {
+        return new Intl.PluralRules(locale).select(count);
+    } catch {
+        if (!Number.isInteger(count)) return 'other';
+        const n = Math.abs(count);
+        if (!locale.startsWith('ru')) return n === 1 ? 'one' : 'other';
+        if (n % 10 === 1 && n % 100 !== 11) return 'one';
+        if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) return 'few';
+        return 'many';
+    }
+}
+
+// Message `${key}_${category}` with the count as $1, e.g. playback_seconds_few.
+function veinPlural(key, count) {
+    const value = String(count);
+    return veinT(`${key}_${veinPluralCategory(count)}`, [value]) || veinT(`${key}_other`, [value]);
+}
 
 const VEIN_DEFAULT_API = 'https://api.music.vein.guru';
 
@@ -8,7 +48,7 @@ function veinApiBase(settings) {
     const candidate = settings?.apiUrl || VEIN_DEFAULT_API;
     const url = new URL(candidate);
     const local = (url.hostname === 'localhost' || url.hostname === '127.0.0.1') && url.protocol === 'http:';
-    if (url.origin !== VEIN_DEFAULT_API && !local) throw new Error('Недопустимый адрес API');
+    if (url.origin !== VEIN_DEFAULT_API && !local) throw new Error(veinT('error_invalidApiUrl') || 'Invalid API address');
     return url.origin;
 }
 
@@ -29,7 +69,7 @@ function veinStorageRemove(keys) {
 }
 
 function veinClientName() {
-    return 'Расширение VEIN';
+    return veinT('clientName') || 'VEIN extension';
 }
 
 async function veinStartPairing() {
@@ -41,13 +81,13 @@ async function veinStartPairing() {
         body: JSON.stringify({ client_name: veinClientName() })
     });
     if (!res.ok) {
-        throw new Error(`Сервер ответил ${res.status}`);
+        throw new Error(veinT('error_serverStatus', [String(res.status)]) || `HTTP ${res.status}`);
     }
     const data = await res.json();
     const verificationUrl = new URL(data.verification_uri_complete);
     if (verificationUrl.origin !== 'https://music.vein.guru' &&
         !((verificationUrl.hostname === 'localhost' || verificationUrl.hostname === '127.0.0.1') && verificationUrl.protocol === 'http:')) {
-        throw new Error('Сервер вернул недопустимую страницу подтверждения');
+        throw new Error(veinT('error_invalidVerificationPage') || 'Invalid confirmation page');
     }
     const pairing = {
         device_code: data.device_code,

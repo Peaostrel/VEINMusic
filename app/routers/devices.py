@@ -22,6 +22,7 @@ from slowapi.util import get_remote_address
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.i18n import tr, user_lang
 from app.core.rate_limit import credential_key, limiter
 from app.core.security import SECRET_KEY, get_current_user, hash_developer_key
 from app.database import get_db
@@ -207,8 +208,9 @@ def approve_device(payload: DeviceApproveRequest, request: Request,
         alert = notifications.create(
             db, recipient_id=int(current_user.id), actor_id=int(current_user.id),
             kind=notifications.KIND_SECURITY,
-            message=f"Устройство «{auth.client_name}» получило доступ к прослушиваниям. "
-                    "Не вы? Отзовите его ключ в настройках безопасности")
+            message=tr(user_lang(current_user),
+                       "Устройство «{name}» получило доступ к прослушиваниям. "
+                       "Не вы? Отзовите его ключ в настройках безопасности", name=auth.client_name))
     db.commit()
     notifications.schedule_push(background_tasks, alert)
     return {"status": status}

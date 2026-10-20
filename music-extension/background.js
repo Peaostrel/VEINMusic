@@ -71,27 +71,18 @@ const SKIPPED_STATUSES = new Set([
     'integration_paused', 'source_ignored', 'artist_ignored', 'track_ignored',
     'short_track_ignored', 'private_session', 'blacklisted', 'link_ignored', 'ignored_inactive'
 ]);
-const DELIVERY_MESSAGES = {
-    ok: 'Событие принято. Зачёт прослушивания зависит от реально прослушанного времени.',
-    confirmed_duplicate: 'Событие принято: этот трек уже отслеживается другим подключением.',
-    integration_paused: 'Приём этого сервиса выключен в настройках VEIN.',
-    source_ignored: 'Этот сервис исключён из записи в настройках VEIN.',
-    artist_ignored: 'Исполнитель исключён из записи в настройках VEIN.',
-    track_ignored: 'Трек исключён из записи в настройках VEIN.',
-    short_track_ignored: 'Короткие треки исключены в настройках VEIN.',
-    private_session: 'В VEIN включена приватная сессия: запись приостановлена.',
-    blacklisted: 'Событие отклонено правилами VEIN.',
-    link_ignored: 'В названии или исполнителе обнаружена ссылка.',
-    rate_limited: 'Сервер просит подождать. Передача повторится автоматически.',
-    ignored_spam_protection: 'Смена трека отложена сервером. Передача повторится автоматически.',
-    flagged: 'Сервер ограничил приём. Проверьте диагностику интеграции в VEIN.',
-    ignored_inactive: 'Остановленная вкладка пропущена: в другом плеере сейчас играет музыка.',
-    auth_required: 'Ключ недействителен или не имеет доступа. Подключите расширение заново.',
-    invalid_payload: 'Сервис передал неполные данные трека. Обновите расширение и страницу плеера.',
-    network_error: 'Нет связи с VEIN. Текущее состояние будет отправлено повторно.',
-    server_error: 'VEIN временно недоступен. Передача повторится автоматически.',
-    invalid_response: 'Сервер не подтвердил приём события. Передача повторится автоматически.'
-};
+// Every status the popup can explain. The text lives in _locales as
+// delivery_<status> and follows the browser language.
+const DELIVERY_STATUSES = new Set([
+    'ok', 'confirmed_duplicate', 'integration_paused', 'source_ignored', 'artist_ignored',
+    'track_ignored', 'short_track_ignored', 'private_session', 'blacklisted', 'link_ignored',
+    'rate_limited', 'ignored_spam_protection', 'flagged', 'ignored_inactive', 'auth_required',
+    'invalid_payload', 'network_error', 'server_error', 'invalid_response'
+]);
+
+function deliveryMessage(status) {
+    return veinT(`delivery_${status}`);
+}
 
 function freshSnapshot(item, settings) {
     return settings.trackingEnabled === true && item.accountKey === settings.apiKey &&
@@ -163,14 +154,14 @@ async function submitScrobble(apiBase, apiKey, payload) {
     const status = data?.status;
     if (ACCEPTED_STATUSES.has(status)) return {kind: 'accepted', status, httpStatus: response.status, diagnostics: data?.diagnostics};
     if (SKIPPED_STATUSES.has(status)) return {kind: 'skipped', status, httpStatus: response.status, diagnostics: data?.diagnostics};
-    return {kind: 'retry', status: Object.hasOwn(DELIVERY_MESSAGES, status) ? status : 'invalid_response', httpStatus: response.status};
+    return {kind: 'retry', status: DELIVERY_STATUSES.has(status) ? status : 'invalid_response', httpStatus: response.status};
 }
 
 async function rememberDelivery(outcome, payload, accountKey) {
     const settings = await storageGet(['apiKey', 'trackingEnabled']);
     if (settings.apiKey !== accountKey || settings.trackingEnabled !== true) return;
     await storageSet({last_delivery: {
-        status: outcome.status, message: DELIVERY_MESSAGES[outcome.status],
+        status: outcome.status, message: deliveryMessage(outcome.status),
         httpStatus: outcome.httpStatus ?? null, source: payload?.source || '', at: Date.now(),
         title: payload?.title || '', artist: payload?.artist || '',
         position: payload?.progress_sec ?? null, playing: Boolean(payload?.is_playing),
@@ -273,7 +264,7 @@ function platformForUrl(url) {
         'music.yandex.ru': 'yandex', 'music.yandex.com': 'yandex',
         'open.spotify.com': 'spotify', 'music.youtube.com': 'youtube_music',
         'vk.com': 'vk', 'vk.ru': 'vk', 'soundcloud.com': 'soundcloud',
-        'music.apple.com': 'apple_music'
+        'music.apple.com': 'apple_music', 'zvuk.com': 'zvuk'
     }[url.hostname] || null;
 }
 

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { apiJson } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/client";
+import { plural } from "@/app/lib/plural";
 import type { LastfmImportJob } from "@/app/lib/types";
 
 const POLL_MS = 3000;
@@ -13,6 +15,7 @@ const POLL_MS = 3000;
 export default function LastfmImportStatus({
   refreshKey,
 }: Readonly<{ refreshKey: number }>) {
+  const t = useT();
   const [job, setJob] = useState<LastfmImportJob | null>(null);
 
   useEffect(() => {
@@ -51,12 +54,17 @@ export default function LastfmImportStatus({
         <>
           <div className="flex justify-between text-fg-2">
             <span>
-              Импорт {job.incremental ? "новых прослушиваний" : "истории"}…
+              {job.incremental
+                ? t("Импорт новых прослушиваний…")
+                : t("Импорт истории…")}
             </span>
             <span>
               {job.total_pages
-                ? `стр. ${job.current_page}/${job.total_pages}`
-                : "подготовка"}
+                ? t("стр. {current}/{total}", {
+                    current: job.current_page ?? 0,
+                    total: job.total_pages,
+                  })
+                : t("подготовка")}
             </span>
           </div>
           <div className="h-1.5 w-full bg-line rounded-full overflow-hidden">
@@ -66,21 +74,25 @@ export default function LastfmImportStatus({
             />
           </div>
           <p className="text-fg-2">
-            Добавлено треков: {job.imported_tracks ?? 0}
+            {t("Добавлено треков: {n}", { n: job.imported_tracks ?? 0 })}
           </p>
         </>
       )}
       {job.status === "completed" && (
         <p className="text-ok">
-          Последний импорт завершён: добавлено {job.imported_tracks ?? 0}{" "}
-          треков. Повторный импорт добавит только новые прослушивания.
+          {t("Последний импорт завершён: добавлено {n} {tracks}.", {
+            n: job.imported_tracks ?? 0,
+            tracks: plural(job.imported_tracks ?? 0, "трек", "трека", "треков"),
+          })}{" "}
+          {t("Повторный импорт добавит только новые прослушивания.")}
         </p>
       )}
       {job.status === "failed" && (
         <p className="text-danger">
-          Импорт прервался
-          {job.error ? `: ${job.error}` : ""}. Нажмите «Импорт», чтобы
-          продолжить с того же места.
+          {job.error
+            ? t("Импорт прервался: {error}.", { error: t(job.error) })
+            : t("Импорт прервался.")}{" "}
+          {t("Нажмите «Импорт», чтобы продолжить с того же места.")}
         </p>
       )}
     </div>

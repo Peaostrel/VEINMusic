@@ -1,5 +1,7 @@
 "use client";
 
+import { useT } from "@/app/lib/i18n/client";
+import { msg } from "@/app/lib/i18n/core";
 import { useState } from "react";
 import { Filter, Trash2 } from "lucide-react";
 import type { BlacklistFilter } from "../types";
@@ -16,13 +18,14 @@ import {
 } from "../ui";
 
 const TYPES: Record<string, string> = {
-  keyword: "Слово в названии, исполнителе или альбоме",
-  artist: "Исполнитель (точное совпадение)",
-  regex: "Регулярное выражение (название или исполнитель)",
+  keyword: msg("Слово в названии, исполнителе или альбоме"),
+  artist: msg("Исполнитель (точное совпадение)"),
+  regex: msg("Регулярное выражение (название или исполнитель)"),
 };
 
 /** Plays matching these filters are not recorded (white noise, podcasts…). */
 export default function BlacklistPanel() {
+  const t = useT();
   const { data, reload } = useAdminResource<{ filters: BlacklistFilter[] }>(
     "/api/admin/catalog/blacklist",
   );
@@ -43,7 +46,7 @@ export default function BlacklistPanel() {
             reason: reason.trim() || null,
           },
         }),
-      "Фильтр добавлен",
+      t("Фильтр добавлен"),
     );
     if (ok) {
       setPattern("");
@@ -53,14 +56,15 @@ export default function BlacklistPanel() {
   };
 
   const remove = async (f: BlacklistFilter) => {
-    if (!confirm(`Удалить фильтр «${f.pattern}»?`)) return;
+    if (!confirm(t("Удалить фильтр «{pattern}»?", { pattern: f.pattern })))
+      return;
     if (
       await run(
         () =>
           adminRequest(`/api/admin/catalog/blacklist/${f.id}`, {
             method: "DELETE",
           }),
-        "Фильтр удалён",
+        t("Фильтр удалён"),
       )
     )
       reload();
@@ -71,14 +75,16 @@ export default function BlacklistPanel() {
       <PanelTitle
         icon={<Filter className="w-4 h-4 text-danger" aria-hidden="true" />}
       >
-        <span id="blacklist-heading">Чёрный список (не засчитывать)</span>
+        <span id="blacklist-heading">
+          {t("Чёрный список (не засчитывать)")}
+        </span>
       </PanelTitle>
       <form
         onSubmit={add}
         className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end"
       >
         <label>
-          <span className={labelClass}>Шаблон</span>
+          <span className={labelClass}>{t("Шаблон")}</span>
           <input
             autoComplete="off"
             value={pattern}
@@ -89,7 +95,7 @@ export default function BlacklistPanel() {
           />
         </label>
         <label>
-          <span className={labelClass}>Тип</span>
+          <span className={labelClass}>{t("Тип")}</span>
           <select
             value={type}
             onChange={(e) => setType(e.target.value)}
@@ -97,13 +103,13 @@ export default function BlacklistPanel() {
           >
             {Object.entries(TYPES).map(([id, label]) => (
               <option key={id} value={id}>
-                {label}
+                {t(label)}
               </option>
             ))}
           </select>
         </label>
         <label>
-          <span className={labelClass}>Причина</span>
+          <span className={labelClass}>{t("Причина")}</span>
           <input
             autoComplete="off"
             value={reason}
@@ -112,7 +118,7 @@ export default function BlacklistPanel() {
           />
         </label>
         <button type="submit" className={buttonClass.primary}>
-          Добавить фильтр
+          {t("Добавить фильтр")}
         </button>
       </form>
       <Notice text={notice} />
@@ -130,7 +136,7 @@ export default function BlacklistPanel() {
             <button
               type="button"
               onClick={() => remove(f)}
-              aria-label={`Удалить фильтр ${f.pattern}`}
+              aria-label={t("Удалить фильтр {pattern}", { pattern: f.pattern })}
               className="p-2 hover:bg-[#2a1b1b] rounded-lg text-danger"
             >
               <Trash2 className="w-4 h-4" aria-hidden="true" />
@@ -138,7 +144,7 @@ export default function BlacklistPanel() {
           </li>
         ))}
         {data?.filters.length === 0 && (
-          <li className="py-2 text-xs text-fg-2">Фильтров нет</li>
+          <li className="py-2 text-xs text-fg-2">{t("Фильтров нет")}</li>
         )}
       </ul>
     </section>

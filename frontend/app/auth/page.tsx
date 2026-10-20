@@ -3,6 +3,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/client";
+import { msg } from "@/app/lib/i18n/core";
 import { useFeature } from "@/app/lib/featureFlags";
 import { clearOfflineCache } from "@/app/lib/offline";
 import { isValidUser } from "@/app/lib/theme";
@@ -14,16 +16,26 @@ type Mode = "login" | "register";
 
 /** What the VK ID callback reports back in ?vk=… */
 const vkErrors: Record<string, string> = {
-  unknown:
+  unknown: msg(
     "Этот VK ID не привязан ни к одному аккаунту. Войдите по логину и паролю и привяжите VK ID в настройках безопасности.",
-  banned: "Аккаунт заблокирован",
-  error: "Не удалось войти через VK ID. Попробуйте ещё раз.",
+  ),
+  banned: msg("Аккаунт заблокирован"),
+  error: msg("Не удалось войти через VK ID. Попробуйте ещё раз."),
 };
 
 const nextSteps = [
-  ["Подключите сервис", "Яндекс, Spotify или SoundCloud работают напрямую"],
-  ["При необходимости — расширение", "Для YouTube Music, VK и веб-плееров"],
-  ["Включите музыку", "Первые треки появятся в профиле автоматически"],
+  [
+    msg("Подключите сервис"),
+    msg("Яндекс, Spotify или SoundCloud работают напрямую"),
+  ],
+  [
+    msg("При необходимости — расширение"),
+    msg("Для YouTube Music, VK и веб-плееров"),
+  ],
+  [
+    msg("Включите музыку"),
+    msg("Первые треки появятся в профиле автоматически"),
+  ],
 ];
 
 /** Page to open after signing in: the one that sent the user here, or the profile. */
@@ -40,13 +52,14 @@ function go(url: string) {
 }
 
 function NextSteps() {
+  const t = useT();
   return (
     <aside
-      aria-label="Что дальше"
+      aria-label={t("Что дальше")}
       className="flex w-full max-w-[380px] flex-col gap-4 border-line-soft md:w-[320px] md:border-l md:pl-10"
     >
       <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-fg-3">
-        после входа
+        {t("после входа")}
       </span>
       <ol className="flex flex-col gap-4">
         {nextSteps.map(([title, text], i) => (
@@ -57,8 +70,8 @@ function NextSteps() {
               0{i + 1}
             </span>
             <span className="flex flex-col gap-0.5">
-              <span className="text-sm font-medium">{title}</span>
-              <span className="text-[13px] text-fg-2">{text}</span>
+              <span className="text-sm font-medium">{t(title)}</span>
+              <span className="text-[13px] text-fg-2">{t(text)}</span>
             </span>
           </li>
         ))}
@@ -72,6 +85,7 @@ function ApiKeyStep({
   apiKey,
   onDone,
 }: Readonly<{ apiKey: string; onDone: () => void }>) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
   const copyKey = async () => {
     try {
@@ -88,18 +102,18 @@ function ApiKeyStep({
     >
       <span className="inline-flex h-[26px] items-center gap-2 self-start rounded-full border border-line px-2.5 text-xs text-ok">
         <Check className="h-3.5 w-3.5" aria-hidden="true" />
-        Аккаунт создан
+        {t("Аккаунт создан")}
       </span>
       <h1
         id="key-title"
         className="text-[26px] font-semibold tracking-[-0.02em]"
       >
-        Ваш API-ключ
+        {t("Ваш API-ключ")}
       </h1>
       <p className="text-sm leading-relaxed text-fg-2">
-        Он нужен расширению и сторонним плеерам. Мы показываем его один раз —
-        сохраните сейчас. Новый ключ можно выпустить в настройках, старый при
-        этом перестанет работать.
+        {t(
+          "Он нужен расширению и сторонним плеерам. Мы показываем его один раз — сохраните сейчас. Новый ключ можно выпустить в настройках, старый при этом перестанет работать.",
+        )}
       </p>
       <div className="flex gap-2">
         <code className="flex h-11 min-w-0 flex-1 items-center truncate rounded-lg border border-line bg-surface px-3.5 font-mono text-[13px] select-all">
@@ -111,7 +125,7 @@ function ApiKeyStep({
           className={`${btn.secondary} h-11 px-4`}
         >
           <Copy className="h-4 w-4" aria-hidden="true" />
-          {copied ? "Скопировано" : "Копировать"}
+          {copied ? t("Скопировано") : t("Копировать")}
         </button>
       </div>
       <button
@@ -119,13 +133,14 @@ function ApiKeyStep({
         onClick={onDone}
         className={`${btn.primary} ${btn.lg}`}
       >
-        Я сохранил, дальше
+        {t("Я сохранил, дальше")}
       </button>
     </section>
   );
 }
 
 export default function Auth() {
+  const t = useT();
   const [mode, setMode] = useState<Mode>("login");
   const registrationOpen = useFeature("registration");
   const [username, setUsername] = useState("");
@@ -172,14 +187,14 @@ export default function Auth() {
       }
       if (data.detail?.code === "mfa_required") {
         setVkMfa(true);
-        setError(data.detail.message);
+        setError(t(data.detail.message));
       } else {
         setError(
-          typeof data.detail === "string" ? data.detail : vkErrors.error,
+          typeof data.detail === "string" ? t(data.detail) : t(vkErrors.error),
         );
       }
     } catch {
-      setError("Сервер не отвечает. Попробуйте ещё раз.");
+      setError(t("Сервер не отвечает. Попробуйте ещё раз."));
     }
     setLoading(false);
   };
@@ -194,7 +209,7 @@ export default function Auth() {
     if (params.get("mode") === "register") setMode("register");
     const vk = params.get("vk");
     if (vk === "finish") void finishVk();
-    else if (vk && vkErrors[vk]) setError(vkErrors[vk]);
+    else if (vk && vkErrors[vk]) setError(t(vkErrors[vk]));
     fetch(`${API_URL}/auth/vk/config`)
       .then((res) => (res.ok ? res.json() : { enabled: false }))
       .then((config: { enabled: boolean }) => setVkEnabled(config.enabled))
@@ -232,15 +247,15 @@ export default function Auth() {
         setCaptchaRound((n) => n + 1);
         if (data.detail?.code === "captcha_required") {
           setCaptchaAsked(true);
-          setError(data.detail.message);
+          setError(t(data.detail.message));
         } else if (data.detail?.code === "mfa_required") {
           setMfaRequired(true);
-          setError(data.detail.message);
+          setError(t(data.detail.message));
         } else {
           setError(
             typeof data.detail === "string"
-              ? data.detail
-              : "Неверный логин или пароль.",
+              ? t(data.detail)
+              : t("Неверный логин или пароль."),
           );
         }
         setLoading(false);
@@ -268,13 +283,13 @@ export default function Auth() {
       signedIn(data.username);
     } catch (err) {
       console.error(err);
-      setError("Сервер не отвечает. Попробуйте ещё раз.");
+      setError(t("Сервер не отвечает. Попробуйте ещё раз."));
       setLoading(false);
     }
   };
 
-  let submitLabel = isLogin ? "Войти" : "Создать аккаунт";
-  if (loading) submitLabel = "Подождите…";
+  let submitLabel = isLogin ? t("Войти") : t("Создать аккаунт");
+  if (loading) submitLabel = t("Подождите…");
 
   return (
     <div className="mx-auto flex w-full max-w-[900px] flex-col items-center gap-16 px-4 py-16 md:flex-row md:items-start md:justify-center md:gap-24 md:py-24">
@@ -291,15 +306,15 @@ export default function Auth() {
         >
           {(registrationOpen || !isLogin) && (
             <Segmented
-              label="Вход или регистрация"
+              label={t("Вход или регистрация")}
               value={mode}
               onChange={(m) => {
                 setMode(m);
                 setError("");
               }}
               options={[
-                { id: "login", label: "Вход" },
-                { id: "register", label: "Регистрация" },
+                { id: "login", label: t("Вход") },
+                { id: "register", label: t("Регистрация") },
               ]}
             />
           )}
@@ -308,19 +323,19 @@ export default function Auth() {
               id="auth-title"
               className="text-[26px] font-semibold tracking-[-0.02em]"
             >
-              {isLogin ? "С возвращением" : "Новый профиль"}
+              {isLogin ? t("С возвращением") : t("Новый профиль")}
             </h1>
             <p className="text-sm text-fg-2">
               {isLogin
-                ? "Войдите, чтобы увидеть свою музыку."
-                : "Регистрация занимает 10 секунд."}
+                ? t("Войдите, чтобы увидеть свою музыку.")
+                : t("Регистрация занимает 10 секунд.")}
             </p>
           </div>
           {!vkMfa && (
             <>
               <div>
                 <label htmlFor="auth-username" className={label}>
-                  Логин
+                  {t("Логин")}
                 </label>
                 <input
                   id="auth-username"
@@ -339,11 +354,11 @@ export default function Auth() {
               <div>
                 <div className="flex items-baseline justify-between">
                   <label htmlFor="auth-password" className={label}>
-                    Пароль
+                    {t("Пароль")}
                   </label>
                   {!isLogin && (
                     <span className="text-xs text-fg-3">
-                      минимум 8 символов
+                      {t("минимум 8 символов")}
                     </span>
                   )}
                 </div>
@@ -365,7 +380,7 @@ export default function Auth() {
           {((isLogin && mfaRequired) || vkMfa) && (
             <div>
               <label htmlFor="auth-otp" className={label}>
-                Код из приложения или резервный код
+                {t("Код из приложения или резервный код")}
               </label>
               <input
                 id="auth-otp"
@@ -389,13 +404,13 @@ export default function Auth() {
                 required
               />
               <span>
-                Даю{" "}
+                {t("Даю")}{" "}
                 <a
                   href="/consent"
                   target="_blank"
                   className="text-fg underline underline-offset-2"
                 >
-                  согласие на обработку персональных данных
+                  {t("согласие на обработку персональных данных")}
                 </a>
               </span>
             </label>
@@ -426,31 +441,33 @@ export default function Auth() {
               mode="login"
               onResult={(result) => {
                 if (result === "finish") void finishVk();
-                else setError(vkErrors[result] ?? vkErrors.error);
+                else setError(t(vkErrors[result] ?? vkErrors.error));
               }}
             />
           )}
           {isLogin && (
             <Link href="/email/forgot" className="text-sm text-accent">
-              Забыли пароль?
+              {t("Забыли пароль?")}
             </Link>
           )}
           {!registrationOpen && isLogin && (
             <p className="text-[13px] text-fg-3">
-              Регистрация новых аккаунтов временно закрыта.
+              {t("Регистрация новых аккаунтов временно закрыта.")}
             </p>
           )}
           <p className="text-[13px] text-fg-3">
-            {isLogin ? "Действуют наши" : "Создавая аккаунт, вы принимаете"}{" "}
+            {isLogin
+              ? t("Действуют наши")
+              : t("Создавая аккаунт, вы принимаете")}{" "}
             <a href="/terms" className="text-fg-2 underline underline-offset-2">
-              условия
+              {t("условия")}
             </a>{" "}
-            и{" "}
+            {t("и")}{" "}
             <a
               href="/privacy"
               className="text-fg-2 underline underline-offset-2"
             >
-              политику конфиденциальности
+              {t("политику конфиденциальности")}
             </a>
             {"."}
           </p>

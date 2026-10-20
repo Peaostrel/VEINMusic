@@ -1,9 +1,14 @@
 # VEINMusic Extension
 
-История прослушиваний из Яндекс Музыки, Spotify, YouTube Music, VK, SoundCloud и
-Apple Music в вашем аккаунте [VEINMusic](https://music.vein.guru).
+История прослушиваний из Яндекс Музыки, Spotify, YouTube Music, VK, SoundCloud,
+Apple Music и Звука в вашем аккаунте [VEINMusic](https://music.vein.guru).
 Разметка музыкальных сервисов может меняться; поддержка веб-плеера не означает
 поддержку его мобильного или настольного приложения.
+
+Интерфейс расширения следует языку браузера: русский в русском браузере,
+английский во всех остальных (English is the default; the extension follows the
+browser language). Тексты находятся в `_locales/<язык>/messages.json`; новый
+язык добавляется отдельной папкой с тем же набором ключей.
 
 ## Скачать
 

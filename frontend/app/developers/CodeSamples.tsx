@@ -2,14 +2,17 @@
 
 import { useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { useT } from "@/app/lib/i18n/client";
+import { msg } from "@/app/lib/i18n/core";
 
 const API = "https://api.music.vein.guru";
 
-const SAMPLES = {
+/** Code samples; `key` and `days` are the translated placeholder words. */
+const samples = (key: string, days: string) => ({
   curl: String.raw`curl -X POST ${API}/api/scrobble \
   -H "Content-Type: application/json" \
   -d '{
-    "api_key": "ваш_ключ",
+    "api_key": "${key}",
     "title": "Всё забрать",
     "artist": "Джизус",
     "source": "terminal"
@@ -17,7 +20,7 @@ const SAMPLES = {
   python: `import requests
 
 payload = {
-    "api_key": "ваш_ключ",
+    "api_key": "${key}",
     "title": "Демиург",
     "artist": "Джизус",
     "source": "python_bot",
@@ -33,9 +36,9 @@ print(r.json())`,
 r = requests.get("${API}/api/user/peaostrel")
 user = r.json()
 
-print(user["display_name"], "—", user["streak"], "дн. подряд")`,
+print(user["display_name"], "—", user["streak"], "${days}")`,
   json: `{
-  "api_key": "ваш_ключ",
+  "api_key": "${key}",
   "title": "Worthless I, Worthless You",
   "artist": "LAZZY2WICE",
   "source": "custom_script",
@@ -43,18 +46,20 @@ print(user["display_name"], "—", user["streak"], "дн. подряд")`,
   "duration": 69,
   "is_playing": true
 }`,
-};
+});
 
-type Lang = keyof typeof SAMPLES;
+type Lang = keyof ReturnType<typeof samples>;
 
 const TABS: { id: Lang; label: string }[] = [
   { id: "curl", label: "cURL" },
   { id: "python", label: "Python" },
-  { id: "profile", label: "Профиль (GET)" },
+  { id: "profile", label: msg("Профиль (GET)") },
   { id: "json", label: "JSON" },
 ];
 
 export default function CodeSamples() {
+  const t = useT();
+  const SAMPLES = samples(t("ваш_ключ"), t("дн. подряд"));
   const [lang, setLang] = useState<Lang>("curl");
   const [copied, setCopied] = useState(false);
 
@@ -73,19 +78,19 @@ export default function CodeSamples() {
       <div className="flex items-center justify-between gap-3 border-b border-line pr-3 pl-2">
         <div
           role="tablist"
-          aria-label="Пример"
+          aria-label={t("Пример")}
           className="hide-scrollbar flex min-w-0 overflow-x-auto"
         >
-          {TABS.map((t) => {
-            const active = t.id === lang;
+          {TABS.map((tab) => {
+            const active = tab.id === lang;
             return (
               <button
-                key={t.id}
+                key={tab.id}
                 type="button"
                 role="tab"
                 aria-selected={active}
                 onClick={() => {
-                  setLang(t.id);
+                  setLang(tab.id);
                   setCopied(false);
                 }}
                 className={`-mb-px h-10 shrink-0 border-b-2 px-3 text-[13px] transition-colors ${
@@ -94,7 +99,7 @@ export default function CodeSamples() {
                     : "border-transparent text-fg-3 hover:text-fg"
                 }`}
               >
-                {t.label}
+                {t(tab.label)}
               </button>
             );
           })}
@@ -109,7 +114,7 @@ export default function CodeSamples() {
           ) : (
             <Copy className="h-3.5 w-3.5" aria-hidden="true" />
           )}
-          {copied ? "Скопировано" : "Копировать"}
+          {copied ? t("Скопировано") : t("Копировать")}
         </button>
       </div>
       <pre

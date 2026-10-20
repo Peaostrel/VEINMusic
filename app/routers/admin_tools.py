@@ -15,6 +15,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.constants import USER_NOT_FOUND
+from app.core.i18n import request_lang, tr
 from app.core.rate_limit import limiter
 from app.core.security import get_admin_user, revoke_all_sessions
 from app.database import get_db
@@ -30,6 +31,7 @@ from app.models import (
     Track,
     User,
     UserAchievement,
+    UserIntegration,
     Webhook,
 )
 from app.services import audit, broadcast, error_log, system_status
@@ -372,6 +374,61 @@ def analytics_timeseries(
     }
 
 
+RETENTION_WEEKS = 12
+
+
+def _week_start(day: date) -> date:
+    return day - timedelta(days=day.weekday())
+
+
+def _returned(play_days: set[date], joined: date, first: int, last: int, today: date) -> bool | None:
+    """Played between `first` and `last` days after joining; None while that
+    window hasn't ended yet."""
+    if joined + timedelta(days=last) > today:
+        return None
+    return any(joined + timedelta(days=first) <= day <= joined + timedelta(days=last) for day in play_days)
+
+
+@router.get("/analytics/retention")
+def analytics_retention(db: DB, admin: AdminUser):
+    """Weekly sign-up cohorts: who connected music, listened, and came back.
+
+    Counts only VEIN's own data: no cookies or third-party analytics."""
+    today = datetime.now(UTC).date()
+    first_week = _week_start(today) - timedelta(weeks=RETENTION_WEEKS - 1)
+    start = datetime.combine(first_week, datetime.min.time(), tzinfo=UTC)
+    users = db.query(User.id, User.created_at, UserIntegration.spotify_refresh_token.isnot(None),
+                     UserIntegration.yandex_token.isnot(None), UserIntegration.soundcloud_refresh_token.isnot(None)) \
+        .outerjoin(UserIntegration).filter(User.created_at >= start).all()
+    joined = {uid: created.date() for uid, created, *_ in users}
+    linked = {uid for uid, _, *tokens in users if any(tokens)}
+    play_days: dict[int, set[date]] = {}
+    if joined:
+        day = func.date(Scrobble.played_at)
+        # Imported history says nothing about using VEIN: only live plays count
+        rows = db.query(Scrobble.user_id, day).execution_options(include_excluded=True).filter(
+            Scrobble.user_id.in_(list(joined)), Scrobble.played_at >= start,
+            Scrobble.is_imported.isnot(True)).distinct().all()
+        for uid, played in rows:
+            if played is not None:
+                play_days.setdefault(uid, set()).add(date.fromisoformat(str(played)[:10]))
+
+    cohorts = []
+    for index in range(RETENTION_WEEKS):
+        week = first_week + timedelta(weeks=index)
+        members = [uid for uid, day in joined.items() if _week_start(day) == week]
+        row: dict[str, Any] = {"week": week.isoformat(), "registered": len(members),
+                               "connected": sum(uid in linked or uid in play_days for uid in members),
+                               "listened": sum(uid in play_days for uid in members)}
+        for key, first, last in (("week_1", 7, 13), ("week_4", 28, 34)):
+            answers = [_returned(play_days.get(uid, set()), joined[uid], first, last, today) for uid in members]
+            known = [answer for answer in answers if answer is not None]
+            row[key] = sum(known) if known else None
+            row[f"{key}_of"] = len(known)
+        cohorts.append(row)
+    return {"cohorts": cohorts}
+
+
 # ─── BROADCAST ────────────────────────────────────────────────────────────────
 
 class BroadcastRequest(BaseModel):
@@ -392,16 +449,21 @@ class BroadcastRequest(BaseModel):
     @field_validator("channels")
     @classmethod
     def _known_channels(cls, value: list[str]) -> list[str]:
-        unknown = set(value) - {"inapp", "push"}
-        if unknown:
-            raise ValueError(f"Неизвестные каналы: {', '.join(sorted(unknown))}")
+        # Unknown channels are refused by send_broadcast, in the admin's language
         return sorted(set(value))
+
+
+BROADCAST_CHANNELS = {"inapp", "push"}
 
 
 @router.post("/broadcast", responses={400: {"description": "No recipients"}})
 @limiter.limit("10/hour")
 def send_broadcast(request: Request, data: BroadcastRequest, db: DB, admin: AdminUser):
     """Announcement to everyone (or the listed users): in-app and/or Web Push."""
+    unknown = set(data.channels) - BROADCAST_CHANNELS
+    if unknown:
+        raise HTTPException(422, tr(request_lang(request, admin), "Неизвестные каналы: {channels}",
+                                    channels=", ".join(sorted(unknown))))
     user_ids = broadcast.recipient_ids(db, data.usernames)
     if not user_ids:
         raise HTTPException(400, "Нет получателей")

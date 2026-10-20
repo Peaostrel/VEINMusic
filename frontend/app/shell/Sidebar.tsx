@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useT } from "@/app/lib/i18n/client";
 import { BrandLink } from "@/components/brand";
 import NotificationsBell from "@/components/NotificationsBell";
 import AccountMenu from "./AccountMenu";
@@ -21,6 +22,7 @@ export default function Sidebar({
   active: string | null;
   onLogout: () => void;
 }>) {
+  const t = useT();
   const items = navItems(username).filter(
     (i) => !i.staffOnly || isStaff(profile?.role),
   );
@@ -37,7 +39,7 @@ export default function Sidebar({
       <UserSearch id="sidebar-search" />
 
       <nav
-        aria-label="Разделы"
+        aria-label={t("Разделы")}
         className="-mx-1 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-1"
       >
         {items.map((item) => {
@@ -55,7 +57,7 @@ export default function Sidebar({
               }`}
             >
               <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-              {item.label}
+              {t(item.label)}
             </Link>
           );
         })}

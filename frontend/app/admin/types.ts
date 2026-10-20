@@ -34,6 +34,8 @@ export interface Achievement {
   id: number;
   name: string;
   description: string;
+  name_en?: string | null;
+  description_en?: string | null;
   rendered_description?: string;
   icon: string;
   rule_type: string;

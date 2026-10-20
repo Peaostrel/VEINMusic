@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Disc3, Music2, Search, UserRound } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/client";
 import { Avatar } from "@/components/ui";
 import { VerifiedBadge } from "@/components/UserBadges";
 import type { NavUser } from "./types";
@@ -37,6 +38,7 @@ export default function UserSearch({
   className = "",
   id = "vein-search",
 }: Readonly<{ className?: string; id?: string }>) {
+  const t = useT();
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResults>(EMPTY);
@@ -103,8 +105,8 @@ export default function UserSearch({
           type="search"
           id={id}
           name={id}
-          placeholder="Люди, артисты, треки"
-          aria-label="Поиск людей, артистов и треков"
+          placeholder={t("Люди, артисты, треки")}
+          aria-label={t("Поиск людей, артистов и треков")}
           aria-controls={showPanel ? listId : undefined}
           aria-expanded={showPanel}
           role="combobox"
@@ -124,20 +126,22 @@ export default function UserSearch({
       {showPanel && (
         <section
           id={listId}
-          aria-label="Результаты поиска"
+          aria-label={t("Результаты поиска")}
           className="absolute left-0 top-full z-50 mt-1.5 max-h-[70vh] w-full min-w-[320px] overflow-y-auto rounded-lg border border-line bg-surface-2 p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.45)]"
         >
           {loading && !hasResults && (
-            <p className="px-3 py-5 text-center text-xs text-fg-3">Ищем…</p>
+            <p className="px-3 py-5 text-center text-xs text-fg-3">
+              {t("Ищем…")}
+            </p>
           )}
           {!loading && !hasResults && (
             <p className="px-3 py-5 text-center text-xs text-fg-3">
-              Ничего не найдено
+              {t("Ничего не найдено")}
             </p>
           )}
           {results.users.length > 0 && (
             <SearchSection
-              title="Люди"
+              title={t("Люди")}
               icon={<UserRound className="h-3 w-3" />}
             >
               {results.users.map((user) => (
@@ -169,13 +173,19 @@ export default function UserSearch({
             </SearchSection>
           )}
           {results.artists.length > 0 && (
-            <SearchSection title="Артисты" icon={<Disc3 className="h-3 w-3" />}>
+            <SearchSection
+              title={t("Артисты")}
+              icon={<Disc3 className="h-3 w-3" />}
+            >
               {results.artists.map((artist) => (
                 <ResultButton
                   key={artist.name}
                   image={<SearchCover src={artist.cover_url} />}
                   title={artist.name}
-                  subtitle={`${artist.tracks} треков · ${artist.plays} прослушиваний`}
+                  subtitle={t("{tracks} треков · {plays} прослушиваний", {
+                    tracks: artist.tracks,
+                    plays: artist.plays,
+                  })}
                   onClick={() =>
                     go(`/artist/${encodeURIComponent(artist.name)}`)
                   }
@@ -184,13 +194,19 @@ export default function UserSearch({
             </SearchSection>
           )}
           {results.tracks.length > 0 && (
-            <SearchSection title="Треки" icon={<Music2 className="h-3 w-3" />}>
+            <SearchSection
+              title={t("Треки")}
+              icon={<Music2 className="h-3 w-3" />}
+            >
               {results.tracks.map((track) => (
                 <ResultButton
                   key={track.id}
                   image={<SearchCover src={track.cover_url} />}
                   title={track.title}
-                  subtitle={`${track.artist} · ${track.plays} прослушиваний`}
+                  subtitle={t("{artist} · {plays} прослушиваний", {
+                    artist: track.artist,
+                    plays: track.plays,
+                  })}
                   onClick={() => go(`/track/${track.id}`)}
                 />
               ))}

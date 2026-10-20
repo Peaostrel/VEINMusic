@@ -65,7 +65,7 @@ test("history transfer previews a file and retries without duplicates", async ({
 }) => {
   await signUp(page, "historytransfer");
   await page.goto("/library/transfer");
-  await page.getByLabel("Файл истории").setInputFiles({
+  await page.getByLabel("Файлы истории").setInputFiles({
     name: "vein-history.json",
     mimeType: "application/json",
     buffer: Buffer.from(
@@ -83,7 +83,7 @@ test("history transfer previews a file and retries without duplicates", async ({
       }),
     ),
   });
-  await page.getByRole("button", { name: "Проверить файл" }).click();
+  await page.getByRole("button", { name: "Проверить файлы" }).click();
   await expect(page.getByText("Новых: 1. Дублей: 0.")).toBeVisible();
   await page.getByRole("button", { name: "Подтвердить импорт" }).click();
   await expect(
@@ -91,7 +91,7 @@ test("history transfer previews a file and retries without duplicates", async ({
       "Импорт завершён: 1 новых прослушиваний, 0 дублей пропущено.",
     ),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Проверить файл" }).click();
+  await page.getByRole("button", { name: "Проверить файлы" }).click();
   await expect(page.getByText("Новых: 0. Дублей: 1.")).toBeVisible();
   const download = page.waitForEvent("download");
   await page.getByRole("link", { name: "История CSV" }).click();
@@ -157,14 +157,14 @@ test("calendar exposes a selected local-day history and date range", async ({
 test("CSV with commas and quotes is parsed before import", async ({ page }) => {
   await signUp(page, "csvtransfer");
   await page.goto("/library/transfer");
-  await page.getByLabel("Файл истории").setInputFiles({
+  await page.getByLabel("Файлы истории").setInputFiles({
     name: "vein-history.csv",
     mimeType: "text/csv",
     buffer: Buffer.from(
       'played_at,artist,title,duration,listened_sec,source,excluded_from_stats\r\n2024-01-01T12:00:00Z,"Artist, One","Song ""quoted""",180,180,spotify,True\r\n',
     ),
   });
-  await page.getByRole("button", { name: "Проверить файл" }).click();
+  await page.getByRole("button", { name: "Проверить файлы" }).click();
   await expect(
     page.getByText('Artist, One — Song "quoted"', { exact: false }),
   ).toBeVisible();

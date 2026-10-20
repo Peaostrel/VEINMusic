@@ -135,6 +135,13 @@ async def poll_cloud_user(ctx: dict[str, Any], user_id: int) -> None:
     await poll_user(user_id, process_scrobble)
 
 
+async def sync_cloud_user(ctx: dict[str, Any], user_id: int, services: list[str]) -> list[str]:
+    """The "sync now" button: one immediate poll, awaited by the API."""
+    from app.services.cloud_scrobbling import sync_user_now
+    from app.services.scrobble_processor import process_scrobble
+    return await sync_user_now(user_id, services, process_scrobble)
+
+
 async def recap_notifications(ctx: dict[str, Any]) -> None:
     """Create user-local weekly/monthly Wrapped reminders when due."""
     from app.services.recap_notifications import send_due_recap_notifications
@@ -188,6 +195,8 @@ class WorkerSettings:
         async_export_scrobble,
         enrich_track_metadata,
         func(poll_cloud_user, timeout=60, keep_result=0),
+        # The API reads the result; keeping it briefly also debounces repeat clicks.
+        func(sync_cloud_user, timeout=60, keep_result=10),
         import_lastfm,
         send_social_push,
         broadcast_push,

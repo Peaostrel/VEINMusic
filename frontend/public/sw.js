@@ -86,6 +86,9 @@ const CACHE_BUSTERS = ["t", "_", "ts"];
 function apiCacheKey(request) {
   const url = new URL(request.url);
   for (const name of CACHE_BUSTERS) url.searchParams.delete(name);
+  // Answers carry texts in the site's language: keep each language apart
+  const lang = request.headers.get("X-VEIN-Lang");
+  if (lang) url.searchParams.set("__lang", lang);
   return url.toString();
 }
 
@@ -157,11 +160,23 @@ self.addEventListener("fetch", (event) => {
   );
 });
 
+// Languages whose speakers get the Russian interface (as on the server)
+const RUSSIAN_SPEAKING = ["ru", "uk", "be", "kk", "ky", "uz", "tg", "hy", "az"];
+
+function fallbackPushBody() {
+  const lang = String(self.navigator?.language || "")
+    .toLowerCase()
+    .split("-")[0];
+  return RUSSIAN_SPEAKING.includes(lang)
+    ? "Новое событие в вашей музыкальной ленте!"
+    : "Something new in your music feed!";
+}
+
 // Web Push Notification Handler
 self.addEventListener("push", (event) => {
   let data = {
     title: "VEIN Music",
-    body: "Новое событие в вашей музыкальной ленте!",
+    body: fallbackPushBody(),
   };
   if (event.data) {
     try {

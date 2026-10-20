@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Flag, X } from "lucide-react";
 import Dialog from "@/components/Dialog";
 import { apiJson } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/client";
+import { msg, type Translator } from "@/app/lib/i18n/core";
 import { btn } from "@/components/ui";
 
 export type ReportTarget =
@@ -12,12 +14,12 @@ export type ReportTarget =
   | { type: "track"; trackId: number; title: string; artist: string };
 
 const REASONS = [
-  { id: "spam", label: "Спам или реклама" },
-  { id: "abuse", label: "Оскорбления или травля" },
-  { id: "inappropriate", label: "Неприемлемый контент" },
-  { id: "cheating", label: "Накрутка прослушиваний" },
-  { id: "impersonation", label: "Выдаёт себя за другого" },
-  { id: "other", label: "Другое" },
+  { id: "spam", label: msg("Спам или реклама") },
+  { id: "abuse", label: msg("Оскорбления или травля") },
+  { id: "inappropriate", label: msg("Неприемлемый контент") },
+  { id: "cheating", label: msg("Накрутка прослушиваний") },
+  { id: "impersonation", label: msg("Выдаёт себя за другого") },
+  { id: "other", label: msg("Другое") },
 ] as const;
 
 // Same as REASONS_BY_TARGET on the API (app/routers/reports.py)
@@ -28,16 +30,19 @@ const REASONS_BY_TARGET: Record<ReportTarget["type"], readonly string[]> = {
 };
 
 const TRACK_LABELS: Record<string, string> = {
-  spam: "Спам или реклама в названии",
-  inappropriate: "Оскорбительное или неприемлемое название",
+  spam: msg("Спам или реклама в названии"),
+  inappropriate: msg("Оскорбительное или неприемлемое название"),
 };
 
-function dialogTitle(target: ReportTarget): string {
+function dialogTitle(target: ReportTarget, t: Translator): string {
   if (target.type === "comment")
-    return `Жалоба на комментарий @${target.author}`;
+    return t("Жалоба на комментарий @{user}", { user: target.author });
   if (target.type === "track")
-    return `Жалоба на трек «${target.artist} — ${target.title}»`;
-  return `Жалоба на профиль @${target.username}`;
+    return t("Жалоба на трек «{artist} — {title}»", {
+      artist: target.artist,
+      title: target.title,
+    });
+  return t("Жалоба на профиль @{user}", { user: target.username });
 }
 
 /** Sends a report on a profile, a comment or a track to the moderators. */
@@ -45,6 +50,7 @@ export default function ReportDialog({
   target,
   onClose,
 }: Readonly<{ target: ReportTarget; onClose: () => void }>) {
+  const t = useT();
   const [reason, setReason] = useState<string>("");
   const [details, setDetails] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "done">("idle");
@@ -77,12 +83,12 @@ export default function ReportDialog({
       setRepeated(result.status === "already_reported");
       setState("done");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось отправить");
+      setError(err instanceof Error ? err.message : t("Не удалось отправить"));
       setState("idle");
     }
   };
 
-  const title = dialogTitle(target);
+  const title = dialogTitle(target, t);
 
   return (
     <Dialog label={title} onClose={onClose}>
@@ -95,7 +101,7 @@ export default function ReportDialog({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Закрыть"
+            aria-label={t("Закрыть")}
             className={btn.icon}
           >
             <X className="h-4 w-4" aria-hidden="true" />
@@ -106,16 +112,16 @@ export default function ReportDialog({
           <div className="space-y-4">
             <p className="text-sm text-fg-2">
               {repeated
-                ? "Вы уже жаловались на это, жалоба ждёт модераторов."
-                : "Спасибо, жалоба отправлена модераторам."}{" "}
-              Когда её рассмотрят, придёт уведомление.
+                ? t("Вы уже жаловались на это, жалоба ждёт модераторов.")
+                : t("Спасибо, жалоба отправлена модераторам.")}{" "}
+              {t("Когда её рассмотрят, придёт уведомление.")}
             </p>
             <button
               type="button"
               onClick={onClose}
               className={`${btn.primary} ${btn.md} w-full`}
             >
-              Готово
+              {t("Готово")}
             </button>
           </div>
         ) : (
@@ -126,7 +132,7 @@ export default function ReportDialog({
               </blockquote>
             )}
             <fieldset className="space-y-1.5">
-              <legend className="mb-2 text-xs text-fg-2">Причина</legend>
+              <legend className="mb-2 text-xs text-fg-2">{t("Причина")}</legend>
               {reasons.map((r) => (
                 <label
                   key={r.id}
@@ -144,13 +150,13 @@ export default function ReportDialog({
                     onChange={() => setReason(r.id)}
                     className="accent-(--accent)"
                   />
-                  {r.label}
+                  {t(r.label)}
                 </label>
               ))}
             </fieldset>
             <label className="block">
               <span className="mb-1.5 block text-xs text-fg-2">
-                Подробности (необязательно)
+                {t("Подробности (необязательно)")}
               </span>
               <textarea
                 autoComplete="off"
@@ -167,7 +173,7 @@ export default function ReportDialog({
               disabled={!reason || state === "sending"}
               className={`${btn.primary} ${btn.md} w-full`}
             >
-              {state === "sending" ? "Отправляем…" : "Отправить жалобу"}
+              {state === "sending" ? t("Отправляем…") : t("Отправить жалобу")}
             </button>
           </form>
         )}

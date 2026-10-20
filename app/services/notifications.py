@@ -11,6 +11,7 @@ from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
+from app.core.i18n import tr, user_lang
 from app.database import SessionLocal
 from app.models import Notification, Scrobble, ScrobbleComment, Track, User
 from app.services.user_preferences import preferences_dict
@@ -104,15 +105,38 @@ def delete_for_user(db: Session, user_id: int) -> None:
     ).delete(synchronize_session=False)
 
 
-def _describe(kind: str, actor: str, track_title: Optional[str], message: Optional[str] = None) -> str:
+def recipient_lang(db: Session, user_id: int) -> str:
+    """Language of a notification's recipient (who reads it later)."""
+    return user_lang(db.query(User).filter(User.id == user_id).first())
+
+
+def describe(lang: str, kind: str, actor: str, track_title: Optional[str],
+             message: Optional[str] = None) -> str:
+    """The line shown in the bell and in the push, in `lang`."""
     if kind in MESSAGE_KINDS:
         return message or ""
-    target = f"«{track_title}»" if track_title else "ваше прослушивание"
     if kind == KIND_LIKE:
-        return f"{actor} оценил(а) {target}"
+        if track_title:
+            return tr(lang, "{actor} оценил(а) «{track}»", actor=actor, track=track_title)
+        return tr(lang, "{actor} оценил(а) ваше прослушивание", actor=actor)
     if kind == KIND_COMMENT:
-        return f"{actor} прокомментировал(а) {target}"
-    return f"{actor} подписался(ась) на вас"
+        if track_title:
+            return tr(lang, "{actor} прокомментировал(а) «{track}»", actor=actor, track=track_title)
+        return tr(lang, "{actor} прокомментировал(а) ваше прослушивание", actor=actor)
+    return tr(lang, "{actor} подписался(ась) на вас", actor=actor)
+
+
+def achievement_message(icon: Optional[str], name: str, reward_xp: Optional[int]) -> str:
+    """Stored text of an achievement notification; `name` is already in the
+    recipient's language."""
+    return f"{icon or '🏆'} {name} (+{reward_xp or 0} XP)"[:200]
+
+
+def achievement_push(lang: str, icon: Optional[str], name: str,
+                     reward_xp: Optional[int]) -> tuple[str, str]:
+    """(title, body) of the "achievement unlocked" push in `lang`."""
+    title = tr(lang, "{icon} Новое достижение!", icon=icon or "🏆")
+    return title, f"{name} (+{reward_xp or 0} XP)"
 
 
 def _comment_ids(db: Session, notes: list[Notification]) -> dict[int, int]:
@@ -136,8 +160,11 @@ def _comment_ids(db: Session, notes: list[Notification]) -> dict[int, int]:
     return found
 
 
-def list_for_user(db: Session, user_id: int, limit: int = MAX_LIST) -> dict[str, Any]:
+def list_for_user(db: Session, user_id: int, limit: int = MAX_LIST,
+                  lang: Optional[str] = None) -> dict[str, Any]:
+    """`lang`: the viewer's language (request_lang); defaults to the saved one."""
     user = db.query(User).filter(User.id == user_id).first()
+    lang = lang or user_lang(user)
     in_app = preferences_dict(user.profile)["notifications"]["in_app"] if user else {}
     enabled_kinds = [
         kind for kind, key in PREFERENCE_KEYS.items() if kind == KIND_SECURITY or in_app.get(key, True)
@@ -165,7 +192,7 @@ def list_for_user(db: Session, user_id: int, limit: int = MAX_LIST) -> dict[str,
             "id": n.id,
             "kind": n.kind,
             "comment_id": comment_ids.get(int(n.id)),
-            "text": _describe(str(n.kind), str(actor.username), title, n.message),
+            "text": describe(lang, str(n.kind), str(actor.username), title, n.message),
             "message": n.message,
             "actor": {
                 "username": actor.username,
@@ -206,9 +233,10 @@ def _push_payload(notification_id: int) -> Optional[tuple[int, str, str, str]]:
         if recipient and not push_allowed(
                 recipient, PREFERENCE_KEYS.get(str(n.kind), "system")):
             return None
-        body = _describe(str(n.kind), str(actor.username), title)
+        body = describe(user_lang(recipient), str(n.kind), str(actor.username), title)
         if n.message:
-            body = f"{body}: {n.message}"
+            # Message kinds are the whole text; a comment adds its excerpt
+            body = f"{body}: {n.message}" if body else str(n.message)
         if n.kind == KIND_FOLLOW:
             url = f"/user/{actor.username}"
         elif n.kind == KIND_RECAP:

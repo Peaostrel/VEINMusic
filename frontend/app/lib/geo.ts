@@ -73,14 +73,18 @@ export function useCountries(): Country[] {
 }
 
 /** Country list and city suggestions for the location fields. */
+/** True when the saved name is this country's name in either language. */
+export function countryMatches(c: Country, name: string): boolean {
+  const wanted = name.toLowerCase().trim();
+  return [c.name, c.name_ru].some((n) => n?.toLowerCase().trim() === wanted);
+}
+
 export function useLocationSuggestions(country: string, city: string) {
   const countries = useCountries();
   const [cities, setCities] = useState<string[]>([]);
 
   const countryCode =
-    countries.find(
-      (c) => c.name.toLowerCase().trim() === country.toLowerCase().trim(),
-    )?.code ?? "";
+    countries.find((c) => countryMatches(c, country))?.code ?? "";
 
   useEffect(() => {
     if (!countryCode || city.trim().length < 2) {
