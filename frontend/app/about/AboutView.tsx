@@ -211,14 +211,12 @@ function shortNumber(n: number, t: Translator) {
 }
 
 function weekRange(week: Week, t: Translator) {
-  const fmt = (iso: string, withMonth: boolean) =>
-    new Date(`${iso}T00:00:00Z`).toLocaleDateString(t.locale, {
-      day: "numeric",
-      month: withMonth ? "long" : undefined,
-      timeZone: "UTC",
-    });
-  const sameMonth = week.from.slice(0, 7) === week.to.slice(0, 7);
-  return `${fmt(week.from, !sameMonth)}–${fmt(week.to, true)}`;
+  const day = (iso: string) => new Date(`${iso}T00:00:00Z`);
+  return new Intl.DateTimeFormat(t.locale, {
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  }).formatRange(day(week.from), day(week.to));
 }
 
 /** "VEIN за неделю": site-wide plays per day, totals and artist of the week. */
@@ -470,14 +468,16 @@ export default function About({
             <li>SoundCloud</li>
             <li>{t("Last.fm (импорт)")}</li>
           </ul>
-          <Link
-            href="/en"
-            hrefLang="en"
-            lang="en"
-            className="self-start text-[13px] text-fg-3 hover:text-fg-2"
-          >
-            English
-          </Link>
+          {t.lang === "ru" && (
+            <Link
+              href="/en"
+              hrefLang="en"
+              lang="en"
+              className="self-start text-[13px] text-fg-3 hover:text-fg-2"
+            >
+              English
+            </Link>
+          )}
         </div>
 
         <div className="flex flex-col gap-3">

@@ -22,7 +22,7 @@ export default function GuestHeader({
   const t = useT();
   return (
     <header className="border-b border-line-soft">
-      <div className="mx-auto flex h-16 w-full max-w-[1200px] items-center gap-8 px-4 sm:px-6">
+      <div className="mx-auto flex h-16 w-full max-w-[1200px] items-center gap-3 px-4 sm:gap-8 sm:px-6">
         <BrandLink />
         {minimal ? (
           <div className="ml-auto flex items-center gap-4">
