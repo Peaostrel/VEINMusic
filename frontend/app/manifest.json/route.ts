@@ -44,12 +44,6 @@ export async function GET() {
         "/feed",
       ),
       shortcut(
-        msg("Слушать вместе"),
-        msg("Вместе"),
-        msg("Комнаты совместного прослушивания"),
-        "/together",
-      ),
-      shortcut(
         msg("Топ слушателей"),
         msg("Топ"),
         msg("Топ слушателей недели"),
