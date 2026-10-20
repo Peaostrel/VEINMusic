@@ -1,3 +1,8 @@
+## 1.5.5
+
+Добавлен Звук (zvuk.com): трек, обложка и позиция берутся из системной
+панели медиа плеера, как у Spotify и Apple Music.
+
 ## 1.5.4
 
 Firefox: прослушивания из Spotify, YouTube Music, VK, SoundCloud и Apple Music

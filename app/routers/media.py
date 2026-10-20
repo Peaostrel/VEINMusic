@@ -1,6 +1,7 @@
 """Image uploads."""
 
 import asyncio
+import hmac
 import os
 import re
 import uuid
@@ -21,7 +22,7 @@ from fastapi import (
 from fastapi.responses import FileResponse
 
 from app.core.rate_limit import credential_key, limiter
-from app.core.cover_urls import PLAT_COVER_PATH
+from app.core.cover_urls import PLAT_COVER_PATH, image_signature
 from app.core.safe_http import UnsafeURLError, pinned_download
 from app.core.security import get_current_user
 from app.models import (
@@ -69,6 +70,35 @@ async def plat_cover(cover_path: str, request: Request):
                 return Response(content, media_type=mime,
                                 headers={"Cache-Control": "public, max-age=3600"})
     raise HTTPException(404, "Обложка не найдена")
+
+
+@router.get("/api/media/image",
+            responses={403: {"description": "Unsigned address"},
+                       404: {"description": "Not an image"},
+                       502: {"description": "Image host unavailable"}})
+@limiter.limit("300/minute")
+async def proxied_image(url: str, sig: str, request: Request):
+    """Pictures from arbitrary hosts (avatars, banners, covers sent by clients).
+
+    Fetched by VEIN so that the host never sees who looks at them. Only
+    addresses VEIN signed itself are fetched: this is not an open proxy.
+    """
+    if len(url) > 2048 or not hmac.compare_digest(sig, image_signature(url)):
+        raise HTTPException(403, "Адрес картинки не подписан")
+    try:
+        async with asyncio.timeout(8):
+            content = await pinned_download(url, max_bytes=5 * 1024 * 1024)
+    except (UnsafeURLError, TimeoutError, OSError, httpx.HTTPError):
+        raise HTTPException(502, "Сервер картинки недоступен")
+    if content:
+        for mime in (MIME_IMAGE_JPEG, MIME_IMAGE_PNG, MIME_IMAGE_GIF, MIME_IMAGE_WEBP):
+            if _is_valid_image_bytes(content, mime):
+                return Response(content, media_type=mime, headers={
+                    "Cache-Control": "public, max-age=86400",
+                    "X-Content-Type-Options": "nosniff",
+                    "Content-Security-Policy": "default-src 'none'",
+                })
+    raise HTTPException(404, "Картинка не найдена")
 
 
 def _is_valid_image_bytes(content: bytes, content_type: str) -> bool:

@@ -417,11 +417,17 @@ def test_together_only_host_controls_playback(client):
     guest_token = client.cookies.get("api_key")
     client.cookies.clear()
 
-    with client.websocket_connect(f"/ws/together/party?token={host_token}", headers=ORIGIN) as host_ws:
+    # Session tokens travel in the cookie: ?token= accepts only API keys
+    with client.websocket_connect(f"/ws/together/probe?token={host_token}", headers=ORIGIN) as anonymous_ws:
+        assert anonymous_ws.receive_json()["you"] != "partyhost"
+
+    client.cookies.set("api_key", host_token)
+    with client.websocket_connect("/ws/together/party", headers=ORIGIN) as host_ws:
         host_state = host_ws.receive_json()
         assert host_state["host"] == host_state["you"] == "partyhost"
 
-        with client.websocket_connect(f"/ws/together/party?token={guest_token}", headers=ORIGIN) as guest_ws:
+        client.cookies.set("api_key", guest_token)
+        with client.websocket_connect("/ws/together/party", headers=ORIGIN) as guest_ws:
             guest_state = guest_ws.receive_json()
             assert guest_state["you"] != guest_state["host"]
             host_ws.receive_json()  # USER_JOINED

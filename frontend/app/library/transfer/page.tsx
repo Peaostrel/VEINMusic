@@ -5,7 +5,8 @@ import { useState } from "react";
 import { API_URL, apiJson } from "@/app/lib/api";
 import {
   historyBatches,
-  readHistoryFile,
+  MAX_TRANSFER_BATCHES,
+  readHistoryFiles,
   sequentialMap,
 } from "@/app/lib/historyTransfer";
 import { btn, input, PageHeader } from "@/components/ui";
@@ -22,7 +23,7 @@ interface Batch {
 }
 
 export default function TransferPage() {
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -33,13 +34,17 @@ export default function TransferPage() {
     ...(exportTo ? { date_to: exportTo } : {}),
   }).toString();
   const preview = async () => {
-    if (!file) return;
+    if (!files.length) return;
     setBusy(true);
     setBatches([]);
-    setMessage("Проверяем файл…");
+    setMessage("Читаем файлы…");
     try {
-      const rows = await readHistoryFile(file);
+      const rows = await readHistoryFiles(files);
       const chunks = historyBatches(rows);
+      if (chunks.length > MAX_TRANSFER_BATCHES)
+        throw new Error(
+          `За один перенос помещается ${MAX_TRANSFER_BATCHES} частей, а здесь ${chunks.length}. Выберите меньше файлов и перенесите остальное следующим заходом.`,
+        );
       let checked = 0;
       const results = await sequentialMap(
         chunks,
@@ -69,6 +74,7 @@ export default function TransferPage() {
     setBusy(true);
     let imported = 0;
     let duplicates = 0;
+    let done = 0;
     try {
       await sequentialMap(batches, async (batch) => {
         const result = await apiJson<{ imported: number; duplicates: number }>(
@@ -83,6 +89,7 @@ export default function TransferPage() {
         );
         imported += result.imported;
         duplicates += result.duplicates;
+        done += 1;
         setMessage(`Перенесено ${imported}, пропущено дублей ${duplicates}…`);
       });
       setBatches([]);
@@ -90,9 +97,10 @@ export default function TransferPage() {
         `Импорт завершён: ${imported} новых прослушиваний, ${duplicates} дублей пропущено.`,
       );
     } catch (cause) {
-      setBatches([]);
+      // Keep what is left, so a retry does not resend finished parts
+      setBatches(batches.slice(done));
       setMessage(
-        `Уже перенесено: ${imported}. ${cause instanceof Error ? cause.message : "Ошибка импорта"} Проверьте файл и повторите: уже добавленные записи будут пропущены.`,
+        `Уже перенесено: ${imported}. ${cause instanceof Error ? cause.message : "Ошибка импорта"} Нажмите «Подтвердить импорт» ещё раз, чтобы продолжить, или проверьте файлы заново: уже добавленные записи будут пропущены.`,
       );
     } finally {
       setBusy(false);
@@ -150,34 +158,72 @@ export default function TransferPage() {
         </p>
       </section>
       <section className="space-y-4 rounded-xl border border-line p-4">
-        <h2 className="font-semibold">Импортировать историю VEIN</h2>
+        <h2 className="font-semibold">Импортировать историю</h2>
         <p className="text-sm text-fg-2">
-          JSON или CSV, до 20 МБ и 50 000 записей за один перенос. Импорт
-          сохраняет даты, источник и отметки исключения. XP и награды за него не
-          начисляются; настройки аккаунта не меняются.
+          Подходят выгрузка VEIN (JSON или CSV), архив Spotify и экспорт
+          ListenBrainz. Можно выбрать сразу несколько файлов или ZIP целиком, до
+          100 000 прослушиваний за один перенос. Повторы пропускаются, XP и
+          награды за импорт не начисляются.
         </p>
+        <details className="text-sm text-fg-2">
+          <summary className="cursor-pointer text-fg">
+            Где взять историю Spotify и ListenBrainz
+          </summary>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            <li>
+              Spotify: в{" "}
+              <a
+                className="text-accent"
+                href="https://www.spotify.com/account/privacy/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                настройках приватности
+              </a>{" "}
+              запросите «Extended streaming history». Архив придёт на почту
+              через несколько дней; загрузите его сюда без распаковки.
+              Прослушивания короче 30 секунд, подкасты и видео не переносятся.
+            </li>
+            <li>
+              ListenBrainz: на{" "}
+              <a
+                className="text-accent"
+                href="https://listenbrainz.org/settings/export/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                странице экспорта
+              </a>{" "}
+              скачайте архив прослушиваний и загрузите его сюда.
+            </li>
+            <li>
+              Last.fm переносится отдельно, через подключение в настройках.
+            </li>
+          </ul>
+        </details>
         <label className="block">
-          <span>Файл истории</span>
+          <span>Файлы истории</span>
           <input
             type="file"
-            accept=".json,.csv,application/json,text/csv"
+            multiple
+            accept=".json,.jsonl,.csv,.zip,application/json,text/csv,application/zip"
             disabled={busy}
             className={`${input} mt-2 h-auto py-3`}
             onChange={(event) => {
-              setFile(event.target.files?.[0] ?? null);
+              setFiles(Array.from(event.target.files ?? []));
               setBatches([]);
               setMessage("");
             }}
           />
         </label>
         <button
-          disabled={!file || busy}
+          disabled={!files.length || busy}
           className={`${btn.secondary} ${btn.md}`}
           onClick={() => {
             void preview();
           }}
         >
-          Проверить файл
+          Проверить файлы
         </button>
         {!!batches.length && (
           <div className="space-y-3">

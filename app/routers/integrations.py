@@ -1,6 +1,6 @@
 """Third-party integrations: Last.fm import, Yandex, Spotify."""
 
-from datetime import UTC, datetime
+import logging
 from typing import Annotated
 
 import anyio
@@ -9,6 +9,7 @@ from fastapi import (
     Depends,
     HTTPException,
 )
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.core.redis import redis_lock
@@ -22,7 +23,6 @@ from app.schemas import (
     LikeRequest,
     YandexTokenUpdate,
 )
-from app.services import runtime_settings
 from app.services.lastfm_import import (
     LASTFM_API_KEY,
     enqueue_import,
@@ -33,47 +33,68 @@ from app.services.lastfm_import import (
 from app.services.runtime_settings import require_feature
 from app.services.user_preferences import get_preferences
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["integrations"])
+# Longer than this, the answer says the sync continues in the background.
+MANUAL_SYNC_WAIT_SEC = 20
+
+
+def _sync_targets(db: Session, user: User, service: str) -> list[str]:
+    from app.services.cloud_scrobbling import CLOUD_SERVICES, linked_services
+    if not get_preferences(user.profile).integrations.auto_sync:
+        raise HTTPException(409, "Автоматическая синхронизация приостановлена")
+    services = linked_services(user, db, CLOUD_SERVICES if service == "all" else (service,))
+    if not services:
+        raise HTTPException(409, "Нет активных облачных интеграций для синхронизации")
+    return services
+
+
+def _last_sync(db: Session, user: User):
+    db.refresh(user.integration)
+    return user.integration.last_sync
 
 
 @router.post(
     "/api/integrations/sync",
-    responses={409: {"description": "Cloud synchronization is unavailable"}},
+    responses={
+        202: {"description": "Synchronization is still running in the background"},
+        409: {"description": "Cloud synchronization is unavailable"},
+        502: {"description": "A music service failed during synchronization"},
+    },
 )
 async def sync_integrations_now(
         data: IntegrationSyncRequest,
         db: Annotated[Session, Depends(get_db)],
         current_user: Annotated[User, Depends(get_current_user)]):
-    """Run one immediate cloud poll for the signed-in user."""
-    from app.services.cloud_scrobbling import (
-        sync_soundcloud_status,
-        sync_spotify_status,
-        sync_yandex_status,
-    )
+    """Run one immediate cloud poll for the signed-in user.
+
+    Provider calls and their database writes run in the arq worker, so a slow
+    Spotify or Yandex response never stalls this process's event loop."""
+    from app.core.redis import get_arq_pool
+    from app.services.cloud_scrobbling import sync_user_now
     from app.services.scrobble_processor import process_scrobble
 
-    preferences = get_preferences(current_user.profile).integrations
-    if not preferences.auto_sync:
-        raise HTTPException(409, "Автоматическая синхронизация приостановлена")
-    jobs = {
-        "spotify": (bool(current_user.integration.spotify_access_token), preferences.spotify_enabled, sync_spotify_status),
-        "yandex": (bool(current_user.integration.yandex_token), preferences.yandex_enabled, sync_yandex_status),
-        "soundcloud": (bool(current_user.integration.soundcloud_access_token), preferences.soundcloud_enabled, sync_soundcloud_status),
-    }
-    selected = jobs.items() if data.service == "all" else [(data.service, jobs[data.service])]
-    completed = []
-    async with redis_lock(f"manual-sync:{current_user.id}", expire_sec=20):
-        for name, (linked, enabled, sync_func) in selected:
-            if linked and enabled and runtime_settings.is_feature_enabled(
-                f"integration_{name}", db
-            ):
-                await sync_func(current_user, db, process_scrobble)
-                completed.append(name)
-        if not completed:
-            raise HTTPException(409, "Нет активных облачных интеграций для синхронизации")
-        current_user.integration.last_sync = datetime.now(UTC)
-        db.commit()
-    return {"status": "ok", "services": completed, "last_sync": current_user.integration.last_sync}
+    services = await anyio.to_thread.run_sync(_sync_targets, db, current_user, data.service)
+    user_id = int(current_user.id)
+    pool = await get_arq_pool()
+    if pool is None:
+        # No Redis (local development): nothing else shares this loop.
+        completed = await sync_user_now(user_id, services, process_scrobble)
+    else:
+        job = await pool.enqueue_job("sync_cloud_user", user_id, services, _job_id=f"manual_sync:{user_id}")
+        if job is None:
+            raise HTTPException(409, "Синхронизация уже идёт, подождите немного")
+        try:
+            completed = await job.result(timeout=MANUAL_SYNC_WAIT_SEC)
+        except TimeoutError:
+            return JSONResponse({"status": "queued", "services": services}, status_code=202)
+        except Exception:
+            logger.warning("Manual cloud sync failed for user %s", user_id, exc_info=True)
+            raise HTTPException(502, "Сервис музыки не ответил, попробуйте позже") from None
+    if not completed:
+        raise HTTPException(409, "Нет активных облачных интеграций для синхронизации")
+    last_sync = await anyio.to_thread.run_sync(_last_sync, db, current_user)
+    return {"status": "ok", "services": completed, "last_sync": last_sync}
 
 
 # --- /api/import/lastfm ---

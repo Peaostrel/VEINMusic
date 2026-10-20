@@ -123,11 +123,32 @@ def test_hidden_history_cannot_be_probed_via_like(client, db, listeners):
 
 def test_user_invalidation_leaves_shared_cache(monkeypatch):
     monkeypatch.setattr(cache, "redis_client", None)
+    monkeypatch.setattr(cache, "_reconnect_at", float("inf"))
     monkeypatch.setattr(cache, "CACHE", {})
     for key in ("preview:user:mia", "taste_twins:v2:mia", "preview:user:nick", "leaderboard:raw:v3"):
         cache.set_to_cache(key, [1])
     cache.invalidate_user("mia")
     assert sorted(cache.CACHE) == ["leaderboard:raw:v3", "preview:user:nick"]
+
+
+def test_cache_reconnects_to_redis_after_outage(monkeypatch):
+    attempts = []
+
+    class Client:
+        def ping(self):
+            attempts.append(1)
+
+        def get(self, key):
+            return None
+
+    monkeypatch.setattr(cache.redis.Redis, "from_url", lambda *args, **kwargs: Client())
+    monkeypatch.setattr(cache, "redis_client", None)
+    monkeypatch.setattr(cache, "_reconnect_at", cache.time.time() + 60)
+    cache.get_from_cache("missing")
+    assert cache.redis_client is None and not attempts
+    monkeypatch.setattr(cache, "_reconnect_at", 0.0)
+    cache.get_from_cache("missing")
+    assert isinstance(cache.redis_client, Client) and attempts == [1]
 
 
 @pytest.mark.parametrize("period", ["all", "7d", "30d"])

@@ -52,23 +52,229 @@ function decodeCsvRows(rows: string[][]): Record<string, unknown>[] {
     });
 }
 
-export async function readHistoryFile(
+const LISTENBRAINZ_SOURCE = "listenbrainz_import";
+/** Plays shorter than this are skips, as on Last.fm and ListenBrainz. */
+const MIN_PLAY_MS = 30_000;
+const MAX_ROWS = 100_000;
+const MAX_FILE_BYTES = 20 * 1024 * 1024;
+const MAX_ZIP_BYTES = 200 * 1024 * 1024;
+const MAX_UNZIPPED_BYTES = 600 * 1024 * 1024;
+
+type Row = Record<string, unknown>;
+
+function text(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function seconds(ms: unknown): number {
+  return typeof ms === "number" && ms > 0
+    ? Math.min(86400, Math.round(ms / 1000))
+    : 0;
+}
+
+/** Spotify "Extended streaming history": `ts` is when playback stopped. */
+function fromSpotify(item: Row): Row | null {
+  const title = text(item.master_metadata_track_name);
+  const artist = text(item.master_metadata_album_artist_name);
+  const played = typeof item.ms_played === "number" ? item.ms_played : 0;
+  const stopped = Date.parse(String(item.ts ?? ""));
+  if (!title || !artist || played < MIN_PLAY_MS || Number.isNaN(stopped))
+    return null;
+  return {
+    played_at: new Date(stopped - played).toISOString(),
+    artist,
+    title,
+    album: text(item.master_metadata_album_album_name),
+    // A track played to the end tells its length; otherwise it is unknown
+    duration: item.reason_end === "trackdone" ? seconds(played) : 0,
+    listened_sec: seconds(played),
+    source: "spotify_import",
+  };
+}
+
+/** Spotify "Account data" (StreamingHistory_music_*.json) has no time zone. */
+function fromSpotifyAccount(item: Row): Row | null {
+  const title = text(item.trackName);
+  const artist = text(item.artistName);
+  const played = typeof item.msPlayed === "number" ? item.msPlayed : 0;
+  const stopped = Date.parse(
+    `${String(item.endTime ?? "").replace(" ", "T")}:00Z`,
+  );
+  if (!title || !artist || played < MIN_PLAY_MS || Number.isNaN(stopped))
+    return null;
+  return {
+    played_at: new Date(stopped - played).toISOString(),
+    artist,
+    title,
+    listened_sec: seconds(played),
+    source: "spotify_import",
+  };
+}
+
+function fromListenBrainz(item: Row): Row | null {
+  const meta = (item.track_metadata ?? {}) as Row;
+  const info = (meta.additional_info ?? {}) as Row;
+  const title = text(meta.track_name);
+  const artist = text(meta.artist_name);
+  const when = typeof item.listened_at === "number" ? item.listened_at : NaN;
+  if (!title || !artist || Number.isNaN(when)) return null;
+  const duration = seconds(
+    info.duration_ms ?? Number(info.duration ?? 0) * 1000,
+  );
+  return {
+    played_at: new Date(when * 1000).toISOString(),
+    artist,
+    title,
+    album: text(meta.release_name),
+    duration,
+    // ListenBrainz keeps only counted listens; the server fills in the
+    // length of the catalog track when the export has none
+    listened_sec: duration,
+    source: LISTENBRAINZ_SOURCE,
+  };
+}
+
+/** Turn any supported export into VEIN history rows; null for other JSON. */
+export function convertHistoryRows(items: unknown[]): Row[] | null {
+  const rows = items.filter(
+    (item): item is Row => !!item && typeof item === "object",
+  );
+  const first = rows[0] ?? {};
+  let convert: ((item: Row) => Row | null) | null = null;
+  if ("ms_played" in first && "ts" in first) convert = fromSpotify;
+  else if ("msPlayed" in first && "endTime" in first)
+    convert = fromSpotifyAccount;
+  else if ("listened_at" in first && "track_metadata" in first)
+    convert = fromListenBrainz;
+  else if ("played_at" in first && "artist" in first && "title" in first)
+    return rows;
+  if (!convert) return rows.length ? null : [];
+  return rows.map(convert).filter((row): row is Row => row !== null);
+}
+
+/** Parse one JSON, JSON Lines or VEIN CSV file; null when it holds no history. */
+export function parseHistoryText(name: string, source: string): Row[] | null {
+  const lower = name.toLowerCase();
+  if (lower.endsWith(".csv")) return parseHistoryCsv(source);
+  const body = source.replace(/^\uFEFF/, "").trim();
+  if (!body) return [];
+  if (lower.endsWith(".jsonl") || (body[0] === "{" && body.includes("}\n{")))
+    return convertHistoryRows(
+      body
+        .split("\n")
+        .filter((line) => line.trim())
+        .map((line) => JSON.parse(line)),
+    );
+  const parsed = JSON.parse(body);
+  const rows = Array.isArray(parsed) ? parsed : parsed?.scrobbles;
+  return Array.isArray(rows) ? convertHistoryRows(rows) : null;
+}
+
+/** History files inside a ZIP export, read with the browser's own inflater. */
+async function unzipHistory(
   file: File,
-): Promise<Record<string, unknown>[]> {
-  if (file.size > 20 * 1024 * 1024)
-    throw new Error(
-      "Максимальный размер файла — 20 МБ. Разделите большую историю на части.",
+): Promise<{ name: string; text: string }[]> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const view = new DataView(bytes.buffer);
+  let end = -1;
+  for (
+    let index = bytes.length - 22;
+    index >= Math.max(0, bytes.length - 65_557);
+    index--
+  )
+    if (view.getUint32(index, true) === 0x06054b50) {
+      end = index;
+      break;
+    }
+  if (end < 0) throw new Error("ZIP-архив повреждён");
+  const count = view.getUint16(end + 10, true);
+  let offset = view.getUint32(end + 16, true);
+  const decoder = new TextDecoder();
+  const files: { name: string; text: string }[] = [];
+  let total = 0;
+  for (let entry = 0; entry < count; entry++) {
+    if (view.getUint32(offset, true) !== 0x02014b50)
+      throw new Error("ZIP-архив повреждён");
+    const method = view.getUint16(offset + 10, true);
+    const compressed = view.getUint32(offset + 20, true);
+    const size = view.getUint32(offset + 24, true);
+    const nameLength = view.getUint16(offset + 28, true);
+    const extraLength = view.getUint16(offset + 30, true);
+    const commentLength = view.getUint16(offset + 32, true);
+    const local = view.getUint32(offset + 42, true);
+    const name = decoder.decode(
+      bytes.subarray(offset + 46, offset + 46 + nameLength),
     );
-  const text = await file.text();
-  const parsed = file.name.toLowerCase().endsWith(".csv")
-    ? parseHistoryCsv(text)
-    : JSON.parse(text);
-  const rows = Array.isArray(parsed) ? parsed : parsed.scrobbles;
-  if (!Array.isArray(rows) || !rows.length || rows.length > 50000)
-    throw new Error(
-      "В файле должно быть от 1 до 50 000 прослушиваний. Большую историю разделите на части.",
-    );
-  return rows;
+    offset += 46 + nameLength + extraLength + commentLength;
+    const lower = name.toLowerCase();
+    const base = lower.split("/").pop() ?? "";
+    if (!/\.(json|jsonl|csv)$/.test(base) || base.startsWith(".")) continue;
+    total += size;
+    if (total > MAX_UNZIPPED_BYTES)
+      throw new Error(
+        "Архив слишком большой: распакуйте его и загрузите файлы частями",
+      );
+    const start =
+      local +
+      30 +
+      view.getUint16(local + 26, true) +
+      view.getUint16(local + 28, true);
+    const data = bytes.subarray(start, start + compressed);
+    let content: Uint8Array;
+    if (method === 0) content = data;
+    else if (method === 8)
+      content = new Uint8Array(
+        await new Response(
+          new Blob([data])
+            .stream()
+            .pipeThrough(new DecompressionStream("deflate-raw")),
+        ).arrayBuffer(),
+      );
+    else throw new Error(`Файл ${name} сжат неподдерживаемым способом`);
+    files.push({ name, text: decoder.decode(content) });
+  }
+  return files;
+}
+
+/** Read VEIN, Spotify or ListenBrainz exports (files or ZIP) into one sorted history. */
+export async function readHistoryFiles(files: File[]): Promise<Row[]> {
+  const rows: Row[] = [];
+  for (const file of files) {
+    const isZip = file.name.toLowerCase().endsWith(".zip");
+    if (file.size > (isZip ? MAX_ZIP_BYTES : MAX_FILE_BYTES))
+      throw new Error(
+        isZip
+          ? "Максимальный размер архива — 200 МБ."
+          : `Файл ${file.name} больше 20 МБ. Разделите его на части.`,
+      );
+    const parts = isZip
+      ? await unzipHistory(file)
+      : [{ name: file.name, text: await file.text() }];
+    for (const part of parts) {
+      let parsed: Row[] | null;
+      try {
+        parsed = parseHistoryText(part.name, part.text);
+      } catch (cause) {
+        // Archives also carry playlists, settings and other unrelated files.
+        if (isZip) continue;
+        throw cause;
+      }
+      if (!parsed) {
+        if (isZip) continue;
+        throw new Error(`Не удалось распознать формат файла ${part.name}`);
+      }
+      for (const row of parsed) rows.push(row);
+      if (rows.length > MAX_ROWS)
+        throw new Error(
+          "За один перенос можно загрузить до 100 000 прослушиваний. Выберите меньше файлов.",
+        );
+    }
+  }
+  if (!rows.length)
+    throw new Error("В файлах не нашлось прослушиваний длиннее 30 секунд");
+  return rows.sort((a, b) =>
+    String(a.played_at).localeCompare(String(b.played_at)),
+  );
 }
 
 /** Keep account mutations ordered and stop at the first failed batch. */
@@ -83,6 +289,8 @@ export function sequentialMap<T, U>(
   }, Promise.resolve([]));
 }
 
+/** The import API takes at most this many requests per hour. */
+export const MAX_TRANSFER_BATCHES = 20;
 /** The API takes at most this many plays per request… */
 const BATCH_ROWS = 5000;
 /** …and at most 2 MB per request; batches stay below it with room to spare. */

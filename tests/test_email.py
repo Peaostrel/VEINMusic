@@ -231,6 +231,16 @@ def test_disabled_worker_still_purges_expired_data(client, db, owner, monkeypatc
     assert db.query(EmailOutbox).count() == 0
 
 
+def test_account_deletion_needs_the_2fa_code(client, db, owner, monkeypatch):
+    owner.totp_enabled = True
+    db.commit()
+    monkeypatch.setattr("app.services.mfa.consume_code", lambda db, user, code: code == "123456")
+    for body in ({"password": PASSWORD}, {"password": PASSWORD, "otp_code": "000000"}):
+        response = client.request("DELETE", "/api/account", json=body)
+        assert response.status_code == 400 and "двухфакторной" in response.json()["detail"]
+    assert client.request("DELETE", "/api/account", json={"password": PASSWORD, "otp_code": "123456"}).status_code == 200
+
+
 def test_resend_quota_waits_for_reset(client, db, owner):
     verified(client, db, owner)
     row = mail.queue(db, owner.id, "security", "user@example.com", "Subject", "Hello")

@@ -219,6 +219,8 @@ class Scrobble(Base):
         Index("ix_scrobbles_user_played_at", "user_id", "played_at"),
         # "online now" and activity queries
         Index("ix_scrobbles_updated_at", "updated_at"),
+        # Site-wide period queries: rankings, admin statistics
+        Index("ix_scrobbles_played_at", "played_at"),
         Index("ix_scrobbles_user_time_id", "user_id", "played_at", "id"),
         Index("ix_scrobbles_user_track", "user_id", "excluded_from_stats", "deleted_at", "track_id"),
     )

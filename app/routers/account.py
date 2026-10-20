@@ -42,6 +42,7 @@ router = APIRouter(prefix="/api/account", tags=["account"])
 
 class AccountDeleteRequest(BaseModel):
     password: str = Field(..., max_length=128)
+    otp_code: str | None = Field(default=None, max_length=64)
 
 
 def _iso(value: Any) -> Any:
@@ -167,7 +168,7 @@ def export_account(request: Request,
     )
 
 
-@router.delete("", responses={400: {"description": "Wrong password"}})
+@router.delete("", responses={400: {"description": "Wrong password or 2FA code"}})
 @limiter.limit("5/hour")
 def delete_account(request: Request, payload: AccountDeleteRequest, response: Response,
                    db: Annotated[Session, Depends(get_db)],
@@ -175,6 +176,11 @@ def delete_account(request: Request, payload: AccountDeleteRequest, response: Re
     """Permanently delete the account and all related data."""
     if not verify_password(payload.password, str(current_user.hashed_password)):
         raise HTTPException(400, "Неверный пароль")
+    if current_user.totp_enabled:
+        from app.services.mfa import consume_code
+        # A stolen password alone must not erase an account protected by 2FA.
+        if not payload.otp_code or not consume_code(db, current_user, payload.otp_code):
+            raise HTTPException(400, "Введите действующий код двухфакторной защиты")
     if current_user.role == "admin" and db.query(User).filter(User.role == "admin").count() <= 1:
         raise HTTPException(400, "Нельзя удалить единственного администратора")
 

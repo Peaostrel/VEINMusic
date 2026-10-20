@@ -13,7 +13,7 @@ import { btn, card } from "@/components/ui";
 export const metadata: Metadata = {
   title: "Расширение для браузера",
   description:
-    "Сохраняйте музыку из Яндекс Музыки, Spotify, YouTube Music, VK, SoundCloud и Apple Music в одной истории VEIN.",
+    "Сохраняйте музыку из Яндекс Музыки, Spotify, YouTube Music, VK, SoundCloud, Apple Music и Звука в одной истории VEIN.",
   alternates: { canonical: "/extension" },
 };
 
@@ -70,6 +70,7 @@ const services = [
   "VK Музыка",
   "SoundCloud",
   "Apple Music",
+  "Звук",
 ];
 const steps = [
   [

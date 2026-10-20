@@ -17,6 +17,7 @@ const SOURCES = [
   { value: "vk", label: "VK Музыка" },
   { value: "youtube", label: "YouTube Music" },
   { value: "apple", label: "Apple Music" },
+  { value: "zvuk", label: "Звук" },
   { value: "soundcloud", label: "SoundCloud" },
   { value: "plat", label: "Plat Music" },
   { value: "desktop", label: "Десктопный клиент" },

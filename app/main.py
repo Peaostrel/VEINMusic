@@ -19,6 +19,7 @@ from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
 
 from app.core.body_limit import BodySizeLimitMiddleware
+from app.core.cover_urls import proxied_image_url
 from app.core.flood_guard import FloodGuardMiddleware
 from app.core.observability import setup_observability
 from app.core.performance import record_request
@@ -288,7 +289,8 @@ def _is_ws_origin_allowed(websocket: WebSocket) -> bool:
 
 def _get_ws_authenticated_username(websocket: WebSocket) -> str | None:
     ticket = websocket.query_params.get("ticket")
-    token = websocket.cookies.get("api_key") or websocket.query_params.get("token")
+    cookie_token = websocket.cookies.get("api_key")
+    token = cookie_token or websocket.query_params.get("token")
     if not ticket and not token:
         return None
 
@@ -306,6 +308,10 @@ def _get_ws_authenticated_username(websocket: WebSocket) -> str | None:
             return None
         client_ip = websocket.client.host if websocket.client else None
         auth_user, scopes = _authenticate_user_with_scopes(token, db, client_ip)
+        if scopes is None and not cookie_token:
+            # Addresses end up in proxy logs: a session travels in the cookie
+            # or as a one-time ticket, ?token= is only for API keys.
+            return None
         if scopes is not None and not {"profile:read", "*"}.intersection(scopes.split(",")):
             return None
         if auth_user and not auth_user.is_banned:
@@ -420,7 +426,8 @@ def _clean_track_update(track_data) -> dict:
             clean[key] = val[:MAX_TEXT_FIELD_LENGTH]
     cover = track_data.get("cover_url")
     if isinstance(cover, str) and cover.startswith(("http://", "https://")):
-        clean["cover_url"] = cover[:2048]
+        # The host's cover reaches every listener: never from an unknown server
+        clean["cover_url"] = proxied_image_url(cover[:2048])
     for key in ("duration", "progress_sec"):
         val = track_data.get(key)
         if isinstance(val, (int, float)) and not isinstance(val, bool) and 0 <= val < 86400:

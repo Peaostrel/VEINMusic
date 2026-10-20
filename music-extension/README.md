@@ -1,7 +1,7 @@
 # VEINMusic Extension
 
-История прослушиваний из Яндекс Музыки, Spotify, YouTube Music, VK, SoundCloud и
-Apple Music в вашем аккаунте [VEINMusic](https://music.vein.guru).
+История прослушиваний из Яндекс Музыки, Spotify, YouTube Music, VK, SoundCloud,
+Apple Music и Звука в вашем аккаунте [VEINMusic](https://music.vein.guru).
 Разметка музыкальных сервисов может меняться; поддержка веб-плеера не означает
 поддержку его мобильного или настольного приложения.
 

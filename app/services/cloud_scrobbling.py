@@ -617,6 +617,47 @@ async def poll_user(user_id: int, process_func):
         local_db.close()
 
 
+CLOUD_SERVICES = ("spotify", "yandex", "soundcloud")
+
+
+def linked_services(user: User, db: Session, wanted: list[str] | tuple[str, ...] = CLOUD_SERVICES) -> list[str]:
+    """Services in `wanted` that this user linked, enabled and the site allows."""
+    integrations = get_preferences(user.profile).integrations
+    linked = {
+        "spotify": (user.integration.spotify_access_token, integrations.spotify_enabled),
+        "yandex": (user.integration.yandex_token, integrations.yandex_enabled),
+        "soundcloud": (user.integration.soundcloud_access_token, integrations.soundcloud_enabled),
+    }
+    return [name for name in wanted if name in linked and all(linked[name])
+            and runtime_settings.is_feature_enabled(f"integration_{name}", db)]
+
+
+async def sync_user_now(user_id: int, services: list[str], process_func) -> list[str]:
+    """One immediate poll of the given services for a user ("sync now")."""
+    from app.core.redis import redis_lock
+    syncs = {"spotify": sync_spotify_status, "yandex": sync_yandex_status,
+             "soundcloud": sync_soundcloud_status}
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user or not get_preferences(user.profile).integrations.auto_sync:
+            return []
+
+        async def record(*args, **kwargs):
+            async with redis_lock(f"scrobble_lock:{user_id}", expire_sec=30):
+                return await process_func(*args, **kwargs)
+
+        completed = linked_services(user, db, services)
+        for name in completed:
+            await syncs[name](user, db, record)
+        if completed:
+            user.integration.last_sync = datetime.now(UTC)
+            db.commit()
+        return completed
+    finally:
+        db.close()
+
+
 def get_pollable_user_ids(db: Session) -> list[int]:
     """IDs of non-banned users with a linked cloud music account."""
     from app.models import UserIntegration
