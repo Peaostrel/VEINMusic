@@ -24,7 +24,6 @@ export interface SettingsData {
   city: string;
   isPrivate: boolean;
   hiddenArtists: string;
-  syncPrivacy: string;
   yandexToken: string;
   lastfmUsername: string;
   preferences: UserPreferences;
@@ -66,7 +65,6 @@ export const EMPTY_SETTINGS: SettingsData = {
   city: "",
   isPrivate: false,
   hiddenArtists: "",
-  syncPrivacy: "all",
   yandexToken: "",
   lastfmUsername: "",
   preferences: structuredClone(DEFAULT_PREFERENCES),
@@ -101,7 +99,6 @@ export function settingsFromProfile(
     theme: u.theme || "classic",
     isPrivate: u.is_private || false,
     hiddenArtists: u.hidden_artists || "",
-    syncPrivacy: u.sync_privacy || "all",
     yandexToken: u.yandex_token || "",
     lastfmUsername: u.lastfm_username || "",
     preferences: mergePreferences(preferences),
