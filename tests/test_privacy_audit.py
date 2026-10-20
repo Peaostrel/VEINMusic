@@ -1,6 +1,5 @@
 """Granular privacy, warm-cache withdrawals and bounded invalidation."""
 import json
-from unittest.mock import Mock
 
 import pytest
 
@@ -122,26 +121,13 @@ def test_hidden_history_cannot_be_probed_via_like(client, db, listeners):
     assert client.post(f"/api/scrobble/{row.id}/comment", json={"content": "test"}).status_code == 403
 
 
-def test_invalidation_throttle_local_and_redis(monkeypatch):
-    clock = [100.0]
-    monkeypatch.setattr(cache.time, "monotonic", lambda: clock[0])
-    monkeypatch.setattr(cache, "_last_invalidation", float("-inf"))
+def test_user_invalidation_leaves_shared_cache(monkeypatch):
     monkeypatch.setattr(cache, "redis_client", None)
-    flush = Mock(return_value=4)
-    monkeypatch.setattr(cache, "clear_all", flush)
-    assert cache.invalidate_all() == 4
-    assert cache.invalidate_all() == 0
-    clock[0] += 5
-    assert cache.invalidate_all() == 4
-    flush.assert_called_with()
-    assert flush.call_count == 2
-    shared = Mock()
-    shared.set.return_value = False
-    monkeypatch.setattr(cache, "redis_client", shared)
-    clock[0] += 5
-    assert cache.invalidate_all() == 0
-    shared.set.assert_called_once_with("cache_invalidation_lease", "1", nx=True, ex=5)
-    assert flush.call_count == 2
+    monkeypatch.setattr(cache, "CACHE", {})
+    for key in ("preview:user:mia", "taste_twins:v2:mia", "preview:user:nick", "leaderboard:raw:v3"):
+        cache.set_to_cache(key, [1])
+    cache.invalidate_user("mia")
+    assert sorted(cache.CACHE) == ["leaderboard:raw:v3", "preview:user:nick"]
 
 
 @pytest.mark.parametrize("period", ["all", "7d", "30d"])

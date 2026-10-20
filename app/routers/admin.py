@@ -2,6 +2,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, cast
 
+import anyio
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -338,12 +339,12 @@ def merge_catalog_items(
 
 
 @router.post("/cache/flush", responses={500: {"description": "Internal Server Error"}})
-async def flush_system_cache(db: Annotated[Session, Depends(get_db)],
+def flush_system_cache(db: Annotated[Session, Depends(get_db)],
                              admin: Annotated[User, Depends(get_admin_user)]):
     """Drop cached responses (leaderboard, discovery, taste twins…) and the
     cached runtime settings, so the next requests are computed afresh."""
     try:
-        removed = await asyncio.to_thread(cache.clear_all)
+        removed = cache.clear_all()
     except Exception:
         raise HTTPException(500, "Ошибка сброса системного кэша")
     runtime_settings.invalidate()
@@ -718,7 +719,7 @@ def list_lastfm_import_jobs(
 
 @router.post("/jobs/lastfm/{job_id}/retry",
              responses={404: {"description": "Not Found"}, 400: {"description": "Bad Request"}})
-async def retry_lastfm_import_job(
+def retry_lastfm_import_job(
     job_id: int,
     db: Annotated[Session, Depends(get_db)],
     admin: Annotated[User, Depends(get_admin_user)],
@@ -736,7 +737,7 @@ async def retry_lastfm_import_job(
     db.commit()
     # Resumes from the last imported page
     from app.services.lastfm_import import enqueue_import
-    await enqueue_import(job_id)
+    anyio.from_thread.run(enqueue_import, job_id)
     return {"status": "ok", "message": f"Задача импорта #{job_id} поставлена в очередь на повтор"}
 
 

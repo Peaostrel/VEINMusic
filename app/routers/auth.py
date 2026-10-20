@@ -7,6 +7,7 @@ import urllib.parse
 from datetime import UTC, datetime
 from typing import Annotated
 
+import anyio
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
@@ -159,7 +160,7 @@ def login(request: Request, data: UserLogin, response: Response, background_task
 
 
 @router.post("/logout")
-async def logout(request: Request, response: Response, db: Annotated[Session, Depends(get_db)]):
+def logout(request: Request, response: Response, db: Annotated[Session, Depends(get_db)]):
     from app.models import UserSession
     from app.core.security import _check_csrf, _authenticate_session_token
     token = request.cookies.get("api_key", "")
@@ -171,7 +172,7 @@ async def logout(request: Request, response: Response, db: Annotated[Session, De
             row.revoked = True  # type: ignore[assignment]
             db.commit()
             from app.core.websockets import manager
-            await manager.revoke_session(str(user.username), str(row.id))
+            anyio.from_thread.run(manager.revoke_session, str(user.username), str(row.id))
     response.delete_cookie("api_key")
     return {"message": "Успешный выход"}
 
@@ -195,6 +196,13 @@ def ws_ticket(request: Request, current_user: Annotated[User, Depends(get_curren
     (passed as ?ticket=…; see app/core/ws_ticket.py)."""
     from app.core.ws_ticket import TICKET_TTL_SEC, issue_ticket
     return {"ticket": issue_ticket(str(current_user.username), session_version=int(current_user.session_version or 0), session_id=current_session_id(request)), "expires_in": TICKET_TTL_SEC}
+
+
+async def _post_form(url: str, data: dict) -> httpx.Response:
+    """Token request of an OAuth callback (the callback itself runs in a
+    worker thread, so its database work never blocks the event loop)."""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        return await client.post(url, data=data, headers={"Content-Type": "application/x-www-form-urlencoded"})
 
 
 SPOTIFY_STATE_COOKIE = "spotify_auth_state"
@@ -257,7 +265,7 @@ def spotify_login(current_user: Annotated[User, Depends(get_current_user)]):
 @router.get("/spotify/callback",
             dependencies=[Depends(runtime_settings.require_feature("integration_spotify"))],
             responses={400: {"description": INVALID_STATE_PARAMETER}})
-async def spotify_callback(code: str,
+def spotify_callback(code: str,
                            state: str,
                            request: Request,
                            db: Annotated[Session, Depends(get_db)]):
@@ -273,26 +281,24 @@ async def spotify_callback(code: str,
         raise HTTPException(status_code=400, detail=INVALID_STATE_PARAMETER)
 
     result = "error"
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.post("https://accounts.spotify.com/api/token", data={
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": SPOTIFY_REDIRECT_URI,
-            "client_id": SPOTIFY_CLIENT_ID,
-            "client_secret": SPOTIFY_CLIENT_SECRET
-        }, headers={"Content-Type": "application/x-www-form-urlencoded"})
-
-        if resp.status_code == 200:
-            data = resp.json()
-            if data.get("access_token") and data.get("refresh_token"):
-                if not user.integration:
-                    db.add(UserIntegration(user_id=user.id))
-                    db.commit()
-                    db.refresh(user)
-                user.integration.spotify_access_token = data["access_token"]
-                user.integration.spotify_refresh_token = data["refresh_token"]
+    resp = anyio.from_thread.run(_post_form, "https://accounts.spotify.com/api/token", {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": SPOTIFY_REDIRECT_URI,
+        "client_id": SPOTIFY_CLIENT_ID,
+        "client_secret": SPOTIFY_CLIENT_SECRET
+    })
+    if resp.status_code == 200:
+        data = resp.json()
+        if data.get("access_token") and data.get("refresh_token"):
+            if not user.integration:
+                db.add(UserIntegration(user_id=user.id))
                 db.commit()
-                result = "success"
+                db.refresh(user)
+            user.integration.spotify_access_token = data["access_token"]
+            user.integration.spotify_refresh_token = data["refresh_token"]
+            db.commit()
+            result = "success"
 
     redirect = RedirectResponse(f"{FRONTEND_URL}/settings?spotify={result}")
     redirect.delete_cookie(SPOTIFY_STATE_COOKIE)
@@ -378,7 +384,7 @@ def soundcloud_login(current_user: Annotated[User, Depends(get_current_user)]):
     dependencies=[Depends(runtime_settings.require_feature("integration_soundcloud"))],
     responses={400: {"description": INVALID_STATE_PARAMETER}},
 )
-async def soundcloud_callback(
+def soundcloud_callback(
     code: str,
     state: str,
     request: Request,
@@ -396,19 +402,14 @@ async def soundcloud_callback(
         raise HTTPException(status_code=400, detail=INVALID_STATE_PARAMETER)
 
     result = "error"
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.post(
-            "https://secure.soundcloud.com/oauth/token",
-            data={
-                "grant_type": "authorization_code",
-                "client_id": SOUNDCLOUD_CLIENT_ID,
-                "client_secret": SOUNDCLOUD_CLIENT_SECRET,
-                "redirect_uri": SOUNDCLOUD_REDIRECT_URI,
-                "code_verifier": verifier,
-                "code": code,
-            },
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
+    response = anyio.from_thread.run(_post_form, "https://secure.soundcloud.com/oauth/token", {
+        "grant_type": "authorization_code",
+        "client_id": SOUNDCLOUD_CLIENT_ID,
+        "client_secret": SOUNDCLOUD_CLIENT_SECRET,
+        "redirect_uri": SOUNDCLOUD_REDIRECT_URI,
+        "code_verifier": verifier,
+        "code": code,
+    })
     if response.status_code == 200:
         data = response.json()
         if data.get("access_token") and data.get("refresh_token"):

@@ -2,6 +2,7 @@
 
 from typing import Annotated
 
+import anyio
 from fastapi import (
     APIRouter,
     Depends,
@@ -118,7 +119,7 @@ def get_all_achievements(
         404: {"description": "User or achievement not found"},
     },
 )
-async def get_achievement_album_progress(
+def get_achievement_album_progress(
         username: str,
         achievement_id: int,
         request: Request,
@@ -138,7 +139,7 @@ async def get_achievement_album_progress(
     if not achievement:
         raise HTTPException(404, "Альбомное достижение не найдено")
 
-    result = await get_album_track_progress(db, user, achievement)
+    result = anyio.from_thread.run(get_album_track_progress, db, user, achievement)
     return {"achievement_id": achievement.id, **result}
 
 
@@ -149,7 +150,7 @@ async def get_achievement_album_progress(
         404: {"description": "User or achievement not found"},
     },
 )
-async def get_achievement_artist_progress(
+def get_achievement_artist_progress(
         username: str,
         achievement_id: int,
         request: Request,
@@ -169,7 +170,7 @@ async def get_achievement_artist_progress(
     if not achievement:
         raise HTTPException(404, "Достижение исполнителя не найдено")
 
-    result = await get_artist_track_progress(db, user, achievement)
+    result = anyio.from_thread.run(get_artist_track_progress, db, user, achievement)
     return {"achievement_id": achievement.id, **result}
 
 
@@ -206,9 +207,9 @@ async def _enrich_admin_achievement(
     "/api/admin/achievements",
     responses={422: {"description": "Too many artists in one achievement"}},
 )
-async def create_achievement(data: AchCreate, db: Annotated[Session, Depends(
+def create_achievement(data: AchCreate, db: Annotated[Session, Depends(
         get_db)], admin: Annotated[User, Depends(get_admin_user)]):
-    target_val, val, t_img, meta_text = await _enrich_admin_achievement(data, admin)
+    target_val, val, t_img, meta_text = anyio.from_thread.run(_enrich_admin_achievement, data, admin)
     db.add(
         Achievement(
             name=data.name,
@@ -231,7 +232,7 @@ async def create_achievement(data: AchCreate, db: Annotated[Session, Depends(
                 404: {"description": "Achievement not found"},
                 422: {"description": "Too many artists in one achievement"},
             })
-async def update_achievement(ach_id: int,
+def update_achievement(ach_id: int,
                              data: AchUpdate,
                              db: Annotated[Session,
                                            Depends(get_db)],
@@ -240,7 +241,7 @@ async def update_achievement(ach_id: int,
     ach = db.query(Achievement).filter(Achievement.id == ach_id).first()
     if not ach:
         raise HTTPException(404)
-    target_val, val, t_img, meta_text = await _enrich_admin_achievement(data, admin)
+    target_val, val, t_img, meta_text = anyio.from_thread.run(_enrich_admin_achievement, data, admin)
     ach.name, ach.description, ach.icon, ach.rule_type, ach.rule_value, ach.rule_target, ach.target_image, ach.reward_xp, ach.rule_meta = data.name, data.description, data.icon, data.rule_type, val, target_val, t_img, data.reward_xp, meta_text  # type: ignore[assignment]
     audit.record(db, admin, "achievement.update", data.name, rule=data.rule_type, value=val)
     db.commit()

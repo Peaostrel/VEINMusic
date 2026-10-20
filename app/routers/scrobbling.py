@@ -27,7 +27,7 @@ from app.models import (
 from app.routers.common import _can_view_section, _check_privacy_and_owner
 from app.schemas import CommentRequest, ScrobbleData
 from app.services import notifications
-from app.services.cache import delete_from_cache, get_from_cache, set_to_cache
+from app.services.cache import TASTE_TWINS_KEY, delete_from_cache, get_from_cache, set_to_cache
 from app.services.metadata_cleaner import clean_track_metadata
 from app.services.privacy import (
     filter_public_feed,
@@ -367,7 +367,7 @@ def api_get_taste_twins(
     from app.services.taste import get_taste_twins
     _get_visible_user(username, request, db, "statistics")
     # A full scan over everyone's scrobbles: computed at most every 10 min
-    key = f"taste_twins:v2:{username}"
+    key = TASTE_TWINS_KEY.format(username=username)
     cached = get_from_cache(key, ttl=TASTE_TWINS_TTL)
     if cached is not None:
         visible_names = public_statistics_users(db)

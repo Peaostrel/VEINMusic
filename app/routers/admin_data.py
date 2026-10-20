@@ -7,6 +7,7 @@ import json
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated, Any
 
+import anyio
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_
@@ -233,7 +234,7 @@ def _integration_rows(db: Session, q: str | None, provider: str | None):
 
 
 @router.get("/integrations")
-async def list_integrations(
+def list_integrations(
     db: DB, admin: AdminUser,
     q: Annotated[str | None, Query(max_length=64)] = None,
     provider: Annotated[str | None, Query(pattern="^(yandex|spotify|soundcloud|lastfm)$")] = None,
@@ -242,7 +243,7 @@ async def list_integrations(
 ):
     """Users with a linked service, the state of their Yandex live
     connection (kept by the worker) and when they last scrobbled."""
-    live, heartbeat, redis_ok = await _live_status()
+    live, heartbeat, redis_ok = anyio.from_thread.run(_live_status)
     query = _integration_rows(db, q, provider)
     total = query.count()
     rows = query.order_by(User.username).offset(offset).limit(limit).all()
@@ -319,7 +320,7 @@ def _user_with_integration(db: Session, username: str) -> User:
 @router.post("/integrations/{username}/yandex/reconnect", responses={
     400: {"description": "Yandex Music is not linked"}, 404: {"description": USER_NOT_FOUND},
     503: {"description": "Redis is unavailable"}})
-async def reconnect_yandex(username: str, db: DB, admin: AdminUser):
+def reconnect_yandex(username: str, db: DB, admin: AdminUser):
     """Ask the worker to reopen the user's Ynison connection."""
     from app.core.redis import get_redis_client
     from app.services.yandex_live import RESTART_KEY
@@ -330,7 +331,7 @@ async def reconnect_yandex(username: str, db: DB, admin: AdminUser):
     if not user.integration.yandex_token:
         raise HTTPException(400, "Яндекс Музыка не подключена")
     try:
-        await get_redis_client().sadd(RESTART_KEY, str(user.id))
+        anyio.from_thread.run(get_redis_client().sadd, RESTART_KEY, str(user.id))
     except Exception as e:
         raise HTTPException(503, "Redis недоступен: воркер не получит запрос") from e
     audit.record(db, admin, "integration.reconnect", username, provider="yandex")
@@ -379,11 +380,11 @@ def _profile_of(db: Session, username: str):
 
 
 @router.post("/users/{username}/showcase/refresh", responses={404: {"description": USER_NOT_FOUND}})
-async def refresh_showcase(username: str, db: DB, admin: AdminUser):
+def refresh_showcase(username: str, db: DB, admin: AdminUser):
     """Look the favorites up again (name, picture, link); locks stay."""
     from app.routers.profile import refresh_favorites
 
-    changed = await refresh_favorites(_profile_of(db, username))
+    changed = anyio.from_thread.run(refresh_favorites, _profile_of(db, username))
     audit.record(db, admin, "showcase.refresh", username, changed=changed)
     db.commit()
     cache.clear_all()
