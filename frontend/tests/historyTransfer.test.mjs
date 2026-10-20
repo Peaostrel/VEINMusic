@@ -52,6 +52,7 @@ test("Spotify extended history becomes plays that start before ts", () => {
       artist: "Artist",
       title: "Song",
       album: "Album",
+      duration: 0,
       listened_sec: 180,
       source: "spotify_import",
     },
@@ -94,6 +95,7 @@ test("Spotify account data and ListenBrainz JSON Lines are read", () => {
   assert.equal(listens.length, 2);
   assert.equal(listens[0].played_at, "2024-03-01T12:00:00.000Z");
   assert.equal(listens[0].duration, 200);
+  assert.equal(listens[0].listened_sec, 200);
   assert.equal(listens[1].source, "listenbrainz_import");
 });
 

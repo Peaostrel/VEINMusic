@@ -271,8 +271,8 @@ class ListeningPreferences(BaseModel):
     ignored_artists: list[str] = Field(default_factory=list, max_length=50)
     ignored_tracks: list[str] = Field(default_factory=list, max_length=100)
     ignored_sources: list[Literal[
-        "yandex", "spotify", "vk", "youtube", "apple", "soundcloud", "desktop", "plat",
-    ]] = Field(default_factory=list, max_length=8)
+        "yandex", "spotify", "vk", "youtube", "apple", "soundcloud", "zvuk", "desktop", "plat",
+    ]] = Field(default_factory=list, max_length=9)
     ignore_short_tracks: bool = False
     short_track_seconds: int = Field(30, ge=15, le=120)
     private_session_until: datetime | None = None
@@ -298,8 +298,8 @@ class FeedPreferences(BaseModel):
     allow_likes: bool = True
     default_scope: Literal["all", "following"] = "all"
     hidden_sources: list[Literal[
-        "yandex", "spotify", "vk", "youtube", "apple", "soundcloud", "desktop", "plat",
-    ]] = Field(default_factory=list, max_length=8)
+        "yandex", "spotify", "vk", "youtube", "apple", "soundcloud", "zvuk", "desktop", "plat",
+    ]] = Field(default_factory=list, max_length=9)
 
 
 class NotificationChannelPreferences(BaseModel):

@@ -52,6 +52,7 @@ function decodeCsvRows(rows: string[][]): Record<string, unknown>[] {
     });
 }
 
+const LISTENBRAINZ_SOURCE = "listenbrainz_import";
 /** Plays shorter than this are skips, as on Last.fm and ListenBrainz. */
 const MIN_PLAY_MS = 30_000;
 const MAX_ROWS = 100_000;
@@ -84,6 +85,8 @@ function fromSpotify(item: Row): Row | null {
     artist,
     title,
     album: text(item.master_metadata_album_album_name),
+    // A track played to the end tells its length; otherwise it is unknown
+    duration: item.reason_end === "trackdone" ? seconds(played) : 0,
     listened_sec: seconds(played),
     source: "spotify_import",
   };
@@ -115,13 +118,19 @@ function fromListenBrainz(item: Row): Row | null {
   const artist = text(meta.artist_name);
   const when = typeof item.listened_at === "number" ? item.listened_at : NaN;
   if (!title || !artist || Number.isNaN(when)) return null;
+  const duration = seconds(
+    info.duration_ms ?? Number(info.duration ?? 0) * 1000,
+  );
   return {
     played_at: new Date(when * 1000).toISOString(),
     artist,
     title,
     album: text(meta.release_name),
-    duration: seconds(info.duration_ms ?? Number(info.duration ?? 0) * 1000),
-    source: "listenbrainz_import",
+    duration,
+    // ListenBrainz keeps only counted listens; the server fills in the
+    // length of the catalog track when the export has none
+    listened_sec: duration,
+    source: LISTENBRAINZ_SOURCE,
   };
 }
 
@@ -280,6 +289,8 @@ export function sequentialMap<T, U>(
   }, Promise.resolve([]));
 }
 
+/** The import API takes at most this many requests per hour. */
+export const MAX_TRANSFER_BATCHES = 20;
 /** The API takes at most this many plays per request… */
 const BATCH_ROWS = 5000;
 /** …and at most 2 MB per request; batches stay below it with room to spare. */

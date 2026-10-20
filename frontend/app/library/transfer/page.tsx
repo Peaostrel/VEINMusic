@@ -5,6 +5,7 @@ import { useState } from "react";
 import { API_URL, apiJson } from "@/app/lib/api";
 import {
   historyBatches,
+  MAX_TRANSFER_BATCHES,
   readHistoryFiles,
   sequentialMap,
 } from "@/app/lib/historyTransfer";
@@ -40,6 +41,10 @@ export default function TransferPage() {
     try {
       const rows = await readHistoryFiles(files);
       const chunks = historyBatches(rows);
+      if (chunks.length > MAX_TRANSFER_BATCHES)
+        throw new Error(
+          `За один перенос помещается ${MAX_TRANSFER_BATCHES} частей, а здесь ${chunks.length}. Выберите меньше файлов и перенесите остальное следующим заходом.`,
+        );
       let checked = 0;
       const results = await sequentialMap(
         chunks,
@@ -69,6 +74,7 @@ export default function TransferPage() {
     setBusy(true);
     let imported = 0;
     let duplicates = 0;
+    let done = 0;
     try {
       await sequentialMap(batches, async (batch) => {
         const result = await apiJson<{ imported: number; duplicates: number }>(
@@ -83,6 +89,7 @@ export default function TransferPage() {
         );
         imported += result.imported;
         duplicates += result.duplicates;
+        done += 1;
         setMessage(`Перенесено ${imported}, пропущено дублей ${duplicates}…`);
       });
       setBatches([]);
@@ -90,9 +97,10 @@ export default function TransferPage() {
         `Импорт завершён: ${imported} новых прослушиваний, ${duplicates} дублей пропущено.`,
       );
     } catch (cause) {
-      setBatches([]);
+      // Keep what is left, so a retry does not resend finished parts
+      setBatches(batches.slice(done));
       setMessage(
-        `Уже перенесено: ${imported}. ${cause instanceof Error ? cause.message : "Ошибка импорта"} Проверьте файл и повторите: уже добавленные записи будут пропущены.`,
+        `Уже перенесено: ${imported}. ${cause instanceof Error ? cause.message : "Ошибка импорта"} Нажмите «Подтвердить импорт» ещё раз, чтобы продолжить, или проверьте файлы заново: уже добавленные записи будут пропущены.`,
       );
     } finally {
       setBusy(false);
