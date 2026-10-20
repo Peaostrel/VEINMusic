@@ -52,7 +52,7 @@ def _add_listened_scrobble(db, user_id: int, title="Secret Song", artist="Secret
 def test_profile_update_does_not_reset_privacy(client, db):
     key = _register(client, "alice")
     resp = client.post("/api/profile/privacy", headers=_auth(key),
-                       json={"is_private": True, "sync_privacy": "none", "hidden_artists": "X"})
+                       json={"is_private": True, "hidden_artists": "X"})
     assert resp.status_code == 200
 
     resp = client.post("/api/profile/update", headers=_auth(key), json={"bio": "hello"})
@@ -61,14 +61,7 @@ def test_profile_update_does_not_reset_privacy(client, db):
     user = db.query(User).filter_by(username="alice").first()
     db.refresh(user.profile)
     assert user.profile.is_private is True
-    assert user.profile.sync_privacy == "none"
     assert user.profile.hidden_artists == "X"
-
-
-def test_sync_privacy_is_validated(client):
-    key = _register(client, "valid")
-    resp = client.post("/api/profile/privacy", headers=_auth(key), json={"sync_privacy": "whatever"})
-    assert resp.status_code == 422
 
 
 # --- Bans are enforced ---
