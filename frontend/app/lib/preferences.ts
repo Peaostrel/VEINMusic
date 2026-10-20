@@ -16,7 +16,6 @@ const CHANNELS = {
   system: true,
   weekly_digest: true,
   new_releases: false,
-  room_invites: true,
 };
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
