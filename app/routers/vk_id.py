@@ -63,7 +63,7 @@ VK_SCOPE = "vkid.personal_info"
 FLOW_COOKIE = "vk_auth_flows"
 MAX_FLOWS = 5
 # What _begin writes; anything else in the cookie is dropped, not written back
-FLOW_ENTRY = re.compile(r"([0-9a-f]{32}):([0-9]{10}):([A-Za-z0-9_-]{86})")
+FLOW_ENTRY = re.compile(r"([0-9a-f]{32}):(\d{10}):([A-Za-z0-9_-]{86})")
 TICKET_COOKIE = "vk_login_ticket"
 FLOW_TTL_SEC = 600
 TICKET_TTL_SEC = 300
