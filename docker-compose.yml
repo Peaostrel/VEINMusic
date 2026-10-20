@@ -151,6 +151,7 @@ services:
       SITE_URL: ${FRONTEND_URL:-http://localhost:3000}
       API_INTERNAL_URL: http://backend:8000
       FIREFOX_ADDON_URL: ${FIREFOX_ADDON_URL:-}
+      CHROME_EXTENSION_URL: ${CHROME_EXTENSION_URL:-}
     ports:
       - "3000:3000"
     depends_on:
