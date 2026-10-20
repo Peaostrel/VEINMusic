@@ -5,9 +5,9 @@ import { useEffect, useState, type InputHTMLAttributes } from "react";
 /*
  * Password managers fill a saved login into the text field that comes right
  * before a password field in the same form, and pages without a <form> count
- * as one big form. So every password field sits in its own <form> with
- * AccountUsername in front of it, and API tokens use SecretInput instead of
- * type="password".
+ * as one big form. So every password field sits in its own <form>: account
+ * password confirmations put AccountUsername in front of it, and API tokens
+ * use SecretInput.
  */
 
 /**
@@ -48,13 +48,13 @@ export const noAutofill = {
 } as const;
 
 /**
- * Masked field for API tokens and session keys. It is a text field, so the
- * browser never offers or saves the account password here.
+ * Field for API tokens and session keys. It stays type="password" so screen
+ * readers treat the value as secret, and "new-password" tells the browser not
+ * to fill the saved account password into it.
  */
-export function SecretInput({
-  className,
-  ...props
-}: Readonly<Omit<InputHTMLAttributes<HTMLInputElement>, "type">>) {
+export function SecretInput(
+  props: Readonly<Omit<InputHTMLAttributes<HTMLInputElement>, "type">>,
+) {
   return (
     <input
       {...noAutofill}
@@ -62,8 +62,8 @@ export function SecretInput({
       autoCapitalize="none"
       autoCorrect="off"
       {...props}
-      type="text"
-      className={`secret-input ${className ?? ""}`}
+      type="password"
+      autoComplete="new-password"
     />
   );
 }

@@ -116,12 +116,6 @@ body {
   }
 }
 
-/* Token fields are text inputs (so password managers leave them alone),
-   masked where the browser supports it */
-.secret-input {
-  -webkit-text-security: disc;
-}
-
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

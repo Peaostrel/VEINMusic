@@ -427,7 +427,14 @@ function YandexConnection({
         )
       }
     >
+      {/* Own form, so the browser does not pair the token with other fields */}
+      <form
+        id="yandex-token-form"
+        hidden
+        onSubmit={(e) => e.preventDefault()}
+      />
       <SecretInput
+        form="yandex-token-form"
         name="yandex-token"
         value={data.yandexToken}
         onChange={(e) => updateData("yandexToken", e.target.value)}
