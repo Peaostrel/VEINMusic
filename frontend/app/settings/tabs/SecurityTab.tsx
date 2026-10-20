@@ -44,6 +44,7 @@ export default function SecurityTab() {
   // --- account deletion ---
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
+  const [deleteOtp, setDeleteOtp] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
 
   const loadDevices = useCallback(async () => {
@@ -173,7 +174,7 @@ export default function SecurityTab() {
     try {
       await apiJson("/api/account", {
         method: "DELETE",
-        json: { password: deletePassword },
+        json: { password: deletePassword, otp_code: deleteOtp || null },
       });
       localStorage.removeItem("username");
       globalThis.postMessage(
@@ -327,6 +328,15 @@ export default function SecurityTab() {
               aria-label="Пароль для подтверждения удаления"
               className="h-10 min-w-0 flex-grow rounded-lg border border-line bg-bg px-3 text-sm text-fg outline-none focus:border-fg-3"
             />
+            <input
+              value={deleteOtp}
+              onChange={(e) => setDeleteOtp(e.target.value)}
+              placeholder="Код 2FA, если включена"
+              autoComplete="one-time-code"
+              maxLength={64}
+              aria-label="Код двухфакторной защиты для удаления"
+              className="h-10 min-w-0 rounded-lg border border-line bg-bg px-3 text-sm text-fg outline-none focus:border-fg-3 sm:w-44"
+            />
             <button
               type="button"
               onClick={deleteAccount}
@@ -340,6 +350,7 @@ export default function SecurityTab() {
               onClick={() => {
                 setDeleteOpen(false);
                 setDeletePassword("");
+                setDeleteOtp("");
               }}
               className={`${buttonBase} bg-surface-2 text-fg-2`}
             >
