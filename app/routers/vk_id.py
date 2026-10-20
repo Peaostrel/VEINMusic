@@ -1,4 +1,4 @@
-"""Signing in and linking the account through VK ID (id.vk.com, OAuth 2.1).
+"""Signing in and linking the account through VK ID (id.vk.ru, OAuth 2.1).
 
 Russian law (149-FZ art. 10.6) wants users from Russia authorised through a
 Russian system; VK ID is one. The flow uses PKCE without a client secret, as
@@ -37,17 +37,18 @@ from sqlalchemy.orm import Session
 from app.core.rate_limit import limiter
 from app.core.security import SECRET_KEY, _check_csrf, get_current_user
 from app.database import get_db
-from app.models import User
+from app.models import User, UserSession
 from app.routers.auth import FRONTEND_URL, set_session_cookie
 from app.services import runtime_settings, security_events
-from app.services.sessions import issue_session
+from app.services.sessions import current_session_id, issue_session
 
 router = APIRouter(prefix="/auth/vk", tags=["auth"])
 
 VK_CLIENT_ID = os.getenv("VK_CLIENT_ID")
 VK_REDIRECT_URI = os.getenv("VK_REDIRECT_URI", "http://127.0.0.1:8000/auth/vk/callback")
-VK_AUTHORIZE_URL = "https://id.vk.com/authorize"
-VK_TOKEN_URL = "https://id.vk.com/oauth2/auth"
+# The .ru domain the official VK ID SDK uses since VK moved off vk.com
+VK_AUTHORIZE_URL = "https://id.vk.ru/authorize"
+VK_TOKEN_URL = "https://id.vk.ru/oauth2/auth"
 
 STATE_COOKIE = "vk_auth_state"
 PKCE_COOKIE = "vk_pkce_verifier"
@@ -74,50 +75,71 @@ def _code_challenge(verifier: str) -> str:
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
-def _parse_state(state: str, cookie_nonce: str | None) -> tuple[str, int] | None:
-    """Mode and user id (0 when signing in) of a state started by this browser."""
+def _parse_state(state: str, cookie_nonce: str | None) -> tuple[str, str] | None:
+    """Mode and subject (who started linking; "0" when signing in) of a state
+    started by this browser."""
     try:
-        mode, user_id, nonce, signature = state.split(".", 3)
-        user = int(user_id)
+        mode, subject, nonce, signature = state.split(".", 3)
     except ValueError:
         return None
     if mode not in (MODE_LOGIN, MODE_LINK) or not cookie_nonce:
         return None
     if not secrets.compare_digest(nonce, cookie_nonce):
         return None
-    if not hmac.compare_digest(signature, _sign("state", mode, user_id, nonce)):
+    if not hmac.compare_digest(signature, _sign("state", mode, subject, nonce)):
         return None
-    return mode, user
+    return mode, subject
 
 
-def _issue_ticket(user: User, now: float | None = None) -> str:
-    expires = int((now if now is not None else time.time()) + TICKET_TTL_SEC)
-    user_id, version = str(user.id), str(int(user.session_version or 0))
-    return f"{user_id}.{version}.{expires}.{_sign('ticket', user_id, version, str(expires))}"
+def _link_subject(user: User, session_id: str | None) -> str:
+    return f"{user.id}~{int(user.session_version or 0)}~{session_id or ''}"
 
 
-def _ticket_user(ticket: str | None, db: Session) -> User | None:
+def _linking_user(db: Session, subject: str) -> User | None:
+    """The user who started linking, while the session that started it is
+    still valid: revoking it (or logging out everywhere) cancels the flow."""
     try:
-        user_id, version, expires, signature = (ticket or "").split(".", 3)
-        if int(expires) < time.time():
-            return None
+        user_id, version, session_id = subject.split("~")
+        user = db.get(User, int(user_id))
     except ValueError:
         return None
-    if not hmac.compare_digest(signature, _sign("ticket", user_id, version, expires)):
+    if user is None or user.is_banned or str(int(user.session_version or 0)) != version:
         return None
-    user = db.get(User, int(user_id))
-    # Logging out everywhere also voids a ticket that has not been used yet
-    if user is None or str(int(user.session_version or 0)) != version:
+    if session_id and not db.query(UserSession.id).filter(
+            UserSession.id == session_id, UserSession.user_id == user.id,
+            UserSession.revoked.is_(False)).first():
         return None
     return user
 
 
-def _start(mode: str, user_id: int) -> RedirectResponse:
+def _issue_ticket(user: User, now: float | None = None) -> str:
+    expires = str(int((now if now is not None else time.time()) + TICKET_TTL_SEC))
+    user_id, version, vk = str(user.id), str(int(user.session_version or 0)), str(user.vk_id)
+    return f"{user_id}.{version}.{vk}.{expires}.{_sign('ticket', user_id, version, vk, expires)}"
+
+
+def _ticket_user(ticket: str | None, db: Session) -> User | None:
+    try:
+        user_id, version, vk, expires, signature = (ticket or "").split(".", 4)
+        if int(expires) < time.time():
+            return None
+    except ValueError:
+        return None
+    if not hmac.compare_digest(signature, _sign("ticket", user_id, version, vk, expires)):
+        return None
+    user = db.get(User, int(user_id))
+    # Logging out everywhere or unlinking VK ID voids a ticket not used yet
+    if user is None or str(int(user.session_version or 0)) != version or user.vk_id != vk:
+        return None
+    return user
+
+
+def _start(mode: str, subject: str) -> RedirectResponse:
     if not VK_CLIENT_ID:
         raise HTTPException(503, "Вход через VK ID не настроен на сервере")
     nonce = secrets.token_hex(16)
     verifier = secrets.token_urlsafe(64)
-    state = f"{mode}.{user_id}.{nonce}.{_sign('state', mode, str(user_id), nonce)}"
+    state = f"{mode}.{subject}.{nonce}.{_sign('state', mode, subject, nonce)}"
     query = urllib.parse.urlencode({
         "response_type": "code",
         "client_id": VK_CLIENT_ID,
@@ -167,13 +189,13 @@ def vk_config(db: Annotated[Session, Depends(get_db)]):
             responses={503: {"description": "VK ID is not configured"}})
 @limiter.limit("10/minute")
 def vk_login(request: Request):
-    return _start(MODE_LOGIN, 0)
+    return _start(MODE_LOGIN, "0")
 
 
 @router.get("/link", dependencies=[require_vk],
             responses={503: {"description": "VK ID is not configured"}})
-def vk_link(current_user: Annotated[User, Depends(get_current_user)]):
-    return _start(MODE_LINK, int(current_user.id))
+def vk_link(request: Request, current_user: Annotated[User, Depends(get_current_user)]):
+    return _start(MODE_LINK, _link_subject(current_user, current_session_id(request)))
 
 
 @router.get("/callback", dependencies=[require_vk])
@@ -196,9 +218,9 @@ def vk_callback(request: Request, db: Annotated[Session, Depends(get_db)],
     return redirect
 
 
-def _link(db: Session, user_id: int, vk_user: str | None) -> str:
-    user = db.get(User, user_id)
-    if user is None or user.is_banned or vk_user is None:
+def _link(db: Session, subject: str, vk_user: str | None) -> str:
+    user = _linking_user(db, subject)
+    if user is None or vk_user is None:
         return "error"
     owner = db.query(User).filter(User.vk_id == vk_user).first()
     if owner is not None and owner.id != user.id:

@@ -96,7 +96,7 @@ def test_forged_ticket_is_rejected(client, db):
     _register(client, "tickettarget")
     user = db.query(User).filter_by(username="tickettarget").one()
     client.cookies.clear()
-    client.cookies.set(vk_id.TICKET_COOKIE, f"{user.id}.0.9999999999.forged")
+    client.cookies.set(vk_id.TICKET_COOKIE, f"{user.id}.0.1.9999999999.forged")
     assert client.post("/auth/vk/finish", json={}, headers=ORIGIN).status_code == 400
 
 
@@ -129,3 +129,31 @@ def test_not_configured(client):
     with patch.object(vk_id, "VK_CLIENT_ID", None):
         assert client.get("/auth/vk/config").json() == {"enabled": False}
         assert client.get("/auth/vk/login", follow_redirects=False).status_code == 503
+
+
+def test_logging_out_everywhere_cancels_a_pending_link(client, db):
+    key = _register(client, "vkrevoked")
+    resp = client.get("/auth/vk/link", headers={"X-API-Key": key}, follow_redirects=False)
+    state = httpx.URL(resp.headers["location"]).params["state"]
+    nonce, verifier = resp.cookies[vk_id.STATE_COOKIE], resp.cookies[vk_id.PKCE_COOKIE]
+    assert client.post("/auth/logout-all", headers={"X-API-Key": key, **ORIGIN}).status_code == 200
+
+    client.cookies.clear()
+    client.cookies.set(vk_id.STATE_COOKIE, nonce)
+    client.cookies.set(vk_id.PKCE_COOKIE, verifier)
+    token = MagicMock(status_code=200)
+    token.json.return_value = {"user_id": 6161}
+    with patch.object(httpx.Client, "post", return_value=token):
+        resp = client.get(f"/auth/vk/callback?code=c&device_id=d&state={state}", follow_redirects=False)
+    assert resp.headers["location"].endswith("vk=error")
+    assert db.query(User).filter_by(username="vkrevoked").one().vk_id is None
+
+
+def test_unlinking_voids_a_pending_sign_in(client, db):
+    key = _register(client, "vkticket")
+    _through_vk(client, "/auth/vk/link", "7171", {"X-API-Key": key})
+    _through_vk(client, "/auth/vk/login", "7171")
+    user = db.query(User).filter_by(username="vkticket").one()
+    user.vk_id = None
+    db.commit()
+    assert client.post("/auth/vk/finish", json={}, headers=ORIGIN).status_code == 400

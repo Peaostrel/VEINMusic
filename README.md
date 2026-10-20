@@ -241,7 +241,7 @@ cp .env.example .env
 `https://api.music.vein.guru/auth/soundcloud/callback`).
 
 Для входа и привязки через VK ID создайте веб-приложение в кабинете
-[id.vk.com](https://id.vk.com/about/business/go), укажите доверенный redirect
+[id.vk.ru](https://id.vk.ru/about/business/go), укажите доверенный redirect
 URL `https://api.music.vein.guru/auth/vk/callback` и задайте `VK_CLIENT_ID`
 (ID приложения). Защищённый ключ не нужен: вход идёт по OAuth 2.1 с PKCE.
 Пока `VK_CLIENT_ID` пуст, кнопки VK ID на сайте не показываются.
