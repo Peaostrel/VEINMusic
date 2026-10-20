@@ -59,7 +59,6 @@ export default function Profile() {
     error,
     handleShowCompatibility,
     mood,
-    wsRef,
     handleFollow,
     openFollowModal,
     importLoading,
