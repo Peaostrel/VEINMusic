@@ -1,5 +1,5 @@
 """Limits against abuse: webhook/push amplification, input bounds, key scopes,
-privacy of follow relations, forged share cards, social links, guest chat."""
+privacy of follow relations, forged share cards, and social links."""
 import asyncio
 import json
 import secrets
