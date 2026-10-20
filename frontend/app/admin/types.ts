@@ -92,7 +92,6 @@ export interface SystemHealth {
     pool_status: string;
   };
   websockets: {
-    active_rooms: number;
     connected_clients: number;
   };
   cloud_scrobblers: {
