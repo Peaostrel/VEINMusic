@@ -1,4 +1,4 @@
-"""Brevo delivery with a durable, encrypted outbox; no credentials in responses/logs."""
+"""Resend delivery with a durable, encrypted outbox; no credentials in responses/logs."""
 import hashlib
 import html
 import json
@@ -14,7 +14,7 @@ from app.models import EmailAccount, EmailOutbox, User
 
 
 def configured():
-    return bool(os.getenv("BREVO_API_KEY") and os.getenv("EMAIL_FROM"))
+    return bool(os.getenv("RESEND_API_KEY") and os.getenv("EMAIL_FROM"))
 
 
 def digest(value):
@@ -79,19 +79,19 @@ def deliver_one(db, row, client):
         row.status = "cancelled"
         row.payload = "{}"
         return
-    body = {"sender": {"email": os.environ["EMAIL_FROM"], "name": "VEIN Music"},
-            "to": [{"email": payload["to"]}], "subject": payload["subject"],
-            "htmlContent": render(payload), "textContent": payload["text"] + ("\n" + payload["link"] if payload.get("link") else ""),
-            "headers": {"IdempotencyKey": row.id}, "tags": ["vein-" + row.kind]}
+    body = {"from": f"VEIN Music <{os.environ['EMAIL_FROM']}>",
+            "to": [payload["to"]], "subject": payload["subject"],
+            "html": render(payload), "text": payload["text"] + ("\n" + payload["link"] if payload.get("link") else ""),
+            "tags": [{"name": "kind", "value": row.kind}]}
     if os.getenv("EMAIL_REPLY_TO"):
-        body["replyTo"] = {"email": os.environ["EMAIL_REPLY_TO"]}
+        body["reply_to"] = os.environ["EMAIL_REPLY_TO"]
     row.attempts += 1
     try:
-        result = client.post("https://api.brevo.com/v3/smtp/email", json=body,
-                             headers={"api-key": os.environ["BREVO_API_KEY"]})
-        if result.status_code == 201:
+        result = client.post("https://api.resend.com/emails", json=body,
+                             headers={"Authorization": "Bearer " + os.environ["RESEND_API_KEY"], "Idempotency-Key": row.id})
+        if result.status_code == 200:
             row.status = "sent"
-            row.message_id = str(result.json().get("messageId", ""))[:254]
+            row.message_id = str(result.json().get("id", ""))[:254]
             row.error_code = None
             row.payload = "{}"  # don't keep email bodies or actionable tokens after delivery
             return

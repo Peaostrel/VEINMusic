@@ -1,33 +1,38 @@
-# Brevo email
+# Email
 
-Email delivery stays disabled until BREVO_API_KEY and EMAIL_FROM are set.
+Email delivery stays disabled until RESEND_API_KEY and EMAIL_FROM are set.
 No existing users are silently enrolled: add/verify email in Settings → Security.
 
-## Provider setup
+## Provider setup (Resend)
 
-1. Create a Brevo account at https://app.brevo.com/account/register.
-2. In Settings → Senders, Domains & Dedicated IPs add `vein.guru` (or a dedicated sending subdomain).
-3. Copy the domain authentication records displayed by Brevo into the DNS panel.
-   Use the actual supplied values, not guessed DKIM/DMARC records. Preserve existing mail MX records.
-4. Add and verify a sender such as `notifications@vein.guru`.
-5. Create an API key under SMTP & API → API Keys. Use the **API key**, not an SMTP password.
-6. Set these only in the server's `deploy/.env` (never GitHub/source/browser/localStorage):
+Resend's free plan (about 3,000 emails a month, 100 a day) is enough here. Sign-up
+works with GitHub or email; no phone number is needed.
+
+1. Sign up at https://resend.com/signup.
+2. Domains → Add Domain: `music.vein.guru` (or `vein.guru`). Region: any.
+3. Copy the DNS records Resend shows (DKIM TXT, SPF MX + TXT on the `send` subdomain)
+   into the DNS panel, then press Verify. Use the supplied values, not guessed ones.
+   Preserve existing mail MX records. A DMARC record (`_dmarc` TXT `v=DMARC1; p=none;`)
+   is recommended for Gmail.
+4. API Keys → Create API Key, permission "Sending access", limited to that domain.
+5. Set these only in the server's `deploy/.env` (never GitHub/source/browser/localStorage):
 
    ```dotenv
-   BREVO_API_KEY=<secret>
-   EMAIL_FROM=notifications@vein.guru
+   RESEND_API_KEY=re_<secret>
+   EMAIL_FROM=notifications@music.vein.guru
    EMAIL_REPLY_TO=<existing support mailbox, optional>
    ```
 
-7. Recreate backend and worker services using the deployment's regular blue/green procedure.
-   Both use the shared backend environment. `FRONTEND_URL` must be the real HTTPS site.
-8. Confirm email in a real user's settings, test a new browser login, and password recovery.
-   Admin → System → Letters shows queue status. "Sent" means **accepted by Brevo**, not confirmed inbox delivery.
-   Check Brevo transactional logs for delivered/bounced status. Don't infer delivery from HTTP 201.
+   `EMAIL_FROM` must be on the verified domain.
+6. Redeploy (`./deploy/deploy.sh`). Backend and worker share this environment.
+   `FRONTEND_URL` must be the real HTTPS site.
+7. Confirm email in a real user's settings, test a new browser login, and password recovery.
+   Admin → System → Letters shows queue status. "Sent" means **accepted by Resend**, not confirmed inbox delivery.
+   Check the Resend Emails log for delivered/bounced status.
 
 A cron job drains the encrypted SQL outbox every 30 seconds. PostgreSQL row locks
-prevent concurrent workers claiming the same row. Each request has a stable Brevo
-IdempotencyKey. Upstream 429/5xx/network errors retry with exponential backoff, up
+prevent concurrent workers claiming the same row. Each request has a stable Resend
+Idempotency-Key. Upstream 429/5xx/network errors retry with exponential backoff, up
 to eight attempts; a pending message expires after 24 hours. Verification/reset
 messages must still match their current single-use token and 30-minute expiry.
 Bodies are cleared after send/cancel/failure; technical rows expire after 30 days.
@@ -49,5 +54,4 @@ Bodies are cleared after send/cancel/failure; technical rows expire after 30 day
 
 This integration sends transactional email. It does **not** create a mailbox for
 `support@vein.guru`. To read and answer support emails, separately provision a mailbox
-with a mail host and then set EMAIL_REPLY_TO to it. Brevo inbound parsing is an API
-feature, not an inbox provisioned by this change.
+with a mail host and then set EMAIL_REPLY_TO to it. This change does not provision an inbox.

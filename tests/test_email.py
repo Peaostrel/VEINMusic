@@ -20,7 +20,7 @@ PASSWORD = "password-123"
 
 @pytest.fixture
 def owner(db, monkeypatch):
-    monkeypatch.setenv("BREVO_API_KEY", "test-key")
+    monkeypatch.setenv("RESEND_API_KEY", "test-key")
     monkeypatch.setenv("EMAIL_FROM", "notifications@example.com")
     u = User(username="mailuser", hashed_password=get_password_hash(PASSWORD), session_version=0)
     db.add(u)
@@ -61,9 +61,9 @@ def test_verification_private_single_use(client, db, owner):
 
 
 def test_disabled_and_wrong_password(client, db, owner, monkeypatch):
-    monkeypatch.delenv("BREVO_API_KEY")
+    monkeypatch.delenv("RESEND_API_KEY")
     assert client.post("/api/account/email", json={"email": "u@example.com", "password": PASSWORD}).status_code == 503
-    monkeypatch.setenv("BREVO_API_KEY", "test-key")
+    monkeypatch.setenv("RESEND_API_KEY", "test-key")
     assert client.post("/api/account/email", json={"email": "u@example.com", "password": "wrong"}).status_code == 400
     assert db.query(EmailOutbox).count() == 0
 
@@ -120,19 +120,21 @@ def test_new_device_alert_and_opt_out(client, db, owner):
     assert db.query(EmailOutbox).filter_by(kind="security").count() == 1
 
 
-@pytest.mark.parametrize("code,status", [(201, "sent"), (429, "pending"), (503, "pending"), (400, "failed")])
-def test_brevo_response_and_redaction(client, db, owner, code, status):
+@pytest.mark.parametrize("code,status", [(200, "sent"), (429, "pending"), (503, "pending"), (400, "failed")])
+def test_resend_response_and_redaction(client, db, owner, code, status):
     verified(client, db, owner)
     row = mail.queue(db, owner.id, "security", "user@example.com", "Subject", "Hello <script>", "https://example.com")
     db.commit()
     transport = Mock()
-    transport.post.return_value = httpx.Response(code, json={"messageId": "brevo-id"})
+    transport.post.return_value = httpx.Response(code, json={"id": "resend-id"})
     mail.deliver_one(db, row, transport); db.commit()
     assert row.status == status
     args = transport.post.call_args
-    assert args.args[0] == "https://api.brevo.com/v3/smtp/email"
-    assert args.kwargs["headers"]["api-key"] == "test-key"
-    assert "&lt;script&gt;" in args.kwargs["json"]["htmlContent"]
+    assert args.args[0] == "https://api.resend.com/emails"
+    assert args.kwargs["headers"]["Authorization"] == "Bearer test-key"
+    assert args.kwargs["headers"]["Idempotency-Key"] == row.id
+    assert args.kwargs["json"]["from"] == "VEIN Music <notifications@example.com>"
+    assert "&lt;script&gt;" in args.kwargs["json"]["html"]
     assert row.payload == "{}" if status in {"sent", "failed"} else row.attempts == 1
 
 
@@ -223,7 +225,7 @@ def test_disabled_worker_still_purges_expired_data(client, db, owner, monkeypatc
     row = mail.queue(db, owner.id, "verify", "user@example.com", "Hi", "Hi")
     row.created_at = datetime.now(UTC) - timedelta(days=31)
     db.commit()
-    monkeypatch.delenv("BREVO_API_KEY")
+    monkeypatch.delenv("RESEND_API_KEY")
     mail.drain()
     db.expire_all()
     assert db.query(EmailOutbox).count() == 0
