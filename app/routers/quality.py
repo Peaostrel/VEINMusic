@@ -20,7 +20,7 @@ from app.models import (
 )
 from app.routers.common import _get_visible_user
 from app.routers.library import _track_dict
-from app.services.cache import invalidate_all
+from app.services.cache import invalidate_user
 from app.services.lastfm_import import job_to_dict
 from app.services.music_story import weekly_story as build_weekly_story
 from app.services.source_health import MESSAGES, SOURCES
@@ -100,7 +100,7 @@ def edit_history(scrobble_id: int, data: HistoryEdit, db: DB, user: Owner):
         db.flush()
     row.track_id = track.id
     db.commit()
-    invalidate_all()
+    invalidate_user(str(user.username))
     return {"status": "ok", "track": _track_dict(track)}
 
 
@@ -109,7 +109,7 @@ def exclude_history(scrobble_id: int, data: ExcludeRequest, db: DB, user: Owner)
     row = own_scrobble(db, user, scrobble_id)
     row.excluded_from_stats = data.excluded
     db.commit()
-    invalidate_all()
+    invalidate_user(str(user.username))
     return {"status": "ok", "excluded": data.excluded}
 
 
@@ -131,7 +131,7 @@ def undo_import(job_id: int, db: DB, user: Owner):
     count = db.query(Scrobble).filter_by(user_id=user.id, import_job_id=job.id).delete(synchronize_session=False)
     job.status = "undone"  # type: ignore[assignment]
     db.commit()
-    invalidate_all()
+    invalidate_user(str(user.username))
     return {"status": "ok", "removed": count}
 
 

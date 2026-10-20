@@ -1,6 +1,8 @@
 """Only browser sessions can manage other browser sessions."""
 from datetime import UTC, datetime
 from typing import Annotated
+
+import anyio
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 from app.core.security import get_current_user
@@ -23,14 +25,14 @@ def sessions(request: Request, response: Response, db: Annotated[Session, Depend
 
 
 @router.delete("/{session_id}", responses={404: {"description": "Session not found"}})
-async def revoke_session(session_id: str, request: Request, response: Response, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(get_current_user)]):
+def revoke_session(session_id: str, request: Request, response: Response, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(get_current_user)]):
     row = db.query(UserSession).filter_by(id=session_id, user_id=user.id).first()
     if not row:
         raise HTTPException(404, "Сессия не найдена")
     row.revoked = True  # type: ignore[assignment]
     db.commit()
     from app.core.websockets import manager
-    await manager.revoke_session(str(user.username), session_id)
+    anyio.from_thread.run(manager.revoke_session, str(user.username), session_id)
     if session_id == current_session_id(request):
         response.delete_cookie("api_key")
     response.headers["Cache-Control"] = "no-store"

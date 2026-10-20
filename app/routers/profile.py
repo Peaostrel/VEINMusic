@@ -5,6 +5,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
+import anyio
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
@@ -13,7 +14,7 @@ from app.core.security import SECRET_KEY, get_current_user
 from app.database import get_db
 from app.models import User
 from app.schemas import PrivacyUpdate, ProfileUpdate, UserPreferences
-from app.services.cache import invalidate_all, delete_from_cache
+from app.services.cache import invalidate_user
 from app.services.metadata_search import search_metadata
 from app.services.user_preferences import preferences_dict, save_preferences
 from app.utils import sanitize_text
@@ -39,7 +40,7 @@ def update_user_preferences(
         current_user: Annotated[User, Depends(get_current_user)]):
     save_preferences(current_user.profile, data)
     db.commit()
-    invalidate_all()
+    invalidate_user(str(current_user.username))
     return preferences_dict(current_user.profile)
 
 
@@ -196,14 +197,12 @@ def _update_profile_fields(profile, data: ProfileUpdate):
 
 @router.post("/update", responses={400: {"description": "Bad Request"}})
 @limiter.limit("20/minute")
-async def update_profile(request: Request, data: ProfileUpdate, db: Annotated[Session, Depends(
+def update_profile(request: Request, data: ProfileUpdate, db: Annotated[Session, Depends(
         get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     user = current_user
-    privacy_changed = data.is_private is not None and user.profile.is_private != data.is_private
-
-    await _update_favorite(user.profile, data.favorite_artist, 'favorite_artist', 'artist')
-    await _update_favorite(user.profile, data.favorite_track, 'favorite_track', 'track')
-    await _update_favorite(user.profile, data.favorite_album, 'favorite_album', 'album')
+    anyio.from_thread.run(_update_favorite, user.profile, data.favorite_artist, 'favorite_artist', 'artist')
+    anyio.from_thread.run(_update_favorite, user.profile, data.favorite_track, 'favorite_track', 'track')
+    anyio.from_thread.run(_update_favorite, user.profile, data.favorite_album, 'favorite_album', 'album')
 
     _update_profile_fields(user.profile, data)
 
@@ -221,11 +220,8 @@ async def update_profile(request: Request, data: ProfileUpdate, db: Annotated[Se
     _validate_and_set_social(user.profile, data.social_links)
 
     db.commit()
-    if privacy_changed:
-        invalidate_all()
-    else:
-        # Name, avatar and bio of link previews
-        delete_from_cache(f"preview:user:{user.username}")
+    # Name, avatar, bio and privacy of link previews
+    invalidate_user(str(user.username))
     return {"status": "ok"}
 
 
@@ -243,7 +239,7 @@ def update_privacy(request: Request, data: PrivacyUpdate, db: Annotated[Session,
         current_user.profile.sync_privacy = data.sync_privacy
     db.commit()
     if privacy_changed:
-        invalidate_all()
+        invalidate_user(str(current_user.username))
     return {"status": "ok"}
 
 

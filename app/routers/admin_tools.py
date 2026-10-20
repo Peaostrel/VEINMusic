@@ -8,6 +8,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any
 from urllib.parse import urlparse
 
+import anyio
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func
@@ -399,23 +400,23 @@ class BroadcastRequest(BaseModel):
 
 @router.post("/broadcast", responses={400: {"description": "No recipients"}})
 @limiter.limit("10/hour")
-async def send_broadcast(request: Request, data: BroadcastRequest, db: DB, admin: AdminUser):
+def send_broadcast(request: Request, data: BroadcastRequest, db: DB, admin: AdminUser):
     """Announcement to everyone (or the listed users): in-app and/or Web Push."""
-    user_ids = await asyncio.to_thread(broadcast.recipient_ids, db, data.usernames)
+    user_ids = broadcast.recipient_ids(db, data.usernames)
     if not user_ids:
         raise HTTPException(400, "Нет получателей")
     text = broadcast.compose(data.title, data.message)
     inapp = 0
     if "inapp" in data.channels:
-        inapp = await asyncio.to_thread(broadcast.create_inapp, db, admin, user_ids, text)
+        inapp = broadcast.create_inapp(db, admin, user_ids, text)
     audit.record(db, admin, "broadcast.send", "все" if not data.usernames else ", ".join(data.usernames)[:128],
                  channels=data.channels, recipients=len(user_ids), text=text)
-    await asyncio.to_thread(db.commit)
+    db.commit()
     push_queued = False
     if "push" in data.channels:
         from app.core.redis import enqueue_background_task
-        push_queued = bool(await enqueue_background_task(
-            "broadcast_push", data.title or "VEIN Music", data.message, data.url,
+        push_queued = bool(anyio.from_thread.run(
+            enqueue_background_task, "broadcast_push", data.title or "VEIN Music", data.message, data.url,
             user_ids if data.usernames else None))
     return {"status": "ok", "recipients": len(user_ids), "inapp": inapp, "push_queued": push_queued}
 
@@ -454,8 +455,8 @@ async def list_error_log(
 
 
 @router.delete("/logs")
-async def clear_error_log(db: DB, admin: AdminUser):
-    await error_log.clear()
+def clear_error_log(db: DB, admin: AdminUser):
+    anyio.from_thread.run(error_log.clear)
     audit.record(db, admin, "logs.clear")
     db.commit()
     return {"status": "ok"}

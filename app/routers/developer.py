@@ -5,6 +5,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
+import anyio
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
@@ -208,7 +209,7 @@ def delete_webhook(
              responses={404: {"description": "Webhook Not Found"},
                         503: {"description": "Webhooks are switched off"}})
 @limiter.limit("5/minute")
-async def test_webhook(
+def test_webhook(
     request: Request,
     webhook_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -219,7 +220,7 @@ async def test_webhook(
     if not wh:
         raise HTTPException(404, "Вебхук не найден")
 
-    await send_test_ping(wh, str(current_user.username))
+    anyio.from_thread.run(send_test_ping, wh, str(current_user.username))
     return {"status": "ok", "message": f"Тестовое событие отправлено на {wh.url}"}
 
 

@@ -15,6 +15,7 @@ import urllib.parse
 from datetime import datetime
 from typing import Annotated
 
+import anyio
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -23,7 +24,7 @@ from app.core.safe_http import UnsafeURLError, pinned_download
 from app.database import get_db
 from app.models import Scrobble, Track, User, UserProfile
 from app.routers.media import API_BASE_URL, UPLOADS_DIR
-from app.services.cache import get_from_cache, set_to_cache
+from app.services.cache import USER_PREVIEW_KEY, get_from_cache, set_to_cache
 from app.services.privacy import audience_cache_key, public_statistics_users
 from app.services.user_preferences import preferences_dict
 from app.services.user_stats import get_user_level_info
@@ -103,7 +104,7 @@ def _redact_cached_user_preview(cached, user):
 def user_preview(username: str, db: Annotated[Session, Depends(get_db)]):
     user = _public_user(db, username)
     profile = user.profile
-    cache_key = f"preview:user:{username}"
+    cache_key = USER_PREVIEW_KEY.format(username=username)
     cached = get_from_cache(cache_key, PREVIEW_TTL)
     if cached is not None and not profile.is_private:
         return _redact_cached_user_preview(cached, user)
@@ -269,7 +270,7 @@ async def _download(url: str) -> bytes:
     "/{kind}/{key}/image",
     responses={404: {"description": "No picture usable in a preview"}},
 )
-async def preview_image(kind: str, key: str, db: Annotated[Session, Depends(get_db)]):
+def preview_image(kind: str, key: str, db: Annotated[Session, Depends(get_db)]):
     """The avatar or cover for a preview card, as PNG, JPEG or GIF.
 
     Only the picture of a public profile, artist or track can be requested,
@@ -282,7 +283,7 @@ async def preview_image(kind: str, key: str, db: Annotated[Session, Depends(get_
         raise HTTPException(404, IMAGE_NOT_FOUND)
     content = _read_upload(url)
     if content is None:
-        content = await _download(url)
+        content = anyio.from_thread.run(_download, url)
     media_type = _image_type(content) if content else None
     if not media_type:
         raise HTTPException(404, IMAGE_NOT_FOUND)

@@ -3,7 +3,6 @@
 import json
 import os
 import time
-import threading
 from typing import Any
 
 import redis
@@ -109,29 +108,16 @@ def clear_all() -> int:
     return removed
 
 
-INVALIDATION_INTERVAL_SEC = 5
-_invalidation_lock = threading.Lock()
-_last_invalidation = float("-inf")
+# Entries built from one user's own listening or profile. Everything else is
+# shared (leaderboards, feeds, artist pages): it expires on its own short TTL
+# and every read rechecks privacy, so a user's change never has to flush it.
+USER_PREVIEW_KEY = "preview:user:{username}"
+TASTE_TWINS_KEY = "taste_twins:v2:{username}"
 
 
-def invalidate_all() -> int:
-    """Coalesce user-triggered flushes across workers using a Redis lease.
-
-    The local fallback is bounded per process when Redis is unavailable.
-    Privacy checks must run on cache reads independently of this throttle.
-    Explicit administrator flushes use clear_all() instead.
-    """
-    global _last_invalidation
-    with _invalidation_lock:
-        now = time.monotonic()
-        if now - _last_invalidation < INVALIDATION_INTERVAL_SEC:
-            return 0
-        if redis_client is not None:
-            try:
-                if not redis_client.set("cache_invalidation_lease", "1", nx=True, ex=INVALIDATION_INTERVAL_SEC):
-                    _last_invalidation = now
-                    return 0
-            except redis.RedisError:
-                pass
-        _last_invalidation = now
-        return clear_all()
+def invalidate_user(username: str) -> None:
+    """Forget the cached entries of one user after they change their history,
+    privacy or preferences (their detailed stats are keyed by a version of the
+    history and refresh by themselves)."""
+    for template in (USER_PREVIEW_KEY, TASTE_TWINS_KEY):
+        delete_from_cache(template.format(username=username))

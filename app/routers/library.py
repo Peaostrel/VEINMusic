@@ -16,7 +16,7 @@ from app.database import get_db
 from app.models import ApiKey, Scrobble, SourceHealth, Track, TrackAlias, User, UserProfile
 from app.schemas import ScrobbleMergeRequest
 from app.services import runtime_settings
-from app.services.cache import invalidate_all
+from app.services.cache import invalidate_user
 from app.services.privacy import public_statistics_users, public_feed_user_ids
 from app.services.user_preferences import get_preferences
 from app.services.source_health import MESSAGES, source_key
@@ -277,7 +277,7 @@ def delete_own_scrobble(
         raise HTTPException(404, "Прослушивание не найдено")
     db.delete(scrobble)
     db.commit()
-    invalidate_all()
+    invalidate_user(str(current_user.username))
     return {"status": "ok"}
 
 
@@ -338,7 +338,7 @@ def merge_own_tracks(
             )
         )
     db.commit()
-    invalidate_all()
+    invalidate_user(str(current_user.username))
     return {"status": "ok", "reassigned_scrobbles": int(count)}
 
 

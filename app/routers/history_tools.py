@@ -13,7 +13,7 @@ from app.core.security import get_current_user
 from app.database import get_db
 from app.models import HistoryChange, Scrobble, Track, User
 from app.routers.library import _track_dict
-from app.services.cache import invalidate_all
+from app.services.cache import invalidate_user
 from app.services.listen_status import listen_status
 
 router = APIRouter(tags=["library"])
@@ -125,7 +125,7 @@ def apply_change(request: Request, data: BatchChange, db: DB, user: Owner):
     change = HistoryChange(id=uuid4().hex, user_id=user.id, payload=payload, expires_at=datetime.now(UTC) + timedelta(hours=24))
     db.add(change)
     db.commit()
-    invalidate_all()
+    invalidate_user(str(user.username))
     return {"count": len(rows), "undo_id": change.id, "expires_at": change.expires_at}
 
 
@@ -155,5 +155,5 @@ def undo_change(change_id: str, db: DB, user: Owner):
         row.deleted_at = datetime.fromisoformat(item["before"]["deleted_at"]) if item["before"]["deleted_at"] else None  # type: ignore[assignment]
     change.undone = True  # type: ignore[assignment]
     db.commit()
-    invalidate_all()
+    invalidate_user(str(user.username))
     return {"count": len(rows)}

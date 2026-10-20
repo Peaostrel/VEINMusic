@@ -34,6 +34,9 @@ x-backend-env: &backend-env
   SOUNDCLOUD_CLIENT_ID: ${SOUNDCLOUD_CLIENT_ID:-}
   SOUNDCLOUD_CLIENT_SECRET: ${SOUNDCLOUD_CLIENT_SECRET:-}
   SOUNDCLOUD_REDIRECT_URI: https://${API_DOMAIN}/auth/soundcloud/callback
+  # Sign-in and account linking through VK ID (off while the id is empty)
+  VK_CLIENT_ID: ${VK_CLIENT_ID:-}
+  VK_REDIRECT_URI: https://${API_DOMAIN}/auth/vk/callback
   # 0 turns off the open Ynison connections (Yandex Music falls back to polling)
   YANDEX_LIVE: ${YANDEX_LIVE:-1}
   # Captcha on sign-up and after failed sign-ins (off while the keys are empty)

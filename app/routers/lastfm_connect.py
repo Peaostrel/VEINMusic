@@ -15,6 +15,7 @@ import secrets
 import urllib.parse
 from typing import Annotated
 
+import anyio
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -109,8 +110,8 @@ async def _get_session_key(token: str) -> str | None:
 @router.get("/callback",
             dependencies=[Depends(require_feature("integration_lastfm"))],
             responses={400: {"description": "Invalid state or token"}})
-async def lastfm_callback(state: str, token: str, request: Request,
-                          db: Annotated[Session, Depends(get_db)]):
+def lastfm_callback(state: str, token: str, request: Request,
+                    db: Annotated[Session, Depends(get_db)]):
     # The session cookie is SameSite=Strict and isn't sent on the redirect
     # from last.fm, so the user comes from the signed state instead.
     user_id = _parse_state(state, request.cookies.get(STATE_COOKIE))
@@ -120,7 +121,7 @@ async def lastfm_callback(state: str, token: str, request: Request,
     if not user or user.is_banned:
         raise HTTPException(400, "Некорректный запрос авторизации Last.fm")
 
-    session_key = await _get_session_key(token)
+    session_key = anyio.from_thread.run(_get_session_key, token)
     result = "lastfm_error"
     if session_key:
         config = db.query(ExternalSyncConfig).filter(ExternalSyncConfig.user_id == user.id).first()

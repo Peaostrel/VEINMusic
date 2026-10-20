@@ -18,7 +18,7 @@ from app.core.security import SECRET_KEY, get_current_user
 from app.database import get_db
 from app.models import Scrobble, Track, User
 from app.routers.account import export_history
-from app.services.cache import invalidate_all
+from app.services.cache import invalidate_user
 
 router = APIRouter(tags=["account"])
 DB = Annotated[Session, Depends(get_db)]
@@ -134,7 +134,7 @@ def import_history(request: Request, data: HistoryTransfer, db: DB, user: Owner)
     items = _new_items(db, int(user.id), data.scrobbles)
     _insert_history(db, int(user.id), items)
     db.commit()
-    invalidate_all()
+    invalidate_user(str(user.username))
     return {"imported": len(items), "duplicates": len(data.scrobbles) - len(items)}
 
 
