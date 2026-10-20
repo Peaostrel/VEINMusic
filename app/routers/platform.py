@@ -1,4 +1,4 @@
-"""Platform endpoints: announcements, flags, frames, push, rooms."""
+"""Platform endpoints: announcements, flags, frames, and push."""
 
 from datetime import UTC, datetime
 from typing import Annotated
