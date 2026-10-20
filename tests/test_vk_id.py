@@ -164,14 +164,16 @@ def _through_widget(client, mode: str, vk_user: str, headers: dict | None = None
     resp = client.get(f"/auth/vk/widget?mode={mode}", headers=headers or {})
     assert resp.status_code == 200, resp.text
     widget = resp.json()
-    assert widget["app_id"] == 54000000 and widget["code_challenge"]
+    assert widget["app_id"] == 54000000
+    assert widget["code_challenge"]
     # The test client is an httpx.Client itself, so the exchange is replaced
     # one level up; the redirect-flow tests above cover the request to VK
     with patch.object(vk_id, "_vk_user_id", return_value=vk_user) as exchange:
         resp = client.post("/auth/vk/widget/exchange", headers={**ORIGIN, **(headers or {})},
                            json={"code": "c", "device_id": "d", "state": widget["state"]})
     code, device, state, verifier = exchange.call_args.args
-    assert (code, device, state) == ("c", "d", widget["state"]) and verifier
+    assert (code, device, state) == ("c", "d", widget["state"])
+    assert verifier
     return resp
 
 

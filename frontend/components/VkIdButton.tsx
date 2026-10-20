@@ -36,6 +36,18 @@ export default function VkIdButton({
     onResultRef.current = onResult;
   }, [onResult]);
 
+  // Without a session in VK the SDK draws a plain <button> (no type), so
+  // inside the sign-in form a click (or Enter on it) would also submit the
+  // password form. The SDK's own handler on the button still runs.
+  useEffect(() => {
+    const el = container.current;
+    const keepForm = (e: MouseEvent) => {
+      if ((e.target as Element).closest("button")) e.preventDefault();
+    };
+    el?.addEventListener("click", keepForm);
+    return () => el?.removeEventListener("click", keepForm);
+  }, [failed]);
+
   useEffect(() => {
     let cancelled = false;
     let widget: { close: () => void } | undefined;
@@ -122,15 +134,5 @@ export default function VkIdButton({
       </a>
     );
   }
-  return (
-    <div
-      ref={container}
-      className="min-h-11 w-full"
-      // Without a session in VK the SDK draws a plain <button> (no type), so
-      // inside the sign-in form a click would also submit the password form
-      onClick={(e) => {
-        if ((e.target as Element).closest("button")) e.preventDefault();
-      }}
-    />
-  );
+  return <div ref={container} className="min-h-11 w-full" />;
 }
