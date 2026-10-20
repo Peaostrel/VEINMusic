@@ -22,5 +22,19 @@ test.describe("Listen Together", () => {
     await dialog.getByRole("button", { name: "Создать и стать DJ" }).click();
     await page.waitForURL(/\/together\/room-/);
     await expect(page.getByRole("heading", { name: "E2E Room" })).toBeVisible();
+    await expect(page.getByRole("slider", { name: "Перемотка" })).toBeVisible();
+
+    const settings = page.getByRole("region", { name: "Настройки комнаты" });
+    await settings.getByLabel("Название комнаты").fill("Private E2E Room");
+    await settings.getByLabel("Приватная").check();
+    await settings.getByRole("button", { name: "Сохранить" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Private E2E Room" }),
+    ).toBeVisible();
+    await expect(page.getByText("доступ по ссылке", { exact: false })).toBeVisible();
+
+    page.once("dialog", (dialog) => dialog.accept());
+    await settings.getByRole("button", { name: "Удалить" }).click();
+    await page.waitForURL(/\/together$/);
   });
 });
