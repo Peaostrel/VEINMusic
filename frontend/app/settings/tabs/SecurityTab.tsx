@@ -8,6 +8,7 @@ import BrowserSessions from "../components/BrowserSessions";
 import TwoFactorAuth from "../components/TwoFactorAuth";
 import VkIdSettings from "../components/VkIdSettings";
 import StatusText from "@/components/StatusText";
+import { AccountUsername } from "@/components/autofill";
 import { ApiError, apiFetch, apiJson } from "@/app/lib/api";
 import {
   currentSubscription,
@@ -339,9 +340,16 @@ export default function SecurityTab() {
           </p>
         </div>
         {deleteOpen ? (
-          <div className="flex flex-col sm:flex-row gap-3">
+          <form
+            className="flex flex-col sm:flex-row gap-3"
+            // Its own form keeps the browser's saved login out of other
+            // fields; Enter does not delete, only the button does.
+            onSubmit={(e) => e.preventDefault()}
+          >
+            <AccountUsername />
             <input
               type="password"
+              name="current-password"
               value={deletePassword}
               onChange={(e) => setDeletePassword(e.target.value)}
               placeholder={t("Пароль для подтверждения")}
@@ -377,7 +385,7 @@ export default function SecurityTab() {
             >
               {t("Отмена")}
             </button>
-          </div>
+          </form>
         ) : (
           <button
             type="button"

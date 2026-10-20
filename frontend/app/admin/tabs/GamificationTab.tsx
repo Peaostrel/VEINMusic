@@ -33,6 +33,7 @@ export default function GamificationTab({
               {t("Название")}
             </span>
             <input
+              autoComplete="off"
               type="text"
               placeholder="Neon Fire"
               value={newFrame.name}
@@ -49,6 +50,7 @@ export default function GamificationTab({
               {t("Код (slug)")}
             </span>
             <input
+              autoComplete="off"
               type="text"
               placeholder="neon_fire"
               value={newFrame.code}
@@ -83,6 +85,7 @@ export default function GamificationTab({
               {t("Мин. уровень")}
             </span>
             <input
+              autoComplete="off"
               type="number"
               min="1"
               value={newFrame.required_level}

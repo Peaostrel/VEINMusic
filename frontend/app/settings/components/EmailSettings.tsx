@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { apiJson } from "@/app/lib/api";
+import { AccountUsername } from "@/components/autofill";
 import { btn, input, label } from "@/components/ui";
 import { useT } from "@/app/lib/i18n/client";
 
@@ -104,11 +105,15 @@ export default function EmailSettings() {
               void act("POST", { email, password, otp_code: otp || null });
             }}
           >
+            <AccountUsername />
             <label className={label}>
               <span>{t("Адрес почты")}</span>
               <input
                 className={`${input} mt-1`}
                 type="email"
+                name="email"
+                inputMode="email"
+                spellCheck={false}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -121,6 +126,7 @@ export default function EmailSettings() {
               <input
                 className={`${input} mt-1`}
                 type="password"
+                name="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -132,6 +138,8 @@ export default function EmailSettings() {
               <span>{t("Код 2FA, если защита включена")}</span>
               <input
                 className={`${input} mt-1`}
+                name="one-time-code"
+                spellCheck={false}
                 value={otp}
                 onChange={(e) => setOtp(e.target.value)}
                 maxLength={64}

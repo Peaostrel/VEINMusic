@@ -38,6 +38,7 @@ export default function AnnouncementsTab({
                 {t("Заголовок")}
               </span>
               <input
+                autoComplete="off"
                 type="text"
                 placeholder={t("Технические работы")}
                 value={newAnn.title}
@@ -69,6 +70,7 @@ export default function AnnouncementsTab({
               {t("Текст сообщения")}
             </span>
             <textarea
+              autoComplete="off"
               placeholder={t(
                 "15 августа с 04:00 до 05:00 планируется обновление...",
               )}
@@ -151,6 +153,7 @@ export default function AnnouncementsTab({
               {t("Ключ флага (slug)")}
             </span>
             <input
+              autoComplete="off"
               type="text"
               placeholder="enable_listen_together"
               value={newFlag.key}
@@ -164,6 +167,7 @@ export default function AnnouncementsTab({
               {t("Описание")}
             </span>
             <input
+              autoComplete="off"
               type="text"
               placeholder={t("Включает режим синхронного прослушивания")}
               value={newFlag.description}

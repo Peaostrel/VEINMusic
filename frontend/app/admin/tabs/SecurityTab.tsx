@@ -214,6 +214,7 @@ export default function SecurityTab() {
               {t("Адрес или подсеть")}
             </label>
             <input
+              autoComplete="off"
               id="block-network"
               className={inputClass}
               value={network}
@@ -243,6 +244,7 @@ export default function SecurityTab() {
               {t("Причина")}
             </label>
             <input
+              autoComplete="off"
               id="block-reason"
               className={inputClass}
               value={reason}

@@ -5,6 +5,7 @@ import { tr } from "@/app/lib/i18n/active";
 
 import { useCallback, useEffect, useState } from "react";
 import StatusText from "@/components/StatusText";
+import { SecretInput } from "@/components/autofill";
 import { useFeature } from "@/app/lib/featureFlags";
 import { API_URL, ApiError, apiJson } from "@/app/lib/api";
 import type {
@@ -280,13 +281,12 @@ export default function ExportTab({
               setListenbrainzToken("");
             }}
           >
-            <input
-              type="password"
+            <SecretInput
+              name="listenbrainz-token"
               value={listenbrainzToken}
               onChange={(e) => setListenbrainzToken(e.target.value)}
               placeholder={t("Токен ListenBrainz")}
               aria-label={t("Токен ListenBrainz")}
-              autoComplete="off"
               className={input}
             />
             <button
@@ -335,13 +335,12 @@ export default function ExportTab({
               setLibrefmKey("");
             }}
           >
-            <input
-              type="password"
+            <SecretInput
+              name="librefm-session-key"
               value={librefmKey}
               onChange={(e) => setLibrefmKey(e.target.value)}
               placeholder={t("Ключ сессии Libre.fm")}
               aria-label={t("Ключ сессии Libre.fm")}
-              autoComplete="off"
               className={input}
             />
             <button
@@ -428,6 +427,7 @@ export default function ExportTab({
         <form onSubmit={createWebhook} className="flex flex-col gap-3">
           <div className="flex flex-col sm:flex-row gap-3">
             <input
+              autoComplete="off"
               type="url"
               value={hookUrl}
               onChange={(e) => setHookUrl(e.target.value)}

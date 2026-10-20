@@ -111,6 +111,7 @@ export default function WidgetView() {
             {script ? (
               <>
                 <textarea
+                  autoComplete="off"
                   readOnly
                   value={script}
                   rows={10}

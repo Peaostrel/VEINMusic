@@ -33,6 +33,7 @@ export default function UsersTab({
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 text-fg-2 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
+            autoComplete="off"
             type="text"
             placeholder={t("Поиск по нику или имени...")}
             value={userSearch}

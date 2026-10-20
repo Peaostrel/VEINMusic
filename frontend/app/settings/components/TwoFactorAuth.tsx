@@ -2,6 +2,7 @@
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useState } from "react";
 import { apiJson } from "@/app/lib/api";
+import { AccountUsername } from "@/components/autofill";
 import { useT } from "@/app/lib/i18n/client";
 
 function chooseAction(
@@ -156,11 +157,19 @@ export default function TwoFactorAuth() {
         </div>
       )}
       {status && (!status.enabled || !status.required) && (
-        <div className="flex flex-col gap-3">
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit(action);
+          }}
+        >
+          <AccountUsername />
           {!secret && (
             <input
               aria-label={t("Пароль для двухфакторной защиты")}
               type="password"
+              name="current-password"
               autoComplete="current-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
@@ -171,7 +180,9 @@ export default function TwoFactorAuth() {
           {(secret || status.enabled) && (
             <input
               aria-label={t("Код двухфакторной защиты")}
+              name="one-time-code"
               autoComplete="one-time-code"
+              spellCheck={false}
               maxLength={64}
               value={code}
               onChange={(event) => setCode(event.target.value)}
@@ -184,21 +195,18 @@ export default function TwoFactorAuth() {
             />
           )}
           <button
-            type="button"
+            type="submit"
             disabled={
               busy ||
               (secret
                 ? code.length !== 6
                 : !password || (status.enabled && !code))
             }
-            onClick={() => {
-              void submit(action);
-            }}
             className={button}
           >
             {labels[action]}
           </button>
-        </div>
+        </form>
       )}
       {recoveryCodes.length > 0 && (
         <div className="space-y-3">

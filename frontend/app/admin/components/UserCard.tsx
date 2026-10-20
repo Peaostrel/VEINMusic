@@ -381,6 +381,7 @@ export default function UserCard({
             <label className="w-32">
               <span className={labelClass}>{t("Уровень")}</span>
               <input
+                autoComplete="off"
                 type="number"
                 min={1}
                 max={10000}

@@ -154,6 +154,7 @@ function ArtistTargetsEditor({
       {targets.map((target, index) => (
         <div key={ids[index]} className="flex items-center gap-2">
           <input
+            autoComplete="off"
             value={target}
             onChange={(event) => onChange(index, event.target.value)}
             required
@@ -307,6 +308,7 @@ export default function AchievementsManager({
           <label className="sm:col-span-2">
             <span className={labelClass}>{t("Название")}</span>
             <input
+              autoComplete="off"
               value={form.name}
               onChange={set("name")}
               required
@@ -316,6 +318,7 @@ export default function AchievementsManager({
           <label>
             <span className={labelClass}>{t("Иконка")}</span>
             <input
+              autoComplete="off"
               value={form.icon}
               onChange={set("icon")}
               required
@@ -325,6 +328,7 @@ export default function AchievementsManager({
           <label>
             <span className={labelClass}>{t("Награда, XP")}</span>
             <input
+              autoComplete="off"
               type="number"
               min={0}
               value={form.reward_xp}
@@ -352,6 +356,7 @@ export default function AchievementsManager({
               )}
             </span>
             <input
+              autoComplete="off"
               id="achievement-description"
               value={form.description}
               onChange={set("description")}
@@ -362,6 +367,7 @@ export default function AchievementsManager({
           <label className="sm:col-span-2">
             <span className={labelClass}>{t("Название (английский)")}</span>
             <input
+              autoComplete="off"
               value={form.name_en}
               onChange={set("name_en")}
               placeholder={t("Необязательно")}
@@ -372,6 +378,7 @@ export default function AchievementsManager({
           <label className="sm:col-span-2">
             <span className={labelClass}>{t("Описание (английский)")}</span>
             <input
+              autoComplete="off"
               value={form.description_en}
               onChange={set("description_en")}
               placeholder={t("Необязательно — иначе покажем русское")}
@@ -408,6 +415,7 @@ export default function AchievementsManager({
             <label>
               <span className={labelClass}>{t("Нужно раз / треков")}</span>
               <input
+                autoComplete="off"
                 type="number"
                 min={1}
                 value={form.rule_value}
@@ -430,6 +438,7 @@ export default function AchievementsManager({
                   {t("Подпись (необязательно)")}
                 </span>
                 <input
+                  autoComplete="off"
                   value={form.rule_meta}
                   onChange={set("rule_meta")}
                   className={inputClass}
@@ -440,6 +449,7 @@ export default function AchievementsManager({
                   {t("Обложка достижения (URL)")}
                 </span>
                 <input
+                  autoComplete="off"
                   type="url"
                   value={form.target_image}
                   onChange={set("target_image")}
@@ -455,6 +465,7 @@ export default function AchievementsManager({
                   {t("Цель: «Исполнитель - Трек», имя или ссылка")}
                 </span>
                 <input
+                  autoComplete="off"
                   value={form.rule_target}
                   onChange={set("rule_target")}
                   required
@@ -466,6 +477,7 @@ export default function AchievementsManager({
                   {t("Подпись (необязательно)")}
                 </span>
                 <input
+                  autoComplete="off"
                   value={form.rule_meta}
                   onChange={set("rule_meta")}
                   className={inputClass}
@@ -474,6 +486,7 @@ export default function AchievementsManager({
               <label>
                 <span className={labelClass}>{t("Картинка (URL)")}</span>
                 <input
+                  autoComplete="off"
                   type="url"
                   value={form.target_image}
                   onChange={set("target_image")}

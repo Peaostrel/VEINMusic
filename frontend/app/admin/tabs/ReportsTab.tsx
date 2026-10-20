@@ -272,6 +272,7 @@ function ReportGroup({
       {open.length > 0 ? (
         <div className="space-y-2">
           <input
+            autoComplete="off"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             maxLength={300}

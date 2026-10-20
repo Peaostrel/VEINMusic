@@ -157,6 +157,7 @@ export default function ListeningTab({
               </span>
             </span>
             <input
+              autoComplete="off"
               id="short-track-seconds"
               aria-describedby="short-track-seconds-hint"
               type="number"

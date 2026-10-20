@@ -173,6 +173,7 @@ export default function LogsTab() {
           <label>
             <span className={labelClass}>{t("Текст")}</span>
             <input
+              autoComplete="off"
               value={q}
               onChange={(e) => filter(setQ)(e.target.value)}
               placeholder="ynison, Spotify, user 7…"

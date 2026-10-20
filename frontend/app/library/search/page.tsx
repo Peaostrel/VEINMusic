@@ -109,6 +109,7 @@ export default function LibrarySearch() {
         <label className="sm:col-span-2">
           <span>{t("Трек, артист или альбом")}</span>
           <input
+            autoComplete="off"
             type="search"
             value={q}
             onChange={(event) => setQ(event.target.value)}

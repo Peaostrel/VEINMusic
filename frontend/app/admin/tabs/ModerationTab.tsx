@@ -68,6 +68,7 @@ export default function ModerationTab({
           <label>
             <span className={labelClass}>{t("Текст")}</span>
             <input
+              autoComplete="off"
               value={q}
               onChange={(e) => {
                 setQ(e.target.value);
@@ -80,6 +81,7 @@ export default function ModerationTab({
           <label>
             <span className={labelClass}>{t("Автор")}</span>
             <input
+              autoComplete="off"
               value={username}
               onChange={(e) => {
                 setUsername(e.target.value.trim());

@@ -231,6 +231,7 @@ export default function GlobalFeed() {
         <label className="flex h-10 flex-1 items-center gap-2 rounded-lg border border-line bg-surface px-3 text-fg-3 focus-within:border-fg-3">
           <Search className="h-4 w-4" aria-hidden="true" />
           <input
+            autoComplete="off"
             type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}

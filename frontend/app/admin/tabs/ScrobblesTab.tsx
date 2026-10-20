@@ -104,12 +104,14 @@ function Row({
         {editing ? (
           <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-2">
             <input
+              autoComplete="off"
               value={artist}
               onChange={(e) => setArtist(e.target.value)}
               aria-label={t("Исполнитель")}
               className={inputClass}
             />
             <input
+              autoComplete="off"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               aria-label={t("Название")}
@@ -329,6 +331,7 @@ export default function ScrobblesTab({
           <label>
             <span className={labelClass}>{t("Пользователь")}</span>
             <input
+              autoComplete="off"
               value={filters.username}
               onChange={(e) => set("username")(e.target.value.trim())}
               placeholder={t("ник")}
@@ -338,6 +341,7 @@ export default function ScrobblesTab({
           <label>
             <span className={labelClass}>{t("Трек или исполнитель")}</span>
             <input
+              autoComplete="off"
               value={filters.q}
               onChange={(e) => set("q")(e.target.value)}
               placeholder={t("поиск")}

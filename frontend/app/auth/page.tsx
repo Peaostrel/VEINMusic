@@ -339,12 +339,15 @@ export default function Auth() {
                 </label>
                 <input
                   id="auth-username"
+                  name="username"
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className={`${input} h-11 font-mono`}
                   placeholder="masha_l"
                   autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
                   required
                 />
               </div>
@@ -361,6 +364,7 @@ export default function Auth() {
                 </div>
                 <input
                   id="auth-password"
+                  name="password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -380,6 +384,7 @@ export default function Auth() {
               </label>
               <input
                 id="auth-otp"
+                name="one-time-code"
                 value={otpCode}
                 onChange={(event) => setOtpCode(event.target.value)}
                 maxLength={64}

@@ -90,6 +90,7 @@ export default function BroadcastPanel() {
         <label>
           <span className={labelClass}>{t("Заголовок")}</span>
           <input
+            autoComplete="off"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             maxLength={80}
@@ -99,6 +100,7 @@ export default function BroadcastPanel() {
         <label>
           <span className={labelClass}>{t("Ссылка на сайте (для push)")}</span>
           <input
+            autoComplete="off"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             pattern="/.*"
@@ -112,6 +114,7 @@ export default function BroadcastPanel() {
             {t("Текст ({n}/200)", { n: message.length })}
           </span>
           <textarea
+            autoComplete="off"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             maxLength={200}
@@ -125,6 +128,7 @@ export default function BroadcastPanel() {
             {t("Кому (ники через запятую; пусто — всем)")}
           </span>
           <input
+            autoComplete="off"
             value={usernames}
             onChange={(e) => setUsernames(e.target.value)}
             className={inputClass}
