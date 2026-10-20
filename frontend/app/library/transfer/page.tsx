@@ -153,8 +153,8 @@ export default function TransferPage() {
         <h2 className="font-semibold">Импортировать историю</h2>
         <p className="text-sm text-fg-2">
           Подходят выгрузка VEIN (JSON или CSV), архив Spotify и экспорт
-          ListenBrainz. Можно выбрать сразу несколько файлов или ZIP целиком,
-          до 100 000 прослушиваний за один перенос. Повторы пропускаются, XP и
+          ListenBrainz. Можно выбрать сразу несколько файлов или ZIP целиком, до
+          100 000 прослушиваний за один перенос. Повторы пропускаются, XP и
           награды за импорт не начисляются.
         </p>
         <details className="text-sm text-fg-2">

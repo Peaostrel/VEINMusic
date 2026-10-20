@@ -94,7 +94,9 @@ function fromSpotifyAccount(item: Row): Row | null {
   const title = text(item.trackName);
   const artist = text(item.artistName);
   const played = typeof item.msPlayed === "number" ? item.msPlayed : 0;
-  const stopped = Date.parse(`${String(item.endTime ?? "").replace(" ", "T")}:00Z`);
+  const stopped = Date.parse(
+    `${String(item.endTime ?? "").replace(" ", "T")}:00Z`,
+  );
   if (!title || !artist || played < MIN_PLAY_MS || Number.isNaN(stopped))
     return null;
   return {
@@ -160,11 +162,17 @@ export function parseHistoryText(name: string, source: string): Row[] | null {
 }
 
 /** History files inside a ZIP export, read with the browser's own inflater. */
-async function unzipHistory(file: File): Promise<{ name: string; text: string }[]> {
+async function unzipHistory(
+  file: File,
+): Promise<{ name: string; text: string }[]> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const view = new DataView(bytes.buffer);
   let end = -1;
-  for (let index = bytes.length - 22; index >= Math.max(0, bytes.length - 65_557); index--)
+  for (
+    let index = bytes.length - 22;
+    index >= Math.max(0, bytes.length - 65_557);
+    index--
+  )
     if (view.getUint32(index, true) === 0x06054b50) {
       end = index;
       break;
@@ -185,23 +193,32 @@ async function unzipHistory(file: File): Promise<{ name: string; text: string }[
     const extraLength = view.getUint16(offset + 30, true);
     const commentLength = view.getUint16(offset + 32, true);
     const local = view.getUint32(offset + 42, true);
-    const name = decoder.decode(bytes.subarray(offset + 46, offset + 46 + nameLength));
+    const name = decoder.decode(
+      bytes.subarray(offset + 46, offset + 46 + nameLength),
+    );
     offset += 46 + nameLength + extraLength + commentLength;
     const lower = name.toLowerCase();
     const base = lower.split("/").pop() ?? "";
     if (!/\.(json|jsonl|csv)$/.test(base) || base.startsWith(".")) continue;
     total += size;
     if (total > MAX_UNZIPPED_BYTES)
-      throw new Error("Архив слишком большой: распакуйте его и загрузите файлы частями");
+      throw new Error(
+        "Архив слишком большой: распакуйте его и загрузите файлы частями",
+      );
     const start =
-      local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+      local +
+      30 +
+      view.getUint16(local + 26, true) +
+      view.getUint16(local + 28, true);
     const data = bytes.subarray(start, start + compressed);
     let content: Uint8Array;
     if (method === 0) content = data;
     else if (method === 8)
       content = new Uint8Array(
         await new Response(
-          new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw")),
+          new Blob([data])
+            .stream()
+            .pipeThrough(new DecompressionStream("deflate-raw")),
         ).arrayBuffer(),
       );
     else throw new Error(`Файл ${name} сжат неподдерживаемым способом`);

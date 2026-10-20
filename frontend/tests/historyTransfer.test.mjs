@@ -42,7 +42,10 @@ const spotify = [
 ];
 
 test("Spotify extended history becomes plays that start before ts", () => {
-  const rows = parseHistoryText("Streaming_History_Audio_2024.json", JSON.stringify(spotify));
+  const rows = parseHistoryText(
+    "Streaming_History_Audio_2024.json",
+    JSON.stringify(spotify),
+  );
   assert.deepEqual(rows, [
     {
       played_at: "2024-03-01T12:00:00.000Z",
@@ -59,16 +62,34 @@ test("Spotify account data and ListenBrainz JSON Lines are read", () => {
   const account = parseHistoryText(
     "StreamingHistory_music_0.json",
     JSON.stringify([
-      { endTime: "2023-05-02 10:05", artistName: "A", trackName: "T", msPlayed: 300000 },
+      {
+        endTime: "2023-05-02 10:05",
+        artistName: "A",
+        trackName: "T",
+        msPlayed: 300000,
+      },
     ]),
   );
   assert.equal(account[0].played_at, "2023-05-02T10:00:00.000Z");
   const listens = parseHistoryText(
     "listens/2024/3.jsonl",
     [
-      { listened_at: 1709294400, track_metadata: { artist_name: "LB", track_name: "One", release_name: "R", additional_info: { duration_ms: 200000 } } },
-      { listened_at: 1709294700, track_metadata: { artist_name: "LB", track_name: "Two" } },
-    ].map((row) => JSON.stringify(row)).join("\n"),
+      {
+        listened_at: 1709294400,
+        track_metadata: {
+          artist_name: "LB",
+          track_name: "One",
+          release_name: "R",
+          additional_info: { duration_ms: 200000 },
+        },
+      },
+      {
+        listened_at: 1709294700,
+        track_metadata: { artist_name: "LB", track_name: "Two" },
+      },
+    ]
+      .map((row) => JSON.stringify(row))
+      .join("\n"),
   );
   assert.equal(listens.length, 2);
   assert.equal(listens[0].played_at, "2024-03-01T12:00:00.000Z");
@@ -78,9 +99,18 @@ test("Spotify account data and ListenBrainz JSON Lines are read", () => {
 
 test("VEIN exports pass through and unknown JSON is not history", () => {
   const vein = [{ played_at: "2024-01-01T00:00:00Z", artist: "A", title: "T" }];
-  assert.deepEqual(parseHistoryText("export.json", JSON.stringify({ scrobbles: vein })), vein);
-  assert.equal(parseHistoryText("Playlist1.json", JSON.stringify({ playlists: [] })), null);
-  assert.equal(parseHistoryText("Follow.json", JSON.stringify([{ name: "x" }])), null);
+  assert.deepEqual(
+    parseHistoryText("export.json", JSON.stringify({ scrobbles: vein })),
+    vein,
+  );
+  assert.equal(
+    parseHistoryText("Playlist1.json", JSON.stringify({ playlists: [] })),
+    null,
+  );
+  assert.equal(
+    parseHistoryText("Follow.json", JSON.stringify([{ name: "x" }])),
+    null,
+  );
 });
 
 function zip(entries) {
@@ -119,16 +149,40 @@ function zip(entries) {
 }
 
 test("a Spotify ZIP is read whole, skipping unrelated files", async () => {
-  const later = { ...spotify[0], ts: "2024-03-02T12:03:00Z", master_metadata_track_name: "Later" };
+  const later = {
+    ...spotify[0],
+    ts: "2024-03-02T12:03:00Z",
+    master_metadata_track_name: "Later",
+  };
   const archive = zip([
-    ["Spotify Extended Streaming History/Streaming_History_Audio_2024_1.json", JSON.stringify([later])],
+    [
+      "Spotify Extended Streaming History/Streaming_History_Audio_2024_1.json",
+      JSON.stringify([later]),
+    ],
     ["Spotify Extended Streaming History/ReadMeFirst.pdf", "%PDF"],
-    ["Spotify Extended Streaming History/Streaming_History_Video_2024.json", JSON.stringify([{ ts: "2024-01-01T00:00:00Z", ms_played: 60000, master_metadata_track_name: null }])],
-    ["Spotify Extended Streaming History/Streaming_History_Audio_2024_0.json", JSON.stringify(spotify)],
+    [
+      "Spotify Extended Streaming History/Streaming_History_Video_2024.json",
+      JSON.stringify([
+        {
+          ts: "2024-01-01T00:00:00Z",
+          ms_played: 60000,
+          master_metadata_track_name: null,
+        },
+      ]),
+    ],
+    [
+      "Spotify Extended Streaming History/Streaming_History_Audio_2024_0.json",
+      JSON.stringify(spotify),
+    ],
     ["Userdata.json", JSON.stringify({ username: "x" })],
   ]);
-  const rows = await readHistoryFiles([new File([archive], "my_spotify_data.zip")]);
-  assert.deepEqual(rows.map((row) => row.title), ["Song", "Later"]);
+  const rows = await readHistoryFiles([
+    new File([archive], "my_spotify_data.zip"),
+  ]);
+  assert.deepEqual(
+    rows.map((row) => row.title),
+    ["Song", "Later"],
+  );
 });
 
 test("a file with no plays is reported", async () => {
@@ -137,7 +191,7 @@ test("a file with no plays is reported", async () => {
     /30 секунд/,
   );
   await assert.rejects(
-    readHistoryFiles([new File(["{\"x\":1}"], "a.json")]),
+    readHistoryFiles([new File(['{"x":1}'], "a.json")]),
     /распознать/,
   );
 });

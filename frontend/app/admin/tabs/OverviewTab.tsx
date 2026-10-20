@@ -4,6 +4,7 @@ import { Users, Disc3, Server, Zap, Flame, Radio } from "lucide-react";
 import type { AdminPanelState } from "../useAdminPanel";
 import QualityMetrics from "../components/QualityMetrics";
 import AnalyticsCharts from "../components/AnalyticsCharts";
+import RetentionTable from "../components/RetentionTable";
 
 export default function OverviewTab({
   tracks,
@@ -17,6 +18,7 @@ export default function OverviewTab({
   return (
     <div className="space-y-6">
       <AnalyticsCharts />
+      <RetentionTable />
       <QualityMetrics />
       {/* Quick Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
