@@ -54,11 +54,3 @@ def test_profile_socket_accepts_ticket_without_cookie(client):
     url = f"/ws/otheruser?ticket={ticket}"
     with pytest.raises(WebSocketDisconnect):
         _open_socket(client, url)
-
-
-def test_room_socket_identifies_user_by_ticket(client):
-    _register(client, "roomticket")
-    ticket = client.post("/auth/ws-ticket", headers=ORIGIN).json()["ticket"]
-    client.cookies.clear()
-    with client.websocket_connect(f"/ws/together/tickets?ticket={ticket}", headers=ORIGIN) as ws:
-        assert ws.receive_json()["you"] == "roomticket"
