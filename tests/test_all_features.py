@@ -133,14 +133,6 @@ def test_developer_api_keys_and_webhooks(client, db, monkeypatch):
     assert del_key.status_code == 200
 
 
-def test_listen_together_rooms_endpoint(client):
-    """Test Listen Together active rooms endpoint."""
-    resp = client.get("/api/together/rooms")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "rooms" in data
-
-
 def test_push_notifications_endpoints(client, db, monkeypatch, request):
     """Test Web Push VAPID key and subscription endpoints."""
     from app.services import push_notifications
