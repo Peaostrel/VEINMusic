@@ -245,5 +245,9 @@ def test_resend_quota_waits_for_reset(client, db, owner):
 
 def test_render_branded_template():
     page = mail.render({"subject": "Тема <b>", "text": "Строка 1\nСтрока <2>", "link": "https://example.com/x#t"}, "reset")
-    assert "Задать новый пароль" in page and 'href="https://example.com/x#t"' in page
-    assert "Тема &lt;b&gt;" in page and "Строка &lt;2&gt;" in page and "<b>" not in page
+    assert "Задать новый пароль" in page
+    assert 'href="https://example.com/x#t"' in page
+    assert "/icon-192.png" in page
+    assert "Тема &lt;b&gt;" in page
+    assert "Строка &lt;2&gt;" in page
+    assert "<b>" not in page

@@ -78,8 +78,9 @@ def render(payload, kind="message"):
 <tr><td align="center" style="padding:32px 16px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;font-family:'IBM Plex Sans',-apple-system,'Segoe UI',Roboto,Arial,sans-serif">
 <tr><td style="padding:0 4px 18px">
-<a href="{site}" style="text-decoration:none;font-size:20px;font-weight:700;letter-spacing:3px;color:#ededeb">VEIN<span style="color:#e3a93b;font-size:12px;vertical-align:middle">&#9679;</span></a>
-<span style="font-size:13px;color:#8a8b88;letter-spacing:1px">&nbsp;MUSIC</span>
+<a href="{site}" style="text-decoration:none;color:#ededeb">
+<img src="{site}/icon-192.png" width="28" height="28" alt="" style="display:inline-block;vertical-align:middle;border:0;border-radius:6px">
+<span style="vertical-align:middle;padding-left:8px;font-size:18px;font-weight:600;color:#ededeb">VEIN<span style="font-weight:400;color:#a3a4a1">Music</span></span></a>
 </td></tr>
 <tr><td style="background:#16171a;border:1px solid #26282c;border-radius:12px;padding:28px 26px">
 <h1 style="margin:0 0 18px;font-size:20px;line-height:1.3;font-weight:600;color:#ededeb">{esc(payload["subject"])}</h1>
