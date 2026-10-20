@@ -15,13 +15,11 @@ from sqlalchemy.orm import Session
 from app.core.i18n import request_lang, tr
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
-from app.core.websockets import manager
 from app.database import get_db
 from app.models import (
     User,
 )
 from app.services import runtime_settings
-from app.services.runtime_settings import require_feature
 from app.schemas import (
     PushSubscribeRequest,
     PushUnsubscribeRequest,
@@ -201,31 +199,3 @@ async def send_test_push(
         db=db,
     )
     return {"status": "ok", "delivered_count": sent}
-
-
-# --- Listen Together REST API ---
-@router.get("/api/together/rooms", dependencies=[Depends(require_feature("listen_together"))],
-            responses={503: {"description": "Listen Together is switched off"}})
-async def list_together_rooms(request: Request):
-    """List active Listen Together rooms with listener counts and current tracks."""
-    lang = request_lang(request)
-    return {"rooms": [_localized_room(room, lang) for room in await manager.get_active_rooms_info()]}
-
-
-# Texts app/core/websockets.py stores in a room's state (in Russian)
-DEFAULT_ROOM_NAME = "Комната {id}"
-WAITING_FOR_DJ = "Ожидание трека от DJ..."
-
-
-def _localized_room(room: dict, lang: str) -> dict:
-    """The default room name and the "waiting for the DJ" title in `lang`."""
-    if lang == "ru":
-        return room
-    room = dict(room)
-    room_id = room.get("room_id")
-    if room.get("name") == DEFAULT_ROOM_NAME.format(id=room_id):
-        room["name"] = tr(lang, DEFAULT_ROOM_NAME, id=room_id)
-    track = room.get("current_track")
-    if isinstance(track, dict) and track.get("title") == WAITING_FOR_DJ:
-        room["current_track"] = {**track, "title": tr(lang, WAITING_FOR_DJ)}
-    return room
