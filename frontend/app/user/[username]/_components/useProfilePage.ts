@@ -451,7 +451,6 @@ export function useProfilePage() {
     setWrapped,
     mood,
     setMood,
-    wsRef,
     handleNewScrobble,
     handleFollow,
     openFollowModal,
