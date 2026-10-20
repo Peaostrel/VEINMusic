@@ -6,7 +6,6 @@
   "{actor} подписался(ась) на вас": "{actor} followed you",
   "{icon} Новое достижение!": "{icon} New achievement!",
   "Тестовое уведомление: PWA Web Push работает идеально! 🎵": "Test notification: PWA Web Push works perfectly! 🎵",
-
   "Недельные итоги за {date} готовы": "Your weekly recap for {date} is ready",
   "Месячные итоги за {date} готовы": "Your monthly recap for {date} is ready",
   "За неделю — {plays} прослушиваний и {minutes} минут музыки.": "This week: {plays} {plays_word} and {minutes} {minutes_word} of music.",
@@ -16,13 +15,11 @@
   "прослушивание|прослушивания|прослушиваний": "play|plays",
   "минута|минуты|минут": "minute|minutes",
   "трек|трека|треков": "track|tracks",
-
   "Браузер": "Browser",
   "Неизвестное устройство": "Unknown device",
   "Новый вход: {device}. Проверьте устройства в настройках безопасности.": "New sign-in: {device}. Check your devices in security settings.",
   "Вход с нового устройства: {device}. Не вы? Смените пароль и завершите сеансы": "Sign-in from a new device: {device}. Not you? Change your password and end your sessions",
   "Устройство «{name}» получило доступ к прослушиваниям. Не вы? Отзовите его ключ в настройках безопасности": "Device “{name}” was given access to your plays. Not you? Revoke its key in security settings",
-
   "Новая жалоба: {target}, {reason}": "New report: {target}, {reason}",
   "трек «{name}»": "track “{name}”",
   "комментарий @{name}": "comment by @{name}",
@@ -35,10 +32,8 @@
   "накрутка прослушиваний": "fake plays",
   "выдаёт себя за другого": "impersonation",
   "другое": "other",
-
   "❌ Импорт из Last.fm прервался. Нажмите «Импорт» ещё раз, чтобы продолжить.": "❌ The Last.fm import was interrupted. Click “Import” again to continue.",
   "✅ Импорт завершен! Добавлено {n} треков.": "✅ Import finished! Added {n} {tracks}.",
-
   "Открыть VEIN Music": "Open VEIN Music",
   "Новый вход в VEIN Music": "New sign-in to VEIN Music",
   "В аккаунт {username} вошли с нового устройства: {device}.": "Someone signed in to the account {username} from a new device: {device}.",
@@ -50,5 +45,10 @@
   "Восстановление пароля VEIN Music": "Reset your VEIN Music password",
   "Вы запросили новый пароль. Ссылка действует 30 минут.": "You asked for a new password. The link is valid for 30 minutes.",
   "Если это не вы, проигнорируйте письмо.": "If this wasn't you, ignore this email.",
-  "Отключить письма от администрации можно в настройках безопасности VEIN Music.": "You can turn off emails from the VEIN Music team in your security settings."
+  "Отключить письма от администрации можно в настройках безопасности VEIN Music.": "You can turn off emails from the VEIN Music team in your security settings.",
+  "Подтвердить почту": "Confirm email",
+  "Задать новый пароль": "Set a new password",
+  "Проверить устройства": "Review devices",
+  "Если кнопка не работает, откройте ссылку:": "If the button doesn't work, open this link:",
+  "Это служебное письмо от {domain}.": "This is a service email from {domain}."
 }

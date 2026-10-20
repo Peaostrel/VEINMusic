@@ -53,7 +53,7 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 REGISTER_RATE_LIMIT = os.getenv("REGISTER_RATE_LIMIT", "3/minute")
 # Edition of the consent text on the site's /consent page; change it together
 # with that text so each account records which wording it agreed to
-PD_CONSENT_VERSION = "2026-10-19"
+PD_CONSENT_VERSION = "2026-10-20"
 
 
 def set_session_cookie(response: Response, session_token: str) -> None:

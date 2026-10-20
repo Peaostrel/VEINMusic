@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
-import { API_URL, apiJson } from "@/app/lib/api";
+import { apiJson } from "@/app/lib/api";
 import { btn } from "@/components/ui";
 import { useT } from "@/app/lib/i18n/client";
+import VkIdButton from "@/components/VkIdButton";
 
 type Status = { enabled: boolean; linked: boolean };
 
@@ -50,7 +51,7 @@ export default function VkIdSettings() {
               "Привяжите VK ID, чтобы входить без пароля. Мы сохраняем только идентификатор аккаунта VK.",
             )}
       </p>
-      <div className="flex gap-2">
+      <div className="flex max-w-[360px] gap-2">
         {status.linked ? (
           <button
             type="button"
@@ -61,12 +62,21 @@ export default function VkIdSettings() {
             {t("Отвязать")}
           </button>
         ) : (
-          <a
-            href={`${API_URL}/auth/vk/link`}
-            className={`${btn.primary} ${btn.sm}`}
-          >
-            {t("Привязать VK ID")}
-          </a>
+          <VkIdButton
+            mode="link"
+            onResult={(result) => {
+              if (result === "linked") {
+                setStatus((current) => current && { ...current, linked: true });
+                setMessage(
+                  t("✅ VK ID привязан, теперь через него можно входить"),
+                );
+              } else if (result === "taken") {
+                setMessage(t("❌ Этот VK ID уже привязан к другому аккаунту"));
+              } else {
+                setMessage(t("❌ Не удалось привязать VK ID"));
+              }
+            }}
+          />
         )}
       </div>
       {message && <p className="text-sm">{message}</p>}

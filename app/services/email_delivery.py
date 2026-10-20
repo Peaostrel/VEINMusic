@@ -1,4 +1,4 @@
-"""Brevo delivery with a durable, encrypted outbox; no credentials in responses/logs."""
+"""Resend delivery with a durable, encrypted outbox; no credentials in responses/logs."""
 import hashlib
 import html
 import json
@@ -15,7 +15,7 @@ from app.models import EmailAccount, EmailOutbox, User
 
 
 def configured():
-    return bool(os.getenv("BREVO_API_KEY") and os.getenv("EMAIL_FROM"))
+    return bool(os.getenv("RESEND_API_KEY") and os.getenv("EMAIL_FROM"))
 
 
 def digest(value):
@@ -60,13 +60,56 @@ def new_login(db, user, device):
               site_url() + "/settings?tab=security", lang=lang)
 
 
-def render(payload):
+ACTIONS = {"verify": "Подтвердить почту", "reset": "Задать новый пароль",
+           "security": "Проверить устройства", "message": "Открыть VEIN Music"}
+
+
+def render(payload, kind="message"):
+    """Table layout with inline styles: mail clients drop <style> blocks and flexbox."""
+    esc = html.escape
     lang = normalize_lang(payload.get("lang")) or "ru"
-    text = html.escape(payload["text"]).replace("\n", "<br>")
+    paragraphs = "".join(
+        f'<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#d6d6d3">{esc(line)}</p>'
+        for line in payload["text"].split("\n") if line.strip())
     link = payload.get("link")
-    label = html.escape(tr(lang, "Открыть VEIN Music"))
-    action = f'<p><a href="{html.escape(link, quote=True)}">{label}</a></p>' if link else ""
-    return f'<html lang="{lang}"><body><h2>VEIN Music</h2><p>{text}</p>{action}</body></html>'
+    action = ""
+    if link:
+        href = esc(link, quote=True)
+        action = (
+            '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:10px 0 22px"><tr>'
+            '<td style="border-radius:8px;background:#e3a93b">'
+            f'<a href="{href}" style="display:inline-block;padding:12px 22px;font-size:15px;font-weight:600;'
+            f'color:#121212;text-decoration:none;border-radius:8px">{esc(tr(lang, ACTIONS.get(kind, ACTIONS["message"])))}</a>'
+            '</td></tr></table>'
+            '<p style="margin:0;font-size:12px;line-height:1.5;color:#8a8b88">'
+            f'{esc(tr(lang, "Если кнопка не работает, откройте ссылку:"))}<br>'
+            f'<a href="{href}" style="color:#e3a93b;word-break:break-all">{esc(link)}</a></p>')
+    site = esc(site_url(), quote=True)
+    domain = esc(site_url().split("://")[-1])
+    footer = esc(tr(lang, "Это служебное письмо от {domain}.")).replace(
+        "{domain}", f'<a href="{site}" style="color:#8a8b88">{domain}</a>')
+    return f"""<!doctype html>
+<html lang="{lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark light"><meta name="supported-color-schemes" content="dark light">
+<title>{esc(payload["subject"])}</title></head>
+<body style="margin:0;padding:0;background:#0e0f10">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0">{esc(payload["text"].split(chr(10))[0])}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0e0f10">
+<tr><td align="center" style="padding:32px 16px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;font-family:'IBM Plex Sans',-apple-system,'Segoe UI',Roboto,Arial,sans-serif">
+<tr><td style="padding:0 4px 18px">
+<a href="{site}" style="text-decoration:none;color:#ededeb">
+<img src="{site}/icon-192.png" width="28" height="28" alt="" style="display:inline-block;vertical-align:middle;border:0;border-radius:6px">
+<span style="vertical-align:middle;padding-left:8px;font-size:18px;font-weight:600;color:#ededeb">VEIN<span style="font-weight:400;color:#a3a4a1">Music</span></span></a>
+</td></tr>
+<tr><td style="background:#16171a;border:1px solid #26282c;border-radius:12px;padding:28px 26px">
+<h1 style="margin:0 0 18px;font-size:20px;line-height:1.3;font-weight:600;color:#ededeb">{esc(payload["subject"])}</h1>
+{paragraphs}{action}
+</td></tr>
+<tr><td style="padding:18px 4px 0;font-size:12px;line-height:1.5;color:#6f706d">
+{footer}
+</td></tr>
+</table></td></tr></table></body></html>"""
 
 
 def _allowed(db, row, payload):
@@ -90,6 +133,13 @@ def _allowed(db, row, payload):
     return False
 
 
+def _quota_exceeded(result):
+    try:
+        return result.json().get("name") in {"daily_quota_exceeded", "monthly_quota_exceeded"}
+    except ValueError:
+        return False
+
+
 def deliver_one(db, row, client):
     """Called under a database row lock; HTTP timeout bounds lock duration."""
     payload = json.loads(row.payload)
@@ -97,23 +147,29 @@ def deliver_one(db, row, client):
         row.status = "cancelled"
         row.payload = "{}"
         return
-    body = {"sender": {"email": os.environ["EMAIL_FROM"], "name": "VEIN Music"},
-            "to": [{"email": payload["to"]}], "subject": payload["subject"],
-            "htmlContent": render(payload), "textContent": payload["text"] + ("\n" + payload["link"] if payload.get("link") else ""),
-            "headers": {"IdempotencyKey": row.id}, "tags": ["vein-" + row.kind]}
+    body = {"from": f"VEIN Music <{os.environ['EMAIL_FROM']}>",
+            "to": [payload["to"]], "subject": payload["subject"],
+            "html": render(payload, row.kind), "text": payload["text"] + ("\n" + payload["link"] if payload.get("link") else ""),
+            "tags": [{"name": "kind", "value": row.kind}]}
     if os.getenv("EMAIL_REPLY_TO"):
-        body["replyTo"] = {"email": os.environ["EMAIL_REPLY_TO"]}
+        body["reply_to"] = os.environ["EMAIL_REPLY_TO"]
     row.attempts += 1
     try:
-        result = client.post("https://api.brevo.com/v3/smtp/email", json=body,
-                             headers={"api-key": os.environ["BREVO_API_KEY"]})
-        if result.status_code == 201:
+        result = client.post("https://api.resend.com/emails", json=body,
+                             headers={"Authorization": "Bearer " + os.environ["RESEND_API_KEY"], "Idempotency-Key": row.id})
+        if result.status_code == 200:
             row.status = "sent"
-            row.message_id = str(result.json().get("messageId", ""))[:254]
+            row.message_id = str(result.json().get("id", ""))[:254]
             row.error_code = None
             row.payload = "{}"  # don't keep email bodies or actionable tokens after delivery
             return
         row.error_code = f"http_{result.status_code}"
+        if result.status_code == 429 and _quota_exceeded(result):
+            # The free plan's quota resets at 00:00 UTC; retrying sooner only burns attempts
+            row.attempts -= 1
+            row.error_code = "quota_exceeded"
+            row.next_attempt = (datetime.now(UTC) + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            return
         permanent = result.status_code in {400, 404, 422}
     except (httpx.HTTPError, ValueError):
         row.error_code = "transport_error"
