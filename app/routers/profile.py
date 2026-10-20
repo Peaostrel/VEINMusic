@@ -9,6 +9,7 @@ import anyio
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from app.core.cover_urls import proxied_image_url
 from app.core.rate_limit import limiter
 from app.core.security import SECRET_KEY, get_current_user
 from app.database import get_db
@@ -208,10 +209,10 @@ def update_profile(request: Request, data: ProfileUpdate, db: Annotated[Session,
 
     if data.avatar_url is not None:
         _validate_url(data.avatar_url)
-        user.profile.avatar_url = data.avatar_url
+        user.profile.avatar_url = proxied_image_url(data.avatar_url)
     if data.cover_url is not None:
         _validate_url(data.cover_url)
-        user.profile.cover_url = data.cover_url
+        user.profile.cover_url = proxied_image_url(data.cover_url)
     if data.hidden_artists is not None:
         user.profile.hidden_artists = sanitize_text(data.hidden_artists) or ""
     if data.lastfm_username is not None:

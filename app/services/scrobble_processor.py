@@ -11,6 +11,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.core.constants import ACTIVE_PLAYBACK_WINDOW_SEC
+from app.core.cover_urls import proxied_image_url
 from app.core.websockets import manager
 from app.models import (
     Scrobble,
@@ -284,7 +285,8 @@ def _find_or_create_track(
         user_id: int | None = None) -> tuple[Track, bool]:
     """Catalog lookup/insert (blocking DB work). Returns (track, may_enrich)."""
     norm_title, norm_artist = clean_track_metadata(title, artist)
-    cover_url = _safe_http_url(cover_url)
+    # Covers are shown to every visitor: one from an unknown server goes via VEIN
+    cover_url = proxied_image_url(_safe_http_url(cover_url)) or ""
     track_url = _safe_track_url(track_url)
     duration = _valid_duration(duration)
 
