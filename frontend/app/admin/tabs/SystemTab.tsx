@@ -3,8 +3,8 @@
 import { useT } from "@/app/lib/i18n/client";
 import { msg } from "@/app/lib/i18n/core";
 import EmailManager from "../components/EmailManager";
-import { Cpu, Download, HardDrive, Radio, RefreshCw } from "lucide-react";
-import type { LastfmJob, SystemStatus, TogetherRoom } from "../types";
+import { Cpu, Download, HardDrive, RefreshCw } from "lucide-react";
+import type { LastfmJob, SystemStatus } from "../types";
 import {
   Notice,
   PanelTitle,
@@ -269,62 +269,12 @@ function ImportJobsPanel() {
   );
 }
 
-function RoomsPanel() {
-  const t = useT();
-  const { data, reload } = useAdminResource<{ rooms: TogetherRoom[] }>(
-    "/api/admin/together/rooms",
-  );
-  return (
-    <section className={panelClass} aria-labelledby="rooms-heading">
-      <div className="flex items-center justify-between">
-        <PanelTitle
-          icon={<Radio className="w-4 h-4 text-danger" aria-hidden="true" />}
-        >
-          <span id="rooms-heading">{t("Комнаты «Слушать вместе»")}</span>
-        </PanelTitle>
-        <button
-          type="button"
-          onClick={reload}
-          className={buttonClass.secondary}
-        >
-          {t("Обновить")}
-        </button>
-      </div>
-      {data?.rooms.length === 0 && (
-        <p className="text-xs text-fg-2">{t("Активных комнат нет")}</p>
-      )}
-      <ul className="space-y-2">
-        {(data?.rooms ?? []).map((r) => (
-          <li
-            key={r.room_id}
-            className="bg-bg border border-line-soft rounded-xl p-3 text-xs"
-          >
-            <div className="flex justify-between gap-3">
-              <span className="font-medium text-fg">{r.name}</span>
-              <span className="font-mono text-fg-2">{r.room_id}</span>
-            </div>
-            <div className="text-fg-2 mt-1">
-              {t("DJ @{host} · слушателей: {n}", {
-                host: r.host_username,
-                n: r.listeners_count,
-              })}
-              {r.current_track?.title &&
-                ` · ${r.current_track.artist ?? ""} — ${r.current_track.title}`}
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
 export default function SystemTab() {
   return (
     <div className="space-y-6">
       <EmailManager />
       <StatusPanel />
       <ImportJobsPanel />
-      <RoomsPanel />
     </div>
   );
 }
