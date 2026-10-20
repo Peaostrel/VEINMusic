@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import request_lang, tr
 from app.core.rate_limit import limiter
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_current_user_optional
 from app.core.websockets import manager
 from app.database import get_db
 from app.models import (
@@ -206,10 +206,18 @@ async def send_test_push(
 # --- Listen Together REST API ---
 @router.get("/api/together/rooms", dependencies=[Depends(require_feature("listen_together"))],
             responses={503: {"description": "Listen Together is switched off"}})
-async def list_together_rooms(request: Request):
-    """List active Listen Together rooms with listener counts and current tracks."""
+async def list_together_rooms(
+        request: Request,
+        current_user: Annotated[User | None, Depends(get_current_user_optional)]):
+    """List public rooms plus the signed-in host's own private rooms."""
     lang = request_lang(request)
-    return {"rooms": [_localized_room(room, lang) for room in await manager.get_active_rooms_info()]}
+    username = str(current_user.username) if current_user else None
+    rooms = await manager.get_active_rooms_info()
+    visible = [
+        room for room in rooms
+        if not room.get("is_private") or room.get("host_username") == username
+    ]
+    return {"rooms": [_localized_room(room, lang) for room in visible]}
 
 
 # Texts app/core/websockets.py stores in a room's state (in Russian)
