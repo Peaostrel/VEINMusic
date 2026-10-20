@@ -516,7 +516,7 @@ def test_scrobble_is_mirrored_into_hosted_room(client, db):
             patch.object(processor.manager, "sync_host_track", new=AsyncMock()) as sync:
         asyncio.run(processor.process_scrobble(
             db, user, "Live title", "Live artist", "", "", "test",
-            12, True, 180, "Live album"))
+            12, True, 180, "Live album", player_position=True))
 
     sync.assert_awaited_once()
     username, track = sync.await_args.args
