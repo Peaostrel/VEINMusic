@@ -1,5 +1,5 @@
 import html
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response
@@ -7,6 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.constants import ACTIVE_PLAYBACK_WINDOW_SEC
+from app.core.security import get_current_user
 from app.database import get_db
 from app.models import Scrobble, Track, User
 from app.services.privacy import is_public_section
@@ -393,3 +394,57 @@ def get_og_achievement_card(
         media_type=SVG_UTF8_MEDIA_TYPE,
         headers={"Cache-Control": "public, max-age=600, s-maxage=600"},
     )
+
+
+@router.get("/me/summary")
+def get_my_widget_summary(current_user: Annotated[User, Depends(get_current_user)],
+                          db: Annotated[Session, Depends(get_db)]):
+    """What the iPhone widget (docs/iphone-widget.md) shows: the newest play
+    and the last 7 days. Read with the owner's API key, so it works for
+    private profiles too."""
+    latest = (
+        db.query(Scrobble)
+        .filter(Scrobble.user_id == current_user.id, Scrobble.deleted_at.is_(None))
+        .order_by(Scrobble.id.desc())
+        .first()
+    )
+    now = None
+    if latest is not None and latest.track is not None:
+        now = {
+            "title": latest.track.title,
+            "artist": latest.track.artist,
+            "cover_url": latest.track.cover_url,
+            "is_playing": _is_active(latest),
+            "played_at": latest.played_at.isoformat() if latest.played_at else None,
+        }
+
+    since = datetime.now(UTC) - timedelta(days=7)
+    week = (*_listening(current_user.id), Scrobble.played_at >= since)
+    plays, seconds = (
+        db.query(func.count(Scrobble.id), func.coalesce(func.sum(Scrobble.listened_sec), 0))
+        .filter(*week)
+        .one()
+    )
+
+    def top(*columns):
+        return (
+            db.query(*columns, func.count(Scrobble.id))
+            .join(Track, Scrobble.track_id == Track.id)
+            .filter(*week, Track.artist.isnot(None))
+            .group_by(*columns)
+            .order_by(func.count(Scrobble.id).desc())
+            .first()
+        )
+
+    artist = top(Track.artist)
+    track = top(Track.title, Track.artist)
+    return {
+        "username": current_user.username,
+        "now": now,
+        "week": {
+            "plays": int(plays or 0),
+            "minutes": int(seconds or 0) // 60,
+            "top_artist": artist[0] if artist else None,
+            "top_track": {"title": track[0], "artist": track[1]} if track else None,
+        },
+    }

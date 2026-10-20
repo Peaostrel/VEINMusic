@@ -6,6 +6,7 @@ import library from "./library.json";
 import profile from "./profile.json";
 import settings from "./settings.json";
 import shell from "./shell.json";
+import widget from "./widget.json";
 
 /**
  * English dictionary: Russian source text → English. One file per part of
@@ -20,6 +21,7 @@ const en: Messages = {
   ...profile,
   ...settings,
   ...admin,
+  ...widget,
 };
 
 export default en;
