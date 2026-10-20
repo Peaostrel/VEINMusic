@@ -241,3 +241,9 @@ def test_resend_quota_waits_for_reset(client, db, owner):
     assert (row.status, row.attempts, row.error_code) == ("pending", 0, "quota_exceeded")
     assert row.next_attempt.replace(tzinfo=UTC) > datetime.now(UTC)
     assert (row.next_attempt.hour, row.next_attempt.minute) == (0, 0)
+
+
+def test_render_branded_template():
+    page = mail.render({"subject": "Тема <b>", "text": "Строка 1\nСтрока <2>", "link": "https://example.com/x#t"}, "reset")
+    assert "Задать новый пароль" in page and 'href="https://example.com/x#t"' in page
+    assert "Тема &lt;b&gt;" in page and "Строка &lt;2&gt;" in page and "<b>" not in page

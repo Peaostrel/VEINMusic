@@ -44,11 +44,51 @@ def new_login(db, user, device):
               site_url() + "/settings?tab=security")
 
 
-def render(payload):
-    text = html.escape(payload["text"]).replace("\n", "<br>")
+ACTIONS = {"verify": "Подтвердить почту", "reset": "Задать новый пароль",
+           "security": "Проверить устройства", "message": "Открыть VEIN Music"}
+
+
+def render(payload, kind="message"):
+    """Table layout with inline styles: mail clients drop <style> blocks and flexbox."""
+    esc = html.escape
+    paragraphs = "".join(
+        f'<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#d6d6d3">{esc(line)}</p>'
+        for line in payload["text"].split("\n") if line.strip())
     link = payload.get("link")
-    action = f'<p><a href="{html.escape(link, quote=True)}">Открыть VEIN Music</a></p>' if link else ""
-    return f'<html lang="ru"><body><h2>VEIN Music</h2><p>{text}</p>{action}</body></html>'
+    action = ""
+    if link:
+        href = esc(link, quote=True)
+        action = (
+            '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:10px 0 22px"><tr>'
+            '<td style="border-radius:8px;background:#e3a93b">'
+            f'<a href="{href}" style="display:inline-block;padding:12px 22px;font-size:15px;font-weight:600;'
+            f'color:#121212;text-decoration:none;border-radius:8px">{esc(ACTIONS.get(kind, ACTIONS["message"]))}</a>'
+            '</td></tr></table>'
+            '<p style="margin:0;font-size:12px;line-height:1.5;color:#8a8b88">Если кнопка не работает, откройте ссылку:<br>'
+            f'<a href="{href}" style="color:#e3a93b;word-break:break-all">{esc(link)}</a></p>')
+    site = esc(site_url(), quote=True)
+    domain = esc(site_url().split("://")[-1])
+    return f"""<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark light"><meta name="supported-color-schemes" content="dark light">
+<title>{esc(payload["subject"])}</title></head>
+<body style="margin:0;padding:0;background:#0e0f10">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0">{esc(payload["text"].split(chr(10))[0])}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0e0f10">
+<tr><td align="center" style="padding:32px 16px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;font-family:'IBM Plex Sans',-apple-system,'Segoe UI',Roboto,Arial,sans-serif">
+<tr><td style="padding:0 4px 18px">
+<a href="{site}" style="text-decoration:none;font-size:20px;font-weight:700;letter-spacing:3px;color:#ededeb">VEIN<span style="color:#e3a93b;font-size:12px;vertical-align:middle">&#9679;</span></a>
+<span style="font-size:13px;color:#8a8b88;letter-spacing:1px">&nbsp;MUSIC</span>
+</td></tr>
+<tr><td style="background:#16171a;border:1px solid #26282c;border-radius:12px;padding:28px 26px">
+<h1 style="margin:0 0 18px;font-size:20px;line-height:1.3;font-weight:600;color:#ededeb">{esc(payload["subject"])}</h1>
+{paragraphs}{action}
+</td></tr>
+<tr><td style="padding:18px 4px 0;font-size:12px;line-height:1.5;color:#6f706d">
+Это служебное письмо от <a href="{site}" style="color:#8a8b88">{domain}</a>.
+</td></tr>
+</table></td></tr></table></body></html>"""
 
 
 def _allowed(db, row, payload):
@@ -88,7 +128,7 @@ def deliver_one(db, row, client):
         return
     body = {"from": f"VEIN Music <{os.environ['EMAIL_FROM']}>",
             "to": [payload["to"]], "subject": payload["subject"],
-            "html": render(payload), "text": payload["text"] + ("\n" + payload["link"] if payload.get("link") else ""),
+            "html": render(payload, row.kind), "text": payload["text"] + ("\n" + payload["link"] if payload.get("link") else ""),
             "tags": [{"name": "kind", "value": row.kind}]}
     if os.getenv("EMAIL_REPLY_TO"):
         body["reply_to"] = os.environ["EMAIL_REPLY_TO"]
