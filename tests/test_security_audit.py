@@ -28,7 +28,7 @@ def test_hashes_made_by_older_bcrypt_still_verify():
 
 def test_account_settings_are_not_shown_to_other_visitors(client, db):
     user = User(username="private_bits", hashed_password="x",
-                profile=UserProfile(hidden_artists="Guilty Pleasure", sync_privacy="followers"),
+                profile=UserProfile(hidden_artists="Guilty Pleasure"),
                 integration=UserIntegration(lastfm_username="secret_fm", yandex_token="t",
                                             spotify_refresh_token="r"))
     db.add(user)
@@ -37,7 +37,6 @@ def test_account_settings_are_not_shown_to_other_visitors(client, db):
     assert public["hidden_artists"] == ""
     assert public["lastfm_username"] is None
     assert public["last_sync"] is None
-    assert public["sync_privacy"] is None
     assert not public["spotify_linked"]
     assert not public["yandex_linked"]
 
@@ -45,7 +44,6 @@ def test_account_settings_are_not_shown_to_other_visitors(client, db):
     own = client.get("/api/user/private_bits", headers={"X-API-Key": token}).json()
     assert own["hidden_artists"] == "Guilty Pleasure"
     assert own["lastfm_username"] == "secret_fm"
-    assert own["sync_privacy"] == "followers"
     assert own["spotify_linked"]
     assert own["yandex_linked"]
 
