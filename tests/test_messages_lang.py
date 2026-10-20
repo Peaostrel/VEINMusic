@@ -56,7 +56,7 @@ def test_achievement_helpers():
 
 
 def test_new_sign_in_notice_and_email_in_english(db, monkeypatch):
-    monkeypatch.setenv("BREVO_API_KEY", "test-key")
+    monkeypatch.setenv("RESEND_API_KEY", "test-key")
     monkeypatch.setenv("EMAIL_FROM", "notifications@example.com")
     user = _user(db, "traveller", "en")
     db.add(EmailAccount(user_id=user.id, email="t@example.com", security_alerts=True))
@@ -70,8 +70,9 @@ def test_new_sign_in_notice_and_email_in_english(db, monkeypatch):
     assert payload["lang"] == "en"
     html = mail.render(payload)
     assert '<html lang="en">' in html and "Open VEIN Music" in html
+    assert "This is a service email from" in html and "If the button doesn&#x27;t work" in html
     # Old outbox rows have no language: Russian
-    assert "Открыть VEIN Music" in mail.render({"text": "x", "link": "https://a"})
+    assert "Открыть VEIN Music" in mail.render({"subject": "s", "text": "x", "link": "https://a"})
 
 
 def test_russian_wording_is_unchanged(db):
