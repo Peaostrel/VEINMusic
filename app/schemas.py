@@ -217,7 +217,6 @@ class ApiKeyRequest(BaseModel):
 class PrivacyUpdate(BaseModel):
     is_private: bool | None = None
     hidden_artists: str | None = Field(None, max_length=4096)
-    sync_privacy: SyncPrivacy | None = None
 
 
 class AppearancePreferences(BaseModel):
