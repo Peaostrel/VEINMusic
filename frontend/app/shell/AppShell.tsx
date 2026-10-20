@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
+import { useT } from "@/app/lib/i18n/client";
 import { useSiteTheme } from "@/app/lib/theme";
 import GlobalAnnouncementBanner from "@/components/GlobalAnnouncementBanner";
 import OfflineBanner from "@/components/OfflineBanner";
@@ -22,6 +23,7 @@ import { useAuthUser, useMediaQuery } from "./useAuthUser";
 export default function AppShell({
   children,
 }: Readonly<{ children: ReactNode }>) {
+  const t = useT();
   const pathname = usePathname();
   useSiteTheme(pathname);
   const { username, profile, ready, logout } = useAuthUser(pathname);
@@ -38,7 +40,7 @@ export default function AppShell({
       )}
 
       <aside
-        aria-label="Боковая панель"
+        aria-label={t("Боковая панель")}
         className="auth-only fixed inset-y-0 left-0 z-40 hidden w-[var(--sidebar-width)] border-r border-line-soft bg-sidebar lg:block"
       >
         {username && isDesktop && (

@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/app/lib/i18n/client";
 import { useState } from "react";
 import { TrendingUp } from "lucide-react";
 import {
@@ -113,6 +114,7 @@ function Chart({
 
 /** Sign-ups, counted plays and active listeners per day. */
 export default function AnalyticsCharts() {
+  const t = useT();
   const [days, setDays] = useState(30);
   const { data, error } = useAdminResource<Timeseries>(
     `/api/admin/analytics/timeseries?days=${days}`,
@@ -130,10 +132,10 @@ export default function AnalyticsCharts() {
         <PanelTitle
           icon={<TrendingUp className="w-4 h-4 text-ok" aria-hidden="true" />}
         >
-          <span id="analytics-heading">Динамика (UTC)</span>
+          <span id="analytics-heading">{t("Динамика (UTC)")}</span>
         </PanelTitle>
         <fieldset className="flex gap-1">
-          <legend className="sr-only">Период</legend>
+          <legend className="sr-only">{t("Период")}</legend>
           {[7, 30, 90].map((d) => (
             <button
               key={d}
@@ -142,7 +144,7 @@ export default function AnalyticsCharts() {
               onClick={() => setDays(d)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap ${days === d ? "bg-line text-fg" : "bg-surface-2 text-fg-2"}`}
             >
-              {d} дн.
+              {t("{n} дн.", { n: d })}
             </button>
           ))}
         </fieldset>
@@ -150,21 +152,21 @@ export default function AnalyticsCharts() {
       {error && <p className="text-danger text-xs font-medium">{error}</p>}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <Chart
-          title="Засчитанные прослушивания"
+          title={t("Засчитанные прослушивания")}
           data={rows}
           dataKey="scrobbles"
           color="var(--accent)"
           kind="bar"
         />
         <Chart
-          title="Активные слушатели"
+          title={t("Активные слушатели")}
           data={rows}
           dataKey="active_users"
           color="#8c8f96"
           kind="line"
         />
         <Chart
-          title="Регистрации"
+          title={t("Регистрации")}
           data={rows}
           dataKey="registrations"
           color="#8c8f96"
@@ -172,8 +174,9 @@ export default function AnalyticsCharts() {
         />
       </div>
       <p className="text-[11px] text-fg-2">
-        Регистрации считаются для аккаунтов, созданных после обновления с датой
-        регистрации.
+        {t(
+          "Регистрации считаются для аккаунтов, созданных после обновления с датой регистрации.",
+        )}
       </p>
     </section>
   );

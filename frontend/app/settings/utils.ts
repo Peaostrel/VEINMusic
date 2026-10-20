@@ -1,4 +1,5 @@
 import type { Area } from "react-easy-crop";
+import { msg } from "@/app/lib/i18n/core";
 
 export const createImage = (url: string) =>
   new Promise<HTMLImageElement>((resolve, reject) => {
@@ -65,12 +66,17 @@ export const fixImageUrl = (url: string): string => {
 };
 
 export const THEMES = [
-  { id: "classic", name: "Турист (Классика)", req: 1, color: "#e3a93b" },
-  { id: "green", name: "Меломан", req: 5, color: "#5fb58e" },
-  { id: "orange", name: "Аудиофил", req: 15, color: "#e07a45" },
-  { id: "purple", name: "Маньяк", req: 30, color: "#9d86e6" },
-  { id: "red", name: "Легенда", req: 50, color: "#e06c6c" },
-  { id: "cyan", name: "Божество", req: 100, color: "#56b6c2" },
-  { id: "rainbow", name: "RGB Эстетика", req: 150, isRainbow: true },
-  { id: "custom", name: "Создатель (Свой цвет)", req: 200, isCustom: true },
+  { id: "classic", name: msg("Турист (Классика)"), req: 1, color: "#e3a93b" },
+  { id: "green", name: msg("Меломан"), req: 5, color: "#5fb58e" },
+  { id: "orange", name: msg("Аудиофил"), req: 15, color: "#e07a45" },
+  { id: "purple", name: msg("Маньяк"), req: 30, color: "#9d86e6" },
+  { id: "red", name: msg("Легенда"), req: 50, color: "#e06c6c" },
+  { id: "cyan", name: msg("Божество"), req: 100, color: "#56b6c2" },
+  { id: "rainbow", name: msg("RGB Эстетика"), req: 150, isRainbow: true },
+  {
+    id: "custom",
+    name: msg("Создатель (Свой цвет)"),
+    req: 200,
+    isCustom: true,
+  },
 ];

@@ -1,6 +1,9 @@
 "use client";
+import { useT } from "@/app/lib/i18n/client";
+import { msg } from "@/app/lib/i18n/core";
 import { Check, Headphones, Lock } from "lucide-react";
 import React from "react";
+import LanguageSwitch from "@/components/LanguageSwitch";
 import { THEMES } from "../utils";
 import type { SettingsData, UpdateData, UpdatePreference } from "../types";
 import {
@@ -11,17 +14,22 @@ import {
 } from "../components/PreferenceControls";
 
 const FRAMES = [
-  { id: "", name: "Без рамки", req: 1, class: "" },
-  { id: "meloman", name: "Меломан", req: 5, class: "avatar-frame-meloman" },
+  { id: "", name: msg("Без рамки"), req: 1, class: "" },
+  {
+    id: "meloman",
+    name: msg("Меломан"),
+    req: 5,
+    class: "avatar-frame-meloman",
+  },
   {
     id: "audiophile",
-    name: "Аудиофил",
+    name: msg("Аудиофил"),
     req: 15,
     class: "avatar-frame-audiophile",
   },
-  { id: "maniac", name: "Маньяк", req: 30, class: "avatar-frame-maniac" },
-  { id: "legend", name: "Легенда", req: 50, class: "avatar-frame-legend" },
-  { id: "god", name: "Божество", req: 100, class: "avatar-frame-god" },
+  { id: "maniac", name: msg("Маньяк"), req: 30, class: "avatar-frame-maniac" },
+  { id: "legend", name: msg("Легенда"), req: 50, class: "avatar-frame-legend" },
+  { id: "god", name: msg("Божество"), req: 100, class: "avatar-frame-god" },
 ];
 
 interface ThemeTabProps {
@@ -37,6 +45,7 @@ export default function ThemeTab({
   updatePreference,
   level,
 }: Readonly<ThemeTabProps>) {
+  const t = useT();
   const isThemeCustom =
     data.theme && typeof data.theme === "string" && data.theme.startsWith("#");
   const appearance = data.preferences.appearance;
@@ -46,57 +55,78 @@ export default function ThemeTab({
   return (
     <div className="space-y-8">
       <SettingsIntro
-        title="Оформление"
-        description="Настройте режим, масштаб, доступность, цветовую тему и рамку аватара. Изменения интерфейса видны сразу, но сохраняются только кнопкой внизу."
+        title={t("Оформление")}
+        description={t(
+          "Настройте режим, масштаб, доступность, цветовую тему и рамку аватара. Изменения интерфейса видны сразу, но сохраняются только кнопкой внизу.",
+        )}
       />
       <section className={settingsCard}>
+        <div className="flex flex-col gap-3 border-b border-line-soft px-5 py-4 last:border-0 sm:flex-row sm:items-center sm:justify-between">
+          <span className="min-w-0">
+            <span className="block text-sm font-medium text-fg">
+              {t("Язык интерфейса")}
+            </span>
+            <span className="mt-0.5 block text-xs leading-relaxed text-fg-2">
+              {t(
+                "Русский или английский. Применяется сразу, страница перезагрузится.",
+              )}
+            </span>
+          </span>
+          <LanguageSwitch />
+        </div>
         <SelectRow
-          title="Режим интерфейса"
-          description="Тёмный, светлый или зависящий от настроек устройства."
+          title={t("Режим интерфейса")}
+          description={t(
+            "Тёмный, светлый или зависящий от настроек устройства.",
+          )}
           value={appearance.color_mode}
           options={[
-            { value: "dark", label: "Тёмный" },
-            { value: "light", label: "Светлый" },
-            { value: "system", label: "Как в системе" },
+            { value: "dark", label: t("Тёмный") },
+            { value: "light", label: t("Светлый") },
+            { value: "system", label: t("Как в системе") },
           ]}
           onChange={(color_mode) => updateAppearance({ color_mode })}
         />
         <SelectRow
-          title="Плотность интерфейса"
-          description="Компактный режим уменьшает навигацию и интервалы."
+          title={t("Плотность интерфейса")}
+          description={t("Компактный режим уменьшает навигацию и интервалы.")}
           value={appearance.density}
           options={[
-            { value: "comfortable", label: "Обычная" },
-            { value: "compact", label: "Компактная" },
+            { value: "comfortable", label: t("Обычная") },
+            { value: "compact", label: t("Компактная") },
           ]}
           onChange={(density) => updateAppearance({ density })}
         />
         <SelectRow
-          title="Размер интерфейса"
-          description="Меняет базовый размер текста и элементов сайта."
+          title={t("Размер интерфейса")}
+          description={t("Меняет базовый размер текста и элементов сайта.")}
           value={appearance.font_scale}
           options={[
-            { value: "small", label: "Меньше" },
-            { value: "normal", label: "Обычный" },
-            { value: "large", label: "Больше" },
+            { value: "small", label: t("Меньше") },
+            { value: "normal", label: t("Обычный") },
+            { value: "large", label: t("Больше") },
           ]}
           onChange={(font_scale) => updateAppearance({ font_scale })}
         />
         <ToggleRow
-          title="Сократить анимации"
-          description="Отключает декоративные переходы и движения интерфейса."
+          title={t("Сократить анимации")}
+          description={t(
+            "Отключает декоративные переходы и движения интерфейса.",
+          )}
           checked={appearance.reduce_motion}
           onChange={(reduce_motion) => updateAppearance({ reduce_motion })}
         />
         <ToggleRow
-          title="Повышенный контраст"
-          description="Делает границы и вторичный текст заметнее."
+          title={t("Повышенный контраст")}
+          description={t("Делает границы и вторичный текст заметнее.")}
           checked={appearance.high_contrast}
           onChange={(high_contrast) => updateAppearance({ high_contrast })}
         />
         <ToggleRow
-          title="Размытие фона"
-          description="Использовать backdrop-blur в плавающих панелях и окнах."
+          title={t("Размытие фона")}
+          description={t(
+            "Использовать backdrop-blur в плавающих панелях и окнах.",
+          )}
           checked={appearance.background_blur}
           onChange={(background_blur) => updateAppearance({ background_blur })}
         />
@@ -105,7 +135,7 @@ export default function ThemeTab({
       {/* Секция цветовой темы */}
       <div>
         <h2 className="text-lg font-semibold text-fg mb-6">
-          Выбор цветовой темы
+          {t("Выбор цветовой темы")}
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {THEMES.map((opt) => {
@@ -137,11 +167,14 @@ export default function ThemeTab({
             let statusIndicator: React.ReactNode = null;
             if (isLocked) {
               statusIndicator = (
-                <Lock className="h-4 w-4 text-fg-3" aria-label="Закрыто" />
+                <Lock className="h-4 w-4 text-fg-3" aria-label={t("Закрыто")} />
               );
             } else if (isSelected) {
               statusIndicator = (
-                <Check className="h-4 w-4 text-accent" aria-label="Выбрано" />
+                <Check
+                  className="h-4 w-4 text-accent"
+                  aria-label={t("Выбрано")}
+                />
               );
             }
 
@@ -170,9 +203,9 @@ export default function ThemeTab({
                       }}
                     ></div>
                     <div>
-                      <div className="font-medium text-fg">{opt.name}</div>
+                      <div className="font-medium text-fg">{t(opt.name)}</div>
                       <div className="font-mono text-[11px] text-fg-3">
-                        с ур. {opt.req}
+                        {t("с ур. {n}", { n: opt.req })}
                       </div>
                     </div>
                   </div>
@@ -181,7 +214,7 @@ export default function ThemeTab({
 
                 {isSelected && opt.isCustom && (
                   <div className="w-full pt-3 border-t border-line-soft flex items-center gap-3">
-                    <span className="text-xs text-fg-2">Цвет:</span>
+                    <span className="text-xs text-fg-2">{t("Цвет:")}</span>
                     <input
                       type="color"
                       value={isThemeCustom ? data.theme : "#e06c6c"}
@@ -202,9 +235,11 @@ export default function ThemeTab({
 
       {/* Секция рамки аватара */}
       <div className="pt-6 border-t border-line-soft">
-        <h2 className="text-lg font-semibold text-fg mb-2">Рамка аватара</h2>
+        <h2 className="text-lg font-semibold text-fg mb-2">
+          {t("Рамка аватара")}
+        </h2>
         <p className="text-xs text-fg-2 mb-6 leading-relaxed">
-          Рамки открываются по мере роста уровня.
+          {t("Рамки открываются по мере роста уровня.")}
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {FRAMES.map((frame) => {
@@ -225,11 +260,14 @@ export default function ThemeTab({
             let frameStatusIndicator: React.ReactNode = null;
             if (isLocked) {
               frameStatusIndicator = (
-                <Lock className="h-4 w-4 text-fg-3" aria-label="Закрыто" />
+                <Lock className="h-4 w-4 text-fg-3" aria-label={t("Закрыто")} />
               );
             } else if (isSelected) {
               frameStatusIndicator = (
-                <Check className="h-4 w-4 text-accent" aria-label="Выбрано" />
+                <Check
+                  className="h-4 w-4 text-accent"
+                  aria-label={t("Выбрано")}
+                />
               );
             }
 
@@ -253,10 +291,10 @@ export default function ThemeTab({
                   </div>
                   <div>
                     <div className="font-medium text-fg text-sm">
-                      {frame.name}
+                      {t(frame.name)}
                     </div>
                     <div className="font-mono text-[11px] text-fg-3">
-                      с ур. {frame.req}
+                      {t("с ур. {n}", { n: frame.req })}
                     </div>
                   </div>
                 </div>

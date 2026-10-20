@@ -10,12 +10,16 @@ import {
   type Goal,
 } from "@/app/lib/goals";
 import { Meter } from "@/components/ui";
+import { useT } from "@/app/lib/i18n/client";
+import type { Translator } from "@/app/lib/i18n/core";
 
 const SHOWN = 4;
 
-function linkText(active: number): string {
-  if (active === 0) return "Поставить цель →";
-  return active > SHOWN ? `Все цели (${active}) →` : "Все цели →";
+function linkText(active: number, t: Translator): string {
+  if (active === 0) return t("Поставить цель →");
+  return active > SHOWN
+    ? t("Все цели ({n}) →", { n: active })
+    : t("Все цели →");
 }
 
 /** Active goals with progress, for the home page sidebar. */
@@ -28,6 +32,7 @@ export default function GoalsCard({
   goals: Goal[];
   weekScrobbles: number | null;
 }>) {
+  const t = useT();
   const sources = useGoalSources(username, goals);
   const progress = goalProgress({ ...sources, weekScrobbles });
   const active = goals.filter((g) => g.active);
@@ -39,18 +44,22 @@ export default function GoalsCard({
     >
       <div className="flex items-baseline justify-between">
         <h2 id="goals-title" className="text-sm font-semibold">
-          Цели
+          {t("Цели")}
         </h2>
         {active.length > 0 && (
           <span className="text-xs text-fg-3">
-            выполнено {done} из {active.length}
+            {t("выполнено {done} из {total}", {
+              done,
+              total: active.length,
+            })}
           </span>
         )}
       </div>
       {active.length === 0 ? (
         <p className="text-[13px] text-fg-2">
-          Поставьте цель на неделю или месяц: сколько слушать, сколько новых
-          артистов открыть, сколько дней подряд не прерывать серию.
+          {t(
+            "Поставьте цель на неделю или месяц: сколько слушать, сколько новых артистов открыть, сколько дней подряд не прерывать серию.",
+          )}
         </p>
       ) : (
         <ul className="flex flex-col gap-3.5">
@@ -63,10 +72,10 @@ export default function GoalsCard({
                   {complete && (
                     <Check
                       className="h-3.5 w-3.5 shrink-0 text-ok"
-                      aria-label="Выполнено"
+                      aria-label={t("Выполнено")}
                     />
                   )}
-                  <span className="truncate">{goal.title}</span>
+                  <span className="truncate">{t(goal.title)}</span>
                 </span>
                 <Meter value={value} max={goal.target} />
                 <span className="flex justify-between gap-3 text-xs text-fg-3">
@@ -74,7 +83,7 @@ export default function GoalsCard({
                     <span className="tabular-nums text-fg-2">
                       {formatNumber(Math.min(value, goal.target))}
                     </span>{" "}
-                    из{" "}
+                    {t("из")}{" "}
                     <span className="tabular-nums">
                       {formatNumber(goal.target)}
                     </span>{" "}
@@ -90,7 +99,7 @@ export default function GoalsCard({
         </ul>
       )}
       <Link href="/goals" className="text-[13px] text-accent">
-        {linkText(active.length)}
+        {linkText(active.length, t)}
       </Link>
     </section>
   );

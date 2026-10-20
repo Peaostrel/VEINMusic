@@ -16,8 +16,8 @@ const root = new URL("..", import.meta.url).pathname;
 const args = process.argv.slice(2);
 const showUntranslated = args.includes("--untranslated");
 const targets = args.filter((a) => !a.startsWith("--"));
-const paths = (targets.length ? targets : ["app", "components"]).map((p) =>
-  join(root, p),
+const paths = (targets.length ? targets : ["app", "components", "utils"]).map(
+  (p) => join(root, p),
 );
 
 const dictDir = join(root, "app/lib/i18n/en");

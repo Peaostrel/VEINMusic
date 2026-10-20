@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/app/lib/i18n/client";
 import { Users, Disc3, Server, Zap, Flame, Radio } from "lucide-react";
 import type { AdminPanelState } from "../useAdminPanel";
 import QualityMetrics from "../components/QualityMetrics";
@@ -15,6 +16,7 @@ export default function OverviewTab({
   xpMultiplier,
   handleSetMultiplier,
 }: Readonly<AdminPanelState>) {
+  const t = useT();
   return (
     <div className="space-y-6">
       <AnalyticsCharts />
@@ -24,7 +26,7 @@ export default function OverviewTab({
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-surface border border-line-soft p-5 rounded-xl">
           <div className="flex items-center justify-between text-fg-2 text-xs font-mono mb-2">
-            <span>Пользователи</span>
+            <span>{t("Пользователи")}</span>
             <Users className="w-4 h-4 text-fg-3" />
           </div>
           <div className="text-3xl font-semibold text-fg">{totalUsers}</div>
@@ -35,36 +37,38 @@ export default function OverviewTab({
 
         <div className="bg-surface border border-line-soft p-5 rounded-xl">
           <div className="flex items-center justify-between text-fg-2 text-xs font-mono mb-2">
-            <span>Скробблы (всего)</span>
+            <span>{t("Скробблы (всего)")}</span>
             <Disc3 className="w-4 h-4 text-fg-3" />
           </div>
           <div className="text-3xl font-semibold text-fg">
-            {totalScrobbles.toLocaleString()}
+            {totalScrobbles.toLocaleString(t.locale)}
           </div>
           <div className="text-[11px] text-ok mt-1 font-mono">
-            +{analytics?.scrobbles_24h || 0} за 24 часа
+            {t("+{n} за 24 часа", { n: analytics?.scrobbles_24h || 0 })}
           </div>
         </div>
 
         <div className="bg-surface border border-line-soft p-5 rounded-xl">
           <div className="flex items-center justify-between text-fg-2 text-xs font-mono mb-2">
-            <span>Треков в базе</span>
+            <span>{t("Треков в базе")}</span>
             <Zap className="w-4 h-4 text-fg-3" />
           </div>
           <div className="text-3xl font-semibold text-fg">{tracks.length}</div>
-          <div className="text-[11px] text-fg-2 mt-1">Каталог нормализован</div>
+          <div className="text-[11px] text-fg-2 mt-1">
+            {t("Каталог нормализован")}
+          </div>
         </div>
 
         <div className="bg-surface border border-line-soft p-5 rounded-xl">
           <div className="flex items-center justify-between text-fg-2 text-xs font-mono mb-2">
-            <span>WebSocket-клиенты</span>
+            <span>{t("WebSocket-клиенты")}</span>
             <Radio className="w-4 h-4 text-fg-3" />
           </div>
           <div className="text-3xl font-semibold text-fg">
             {health?.websockets.connected_clients || 0}
           </div>
           <div className="text-[11px] text-fg-2 mt-1">
-            В {health?.websockets.active_rooms || 0} комнатах
+            {t("В {n} комнатах", { n: health?.websockets.active_rooms || 0 })}
           </div>
         </div>
       </div>
@@ -74,7 +78,7 @@ export default function OverviewTab({
         <div className="bg-surface border border-line-soft p-6 rounded-xl space-y-4">
           <h3 className="text-sm font-semibold text-fg flex items-center gap-2">
             <Server className="w-4 h-4 text-fg-3" />
-            Инфраструктура и База данных
+            {t("Инфраструктура и База данных")}
           </h3>
 
           <div className="space-y-3 text-xs">
@@ -85,21 +89,29 @@ export default function OverviewTab({
               </span>
             </div>
             <div className="flex justify-between items-center p-3 bg-bg rounded-xl border border-line-soft">
-              <span className="text-fg-2">Синхронизация Яндекс.Музыки</span>
+              <span className="text-fg-2">
+                {t("Синхронизация Яндекс.Музыки")}
+              </span>
               <span className="font-mono text-fg font-medium">
-                {health?.cloud_scrobblers.yandex_users || 0} аккаунтов
+                {t("{n} аккаунтов", {
+                  n: health?.cloud_scrobblers.yandex_users || 0,
+                })}
               </span>
             </div>
             <div className="flex justify-between items-center p-3 bg-bg rounded-xl border border-line-soft">
-              <span className="text-fg-2">Синхронизация Spotify</span>
+              <span className="text-fg-2">{t("Синхронизация Spotify")}</span>
               <span className="font-mono text-fg font-medium">
-                {health?.cloud_scrobblers.spotify_users || 0} аккаунтов
+                {t("{n} аккаунтов", {
+                  n: health?.cloud_scrobblers.spotify_users || 0,
+                })}
               </span>
             </div>
             <div className="flex justify-between items-center p-3 bg-bg rounded-xl border border-line-soft">
-              <span className="text-fg-2">Синхронизация SoundCloud</span>
+              <span className="text-fg-2">{t("Синхронизация SoundCloud")}</span>
               <span className="font-mono text-fg font-medium">
-                {health?.cloud_scrobblers.soundcloud_users || 0} аккаунтов
+                {t("{n} аккаунтов", {
+                  n: health?.cloud_scrobblers.soundcloud_users || 0,
+                })}
               </span>
             </div>
           </div>
@@ -108,13 +120,12 @@ export default function OverviewTab({
         <div className="bg-surface border border-line-soft p-6 rounded-xl space-y-4">
           <h3 className="text-sm font-semibold text-fg flex items-center gap-2">
             <Flame className="w-4 h-4 text-fg-3" />
-            Глобальный множитель опыта (XP)
+            {t("Глобальный множитель опыта (XP)")}
           </h3>
           <p className="text-fg-2 text-xs">
-            Увеличьте опыт за скробблы для всех пользователей платформы
-            (например, в честь выходных или ивентов). Действует на
-            прослушивания, засчитанные после изменения; уже набранный опыт не
-            пересчитывается.
+            {t(
+              "Увеличьте опыт за скробблы для всех пользователей платформы (например, в честь выходных или ивентов). Действует на прослушивания, засчитанные после изменения; уже набранный опыт не пересчитывается.",
+            )}
           </p>
 
           <div className="flex items-center gap-3">

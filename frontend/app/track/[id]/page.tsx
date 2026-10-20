@@ -8,6 +8,8 @@ import { ExternalLink, Flag, Music2 } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
 import { EmptyState, Loading, btn } from "@/components/ui";
 import { sourceLabel } from "@/utils/formatters";
+import { useT } from "@/app/lib/i18n/client";
+import { tr } from "@/app/lib/i18n/active";
 
 interface TrackData {
   id: number;
@@ -24,12 +26,13 @@ interface TrackData {
 function duration(seconds: number) {
   return seconds
     ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
-    : "неизвестно";
+    : tr("неизвестно");
 }
 
 export default function TrackPage({
   params,
 }: Readonly<{ params: Promise<{ id: string }> }>) {
+  const t = useT();
   const { id } = use(params);
   const [data, setData] = useState<TrackData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,12 +46,12 @@ export default function TrackPage({
       .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, [id]);
-  if (loading) return <Loading label="Загружаем трек…" />;
+  if (loading) return <Loading label={t("Загружаем трек…")} />;
   if (!data)
     return (
       <main className="mx-auto w-full max-w-[820px] px-4 py-10 sm:px-8">
-        <EmptyState title="Трек не найден">
-          Возможно, запись была объединена с другой.
+        <EmptyState title={t("Трек не найден")}>
+          {t("Возможно, запись была объединена с другой.")}
         </EmptyState>
       </main>
     );
@@ -68,7 +71,7 @@ export default function TrackPage({
         )}
         <div className="flex min-w-0 flex-1 flex-col justify-center">
           <p className="font-mono text-xs uppercase tracking-wide text-accent">
-            Трек
+            {t("Трек")}
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em]">
             {data.title}
@@ -81,19 +84,21 @@ export default function TrackPage({
           </Link>
           <dl className="mt-6 grid grid-cols-2 gap-4 text-sm">
             <div>
-              <dt className="text-xs text-fg-3">Альбом</dt>
-              <dd>{data.album || "Не указан"}</dd>
+              <dt className="text-xs text-fg-3">{t("Альбом")}</dt>
+              <dd>{data.album || t("Не указан")}</dd>
             </div>
             <div>
-              <dt className="text-xs text-fg-3">Жанр</dt>
-              <dd>{data.genre || "Не определён"}</dd>
+              <dt className="text-xs text-fg-3">{t("Жанр")}</dt>
+              <dd>{data.genre || t("Не определён")}</dd>
             </div>
             <div>
-              <dt className="text-xs text-fg-3">Длительность</dt>
+              <dt className="text-xs text-fg-3">{t("Длительность")}</dt>
               <dd className="font-mono">{duration(data.duration)}</dd>
             </div>
             <div>
-              <dt className="text-xs text-fg-3">Публичные прослушивания</dt>
+              <dt className="text-xs text-fg-3">
+                {t("Публичные прослушивания")}
+              </dt>
               <dd className="font-mono">{data.plays}</dd>
             </div>
           </dl>
@@ -107,7 +112,7 @@ export default function TrackPage({
                 className={`${btn.secondary} ${btn.md}`}
               >
                 <ExternalLink className="h-4 w-4" />
-                Открыть в сервисе
+                {t("Открыть в сервисе")}
               </a>
             )}
             {signedIn && (
@@ -117,7 +122,7 @@ export default function TrackPage({
                 className={`${btn.ghost} ${btn.md} hover:text-danger`}
               >
                 <Flag className="h-4 w-4" aria-hidden="true" />
-                Пожаловаться
+                {t("Пожаловаться")}
               </button>
             )}
           </div>
@@ -135,7 +140,7 @@ export default function TrackPage({
         </div>
       </section>
       <section className="rounded-xl border border-line bg-surface p-5">
-        <h2 className="text-sm font-semibold">Источники</h2>
+        <h2 className="text-sm font-semibold">{t("Источники")}</h2>
         <div className="mt-4 flex flex-wrap gap-2">
           {Object.entries(data.source_counts).map(([source, plays]) => (
             <span
@@ -147,7 +152,7 @@ export default function TrackPage({
           ))}
           {Object.keys(data.source_counts).length === 0 && (
             <span className="text-sm text-fg-3">
-              Публичных прослушиваний пока нет.
+              {t("Публичных прослушиваний пока нет.")}
             </span>
           )}
         </div>

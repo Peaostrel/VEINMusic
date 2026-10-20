@@ -2,10 +2,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiJson } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/client";
 import { btn, input, label } from "@/components/ui";
 export default function EmailAction({
   mode,
 }: Readonly<{ mode: "verify" | "reset" | "forgot" }>) {
+  const t = useT();
   const [token, setToken] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,26 +34,26 @@ export default function EmailAction({
         method: "POST",
         json,
       });
-      setMessage(result.message);
+      setMessage(t(result.message));
       setDone(true);
       setToken("");
       setPassword("");
       setOtp("");
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Ошибка сети");
+      setMessage(e instanceof Error ? e.message : t("Ошибка сети"));
     } finally {
       setBusy(false);
     }
   }
   const title = {
-    verify: "Подтверждение почты",
-    reset: "Новый пароль",
-    forgot: "Восстановление пароля",
+    verify: t("Подтверждение почты"),
+    reset: t("Новый пароль"),
+    forgot: t("Восстановление пароля"),
   }[mode];
   const submitLabel = {
-    verify: "Подтвердить",
-    forgot: "Получить письмо",
-    reset: "Сохранить пароль",
+    verify: t("Подтвердить"),
+    forgot: t("Получить письмо"),
+    reset: t("Сохранить пароль"),
   }[mode];
   return (
     <div className="mx-auto max-w-md space-y-5 px-4 py-16">
@@ -67,10 +69,10 @@ export default function EmailAction({
           {mode === "forgot" && (
             <>
               <p className="text-sm text-fg-2">
-                Введите почту, которую вы подтвердили в настройках VEIN.
+                {t("Введите почту, которую вы подтвердили в настройках VEIN.")}
               </p>
               <label className={label}>
-                <span>Почта</span>
+                <span>{t("Почта")}</span>
                 <input
                   className={`${input} mt-1`}
                   type="email"
@@ -84,13 +86,13 @@ export default function EmailAction({
           )}
           {mode === "verify" && (
             <p className="text-sm">
-              Нажмите кнопку, чтобы подтвердить адрес почты.
+              {t("Нажмите кнопку, чтобы подтвердить адрес почты.")}
             </p>
           )}
           {mode === "reset" && (
             <>
               <label className={label}>
-                <span>Новый пароль</span>
+                <span>{t("Новый пароль")}</span>
                 <input
                   className={`${input} mt-1`}
                   type="password"
@@ -103,7 +105,7 @@ export default function EmailAction({
                 />
               </label>
               <label className={label}>
-                <span>Код 2FA, если защита включена</span>
+                <span>{t("Код 2FA, если защита включена")}</span>
                 <input
                   className={`${input} mt-1`}
                   value={otp}
@@ -116,8 +118,9 @@ export default function EmailAction({
           )}
           {mode !== "forgot" && !token && (
             <p className="text-sm">
-              Откройте полную ссылку из письма. Если она устарела, запросите
-              новую.
+              {t(
+                "Откройте полную ссылку из письма. Если она устарела, запросите новую.",
+              )}
             </p>
           )}
           <button
@@ -134,7 +137,7 @@ export default function EmailAction({
         className="text-sm text-accent"
         href={mode === "verify" ? "/settings?tab=security" : "/auth"}
       >
-        {mode === "verify" ? "К настройкам" : "Ко входу"}
+        {mode === "verify" ? t("К настройкам") : t("Ко входу")}
       </Link>
     </div>
   );

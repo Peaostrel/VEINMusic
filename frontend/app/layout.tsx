@@ -36,7 +36,7 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: new URL(SITE_URL),
     title: { default: "VEINMusic", template: "%s — VEINMusic" },
     description,
-    openGraph: openGraph("VEINMusic", description, "/"),
+    openGraph: openGraph("VEINMusic", description, "/", "website", t.lang),
     twitter: { card: "summary_large_image" },
     manifest: "/manifest.json",
     appleWebApp: {

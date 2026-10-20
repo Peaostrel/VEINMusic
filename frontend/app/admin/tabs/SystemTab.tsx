@@ -1,5 +1,7 @@
 "use client";
 
+import { useT } from "@/app/lib/i18n/client";
+import { msg } from "@/app/lib/i18n/core";
 import EmailManager from "../components/EmailManager";
 import { Cpu, Download, HardDrive, Radio, RefreshCw } from "lucide-react";
 import type { LastfmJob, SystemStatus, TogetherRoom } from "../types";
@@ -16,15 +18,15 @@ import {
 } from "../ui";
 
 const CRON_LABELS: Record<string, string> = {
-  cloud_poll: "Опрос Spotify / Яндекс (каждые 30 с)",
-  cleanup_uploads: "Очистка загрузок (ежедневно)",
+  cloud_poll: msg("Опрос Spotify / Яндекс (каждые 30 с)"),
+  cleanup_uploads: msg("Очистка загрузок (ежедневно)"),
 };
 
 const JOB_STATUS: Record<string, string> = {
-  pending: "в очереди",
-  in_progress: "идёт",
-  completed: "готово",
-  failed: "ошибка",
+  pending: msg("в очереди"),
+  in_progress: msg("идёт"),
+  completed: msg("готово"),
+  failed: msg("ошибка"),
 };
 
 function Stat({
@@ -45,6 +47,7 @@ function Stat({
 }
 
 function StatusPanel() {
+  const t = useT();
   const { data, error, loading, reload } = useAdminResource<SystemStatus>(
     "/api/admin/system/status",
   );
@@ -56,7 +59,7 @@ function StatusPanel() {
         <PanelTitle
           icon={<Cpu className="w-4 h-4 text-danger" aria-hidden="true" />}
         >
-          <span id="status-heading">Состояние системы</span>
+          <span id="status-heading">{t("Состояние системы")}</span>
         </PanelTitle>
         <button
           type="button"
@@ -65,7 +68,7 @@ function StatusPanel() {
           className={buttonClass.secondary}
         >
           <RefreshCw className="w-3.5 h-3.5 inline mr-1" aria-hidden="true" />
-          Обновить
+          {t("Обновить")}
         </button>
       </div>
       {error && <p className="text-danger text-xs font-medium">{error}</p>}
@@ -73,36 +76,42 @@ function StatusPanel() {
         <>
           {data.operations && (
             <div className="space-y-2 rounded-xl border border-line p-3 text-sm">
-              <p>Диск: {data.operations.disk_used_percent ?? "—"}%</p>
               <p>
-                Внешний бэкап:{" "}
+                {t("Диск: {n}%", {
+                  n: data.operations.disk_used_percent ?? "—",
+                })}
+              </p>
+              <p>
+                {t("Внешний бэкап:")}{" "}
                 {data.operations.offsite.configured
-                  ? `последнее подтверждение ${data.operations.offsite.age_hours ?? "—"} ч назад`
-                  : "не подключён"}
+                  ? t("последнее подтверждение {n} ч назад", {
+                      n: data.operations.offsite.age_hours ?? "—",
+                    })
+                  : t("не подключён")}
               </p>
               <p className="text-xs text-fg-3">
-                {data.operations.offsite.note}
+                {t(data.operations.offsite.note)}
               </p>
               {data.operations.alerts.map((alert) => (
                 <p key={alert.code} className="text-danger">
-                  {alert.message}
+                  {t(alert.message)}
                 </p>
               ))}
             </div>
           )}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Stat
-              label="Redis / воркер"
-              value={data.worker.redis ? "доступен" : "недоступен"}
+              label={t("Redis / воркер")}
+              value={data.worker.redis ? t("доступен") : t("недоступен")}
               warn={!data.worker.redis}
             />
             <Stat
-              label="Задач в очереди"
+              label={t("Задач в очереди")}
               value={data.worker.queued_jobs ?? "—"}
               warn={(data.worker.queued_jobs ?? 0) > 100}
             />
             <Stat
-              label="База данных"
+              label={t("База данных")}
               value={
                 data.database.bytes
                   ? `${data.database.dialect}, ${formatBytes(data.database.bytes)}`
@@ -110,46 +119,52 @@ function StatusPanel() {
               }
             />
             <Stat
-              label="Загрузки"
+              label={t("Загрузки")}
               value={
                 data.uploads.available
-                  ? `${data.uploads.files} файлов, ${formatBytes(data.uploads.bytes)}`
-                  : "нет каталога"
+                  ? t("{n} файлов, {size}", {
+                      n: data.uploads.files,
+                      size: formatBytes(data.uploads.bytes),
+                    })
+                  : t("нет каталога")
               }
             />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="bg-bg border border-line-soft rounded-xl p-3 space-y-1">
               <div className="text-[10px] font-mono text-fg-2">
-                Последние запуски cron
+                {t("Последние запуски cron")}
               </div>
               {Object.entries(data.worker.cron).map(([job, at]) => (
                 <div key={job} className="flex justify-between gap-3 text-xs">
-                  <span className="text-fg-2">{CRON_LABELS[job] ?? job}</span>
+                  <span className="text-fg-2">
+                    {CRON_LABELS[job] ? t(CRON_LABELS[job]) : job}
+                  </span>
                   <span
                     className={`font-mono ${at ? "text-fg" : "text-accent"}`}
                   >
-                    {at ? formatDateTime(at) : "не запускался"}
+                    {at ? formatDateTime(at) : t("не запускался")}
                   </span>
                 </div>
               ))}
             </div>
             <div className="bg-bg border border-line-soft rounded-xl p-3 space-y-1 text-xs">
               <div className="text-[10px] font-mono text-fg-2 flex items-center gap-1">
-                <HardDrive className="w-3 h-3" aria-hidden="true" /> Бэкапы БД
+                <HardDrive className="w-3 h-3" aria-hidden="true" />{" "}
+                {t("Бэкапы БД")}
               </div>
               {!data.backups.available && (
                 <p className="text-accent">
-                  Каталог бэкапов не подключён к API (BACKUP_DIR).
+                  {t("Каталог бэкапов не подключён к API (BACKUP_DIR).")}
                 </p>
               )}
               {data.backups.available && !data.backups.latest && (
-                <p className="text-accent">Бэкапов пока нет.</p>
+                <p className="text-accent">{t("Бэкапов пока нет.")}</p>
               )}
               {data.backups.latest && (
                 <>
                   <p className={backupStale ? "text-accent" : "text-fg-2"}>
-                    Последний:{" "}
+                    {t("Последний:")}{" "}
                     <span className="font-mono">
                       {data.backups.latest.name}
                     </span>
@@ -157,7 +172,7 @@ function StatusPanel() {
                     {formatBytes(data.backups.latest.bytes)}
                   </p>
                   <p className="text-fg-2">
-                    Всего копий: {data.backups.count},{" "}
+                    {t("Всего копий: {n},", { n: data.backups.count })}{" "}
                     {formatBytes(data.backups.bytes)}
                   </p>
                 </>
@@ -171,6 +186,7 @@ function StatusPanel() {
 }
 
 function ImportJobsPanel() {
+  const t = useT();
   const { data, reload } = useAdminResource<{ jobs: LastfmJob[] }>(
     "/api/admin/jobs/lastfm",
   );
@@ -182,7 +198,7 @@ function ImportJobsPanel() {
           adminRequest(`/api/admin/jobs/lastfm/${job.id}/retry`, {
             method: "POST",
           }),
-        `Импорт #${job.id} поставлен в очередь`,
+        t("Импорт #{id} поставлен в очередь", { id: job.id }),
       )
     )
       reload();
@@ -192,7 +208,7 @@ function ImportJobsPanel() {
       <PanelTitle
         icon={<Download className="w-4 h-4 text-danger" aria-hidden="true" />}
       >
-        <span id="imports-heading">Импорт из Last.fm</span>
+        <span id="imports-heading">{t("Импорт из Last.fm")}</span>
       </PanelTitle>
       <Notice text={notice} />
       <div className="overflow-x-auto">
@@ -201,9 +217,9 @@ function ImportJobsPanel() {
             <tr>
               <th className="py-2 pr-3">#</th>
               <th className="py-2 pr-3">Last.fm</th>
-              <th className="py-2 pr-3">Статус</th>
-              <th className="py-2 pr-3">Прогресс</th>
-              <th className="py-2 pr-3">Ошибка</th>
+              <th className="py-2 pr-3">{t("Статус")}</th>
+              <th className="py-2 pr-3">{t("Прогресс")}</th>
+              <th className="py-2 pr-3">{t("Ошибка")}</th>
               <th className="py-2" />
             </tr>
           </thead>
@@ -215,7 +231,7 @@ function ImportJobsPanel() {
                 <td
                   className={`py-2 pr-3 font-medium ${j.status === "failed" ? "text-danger" : "text-fg"}`}
                 >
-                  {JOB_STATUS[j.status] ?? j.status}
+                  {JOB_STATUS[j.status] ? t(JOB_STATUS[j.status]) : j.status}
                 </td>
                 <td className="py-2 pr-3 font-mono">
                   {j.imported_tracks}/{j.total_tracks || "?"}
@@ -233,7 +249,7 @@ function ImportJobsPanel() {
                       onClick={() => retry(j)}
                       className={buttonClass.secondary}
                     >
-                      Повторить
+                      {t("Повторить")}
                     </button>
                   )}
                 </td>
@@ -242,7 +258,7 @@ function ImportJobsPanel() {
             {data?.jobs.length === 0 && (
               <tr>
                 <td colSpan={6} className="py-4 text-center text-fg-2">
-                  Импортов не было
+                  {t("Импортов не было")}
                 </td>
               </tr>
             )}
@@ -254,6 +270,7 @@ function ImportJobsPanel() {
 }
 
 function RoomsPanel() {
+  const t = useT();
   const { data, reload } = useAdminResource<{ rooms: TogetherRoom[] }>(
     "/api/admin/together/rooms",
   );
@@ -263,18 +280,18 @@ function RoomsPanel() {
         <PanelTitle
           icon={<Radio className="w-4 h-4 text-danger" aria-hidden="true" />}
         >
-          <span id="rooms-heading">Комнаты «Слушать вместе»</span>
+          <span id="rooms-heading">{t("Комнаты «Слушать вместе»")}</span>
         </PanelTitle>
         <button
           type="button"
           onClick={reload}
           className={buttonClass.secondary}
         >
-          Обновить
+          {t("Обновить")}
         </button>
       </div>
       {data?.rooms.length === 0 && (
-        <p className="text-xs text-fg-2">Активных комнат нет</p>
+        <p className="text-xs text-fg-2">{t("Активных комнат нет")}</p>
       )}
       <ul className="space-y-2">
         {(data?.rooms ?? []).map((r) => (
@@ -287,7 +304,10 @@ function RoomsPanel() {
               <span className="font-mono text-fg-2">{r.room_id}</span>
             </div>
             <div className="text-fg-2 mt-1">
-              DJ @{r.host_username} · слушателей: {r.listeners_count}
+              {t("DJ @{host} · слушателей: {n}", {
+                host: r.host_username,
+                n: r.listeners_count,
+              })}
               {r.current_track?.title &&
                 ` · ${r.current_track.artist ?? ""} — ${r.current_track.title}`}
             </div>

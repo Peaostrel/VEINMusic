@@ -6,6 +6,7 @@ import { Disc3 } from "lucide-react";
 import { API_URL } from "@/app/lib/api";
 import { EmptyState, Loading, PageHeader } from "@/components/ui";
 import { coverAt } from "@/app/lib/coverSize";
+import { useT } from "@/app/lib/i18n/client";
 
 interface ArtistTrack {
   id: number;
@@ -35,6 +36,7 @@ function routeName(value: string): string {
 export default function ArtistPage({
   params,
 }: Readonly<{ params: Promise<{ name: string }> }>) {
+  const t = useT();
   const name = routeName(use(params).name);
   const [data, setData] = useState<ArtistData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,12 +47,12 @@ export default function ArtistPage({
       .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, [name]);
-  if (loading) return <Loading label="Загружаем артиста…" />;
+  if (loading) return <Loading label={t("Загружаем артиста…")} />;
   if (!data)
     return (
       <main className="mx-auto w-full max-w-[920px] px-4 py-8 sm:px-8 lg:py-10">
-        <EmptyState title="Артист не найден">
-          В каталоге VEIN пока нет такого артиста.
+        <EmptyState title={t("Артист не найден")}>
+          {t("В каталоге VEIN пока нет такого артиста.")}
         </EmptyState>
       </main>
     );
@@ -70,7 +72,10 @@ export default function ArtistPage({
         )}
         <PageHeader
           title={data.name}
-          subtitle={`${data.tracks_count} треков · ${data.public_plays} публичных прослушиваний`}
+          subtitle={t("{tracks} треков · {plays} публичных прослушиваний", {
+            tracks: data.tracks_count,
+            plays: data.public_plays,
+          })}
         />
       </div>
       <ol className="overflow-hidden rounded-xl border border-line bg-surface">
@@ -99,7 +104,7 @@ export default function ArtistPage({
                   {track.title}
                 </span>
                 <span className="block truncate text-xs text-fg-3">
-                  {track.album || "Без альбома"}
+                  {track.album || t("Без альбома")}
                 </span>
               </span>
               <span className="font-mono text-xs text-fg-3">{track.plays}</span>

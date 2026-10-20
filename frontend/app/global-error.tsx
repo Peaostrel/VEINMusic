@@ -1,15 +1,20 @@
 "use client";
 
+import { activeTranslator } from "@/app/lib/i18n/active";
+
 /**
  * Last resort when the root layout itself fails: renders its own document,
- * without the site's CSS, so the colours are inline.
+ * without the site's CSS, so the colours are inline. It is outside the
+ * language provider: the translator the provider set before the crash (in
+ * the browser) still knows the visitor's language; otherwise Russian.
  */
 export default function GlobalError({
   error,
   retry,
 }: Readonly<{ error: Error & { digest?: string }; retry: () => void }>) {
+  const t = activeTranslator();
   return (
-    <html lang="ru">
+    <html lang={t.lang}>
       <body
         style={{
           margin: 0,
@@ -24,18 +29,18 @@ export default function GlobalError({
           padding: 16,
         }}
       >
-        <title>Ошибка — VEINMusic</title>
+        <title>{t("Ошибка — VEINMusic")}</title>
         <main role="alert" style={{ maxWidth: 420 }}>
           <p style={{ fontSize: 48, color: "#80848c", margin: 0 }}>:(</p>
           <h1 style={{ fontSize: 20, margin: "12px 0 8px" }}>
-            VEINMusic не загрузился
+            {t("VEINMusic не загрузился")}
           </h1>
           <p style={{ fontSize: 14, color: "#a9acb2", lineHeight: 1.5 }}>
-            Попробуйте ещё раз через минуту.
+            {t("Попробуйте ещё раз через минуту.")}
           </p>
           {error.digest ? (
             <p style={{ fontSize: 12, color: "#80848c" }}>
-              Если ошибка повторяется, напишите нам и приложите код:{" "}
+              {t("Если ошибка повторяется, напишите нам и приложите код:")}{" "}
               <span style={{ fontFamily: "monospace" }}>{error.digest}</span>
             </p>
           ) : null}
@@ -54,7 +59,7 @@ export default function GlobalError({
               cursor: "pointer",
             }}
           >
-            Попробовать ещё раз
+            {t("Попробовать ещё раз")}
           </button>
         </main>
       </body>

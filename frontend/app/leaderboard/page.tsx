@@ -12,6 +12,8 @@ import {
 } from "@/components/ui";
 import { API_URL } from "@/app/lib/api";
 import { formatNumber } from "@/app/lib/plural";
+import { msg } from "@/app/lib/i18n/core";
+import { useT } from "@/app/lib/i18n/client";
 import { isValidUser } from "@/app/lib/theme";
 import type { LeaderboardEntry, MyRank } from "@/app/lib/types";
 
@@ -19,9 +21,9 @@ type Scope = "all" | "following";
 type Period = "7d" | "30d" | "all";
 
 const PERIOD_SUBTITLE: Record<Period, string> = {
-  "7d": "По опыту за неделю",
-  "30d": "По опыту за месяц",
-  all: "По опыту за всё время",
+  "7d": msg("По опыту за неделю"),
+  "30d": msg("По опыту за месяц"),
+  all: msg("По опыту за всё время"),
 };
 
 function useBoard(scope: Scope, period: Period, signedIn: boolean) {
@@ -52,8 +54,9 @@ function Podium({
   users,
   me,
 }: Readonly<{ users: LeaderboardEntry[]; me: string | null }>) {
+  const t = useT();
   return (
-    <ol aria-label="Первые места" className="grid gap-3 sm:grid-cols-3">
+    <ol aria-label={t("Первые места")} className="grid gap-3 sm:grid-cols-3">
       {users.map((u, i) => (
         <li key={u.username}>
           <Link
@@ -66,7 +69,9 @@ function Podium({
               <span className={i === 0 ? "text-accent" : "text-fg-2"}>
                 #{u.rank}
               </span>
-              <span className="text-fg-3">ур. {u.level}</span>
+              <span className="text-fg-3">
+                {t("ур. {level}", { level: u.level })}
+              </span>
             </div>
             <div className="flex items-center gap-3">
               <Avatar src={u.avatar_url} seed={u.username} size={44} />
@@ -81,7 +86,7 @@ function Podium({
                 </span>
                 <span className="truncate font-mono text-xs text-fg-3">
                   @{u.username}
-                  {u.username === me ? " · вы" : ""}
+                  {u.username === me ? ` · ${t("вы")}` : ""}
                 </span>
               </span>
             </div>
@@ -103,8 +108,9 @@ function Rows({
   top,
   me,
 }: Readonly<{ users: LeaderboardEntry[]; top: number; me: string | null }>) {
+  const t = useT();
   return (
-    <ol aria-label="Остальные места" className="border-t border-line-soft">
+    <ol aria-label={t("Остальные места")} className="border-t border-line-soft">
       {users.map((u) => {
         const mine = u.username === me;
         return (
@@ -130,7 +136,7 @@ function Rows({
                   />
                   {mine && (
                     <span className="ml-2 font-mono text-[11px] text-accent">
-                      это вы
+                      {t("это вы")}
                     </span>
                   )}
                 </span>
@@ -140,7 +146,7 @@ function Rows({
               </span>
             </Link>
             <span className="hidden font-mono text-xs text-fg-2 md:block">
-              ур. {u.level}
+              {t("ур. {level}", { level: u.level })}
             </span>
             <Meter
               value={u.total_xp}
@@ -159,6 +165,7 @@ function Rows({
 }
 
 function MyPlace({ rank }: Readonly<{ rank: MyRank | null }>) {
+  const t = useT();
   if (!rank?.rank) return null;
   return (
     <section
@@ -166,19 +173,22 @@ function MyPlace({ rank }: Readonly<{ rank: MyRank | null }>) {
       className="flex flex-col gap-3.5 rounded-xl border border-line bg-surface p-5"
     >
       <h2 id="me-title" className="text-sm font-semibold">
-        Ваше место
+        {t("Ваше место")}
       </h2>
       <div className="flex items-baseline gap-2.5">
         <span className="font-mono text-4xl font-medium">#{rank.rank}</span>
         <span className="text-[13px] text-fg-2">
-          из {formatNumber(rank.total)}
+          {t("из {total}", { total: formatNumber(rank.total) })}
         </span>
       </div>
       {rank.ahead ? (
         <div className="flex flex-col gap-1.5">
           <div className="flex justify-between gap-3 text-xs text-fg-2">
             <span className="truncate">
-              до #{rank.rank - 1} — {rank.ahead.display_name}
+              {t("до #{rank} — {name}", {
+                rank: rank.rank - 1,
+                name: rank.ahead.display_name,
+              })}
             </span>
             <span className="shrink-0 font-mono">
               {formatNumber(rank.ahead.gap_xp)} XP
@@ -191,31 +201,33 @@ function MyPlace({ rank }: Readonly<{ rank: MyRank | null }>) {
           />
         </div>
       ) : (
-        <p className="text-xs text-fg-2">Вы на первом месте. Держитесь.</p>
+        <p className="text-xs text-fg-2">
+          {t("Вы на первом месте. Держитесь.")}
+        </p>
       )}
       <p className="text-xs text-fg-3">
-        Опыт копится за каждый дослушанный трек.
+        {t("Опыт копится за каждый дослушанный трек.")}
       </p>
     </section>
   );
 }
 
-const rules: [string, React.ReactNode][] = [
-  ["xp", "Опыт даётся за трек, дослушанный до 85% длины."],
-  ["level", "Каждые 100 XP — новый уровень."],
-  [
-    "ban",
-    <>
-      Накрутка прослушиваний — бан, см.{" "}
-      <Link href="/terms" className="underline underline-offset-2">
-        условия
-      </Link>
-      {"."}
-    </>,
-  ],
-];
-
 export default function Leaderboard() {
+  const t = useT();
+  const rules: [string, React.ReactNode][] = [
+    ["xp", t("Опыт даётся за трек, дослушанный до 85% длины.")],
+    ["level", t("Каждые 100 XP — новый уровень.")],
+    [
+      "ban",
+      <>
+        {t("Накрутка прослушиваний — бан, см.")}{" "}
+        <Link href="/terms" className="underline underline-offset-2">
+          {t("условия")}
+        </Link>
+        {"."}
+      </>,
+    ],
+  ];
   const [me, setMe] = useState<string | null>(null);
   const [scope, setScope] = useState<Scope>("all");
   const [period, setPeriod] = useState<Period>("all");
@@ -239,16 +251,16 @@ export default function Leaderboard() {
   const top = users[0]?.total_xp || 1;
 
   let body: React.ReactNode;
-  if (loading) body = <Loading label="Считаем опыт…" />;
+  if (loading) body = <Loading label={t("Считаем опыт…")} />;
   else if (users.length === 0)
     body =
       scope === "following" ? (
-        <EmptyState title="Тут пока только вы">
-          Подпишитесь на друзей, чтобы соревноваться с ними.
+        <EmptyState title={t("Тут пока только вы")}>
+          {t("Подпишитесь на друзей, чтобы соревноваться с ними.")}
         </EmptyState>
       ) : (
-        <EmptyState title="Никто ещё не слушал музыку">
-          Будьте первым.
+        <EmptyState title={t("Никто ещё не слушал музыку")}>
+          {t("Будьте первым.")}
         </EmptyState>
       );
   else
@@ -263,34 +275,36 @@ export default function Leaderboard() {
     <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-10 px-4 py-8 sm:px-8 lg:flex-row lg:px-12 lg:py-10">
       <section className="flex min-w-0 flex-1 flex-col gap-6">
         <PageHeader
-          title="Топ слушателей"
-          subtitle={`${PERIOD_SUBTITLE[period]} · обновляется раз в минуту`}
+          title={t("Топ слушателей")}
+          subtitle={t("{period} · обновляется раз в минуту", {
+            period: t(PERIOD_SUBTITLE[period]),
+          })}
           actions={
             <div className="flex flex-wrap justify-end gap-2">
               <Segmented
-                label="Период рейтинга"
+                label={t("Период рейтинга")}
                 value={period}
                 onChange={(value) => {
                   setLoading(true);
                   setPeriod(value);
                 }}
                 options={[
-                  { id: "7d", label: "Неделя" },
-                  { id: "30d", label: "Месяц" },
-                  { id: "all", label: "Всё время" },
+                  { id: "7d", label: t("Неделя") },
+                  { id: "30d", label: t("Месяц") },
+                  { id: "all", label: t("Всё время") },
                 ]}
               />
               {me && (
                 <Segmented
-                  label="Кого показывать"
+                  label={t("Кого показывать")}
                   value={scope}
                   onChange={(v) => {
                     setLoading(true);
                     setScope(v);
                   }}
                   options={[
-                    { id: "all", label: "Все" },
-                    { id: "following", label: "Подписки" },
+                    { id: "all", label: t("Все") },
+                    { id: "following", label: t("Подписки") },
                   ]}
                 />
               )}
@@ -304,7 +318,7 @@ export default function Leaderboard() {
         <MyPlace rank={myRank} />
         <section aria-labelledby="xp-title" className="flex flex-col gap-3">
           <h2 id="xp-title" className="text-sm font-semibold">
-            Как считается опыт
+            {t("Как считается опыт")}
           </h2>
           <ol className="flex flex-col gap-2.5 text-[13px] leading-normal text-fg-2">
             {rules.map(([id, r], i) => (

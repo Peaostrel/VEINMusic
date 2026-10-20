@@ -22,8 +22,11 @@ import UserCard from "./components/UserCard";
 import { type AdminTab, useAdminPanel } from "./useAdminPanel";
 import type { ReportPage } from "./types";
 import { useAdminResource } from "./ui";
+import { useT } from "@/app/lib/i18n/client";
+import { msg } from "@/app/lib/i18n/core";
 
 export default function AdminPanel() {
+  const t = useT();
   const admin = useAdminPanel();
   const [openUser, setOpenUser] = useState<string | null>(null);
   // User whose scrobbles the "Прослушивания" tab opens with
@@ -45,7 +48,7 @@ export default function AdminPanel() {
     handleFlushCache,
   } = admin;
 
-  if (loading) return <Loading label="Загружаем панель управления…" />;
+  if (loading) return <Loading label={t("Загружаем панель управления…")} />;
 
   if (error) {
     return (
@@ -53,21 +56,26 @@ export default function AdminPanel() {
         <ShieldAlert className="h-8 w-8 text-fg-3" aria-hidden="true" />
         <h1 className="text-2xl font-semibold">
           {errorStatus === 401 || errorStatus === 403
-            ? "Доступ ограничен"
-            : "Не удалось загрузить админку"}
+            ? t("Доступ ограничен")
+            : t("Не удалось загрузить админку")}
         </h1>
         <p className="text-sm text-fg-2">{error}</p>
-        {errorStatus === 403 && error.includes("двухфакторную") && (
-          <Link
-            href="/settings?tab=security"
-            className={`${btn.primary} ${btn.md}`}
-          >
-            Включить двухфакторную защиту
-          </Link>
-        )}
+        {errorStatus === 403 &&
+          (error.includes("двухфакторную") ||
+            error ===
+              t(
+                "Для доступа администратора включите двухфакторную защиту в настройках безопасности",
+              )) && (
+            <Link
+              href="/settings?tab=security"
+              className={`${btn.primary} ${btn.md}`}
+            >
+              {t("Включить двухфакторную защиту")}
+            </Link>
+          )}
         {errorStatus === 401 && (
           <Link href="/auth" className={`${btn.primary} ${btn.md}`}>
-            Войти в аккаунт
+            {t("Войти в аккаунт")}
           </Link>
         )}
         <button
@@ -75,14 +83,14 @@ export default function AdminPanel() {
           onClick={() => void loadAllData()}
           className={`${btn.secondary} ${btn.md}`}
         >
-          Повторить загрузку
+          {t("Повторить загрузку")}
         </button>
         <button
           type="button"
           onClick={() => router.push("/")}
           className={`${btn.secondary} ${btn.md} mt-4`}
         >
-          На главную
+          {t("На главную")}
         </button>
       </div>
     );
@@ -91,8 +99,8 @@ export default function AdminPanel() {
   return (
     <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-6 px-4 py-8 sm:px-8 lg:px-12 lg:py-10">
       <PageHeader
-        title="Админка"
-        subtitle="Пользователи, каталог, модерация и состояние системы"
+        title={t("Админка")}
+        subtitle={t("Пользователи, каталог, модерация и состояние системы")}
         actions={
           <>
             <button
@@ -101,7 +109,7 @@ export default function AdminPanel() {
               className={`${btn.secondary} ${btn.sm}`}
             >
               <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-              Сбросить кэш
+              {t("Сбросить кэш")}
             </button>
             <button
               type="button"
@@ -109,42 +117,42 @@ export default function AdminPanel() {
               className={`${btn.secondary} ${btn.sm}`}
             >
               <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-              Обновить
+              {t("Обновить")}
             </button>
           </>
         }
       />
 
       <nav
-        aria-label="Разделы админки"
+        aria-label={t("Разделы админки")}
         className="hide-scrollbar flex gap-x-6 overflow-x-auto border-b border-line-soft md:flex-wrap md:overflow-visible"
       >
         {(
           [
-            { id: "overview", label: "Обзор" },
-            { id: "users", label: "Пользователи", count: users.length },
+            { id: "overview", label: msg("Обзор") },
+            { id: "users", label: msg("Пользователи"), count: users.length },
             {
               id: "antifraud",
-              label: "Антифрод",
+              label: msg("Антифрод"),
               count: suspiciousUsers.length || undefined,
               alert: suspiciousUsers.length > 0,
             },
             {
               id: "reports",
-              label: "Жалобы",
+              label: msg("Жалобы"),
               count: openReportCount || undefined,
               alert: openReportCount > 0,
             },
-            { id: "moderation", label: "Модерация" },
-            { id: "scrobbles", label: "Прослушивания" },
-            { id: "integrations", label: "Интеграции" },
-            { id: "catalog", label: "Каталог" },
-            { id: "gamification", label: "Геймификация" },
-            { id: "announcements", label: "Оповещения и флаги" },
-            { id: "security", label: "Безопасность" },
-            { id: "system", label: "Система" },
-            { id: "logs", label: "Логи" },
-            { id: "audit", label: "Журнал" },
+            { id: "moderation", label: msg("Модерация") },
+            { id: "scrobbles", label: msg("Прослушивания") },
+            { id: "integrations", label: msg("Интеграции") },
+            { id: "catalog", label: msg("Каталог") },
+            { id: "gamification", label: msg("Геймификация") },
+            { id: "announcements", label: msg("Оповещения и флаги") },
+            { id: "security", label: msg("Безопасность") },
+            { id: "system", label: msg("Система") },
+            { id: "logs", label: msg("Логи") },
+            { id: "audit", label: msg("Журнал") },
           ] satisfies {
             id: AdminTab;
             label: string;
@@ -165,7 +173,7 @@ export default function AdminPanel() {
                   : "border-transparent text-fg-2 hover:text-fg"
               }`}
             >
-              {tab.label}
+              {t(tab.label)}
               {tab.count !== undefined && (
                 <span
                   className={`rounded px-1.5 font-mono text-[11px] ${

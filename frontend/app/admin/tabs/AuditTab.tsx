@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/app/lib/i18n/client";
 import { useState } from "react";
 import { ScrollText } from "lucide-react";
 import type { AuditEntry, AuditPage } from "../types";
@@ -32,6 +33,7 @@ function Details({ value }: Readonly<{ value: AuditEntry["details"] }>) {
 
 /** Who changed what in the admin panel. */
 export default function AuditTab() {
+  const t = useT();
   const [action, setAction] = useState("");
   const [admin, setAdmin] = useState("");
   const [target, setTarget] = useState("");
@@ -55,17 +57,17 @@ export default function AuditTab() {
             <ScrollText className="w-4 h-4 text-danger" aria-hidden="true" />
           }
         >
-          Журнал действий администраторов
+          {t("Журнал действий администраторов")}
         </PanelTitle>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <label>
-            <span className={labelClass}>Действие</span>
+            <span className={labelClass}>{t("Действие")}</span>
             <select
               value={action}
               onChange={(e) => resetPage(setAction)(e.target.value)}
               className={inputClass}
             >
-              <option value="">Все</option>
+              <option value="">{t("Все")}</option>
               {(data?.actions ?? []).map((a) => (
                 <option key={a} value={a}>
                   {a}
@@ -74,20 +76,20 @@ export default function AuditTab() {
             </select>
           </label>
           <label>
-            <span className={labelClass}>Администратор</span>
+            <span className={labelClass}>{t("Администратор")}</span>
             <input
               value={admin}
               onChange={(e) => resetPage(setAdmin)(e.target.value.trim())}
-              placeholder="ник"
+              placeholder={t("ник")}
               className={inputClass}
             />
           </label>
           <label>
-            <span className={labelClass}>Объект</span>
+            <span className={labelClass}>{t("Объект")}</span>
             <input
               value={target}
               onChange={(e) => resetPage(setTarget)(e.target.value)}
-              placeholder="пользователь, трек, флаг…"
+              placeholder={t("пользователь, трек, флаг…")}
               className={inputClass}
             />
           </label>
@@ -100,11 +102,11 @@ export default function AuditTab() {
         <table className="w-full text-left text-xs text-fg-2">
           <thead className="bg-[#0f0f12] text-fg-2 font-mono text-[11px] border-b border-line-soft">
             <tr>
-              <th className="py-3 px-4">Когда</th>
-              <th className="py-3 px-4">Кто</th>
-              <th className="py-3 px-4">Действие</th>
-              <th className="py-3 px-4">Объект</th>
-              <th className="py-3 px-4">Подробности</th>
+              <th className="py-3 px-4">{t("Когда")}</th>
+              <th className="py-3 px-4">{t("Кто")}</th>
+              <th className="py-3 px-4">{t("Действие")}</th>
+              <th className="py-3 px-4">{t("Объект")}</th>
+              <th className="py-3 px-4">{t("Подробности")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
@@ -126,7 +128,7 @@ export default function AuditTab() {
             {!loading && data?.items.length === 0 && (
               <tr>
                 <td colSpan={5} className="py-6 text-center text-fg-2">
-                  Записей нет
+                  {t("Записей нет")}
                 </td>
               </tr>
             )}

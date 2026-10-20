@@ -21,8 +21,10 @@ import {
   btn,
   input,
 } from "@/components/ui";
+import { useT } from "@/app/lib/i18n/client";
 
 export default function GoalsPage() {
+  const t = useT();
   const router = useRouter();
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [week, setWeek] = useState<DetailedStats | null>(null);
@@ -59,9 +61,9 @@ export default function GoalsPage() {
         if (monthRes.ok) setMonth(await monthRes.json());
         if (profileRes.ok) setProfile(await profileRes.json());
       })
-      .catch(() => setStatus("Не удалось загрузить цели"))
+      .catch(() => setStatus(t("Не удалось загрузить цели")))
       .finally(() => setLoading(false));
-  }, [router]);
+  }, [router, t]);
 
   const progress = useMemo(
     () =>
@@ -87,10 +89,10 @@ export default function GoalsPage() {
         const saved = await response.json();
         setPreferences(saved);
         storePreferences(saved);
-        setStatus("Цели сохранены");
-      } else setStatus("Не удалось сохранить цели");
+        setStatus(t("Цели сохранены"));
+      } else setStatus(t("Не удалось сохранить цели"));
     } catch {
-      setStatus("Не удалось сохранить цели");
+      setStatus(t("Не удалось сохранить цели"));
     }
   };
   const add = () => {
@@ -99,7 +101,7 @@ export default function GoalsPage() {
     const goal: Goal = {
       id: `${Date.now()}-${newType}`,
       type: newType,
-      title: template.title,
+      title: t(template.title),
       target: Math.max(1, newTarget),
       active: true,
     };
@@ -127,12 +129,12 @@ export default function GoalsPage() {
       },
     });
 
-  if (loading || !preferences) return <Loading label="Загружаем цели…" />;
+  if (loading || !preferences) return <Loading label={t("Загружаем цели…")} />;
   return (
     <main className="mx-auto flex w-full max-w-[900px] flex-col gap-8 px-4 py-8 sm:px-8 lg:py-10">
       <PageHeader
-        title="Музыкальные цели"
-        subtitle="Личные ориентиры без соревнования с другими"
+        title={t("Музыкальные цели")}
+        subtitle={t("Личные ориентиры без соревнования с другими")}
       />
       {status && (
         <output aria-live="polite" className="text-sm text-ok">
@@ -141,9 +143,10 @@ export default function GoalsPage() {
       )}
       <section className="grid gap-3">
         {preferences.goals.items.length === 0 ? (
-          <EmptyState title="Целей пока нет">
-            Создайте первую цель — прогресс посчитается по уже записанной
-            истории.
+          <EmptyState title={t("Целей пока нет")}>
+            {t(
+              "Создайте первую цель — прогресс посчитается по уже записанной истории.",
+            )}
           </EmptyState>
         ) : (
           preferences.goals.items.map((goal) => {
@@ -177,20 +180,20 @@ export default function GoalsPage() {
                       }
                       onBlur={(event) =>
                         update(goal.id, {
-                          title: event.target.value || "Музыкальная цель",
+                          title: event.target.value || t("Музыкальная цель"),
                         })
                       }
                       className="w-full bg-transparent text-sm font-semibold outline-none"
                     />
                     <p className="mt-1 text-xs text-fg-3">
-                      {
+                      {t(
                         GOAL_TYPES.find((item) => item.value === goal.type)
-                          ?.label
-                      }
+                          ?.label ?? "",
+                      )}
                     </p>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <label className="flex items-center gap-2 text-xs text-fg-2">
-                        <span>Цель</span>
+                        <span>{t("Цель")}</span>
                         <input
                           type="number"
                           min={1}
@@ -240,7 +243,7 @@ export default function GoalsPage() {
                         ) : (
                           <Play className="h-3.5 w-3.5" />
                         )}
-                        {goal.active ? "Приостановить" : "Продолжить"}
+                        {goal.active ? t("Приостановить") : t("Продолжить")}
                       </button>
                     </div>
                     <div className="mt-4 flex items-center gap-3">
@@ -257,18 +260,20 @@ export default function GoalsPage() {
                       </span>
                     </div>
                     {done && (
-                      <p className="mt-2 text-xs text-ok">Цель выполнена</p>
+                      <p className="mt-2 text-xs text-ok">
+                        {t("Цель выполнена")}
+                      </p>
                     )}
                     {!goal.active && (
                       <p className="mt-2 text-xs text-fg-3">
-                        Цель приостановлена
+                        {t("Цель приостановлена")}
                       </p>
                     )}
                   </div>
                   <button
                     type="button"
                     onClick={() => remove(goal.id)}
-                    aria-label="Удалить цель"
+                    aria-label={t("Удалить цель")}
                     className="rounded p-2 text-fg-3 hover:text-danger"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -280,7 +285,7 @@ export default function GoalsPage() {
         )}
       </section>
       <section className="rounded-xl border border-line bg-surface p-5">
-        <h2 className="text-sm font-semibold">Новая цель</h2>
+        <h2 className="text-sm font-semibold">{t("Новая цель")}</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_140px_auto]">
           <select
             value={newType}
@@ -296,7 +301,7 @@ export default function GoalsPage() {
           >
             {GOAL_TYPES.map((item) => (
               <option key={item.value} value={item.value}>
-                {item.label}
+                {t(item.label)}
               </option>
             ))}
           </select>
@@ -306,7 +311,7 @@ export default function GoalsPage() {
             max={100000}
             value={newTarget}
             onChange={(event) => setNewTarget(Number(event.target.value))}
-            aria-label="Целевое значение"
+            aria-label={t("Целевое значение")}
             className={`${input} h-10 font-mono`}
           />
           <button
@@ -316,7 +321,7 @@ export default function GoalsPage() {
             className={`${btn.primary} ${btn.md}`}
           >
             <Plus className="h-4 w-4" />
-            Добавить
+            {t("Добавить")}
           </button>
         </div>
       </section>

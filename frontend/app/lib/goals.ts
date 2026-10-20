@@ -1,12 +1,14 @@
 /** Personal goals (stored in preferences) and how far along they are. */
 import { useEffect, useState } from "react";
 import { API_URL } from "./api";
+import { msg } from "./i18n/core";
 import { plural } from "./plural";
 import type { UserPreferences } from "./types";
 
 export type Goal = UserPreferences["goals"]["items"][number];
 export type GoalType = Goal["type"];
 
+/** `label` and `title` are Russian source text: show them with t(). */
 export const GOAL_TYPES: {
   value: GoalType;
   label: string;
@@ -15,26 +17,26 @@ export const GOAL_TYPES: {
 }[] = [
   {
     value: "weekly_scrobbles",
-    label: "Прослушивания за неделю",
-    title: "Музыкальная неделя",
+    label: msg("Прослушивания за неделю"),
+    title: msg("Музыкальная неделя"),
     defaultTarget: 50,
   },
   {
     value: "monthly_minutes",
-    label: "Минуты за месяц",
-    title: "Месяц в музыке",
+    label: msg("Минуты за месяц"),
+    title: msg("Месяц в музыке"),
     defaultTarget: 1000,
   },
   {
     value: "new_artists",
-    label: "Новые артисты за месяц",
-    title: "Открыть новых артистов",
+    label: msg("Новые артисты за месяц"),
+    title: msg("Открыть новых артистов"),
     defaultTarget: 10,
   },
   {
     value: "streak",
-    label: "Серия дней",
-    title: "Не прерывать серию",
+    label: msg("Серия дней"),
+    title: msg("Не прерывать серию"),
     defaultTarget: 7,
   },
 ];

@@ -2,8 +2,10 @@
 
 import { Award, X } from "lucide-react";
 import type { ProfileViewProps } from "./useProfilePage";
+import { useT } from "@/app/lib/i18n/client";
 
 export function ProfileToasts({ toasts, removeToast }: ProfileViewProps) {
+  const tr = useT();
   return (
     <div
       aria-live="polite"
@@ -28,9 +30,9 @@ export function ProfileToasts({ toasts, removeToast }: ProfileViewProps) {
           <span className="flex min-w-0 flex-col gap-0.5">
             <span className="flex items-center gap-1.5 text-[11px] text-accent">
               <Award className="h-3.5 w-3.5" aria-hidden="true" />
-              Новое достижение
+              {tr("Новое достижение")}
             </span>
-            <span className="truncate text-sm font-medium">{t.name}</span>
+            <span className="truncate text-sm font-medium">{tr(t.name)}</span>
             {t.xp > 0 && (
               <span className="font-mono text-[11px] text-ok">+{t.xp} XP</span>
             )}
@@ -38,7 +40,7 @@ export function ProfileToasts({ toasts, removeToast }: ProfileViewProps) {
           <button
             type="button"
             onClick={() => removeToast(t.id)}
-            aria-label="Закрыть уведомление"
+            aria-label={tr("Закрыть уведомление")}
             className="absolute right-2 top-2 rounded p-1 text-fg-3 hover:text-fg"
           >
             <X className="h-3.5 w-3.5" aria-hidden="true" />

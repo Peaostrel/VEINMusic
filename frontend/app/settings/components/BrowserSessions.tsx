@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { qualityRequest } from "@/app/lib/qualityApi";
 import { btn } from "@/components/ui";
+import { useT } from "@/app/lib/i18n/client";
 interface Session {
   id: string;
   device: string;
@@ -11,6 +12,7 @@ interface Session {
   created_at: string;
 }
 export default function BrowserSessions() {
+  const t = useT();
   const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [message, setMessage] = useState("");
@@ -27,11 +29,11 @@ export default function BrowserSessions() {
       .catch((cause: unknown) =>
         setMessage(
           cause instanceof Error
-            ? cause.message
-            : "Не удалось загрузить устройства",
+            ? t(cause.message)
+            : t("Не удалось загрузить устройства"),
         ),
       );
-  }, []);
+  }, [t]);
   const revoke = async (session: Session) => {
     setBusy(true);
     try {
@@ -41,11 +43,13 @@ export default function BrowserSessions() {
       if (session.current) router.push("/auth");
       else {
         setSessions((items) => items.filter((item) => item.id !== session.id));
-        setMessage("Сессия завершена.");
+        setMessage(t("Сессия завершена."));
       }
     } catch (cause) {
       setMessage(
-        cause instanceof Error ? cause.message : "Не удалось завершить сессию",
+        cause instanceof Error
+          ? t(cause.message)
+          : t("Не удалось завершить сессию"),
       );
     } finally {
       setBusy(false);
@@ -53,14 +57,15 @@ export default function BrowserSessions() {
   };
   return (
     <section className="space-y-3 rounded-xl border border-line p-4">
-      <h3 className="font-semibold">Браузеры и устройства</h3>
+      <h3 className="font-semibold">{t("Браузеры и устройства")}</h3>
       <output aria-live="polite" className="block text-sm">
         {message}
       </output>
       {legacy && (
         <p className="text-sm text-fg-3">
-          Этот вход сделан до появления списка устройств. Для отзыва старых
-          входов используйте выход со всех устройств.
+          {t(
+            "Этот вход сделан до появления списка устройств. Для отзыва старых входов используйте выход со всех устройств.",
+          )}
         </p>
       )}
       {sessions.map((session) => (
@@ -70,12 +75,16 @@ export default function BrowserSessions() {
         >
           <div>
             <p>
-              {session.device}
-              {session.current && " · текущая сессия"}
+              {session.device
+                .split(" · ")
+                .map((part) => t(part))
+                .join(" · ")}
+              {session.current && ` · ${t("текущая сессия")}`}
             </p>
             <p className="text-xs text-fg-3">
-              Последняя активность:{" "}
-              {new Date(session.last_seen_at).toLocaleString("ru-RU")}
+              {t("Последняя активность: {time}", {
+                time: new Date(session.last_seen_at).toLocaleString(t.locale),
+              })}
             </p>
           </div>
           <button
@@ -85,7 +94,7 @@ export default function BrowserSessions() {
               void revoke(session);
             }}
           >
-            Завершить сессию
+            {t("Завершить сессию")}
           </button>
         </div>
       ))}

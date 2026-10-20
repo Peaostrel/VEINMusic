@@ -13,6 +13,8 @@ import {
   Trophy,
 } from "lucide-react";
 import { apiJson } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/client";
+import type { Translator } from "@/app/lib/i18n/core";
 import type { NotificationList, SocialNotification } from "@/app/lib/types";
 import { useVisiblePolling } from "@/app/lib/usePolling";
 import ReportDialog, { type ReportTarget } from "@/components/ReportDialog";
@@ -29,17 +31,36 @@ const KIND_ICON: Record<SocialNotification["kind"], typeof Bell> = {
   achievement: Trophy,
 };
 
-function timeAgo(iso: string | null): string {
+function timeAgo(iso: string | null, t: Translator): string {
   if (!iso) return "";
   const minutes = Math.max(
     0,
     Math.round((Date.now() - new Date(iso).getTime()) / 60000),
   );
-  if (minutes < 1) return "только что";
-  if (minutes < 60) return `${minutes} мин назад`;
+  if (minutes < 1) return t("только что");
+  if (minutes < 60) return t("{n} мин назад", { n: minutes });
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} ч назад`;
-  return new Date(iso).toLocaleDateString("ru-RU");
+  if (hours < 24) return t("{n} ч назад", { n: hours });
+  return new Date(iso).toLocaleDateString(t.locale);
+}
+
+/**
+ * The notification's sentence. Likes, comments and follows are rebuilt from
+ * their fields (the API composes them in Russian, the same way as here);
+ * other kinds carry a fixed text from the server, translated if known.
+ */
+function notificationText(n: SocialNotification, t: Translator): string {
+  const actor = n.actor.username;
+  const target = n.track?.title
+    ? t("«{title}»", { title: n.track.title })
+    : t("ваше прослушивание");
+  if (n.kind === "like")
+    return t("{actor} оценил(а) {target}", { actor, target });
+  if (n.kind === "comment")
+    return t("{actor} прокомментировал(а) {target}", { actor, target });
+  if (n.kind === "follow")
+    return t("{actor} подписался(ась) на вас", { actor });
+  return t(n.text);
 }
 
 function notificationHref(notification: SocialNotification): string {
@@ -57,6 +78,7 @@ function notificationHref(notification: SocialNotification): string {
 export default function NotificationsBell({
   align = "right",
 }: Readonly<{ align?: "left" | "right" }>) {
+  const t = useT();
   const [data, setData] = useState<NotificationList>({ items: [], unread: 0 });
   const [open, setOpen] = useState(false);
   const [report, setReport] = useState<ReportTarget | null>(null);
@@ -117,8 +139,8 @@ export default function NotificationsBell({
 
   const label =
     data.unread > 0
-      ? `Уведомления: ${data.unread} непрочитанных`
-      : "Уведомления";
+      ? t("Уведомления: {n} непрочитанных", { n: data.unread })
+      : t("Уведомления");
 
   return (
     <div className="relative" ref={rootRef}>
@@ -144,16 +166,17 @@ export default function NotificationsBell({
 
       {open && (
         <section
-          aria-label="Уведомления"
+          aria-label={t("Уведомления")}
           className={`absolute ${align === "left" ? "left-0" : "right-0"} top-[calc(100%+8px)] z-50 max-h-[420px] w-[320px] overflow-y-auto rounded-xl border border-line bg-surface-2 shadow-[0_12px_32px_rgba(0,0,0,0.45)]`}
         >
           <h2 className="border-b border-line px-4 py-3 text-sm font-semibold text-fg">
-            Уведомления
+            {t("Уведомления")}
           </h2>
           {data.items.length === 0 ? (
             <p className="px-4 py-6 text-center text-sm text-fg-2">
-              Пока ничего нет. Здесь появятся лайки, комментарии и новые
-              подписчики.
+              {t(
+                "Пока ничего нет. Здесь появятся лайки, комментарии и новые подписчики.",
+              )}
             </p>
           ) : (
             <ul>
@@ -172,7 +195,7 @@ export default function NotificationsBell({
                       />
                       <span className="min-w-0 text-sm">
                         <span className="block break-words text-fg">
-                          {n.text}
+                          {notificationText(n, t)}
                         </span>
                         {n.message &&
                           n.kind !== "system" &&
@@ -185,7 +208,7 @@ export default function NotificationsBell({
                             </span>
                           )}
                         <span className="mt-0.5 block font-mono text-[11px] text-fg-3">
-                          {timeAgo(n.created_at)}
+                          {timeAgo(n.created_at, t)}
                         </span>
                       </span>
                     </Link>
@@ -201,8 +224,10 @@ export default function NotificationsBell({
                             text: n.message,
                           });
                         }}
-                        aria-label={`Пожаловаться на комментарий ${n.actor.username}`}
-                        title="Пожаловаться"
+                        aria-label={t("Пожаловаться на комментарий {user}", {
+                          user: n.actor.username,
+                        })}
+                        title={t("Пожаловаться")}
                         className="absolute right-2 top-2.5 flex h-7 w-7 items-center justify-center rounded-md text-fg-3 transition-colors hover:bg-line hover:text-danger"
                       >
                         <Flag className="h-3.5 w-3.5" aria-hidden="true" />

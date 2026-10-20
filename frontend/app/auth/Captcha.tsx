@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { API_URL } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/client";
 
 /**
  * The captcha the API asks for (Yandex SmartCaptcha or Cloudflare
@@ -91,6 +92,8 @@ function whenDefined<T>(get: () => T | undefined): Promise<T | undefined> {
 export default function Captcha({
   onToken,
 }: Readonly<{ onToken: (token: string) => void }>) {
+  const t = useT();
+  const lang = t.lang;
   const box = useRef<HTMLDivElement>(null);
   const [enabled, setEnabled] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -108,8 +111,8 @@ export default function Captcha({
         box.current.replaceChildren();
         api.render(box.current, {
           sitekey: site_key,
-          hl: "ru",
-          language: "ru",
+          hl: lang,
+          language: lang,
           callback: (token: string) => onToken(token),
           "expired-callback": () => onToken(""),
         });
@@ -120,13 +123,14 @@ export default function Captcha({
     return () => {
       active = false;
     };
-  }, [onToken]);
+  }, [onToken, lang]);
 
   if (failed)
     return (
       <p className="text-[13px] text-danger">
-        Не удалось загрузить проверку «я не робот». Обновите страницу или
-        отключите блокировщик для этого сайта.
+        {t(
+          "Не удалось загрузить проверку «я не робот». Обновите страницу или отключите блокировщик для этого сайта.",
+        )}
       </p>
     );
   // Kept in the tree (hidden) until the config arrives, so the ref is set

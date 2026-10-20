@@ -14,6 +14,7 @@ import {
 import type { useRouter } from "next/navigation";
 import { btn } from "@/components/ui";
 import ReportDialog from "@/components/ReportDialog";
+import { useT } from "@/app/lib/i18n/client";
 
 export interface ProfileActionsProps {
   isLogged: boolean;
@@ -45,10 +46,11 @@ export function ProfileActions({
   onListenTogether,
   onShowCompatibility,
 }: Readonly<ProfileActionsProps>) {
+  const t = useT();
   const [reporting, setReporting] = useState(false);
-  let importLabel = "Импорт Last.fm";
-  if (importLoading) importLabel = "Запуск…";
-  else if (hasImportedLastfm) importLabel = "Синхронизировать Last.fm";
+  let importLabel = t("Импорт Last.fm");
+  if (importLoading) importLabel = t("Запуск…");
+  else if (hasImportedLastfm) importLabel = t("Синхронизировать Last.fm");
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -59,7 +61,7 @@ export function ProfileActions({
           aria-pressed={isFollowing}
           className={`${isFollowing ? btn.secondary : btn.primary} h-9 px-4`}
         >
-          {isFollowing ? "Отписаться" : "Подписаться"}
+          {isFollowing ? t("Отписаться") : t("Подписаться")}
         </button>
       )}
       {!isMyProfile && isLogged && (
@@ -70,7 +72,7 @@ export function ProfileActions({
             className={secondary}
           >
             <Percent className="h-3.5 w-3.5" aria-hidden="true" />
-            Совместимость
+            {t("Совместимость")}
           </button>
           <button
             type="button"
@@ -78,13 +80,13 @@ export function ProfileActions({
             className={secondary}
           >
             <Headphones className="h-3.5 w-3.5" aria-hidden="true" />
-            Слушать вместе
+            {t("Слушать вместе")}
           </button>
         </>
       )}
       <Link href={`/user/${username}/stats`} className={secondary}>
         <ChartColumn className="h-3.5 w-3.5" aria-hidden="true" />
-        Статистика
+        {t("Статистика")}
       </Link>
       {isMyProfile && (
         <button
@@ -92,7 +94,7 @@ export function ProfileActions({
           onClick={onImport}
           disabled={importLoading}
           className={secondary}
-          title="Импортировать историю из Last.fm"
+          title={t("Импортировать историю из Last.fm")}
         >
           <Download className="h-3.5 w-3.5" aria-hidden="true" />
           {importLabel}
@@ -101,14 +103,14 @@ export function ProfileActions({
       {isMyProfile && (
         <Link href="/settings" className={secondary}>
           <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
-          Настройки
+          {t("Настройки")}
         </Link>
       )}
       <button
         type="button"
         onClick={onShowWrapped}
-        aria-label="Поделиться профилем"
-        title="Поделиться"
+        aria-label={t("Поделиться профилем")}
+        title={t("Поделиться")}
         className={`${btn.secondary} h-8 w-8`}
       >
         <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -117,8 +119,8 @@ export function ProfileActions({
         <button
           type="button"
           onClick={() => setReporting(true)}
-          aria-label="Пожаловаться на профиль"
-          title="Пожаловаться"
+          aria-label={t("Пожаловаться на профиль")}
+          title={t("Пожаловаться")}
           className={`${btn.secondary} h-8 w-8 hover:text-danger`}
         >
           <Flag className="h-3.5 w-3.5" aria-hidden="true" />

@@ -1,5 +1,7 @@
 "use client";
 
+import { useT } from "@/app/lib/i18n/client";
+import { msg } from "@/app/lib/i18n/core";
 import { useState } from "react";
 import { Pencil, Search, Trash2 } from "lucide-react";
 import Dialog from "@/components/Dialog";
@@ -18,13 +20,13 @@ import {
 
 const LIMIT = 50;
 const FIELDS: { key: keyof CatalogTrack; label: string; type?: string }[] = [
-  { key: "title", label: "Название" },
-  { key: "artist", label: "Исполнитель" },
-  { key: "album", label: "Альбом" },
-  { key: "genre", label: "Жанр" },
-  { key: "cover_url", label: "Обложка (URL)", type: "url" },
-  { key: "track_url", label: "Ссылка на трек (URL)", type: "url" },
-  { key: "duration", label: "Длительность, с", type: "number" },
+  { key: "title", label: msg("Название") },
+  { key: "artist", label: msg("Исполнитель") },
+  { key: "album", label: msg("Альбом") },
+  { key: "genre", label: msg("Жанр") },
+  { key: "cover_url", label: msg("Обложка (URL)"), type: "url" },
+  { key: "track_url", label: msg("Ссылка на трек (URL)"), type: "url" },
+  { key: "duration", label: msg("Длительность, с"), type: "number" },
 ];
 
 function EditTrack({
@@ -36,6 +38,7 @@ function EditTrack({
   onClose: () => void;
   onSaved: () => void;
 }>) {
+  const t = useT();
   const [form, setForm] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       FIELDS.map(({ key }) => [
@@ -61,23 +64,26 @@ function EditTrack({
           method: "PUT",
           json: changes,
         }),
-      "Сохранено",
+      t("Сохранено"),
     );
     if (ok) onSaved();
   };
 
   return (
-    <Dialog label={`Трек #${track.id}`} onClose={onClose}>
+    <Dialog label={t("Трек #{id}", { id: track.id })} onClose={onClose}>
       <form
         onSubmit={save}
         className="bg-surface border border-line rounded-xl w-full max-w-lg p-6 space-y-3 text-left"
       >
         <h2 className="text-base font-semibold text-fg">
-          Трек #{track.id} · {track.plays} прослушиваний
+          {t("Трек #{id} · {n} прослушиваний", {
+            id: track.id,
+            n: track.plays,
+          })}
         </h2>
         {FIELDS.map(({ key, label, type }) => (
           <label key={key} className="block">
-            <span className={labelClass}>{label}</span>
+            <span className={labelClass}>{t(label)}</span>
             <input
               type={type ?? "text"}
               value={form[key]}
@@ -96,10 +102,10 @@ function EditTrack({
             onClick={onClose}
             className={buttonClass.secondary}
           >
-            Отмена
+            {t("Отмена")}
           </button>
           <button type="submit" className={buttonClass.primary}>
-            Сохранить
+            {t("Сохранить")}
           </button>
         </div>
       </form>
@@ -109,6 +115,7 @@ function EditTrack({
 
 /** The whole catalog: search, edit, delete. */
 export default function TrackBrowser() {
+  const t = useT();
   const [q, setQ] = useState("");
   const [offset, setOffset] = useState(0);
   const [editing, setEditing] = useState<CatalogTrack | null>(null);
@@ -117,24 +124,27 @@ export default function TrackBrowser() {
   );
   const { notice, run } = useNotice();
 
-  const remove = async (t: CatalogTrack) => {
+  const remove = async (row: CatalogTrack) => {
     if (
       !confirm(
-        `Удалить «${t.artist} — ${t.title}» и все его прослушивания (${t.plays})?`,
+        t("Удалить «{track}» и все его прослушивания ({n})?", {
+          track: `${row.artist} — ${row.title}`,
+          n: row.plays,
+        }),
       )
     )
       return;
     if (
       await run(
-        () => adminRequest(`/api/admin/tracks/${t.id}`, { method: "DELETE" }),
-        "Трек удалён",
+        () => adminRequest(`/api/admin/tracks/${row.id}`, { method: "DELETE" }),
+        t("Трек удалён"),
       )
     )
       reload();
   };
 
   return (
-    <section className="space-y-3" aria-label="Каталог треков">
+    <section className="space-y-3" aria-label={t("Каталог треков")}>
       <div className="flex items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
           <Search
@@ -143,8 +153,8 @@ export default function TrackBrowser() {
           />
           <input
             type="search"
-            aria-label="Поиск по каталогу"
-            placeholder="Название, исполнитель, альбом или ID…"
+            aria-label={t("Поиск по каталогу")}
+            placeholder={t("Название, исполнитель, альбом или ID…")}
             value={q}
             onChange={(e) => {
               setQ(e.target.value);
@@ -154,7 +164,7 @@ export default function TrackBrowser() {
           />
         </div>
         <span className="text-xs text-fg-2 font-mono">
-          Треков: {data?.total ?? "…"}
+          {t("Треков: {n}", { n: data?.total ?? "…" })}
         </span>
       </div>
       <Notice text={notice} />
@@ -163,44 +173,44 @@ export default function TrackBrowser() {
           <thead className="bg-[#0f0f12] text-fg-2 font-mono text-[11px] border-b border-line-soft">
             <tr>
               <th className="py-3 px-4">ID</th>
-              <th className="py-3 px-4">Трек</th>
-              <th className="py-3 px-4">Альбом / жанр</th>
-              <th className="py-3 px-4">Длит.</th>
-              <th className="py-3 px-4">Прослуш.</th>
+              <th className="py-3 px-4">{t("Трек")}</th>
+              <th className="py-3 px-4">{t("Альбом / жанр")}</th>
+              <th className="py-3 px-4">{t("Длит.")}</th>
+              <th className="py-3 px-4">{t("Прослуш.")}</th>
               <th className="py-3 px-4" />
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
-            {(data?.items ?? []).map((t) => (
-              <tr key={t.id} className="hover:bg-white/[0.02]">
-                <td className="py-2.5 px-4 font-mono text-fg-2">#{t.id}</td>
+            {(data?.items ?? []).map((row) => (
+              <tr key={row.id} className="hover:bg-white/[0.02]">
+                <td className="py-2.5 px-4 font-mono text-fg-2">#{row.id}</td>
                 <td className="py-2.5 px-4">
-                  <div className="font-medium text-fg">{t.title}</div>
-                  <div className="text-fg-2">{t.artist}</div>
+                  <div className="font-medium text-fg">{row.title}</div>
+                  <div className="text-fg-2">{row.artist}</div>
                 </td>
                 <td className="py-2.5 px-4 text-fg-2">
-                  {t.album || "—"}
-                  {t.genre && (
-                    <div className="text-[10px] font-mono">{t.genre}</div>
+                  {row.album || "—"}
+                  {row.genre && (
+                    <div className="text-[10px] font-mono">{row.genre}</div>
                   )}
                 </td>
                 <td className="py-2.5 px-4 font-mono">
-                  {t.duration ? `${t.duration} с` : "—"}
+                  {row.duration ? t("{n} с", { n: row.duration }) : "—"}
                 </td>
-                <td className="py-2.5 px-4 font-mono">{t.plays}</td>
+                <td className="py-2.5 px-4 font-mono">{row.plays}</td>
                 <td className="py-2.5 px-4 text-right whitespace-nowrap">
                   <button
                     type="button"
-                    onClick={() => setEditing(t)}
-                    aria-label={`Изменить трек ${t.id}`}
+                    onClick={() => setEditing(row)}
+                    aria-label={t("Изменить трек {id}", { id: row.id })}
                     className="p-2 hover:bg-line rounded-lg text-fg-2"
                   >
                     <Pencil className="w-4 h-4" aria-hidden="true" />
                   </button>
                   <button
                     type="button"
-                    onClick={() => remove(t)}
-                    aria-label={`Удалить трек ${t.id}`}
+                    onClick={() => remove(row)}
+                    aria-label={t("Удалить трек {id}", { id: row.id })}
                     className="p-2 hover:bg-[#2a1b1b] rounded-lg text-danger"
                   >
                     <Trash2 className="w-4 h-4" aria-hidden="true" />

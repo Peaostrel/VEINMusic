@@ -9,6 +9,7 @@ import type { ProfileViewProps } from "./useProfilePage";
 import type { ProfileSection } from "@/app/lib/types";
 import { useNow } from "./hooks";
 import { coverAt } from "@/app/lib/coverSize";
+import { useT } from "@/app/lib/i18n/client";
 
 function Cover({
   src,
@@ -37,6 +38,7 @@ export function ProfileMainGrid({
   u,
   isMyProfile,
 }: ProfileViewProps) {
+  const t = useT();
   const now = useNow();
   const topArtists = data.stats.top_artists ?? [];
   const topTracks = data.stats.top_tracks ?? [];
@@ -79,7 +81,7 @@ export function ProfileMainGrid({
               style={{ order: priority("recommendations") }}
             >
               <h2 id="recs-title" className="text-base font-semibold">
-                Может понравиться
+                {t("Может понравиться")}
               </h2>
               <ul className="hide-scrollbar flex gap-3 overflow-x-auto pb-1">
                 {recs.map((r) => (
@@ -101,7 +103,7 @@ export function ProfileMainGrid({
                       {r.artist}
                     </span>
                     <span className="line-clamp-2 text-xs text-fg-3">
-                      {r.reason}
+                      {t(r.reason)}
                     </span>
                   </li>
                 ))}
@@ -116,27 +118,28 @@ export function ProfileMainGrid({
             style={{ order: priority("history") }}
           >
             <h2 id="history-title" className="text-base font-semibold">
-              История
+              {t("История")}
             </h2>
             {data.history.length === 0 && isMyProfile ? (
               <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-line px-5 py-10 text-center">
                 <p className="text-sm font-medium">
-                  Здесь появится всё, что вы слушаете
+                  {t("Здесь появится всё, что вы слушаете")}
                 </p>
                 <p className="max-w-sm text-sm text-fg-2">
-                  Подключите Яндекс Музыку, Spotify или SoundCloud либо
-                  поставьте расширение: первый трек появится через пару секунд.
+                  {t(
+                    "Подключите Яндекс Музыку, Spotify или SoundCloud либо поставьте расширение: первый трек появится через пару секунд.",
+                  )}
                 </p>
                 <Link
                   href="/library/connect"
                   className={`${btn.primary} ${btn.sm} mt-1`}
                 >
-                  Подключить музыку
+                  {t("Подключить музыку")}
                 </Link>
               </div>
             ) : data.history.length === 0 ? (
               <p className="rounded-xl border border-dashed border-line px-5 py-10 text-center text-sm text-fg-2">
-                Тут пока пусто.
+                {t("Тут пока пусто.")}
               </p>
             ) : (
               <ol className="border-t border-line-soft">
@@ -169,28 +172,30 @@ export function ProfileMainGrid({
                 Taste Passport
               </span>
               <h2 className="mt-1 text-sm font-semibold">
-                Музыкальный паспорт
+                {t("Музыкальный паспорт")}
               </h2>
             </div>
             <dl className="grid grid-cols-2 gap-4">
               <div className="min-w-0">
-                <dt className="text-xs text-fg-3">главный артист</dt>
+                <dt className="text-xs text-fg-3">{t("главный артист")}</dt>
                 <dd className="mt-0.5 truncate text-sm font-medium">
-                  {topArtists[0]?.artist ?? "Пока не определён"}
+                  {topArtists[0]?.artist ?? t("Пока не определён")}
                 </dd>
               </div>
               <div className="min-w-0">
-                <dt className="text-xs text-fg-3">любимый жанр</dt>
+                <dt className="text-xs text-fg-3">{t("любимый жанр")}</dt>
                 <dd className="mt-0.5 truncate text-sm font-medium">
-                  {u.favorite_genre || "Не указан"}
+                  {u.favorite_genre || t("Не указан")}
                 </dd>
               </div>
               <div>
-                <dt className="text-xs text-fg-3">серия</dt>
-                <dd className="mt-0.5 font-mono text-lg">{u.streak} дн.</dd>
+                <dt className="text-xs text-fg-3">{t("серия")}</dt>
+                <dd className="mt-0.5 font-mono text-lg">
+                  {t("{n} дн.", { n: u.streak })}
+                </dd>
               </div>
               <div>
-                <dt className="text-xs text-fg-3">треков в топе</dt>
+                <dt className="text-xs text-fg-3">{t("треков в топе")}</dt>
                 <dd className="mt-0.5 font-mono text-lg">{topTracks.length}</dd>
               </div>
             </dl>
@@ -206,22 +211,22 @@ export function ProfileMainGrid({
               style={{ order: priority("wrapped") }}
             >
               <h2 id="month-title" className="text-sm font-semibold">
-                Итоги месяца
+                {t("Итоги месяца")}
               </h2>
               <dl className="grid grid-cols-2 gap-4">
                 <div className="flex min-w-0 flex-col-reverse gap-0.5">
-                  <dt className="text-xs text-fg-2">артист месяца</dt>
+                  <dt className="text-xs text-fg-2">{t("артист месяца")}</dt>
                   <dd className="truncate text-base font-medium">
                     {wrapped.top_artist}
                   </dd>
                 </div>
                 <div className="flex flex-col-reverse gap-0.5">
-                  <dt className="text-xs text-fg-2">минут музыки</dt>
+                  <dt className="text-xs text-fg-2">{t("минут музыки")}</dt>
                   <dd className="font-mono text-xl">{wrapped.total_minutes}</dd>
                 </div>
               </dl>
               <span className="self-start rounded border border-line px-2 py-0.5 font-mono text-[11px] text-fg-2">
-                {wrapped.status}
+                {t(wrapped.status)}
               </span>
             </section>
           )}
@@ -233,10 +238,10 @@ export function ProfileMainGrid({
             style={{ order: priority("top_tracks") }}
           >
             <h2 id="top-tracks-title" className="text-sm font-semibold">
-              Топ треков
+              {t("Топ треков")}
             </h2>
             {topTracks.length === 0 ? (
-              <p className="text-sm text-fg-3">Пока нет данных.</p>
+              <p className="text-sm text-fg-3">{t("Пока нет данных.")}</p>
             ) : (
               <ol className="border-t border-line-soft">
                 {topTracks.map((item, i) => (
@@ -278,10 +283,10 @@ export function ProfileMainGrid({
             style={{ order: priority("top_artists") }}
           >
             <h2 id="top-artists-title" className="text-sm font-semibold">
-              Топ артистов
+              {t("Топ артистов")}
             </h2>
             {topArtists.length === 0 ? (
-              <p className="text-sm text-fg-3">Пока нет данных.</p>
+              <p className="text-sm text-fg-3">{t("Пока нет данных.")}</p>
             ) : (
               <ol className="flex flex-col gap-3">
                 {topArtists.map((item, i) => (

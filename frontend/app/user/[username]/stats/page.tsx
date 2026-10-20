@@ -21,16 +21,19 @@ import {
 import { DailyActivity } from "./_components/DailyActivity";
 import { MusicCalendar } from "./_components/MusicCalendar";
 import { PeriodRecap } from "./_components/PeriodRecap";
+import { periodLabel } from "./_components/links";
+import { msg } from "@/app/lib/i18n/core";
+import { useT } from "@/app/lib/i18n/client";
 
 type Period = "7d" | "30d" | "90d" | "year" | "all" | "custom";
 
 const PERIODS: { id: Period; label: string }[] = [
-  { id: "7d", label: "Неделя" },
-  { id: "30d", label: "Месяц" },
-  { id: "90d", label: "Сезон" },
-  { id: "year", label: "Год" },
-  { id: "all", label: "Всё время" },
-  { id: "custom", label: "Даты" },
+  { id: "7d", label: msg("Неделя") },
+  { id: "30d", label: msg("Месяц") },
+  { id: "90d", label: msg("Сезон") },
+  { id: "year", label: msg("Год") },
+  { id: "all", label: msg("Всё время") },
+  { id: "custom", label: msg("Даты") },
 ];
 
 function isoDate(date: Date) {
@@ -87,6 +90,7 @@ function mostUsedSource(tracks: DetailedStats["top_tracks"]): string {
 }
 
 export default function DetailedStatsPage() {
+  const t = useT();
   const username = useParams()?.username;
   const [stats, setStats] = useState<DetailedStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -146,8 +150,8 @@ export default function DetailedStatsPage() {
             throw new ApiError(
               res.status,
               res.status === 403
-                ? "Это приватный профиль"
-                : body?.detail || "Не удалось загрузить статистику",
+                ? t("Это приватный профиль")
+                : t(body?.detail || "Не удалось загрузить статистику"),
             );
           }
           return (await res.json()) as DetailedStats;
@@ -179,7 +183,7 @@ export default function DetailedStatsPage() {
           setError(
             requestError instanceof Error
               ? requestError.message
-              : "Не удалось загрузить статистику",
+              : t("Не удалось загрузить статистику"),
           );
           setLoading(false);
         })
@@ -198,7 +202,7 @@ export default function DetailedStatsPage() {
       document.removeEventListener("visibilitychange", refresh);
       window.removeEventListener("online", refresh);
     };
-  }, [username, period, dateFrom, dateTo, hasCheckedFallback]);
+  }, [username, period, dateFrom, dateTo, hasCheckedFallback, t]);
 
   if (error) {
     return (
@@ -208,13 +212,13 @@ export default function DetailedStatsPage() {
           href="/"
           className="mt-4 inline-block text-sm text-fg-2 hover:text-fg"
         >
-          ← На главную
+          {t("← На главную")}
         </Link>
       </div>
     );
   }
 
-  if (loading || !stats) return <Loading label="Считаем статистику…" />;
+  if (loading || !stats) return <Loading label={t("Считаем статистику…")} />;
 
   const {
     user,
@@ -253,11 +257,15 @@ export default function DetailedStatsPage() {
     <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-7 px-4 py-8 sm:px-8 lg:px-12 lg:py-10">
       <PageHeader
         title={
-          isMine ? "Статистика" : `Статистика ${user.display_name || username}`
+          isMine
+            ? t("Статистика")
+            : t("Статистика {name}", {
+                name: user.display_name || String(username),
+              })
         }
         subtitle={
           <>
-            {stats.period.label}
+            {periodLabel(stats.period)}
             {!isMine && (
               <>
                 {" · "}
@@ -271,17 +279,17 @@ export default function DetailedStatsPage() {
         actions={
           <div className="flex w-[calc(100vw-2rem)] max-w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
             <Segmented
-              label="Период"
+              label={t("Период")}
               role="radiogroup"
               value={period}
               onChange={setPeriod}
-              options={PERIODS}
+              options={PERIODS.map((p) => ({ ...p, label: t(p.label) }))}
               className="max-w-full overflow-x-auto"
             />
             {period === "custom" && (
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <label className="flex items-center gap-1.5 text-[11px] text-fg-3">
-                  <span>С</span>
+                  <span>{t("С")}</span>
                   <input
                     type="date"
                     value={dateFrom}
@@ -291,7 +299,7 @@ export default function DetailedStatsPage() {
                   />
                 </label>
                 <label className="flex items-center gap-1.5 text-[11px] text-fg-3">
-                  <span>по</span>
+                  <span>{t("по")}</span>
                   <input
                     type="date"
                     value={dateTo}
@@ -338,23 +346,30 @@ export default function DetailedStatsPage() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         <Panel
           id="hours-title"
-          title="Когда вы слушаете"
+          title={t("Когда вы слушаете")}
           aside={
-            peakHour && peakHour[1] > 0 ? `пик — ${peakHour[0]}:00` : undefined
+            peakHour && peakHour[1] > 0
+              ? t("пик — {hour}:00", { hour: peakHour[0] })
+              : undefined
           }
         >
-          <BarStrip data={sortedHours} label="По часам" labelEvery={3} />
+          <BarStrip data={sortedHours} label={t("По часам")} labelEvery={3} />
         </Panel>
-        <Panel id="days-title" title="Дни недели">
-          <BarStrip data={days_activity} label="По дням недели" />
+        <Panel id="days-title" title={t("Дни недели")}>
+          <BarStrip
+            data={Object.fromEntries(
+              Object.entries(days_activity).map(([day, n]) => [t(day), n]),
+            )}
+            label={t("По дням недели")}
+          />
         </Panel>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Panel id="sources-title" title="Источники">
+        <Panel id="sources-title" title={t("Источники")}>
           <PlatformDistribution data={source_counts} />
         </Panel>
-        <Panel id="genres-title" title="Жанры">
+        <Panel id="genres-title" title={t("Жанры")}>
           <GenreCloud data={genre_counts} />
         </Panel>
       </div>

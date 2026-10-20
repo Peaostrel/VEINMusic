@@ -17,6 +17,8 @@ import type {
   UserInfo,
 } from "@/app/lib/types";
 import { coverAt } from "@/app/lib/coverSize";
+import { useT } from "@/app/lib/i18n/client";
+import { tr } from "@/app/lib/i18n/active";
 
 export interface ProfileStatsSectionProps {
   u: UserInfo;
@@ -106,7 +108,7 @@ function locationFact(
       : null;
     location = (
       <Fact
-        label="Местоположение"
+        label={tr("Местоположение")}
         icon={
           flagUrl ? (
             <img
@@ -137,6 +139,7 @@ export function ProfileStatsSection({
   favoriteAlbumRedirectUrl,
   showShowcase = true,
 }: Readonly<ProfileStatsSectionProps>) {
+  const t = useT();
   const location = locationFact(u, countries);
 
   const links = socialLinks
@@ -156,7 +159,7 @@ export function ProfileStatsSection({
           {taste?.match !== undefined && (
             <div className="flex min-w-[220px] flex-col justify-center gap-1.5 rounded-lg border border-line px-3 py-2">
               <span className="flex items-baseline justify-between gap-3 text-[11px] text-fg-3">
-                <span>Совместимость вкусов</span>
+                <span>{t("Совместимость вкусов")}</span>
                 <span className="font-mono text-[13px] text-fg">
                   {taste.match}%
                 </span>
@@ -165,14 +168,14 @@ export function ProfileStatsSection({
               <span className="truncate text-[11px] text-fg-3">
                 {taste.common_artists?.length > 0
                   ? taste.common_artists.join(", ")
-                  : "пока нет общих артистов"}
+                  : t("пока нет общих артистов")}
               </span>
             </div>
           )}
           {location}
           {u.favorite_genre && (
             <Fact
-              label="Жанр"
+              label={t("Жанр")}
               icon={<Headphones className="h-3.5 w-3.5" aria-hidden="true" />}
             >
               {u.favorite_genre}
@@ -180,7 +183,7 @@ export function ProfileStatsSection({
           )}
           {u.equipment && (
             <Fact
-              label="Аппаратура"
+              label={t("Аппаратура")}
               icon={<Speaker className="h-3.5 w-3.5" aria-hidden="true" />}
             >
               {u.equipment}
@@ -197,7 +200,7 @@ export function ProfileStatsSection({
               {SocialIcons[link.network as keyof typeof SocialIcons] ?? (
                 <ExternalLink aria-hidden="true" />
               )}
-              {getNetworkLabel(link.network)}
+              {t(getNetworkLabel(link.network))}
             </a>
           ))}
         </div>
@@ -209,12 +212,12 @@ export function ProfileStatsSection({
           className="flex flex-col gap-3"
         >
           <h2 id="showcase-title" className="text-base font-semibold">
-            Витрина
+            {t("Витрина")}
           </h2>
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             {u.favorite_artist && (
               <ShowcaseCard
-                kind="Артист"
+                kind={t("Артист")}
                 title={u.favorite_artist}
                 cover={u.favorite_artist_cover}
                 round
@@ -227,7 +230,7 @@ export function ProfileStatsSection({
             )}
             {u.favorite_track && (
               <ShowcaseCard
-                kind="Трек"
+                kind={t("Трек")}
                 title={u.favorite_track}
                 cover={u.favorite_track_cover}
                 href={
@@ -243,7 +246,7 @@ export function ProfileStatsSection({
             )}
             {u.favorite_album && (
               <ShowcaseCard
-                kind="Альбом"
+                kind={t("Альбом")}
                 title={u.favorite_album}
                 cover={u.favorite_album_cover}
                 href={favoriteAlbumRedirectUrl}

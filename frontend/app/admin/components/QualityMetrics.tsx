@@ -1,6 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
 import { qualityRequest } from "@/app/lib/qualityApi";
+import { useT } from "@/app/lib/i18n/client";
+import { msg } from "@/app/lib/i18n/core";
+import { tr } from "@/app/lib/i18n/active";
 interface Quality {
   days: number;
   registered: number;
@@ -25,6 +28,7 @@ interface Quality {
   }[];
 }
 export default function QualityMetrics() {
+  const t = useT();
   const [data, setData] = useState<Quality | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -36,7 +40,7 @@ export default function QualityMetrics() {
       .catch((cause) => {
         if (active)
           setError(
-            cause instanceof Error ? cause.message : "Метрики недоступны",
+            cause instanceof Error ? cause.message : tr("Метрики недоступны"),
           );
       });
     return () => {
@@ -46,7 +50,7 @@ export default function QualityMetrics() {
   return (
     <section className="space-y-4 rounded-xl border border-line bg-surface p-5">
       <h3 className="text-base font-semibold">
-        Качество подключения и первое прослушивание
+        {t("Качество подключения и первое прослушивание")}
       </h3>
       {error && (
         <p role="alert" className="text-sm">
@@ -56,23 +60,29 @@ export default function QualityMetrics() {
       {data ? (
         <>
           <p className="text-sm text-fg-2">
-            За {data.days} дней зарегистрировались: {data.registered}. Получено
-            первое живое прослушивание: {data.activated} (
-            {data.activation_percent ?? "—"}%). Импорты не учитываются.
+            {t(
+              "За {days} дней зарегистрировались: {registered}. Получено первое живое прослушивание: {activated} ({percent}%). Импорты не учитываются.",
+              {
+                days: data.days,
+                registered: data.registered,
+                activated: data.activated,
+                percent: data.activation_percent ?? "—",
+              },
+            )}
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr>
                   {[
-                    "Источник",
-                    "Аккаунты / подтверждены",
-                    "События",
-                    "Ошибки",
-                    "Обработка, мс",
+                    msg("Источник"),
+                    msg("Аккаунты / подтверждены"),
+                    msg("События"),
+                    msg("Ошибки"),
+                    msg("Обработка, мс"),
                   ].map((label) => (
                     <th key={label} className="p-2">
-                      {label}
+                      {t(label)}
                     </th>
                   ))}
                 </tr>
@@ -94,18 +104,25 @@ export default function QualityMetrics() {
           </div>
           {data.api_latency.length > 0 && (
             <div className="space-y-2">
-              <h4 className="text-sm font-semibold">Самые медленные API</h4>
+              <h4 className="text-sm font-semibold">
+                {t("Самые медленные API")}
+              </h4>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead>
                     <tr>
-                      {["Маршрут", "Запросы", "p50", "p95", "p99", "5xx"].map(
-                        (label) => (
-                          <th key={label} className="p-2">
-                            {label}
-                          </th>
-                        ),
-                      )}
+                      {[
+                        msg("Маршрут"),
+                        msg("Запросы"),
+                        "p50",
+                        "p95",
+                        "p99",
+                        "5xx",
+                      ].map((label) => (
+                        <th key={label} className="p-2">
+                          {t(label)}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
@@ -113,9 +130,15 @@ export default function QualityMetrics() {
                       <tr key={row.route} className="border-t border-line">
                         <td className="p-2 font-mono">{row.route}</td>
                         <td className="p-2">{row.requests}</td>
-                        <td className="p-2">{row.p50_ms} мс</td>
-                        <td className="p-2">{row.p95_ms} мс</td>
-                        <td className="p-2">{row.p99_ms} мс</td>
+                        <td className="p-2">
+                          {t("{n} мс", { n: row.p50_ms })}
+                        </td>
+                        <td className="p-2">
+                          {t("{n} мс", { n: row.p95_ms })}
+                        </td>
+                        <td className="p-2">
+                          {t("{n} мс", { n: row.p99_ms })}
+                        </td>
                         <td className="p-2">{row.errors}</td>
                       </tr>
                     ))}
@@ -124,10 +147,10 @@ export default function QualityMetrics() {
               </div>
             </div>
           )}
-          <p className="text-xs text-fg-3">{data.note}</p>
+          <p className="text-xs text-fg-3">{t(data.note)}</p>
         </>
       ) : (
-        !error && <p className="text-sm text-fg-3">Загружаем метрики…</p>
+        !error && <p className="text-sm text-fg-3">{t("Загружаем метрики…")}</p>
       )}
     </section>
   );

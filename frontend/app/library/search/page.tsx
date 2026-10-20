@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiJson } from "@/app/lib/api";
 import { btn, input, PageHeader } from "@/components/ui";
+import { useT } from "@/app/lib/i18n/client";
+import { tr } from "@/app/lib/i18n/active";
+import { plural } from "@/app/lib/plural";
 
 interface Track {
   id: number;
@@ -29,6 +32,7 @@ interface Result {
 }
 
 export default function LibrarySearch() {
+  const t = useT();
   const [q, setQ] = useState("");
   const [source, setSource] = useState("");
   const [from, setFrom] = useState("");
@@ -61,7 +65,9 @@ export default function LibrarySearch() {
         .catch((cause: unknown) => {
           if (!controller.signal.aborted) {
             setData(null);
-            setError(cause instanceof Error ? cause.message : "Ошибка поиска");
+            setError(
+              cause instanceof Error ? cause.message : tr("Ошибка поиска"),
+            );
           }
         })
         .finally(() => {
@@ -82,7 +88,7 @@ export default function LibrarySearch() {
       );
       setData({ ...result, history: [...data.history, ...result.history] });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Ошибка поиска");
+      setError(cause instanceof Error ? cause.message : t("Ошибка поиска"));
     } finally {
       setBusy(false);
     }
@@ -90,18 +96,18 @@ export default function LibrarySearch() {
   return (
     <main className="mx-auto max-w-[1000px] space-y-6 px-4 py-8 sm:px-8">
       <PageHeader
-        title="Поиск в моей музыке"
-        subtitle="Личная история, исполнители, альбомы и музыка на потом"
+        title={t("Поиск в моей музыке")}
+        subtitle={t("Личная история, исполнители, альбомы и музыка на потом")}
       />
       <Link href="/library" className="text-sm text-accent">
-        ← Библиотека
+        {t("← Библиотека")}
       </Link>
       <form
         className="grid gap-3 sm:grid-cols-2"
         onSubmit={(event) => event.preventDefault()}
       >
         <label className="sm:col-span-2">
-          <span>Трек, артист или альбом</span>
+          <span>{t("Трек, артист или альбом")}</span>
           <input
             type="search"
             value={q}
@@ -111,13 +117,13 @@ export default function LibrarySearch() {
           />
         </label>
         <label>
-          <span>Источник</span>
+          <span>{t("Источник")}</span>
           <select
             value={source}
             onChange={(event) => setSource(event.target.value)}
             className={input}
           >
-            <option value="">Все источники</option>
+            <option value="">{t("Все источники")}</option>
             {data?.sources.map((name) => (
               <option key={name}>{name}</option>
             ))}
@@ -125,7 +131,7 @@ export default function LibrarySearch() {
         </label>
         <div className="grid grid-cols-2 gap-3">
           <label>
-            <span>С даты</span>
+            <span>{t("С даты")}</span>
             <input
               type="date"
               value={from}
@@ -134,7 +140,7 @@ export default function LibrarySearch() {
             />
           </label>
           <label>
-            <span>По дату</span>
+            <span>{t("По дату")}</span>
             <input
               type="date"
               value={to}
@@ -145,13 +151,13 @@ export default function LibrarySearch() {
         </div>
       </form>
       <p role="status" aria-live="polite">
-        {error || (busy ? "Ищем…" : "")}
+        {error || (busy ? t("Ищем…") : "")}
       </p>
       {data && (
         <>
           <div className="grid gap-4 sm:grid-cols-2">
             <section>
-              <h2 className="mb-3 font-semibold">Исполнители</h2>
+              <h2 className="mb-3 font-semibold">{t("Исполнители")}</h2>
               <ul>
                 {data.artists.map((row) => (
                   <li key={row.artist}>
@@ -167,7 +173,7 @@ export default function LibrarySearch() {
               </ul>
             </section>
             <section>
-              <h2 className="mb-3 font-semibold">Альбомы</h2>
+              <h2 className="mb-3 font-semibold">{t("Альбомы")}</h2>
               <ul>
                 {data.albums.map((row) => (
                   <li key={`${row.artist}/${row.album}`}>
@@ -184,7 +190,7 @@ export default function LibrarySearch() {
             </section>
           </div>
           <section>
-            <h2 className="mb-3 font-semibold">Треки</h2>
+            <h2 className="mb-3 font-semibold">{t("Треки")}</h2>
             <ul className="space-y-2">
               {data.tracks.map((track) => (
                 <li
@@ -193,14 +199,20 @@ export default function LibrarySearch() {
                 >
                   {track.artist} — {track.title}
                   <span className="block text-xs text-fg-3">
-                    {track.album} · {track.plays} прослушиваний
+                    {track.album} · {track.plays}{" "}
+                    {plural(
+                      track.plays,
+                      "прослушивание",
+                      "прослушивания",
+                      "прослушиваний",
+                    )}
                   </span>
                 </li>
               ))}
             </ul>
           </section>
           <section>
-            <h2 className="mb-3 font-semibold">Послушать позже</h2>
+            <h2 className="mb-3 font-semibold">{t("Послушать позже")}</h2>
             <ul className="space-y-2">
               {data.saved.map(({ track, note }) => (
                 <li key={track.id} className="break-words">
@@ -210,11 +222,11 @@ export default function LibrarySearch() {
               ))}
             </ul>
             <Link href="/library/later" className="text-sm text-accent">
-              Открыть список →
+              {t("Открыть список →")}
             </Link>
           </section>
           <section>
-            <h2 className="mb-3 font-semibold">История</h2>
+            <h2 className="mb-3 font-semibold">{t("История")}</h2>
             <ul className="space-y-2">
               {data.history.map((row) => (
                 <li
@@ -223,16 +235,16 @@ export default function LibrarySearch() {
                 >
                   {row.track.artist} — {row.track.title}
                   <span className="block text-xs text-fg-3">
-                    {new Date(row.played_at).toLocaleString("ru-RU")} ·{" "}
+                    {new Date(row.played_at).toLocaleString(t.locale)} ·{" "}
                     {row.source}
-                    {row.excluded ? " · исключено из статистики" : ""}
+                    {row.excluded ? ` · ${t("исключено из статистики")}` : ""}
                   </span>
                 </li>
               ))}
             </ul>
             {!data.history.length && (
               <p className="text-sm text-fg-3">
-                Нет прослушиваний по этим условиям.
+                {t("Нет прослушиваний по этим условиям.")}
               </p>
             )}
             {data.next && (
@@ -244,7 +256,7 @@ export default function LibrarySearch() {
                   void more();
                 }}
               >
-                Ещё прослушивания
+                {t("Ещё прослушивания")}
               </button>
             )}
           </section>

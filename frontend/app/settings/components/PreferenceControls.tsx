@@ -3,6 +3,7 @@
 import { Plus, X } from "lucide-react";
 import { useState } from "react";
 import { btn, inputOnCard } from "@/components/ui";
+import { useT } from "@/app/lib/i18n/client";
 
 export const settingsCard =
   "overflow-hidden rounded-xl border border-line bg-surface";
@@ -72,6 +73,7 @@ export function SelectRow<T extends string>({
   options: { value: T; label: string }[];
   onChange: (value: T) => void;
 }>) {
+  const t = useT();
   return (
     <label className="flex flex-col gap-3 border-b border-line-soft px-5 py-4 last:border-0 sm:flex-row sm:items-center sm:justify-between">
       <span className="min-w-0">
@@ -87,7 +89,7 @@ export function SelectRow<T extends string>({
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
-            {option.label}
+            {t(option.label)}
           </option>
         ))}
       </select>
@@ -108,6 +110,7 @@ export function TagEditor({
   placeholder: string;
   onChange: (values: string[]) => void;
 }>) {
+  const t = useT();
   const [draft, setDraft] = useState("");
   const add = () => {
     const value = draft.trim();
@@ -143,7 +146,7 @@ export function TagEditor({
           className={`${btn.secondary} ${btn.md}`}
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
-          Добавить
+          {t("Добавить")}
         </button>
       </div>
       {values.length > 0 ? (
@@ -159,7 +162,7 @@ export function TagEditor({
                 onClick={() =>
                   onChange(values.filter((item) => item !== value))
                 }
-                aria-label={`Удалить ${value}`}
+                aria-label={t("Удалить {value}", { value })}
                 className="text-fg-3 hover:text-danger"
               >
                 <X className="h-3.5 w-3.5" aria-hidden="true" />
@@ -168,7 +171,7 @@ export function TagEditor({
           ))}
         </ul>
       ) : (
-        <p className="mt-4 text-xs text-fg-3">Список пуст.</p>
+        <p className="mt-4 text-xs text-fg-3">{t("Список пуст.")}</p>
       )}
     </section>
   );
@@ -183,6 +186,7 @@ export function CheckboxGrid({
   options: { value: string; label: string }[];
   onChange: (values: string[]) => void;
 }>) {
+  const t = useT();
   return (
     <div className="grid gap-2 sm:grid-cols-2">
       {options.map((option) => {
@@ -204,7 +208,7 @@ export function CheckboxGrid({
               }
               className="h-4 w-4 accent-[var(--accent)]"
             />
-            {option.label}
+            {t(option.label)}
           </label>
         );
       })}

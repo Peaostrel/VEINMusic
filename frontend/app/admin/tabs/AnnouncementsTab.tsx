@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/app/lib/i18n/client";
 import { Megaphone, Trash2, Zap } from "lucide-react";
 import type { AdminPanelState } from "../useAdminPanel";
 import BroadcastPanel from "../components/BroadcastPanel";
@@ -17,13 +18,14 @@ export default function AnnouncementsTab({
   handleToggleFlag,
   handleCreateFlag,
 }: Readonly<AdminPanelState>) {
+  const t = useT();
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
       {/* Announcements Manager */}
       <div className="space-y-4">
         <h3 className="text-sm font-semibold text-fg flex items-center gap-2">
           <Megaphone className="w-4 h-4 text-fg-2" />
-          Глобальные системные оповещения
+          {t("Глобальные системные оповещения")}
         </h3>
 
         <form
@@ -33,11 +35,11 @@ export default function AnnouncementsTab({
           <div className="grid grid-cols-3 gap-2">
             <div className="col-span-2">
               <span className="block text-[10px] font-mono text-fg-2">
-                Заголовок
+                {t("Заголовок")}
               </span>
               <input
                 type="text"
-                placeholder="Технические работы"
+                placeholder={t("Технические работы")}
                 value={newAnn.title}
                 onChange={(e) =>
                   setNewAnn({ ...newAnn, title: e.target.value })
@@ -47,25 +49,29 @@ export default function AnnouncementsTab({
               />
             </div>
             <div>
-              <span className="block text-[10px] font-mono text-fg-2">Тип</span>
+              <span className="block text-[10px] font-mono text-fg-2">
+                {t("Тип")}
+              </span>
               <select
                 value={newAnn.type}
                 onChange={(e) => setNewAnn({ ...newAnn, type: e.target.value })}
                 className="w-full mt-1 px-3 py-2 bg-bg border border-line rounded-xl text-xs text-fg"
               >
-                <option value="info">Информация</option>
-                <option value="warning">Предупреждение</option>
-                <option value="alert">Важное</option>
+                <option value="info">{t("Информация")}</option>
+                <option value="warning">{t("Предупреждение")}</option>
+                <option value="alert">{t("Важное")}</option>
               </select>
             </div>
           </div>
 
           <div>
             <span className="block text-[10px] font-mono text-fg-2">
-              Текст сообщения
+              {t("Текст сообщения")}
             </span>
             <textarea
-              placeholder="15 августа с 04:00 до 05:00 планируется обновление..."
+              placeholder={t(
+                "15 августа с 04:00 до 05:00 планируется обновление...",
+              )}
               value={newAnn.message}
               onChange={(e) =>
                 setNewAnn({ ...newAnn, message: e.target.value })
@@ -80,7 +86,7 @@ export default function AnnouncementsTab({
             type="submit"
             className="w-full py-2.5 bg-accent text-on-accent hover:brightness-110 font-medium rounded-xl text-xs transition cursor-pointer"
           >
-            Опубликовать оповещение
+            {t("Опубликовать оповещение")}
           </button>
         </form>
 
@@ -114,7 +120,7 @@ export default function AnnouncementsTab({
                       : "bg-surface-2 text-fg-2"
                   }`}
                 >
-                  {ann.is_active ? "Активно" : "Скрыто"}
+                  {ann.is_active ? t("Активно") : t("Скрыто")}
                 </button>
                 <button
                   type="button"
@@ -133,7 +139,7 @@ export default function AnnouncementsTab({
       <div className="space-y-4">
         <h3 className="text-sm font-semibold text-fg flex items-center gap-2">
           <Zap className="w-4 h-4 text-accent" />
-          Динамические Feature Flags
+          {t("Динамические Feature Flags")}
         </h3>
 
         <form
@@ -142,7 +148,7 @@ export default function AnnouncementsTab({
         >
           <div>
             <span className="block text-[10px] font-mono text-fg-2">
-              Ключ флага (slug)
+              {t("Ключ флага (slug)")}
             </span>
             <input
               type="text"
@@ -155,11 +161,11 @@ export default function AnnouncementsTab({
           </div>
           <div>
             <span className="block text-[10px] font-mono text-fg-2">
-              Описание
+              {t("Описание")}
             </span>
             <input
               type="text"
-              placeholder="Включает режим синхронного прослушивания"
+              placeholder={t("Включает режим синхронного прослушивания")}
               value={newFlag.description}
               onChange={(e) =>
                 setNewFlag({ ...newFlag, description: e.target.value })
@@ -171,7 +177,7 @@ export default function AnnouncementsTab({
             type="submit"
             className="w-full py-2.5 bg-accent text-on-accent hover:brightness-110 font-medium rounded-xl text-xs transition cursor-pointer"
           >
-            + Добавить фича-флаг
+            {t("+ Добавить фича-флаг")}
           </button>
         </form>
 
@@ -186,7 +192,7 @@ export default function AnnouncementsTab({
                   {flag.key}
                 </div>
                 <p className="text-xs text-fg-2 mt-0.5">
-                  {flag.description || "Без описания"}
+                  {flag.description ? t(flag.description) : t("Без описания")}
                 </p>
               </div>
 
@@ -199,7 +205,7 @@ export default function AnnouncementsTab({
                     : "bg-line text-fg-2 hover:bg-line"
                 }`}
               >
-                {flag.is_enabled ? "включено" : "выключено"}
+                {flag.is_enabled ? t("включено") : t("выключено")}
               </button>
             </div>
           ))}

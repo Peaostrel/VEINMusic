@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useT } from "@/app/lib/i18n/client";
+import { msg } from "@/app/lib/i18n/core";
 import { BetaBadge, LogoTile } from "@/components/brand";
 import NotificationsBell from "@/components/NotificationsBell";
 import AccountMenu from "./AccountMenu";
@@ -8,7 +10,7 @@ import { navItems } from "./nav";
 import type { NavUser } from "./types";
 
 const TAB_IDS = new Set(["feed", "top", "together", "stats", "profile"]);
-const SHORT_LABEL: Record<string, string> = { together: "Вместе" };
+const SHORT_LABEL: Record<string, string> = { together: msg("Вместе") };
 
 /** Phone header: mark, bell and account button. */
 export function MobileTopBar({
@@ -20,11 +22,12 @@ export function MobileTopBar({
   profile: NavUser | null;
   onLogout: () => void;
 }>) {
+  const t = useT();
   return (
     <div className="flex h-14 items-center justify-between border-b border-line-soft bg-bg/95 px-4 backdrop-blur">
       <Link
         href="/"
-        aria-label="VEINMusic (бета) — на главную"
+        aria-label={t("VEINMusic (бета) — на главную")}
         className="flex items-center gap-2 rounded-md"
       >
         <LogoTile size={28} />
@@ -48,10 +51,11 @@ export function MobileTabBar({
   username,
   active,
 }: Readonly<{ username: string; active: string | null }>) {
+  const t = useT();
   const tabs = navItems(username).filter((i) => TAB_IDS.has(i.id));
   return (
     <nav
-      aria-label="Разделы"
+      aria-label={t("Разделы")}
       className="grid grid-cols-5 border-t border-line-soft bg-sidebar px-1 pb-[calc(6px+env(safe-area-inset-bottom))] pt-1.5"
     >
       {tabs.map((item) => {
@@ -67,7 +71,7 @@ export function MobileTabBar({
             }`}
           >
             <Icon className="h-[22px] w-[22px]" aria-hidden="true" />
-            {SHORT_LABEL[item.id] ?? item.label}
+            {t(SHORT_LABEL[item.id] ?? item.label)}
           </Link>
         );
       })}

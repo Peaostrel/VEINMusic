@@ -3,18 +3,23 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import ts from "typescript";
 
-async function load(path) {
-  const source = await readFile(new URL(path, import.meta.url), "utf8");
-  const { outputText } = ts.transpileModule(source, {
+// Transpiles a TypeScript module and its relative imports into data: URLs
+async function moduleUrl(url) {
+  const source = await readFile(url, "utf8");
+  let { outputText } = ts.transpileModule(source, {
     compilerOptions: {
       module: ts.ModuleKind.ESNext,
       target: ts.ScriptTarget.ES2022,
     },
   });
-  return import(
-    `data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`
-  );
+  for (const [, spec] of outputText.matchAll(/from "(\.{1,2}\/[^"]+)"/g)) {
+    const dep = await moduleUrl(new URL(`${spec}.ts`, url));
+    outputText = outputText.replace(`"${spec}"`, `"${dep}"`);
+  }
+  return `data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`;
 }
+const load = async (path) =>
+  import(await moduleUrl(new URL(path, import.meta.url)));
 const { openSocket, subscribeSocket } = await load("../app/lib/api.ts");
 const {
   listeningElapsed,

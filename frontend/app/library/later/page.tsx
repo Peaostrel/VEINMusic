@@ -3,6 +3,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { jsonRequest, qualityRequest } from "@/app/lib/qualityApi";
 import { btn, PageHeader } from "@/components/ui";
+import { useT } from "@/app/lib/i18n/client";
+import { tr } from "@/app/lib/i18n/active";
 interface Saved {
   id: number;
   note: string;
@@ -16,6 +18,7 @@ interface Saved {
   };
 }
 export default function ListenLaterPage() {
+  const t = useT();
   const [items, setItems] = useState<Saved[]>([]);
   const [cursor, setCursor] = useState<number | null>(null);
   const [message, setMessage] = useState("");
@@ -30,7 +33,9 @@ export default function ListenLaterPage() {
   }, []);
   useEffect(() => {
     void load().catch((cause: unknown) =>
-      setMessage(cause instanceof Error ? cause.message : "Ошибка загрузки"),
+      setMessage(
+        cause instanceof Error ? cause.message : tr("Ошибка загрузки"),
+      ),
     );
   }, [load]);
   const change = async (
@@ -38,7 +43,7 @@ export default function ListenLaterPage() {
     action: "note" | "remove" | "like" | "dislike",
   ) => {
     const note =
-      action === "note" ? prompt("Заметка о треке", item.note) : null;
+      action === "note" ? prompt(t("Заметка о треке"), item.note) : null;
     if (action === "note" && note === null) return;
     setBusy(true);
     try {
@@ -57,10 +62,10 @@ export default function ListenLaterPage() {
           jsonRequest("POST", { value: action }),
         );
       await load();
-      setMessage("Сохранено.");
+      setMessage(t("Сохранено."));
     } catch (cause) {
       setMessage(
-        cause instanceof Error ? cause.message : "Не удалось сохранить",
+        cause instanceof Error ? cause.message : t("Не удалось сохранить"),
       );
     } finally {
       setBusy(false);
@@ -69,15 +74,15 @@ export default function ListenLaterPage() {
   return (
     <main className="mx-auto max-w-[900px] space-y-5 px-4 py-8">
       <PageHeader
-        title="Послушать позже"
-        subtitle="Личный список музыки и заметок"
+        title={t("Послушать позже")}
+        subtitle={t("Личный список музыки и заметок")}
       />
-      <Link href="/library">← Библиотека</Link>
+      <Link href="/library">{t("← Библиотека")}</Link>
       <output aria-live="polite" className="block text-sm">
         {message}
       </output>
       {!items.length && (
-        <p>Сохраните музыку из рекомендаций или карточки трека.</p>
+        <p>{t("Сохраните музыку из рекомендаций или карточки трека.")}</p>
       )}
       {items.map((item) => (
         <article
@@ -90,8 +95,9 @@ export default function ListenLaterPage() {
           <p className="text-sm text-fg-3">{item.note}</p>
           {item.heard && (
             <p className="text-sm">
-              Уже прослушано после сохранения
-              {item.feedback ? " · впечатление сохранено" : " · как вам трек?"}
+              {t("Уже прослушано после сохранения")}
+              {" · "}
+              {item.feedback ? t("впечатление сохранено") : t("как вам трек?")}
             </p>
           )}
           <div className="flex flex-wrap gap-2">
@@ -103,7 +109,7 @@ export default function ListenLaterPage() {
                   rel="noopener noreferrer"
                   className={btn.secondary}
                 >
-                  Открыть в сервисе
+                  {t("Открыть в сервисе")}
                 </a>
               )}
             <button
@@ -113,7 +119,7 @@ export default function ListenLaterPage() {
                 void change(item, "note");
               }}
             >
-              Заметка
+              {t("Заметка")}
             </button>
             {item.heard && (
               <>
@@ -124,7 +130,7 @@ export default function ListenLaterPage() {
                     void change(item, "like");
                   }}
                 >
-                  Понравилось
+                  {t("Понравилось")}
                 </button>
                 <button
                   disabled={busy}
@@ -133,7 +139,7 @@ export default function ListenLaterPage() {
                     void change(item, "dislike");
                   }}
                 >
-                  Не понравилось
+                  {t("Не понравилось")}
                 </button>
               </>
             )}
@@ -144,7 +150,7 @@ export default function ListenLaterPage() {
                 void change(item, "remove");
               }}
             >
-              Убрать из списка
+              {t("Убрать из списка")}
             </button>
           </div>
         </article>
@@ -155,12 +161,12 @@ export default function ListenLaterPage() {
           onClick={() => {
             void load(cursor).catch((cause: unknown) =>
               setMessage(
-                cause instanceof Error ? cause.message : "Ошибка загрузки",
+                cause instanceof Error ? cause.message : t("Ошибка загрузки"),
               ),
             );
           }}
         >
-          Следующие
+          {t("Следующие")}
         </button>
       )}
     </main>

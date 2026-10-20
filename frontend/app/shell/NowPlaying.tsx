@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { API_URL, subscribeSocket } from "@/app/lib/api";
 import { useVisiblePolling } from "@/app/lib/usePolling";
+import { useT } from "@/app/lib/i18n/client";
+import type { Translator } from "@/app/lib/i18n/core";
 import { sanitizeImageUrl } from "@/app/utils/sanitizeUrl";
 import { Music2, Pause } from "lucide-react";
 import {
@@ -70,14 +72,18 @@ function handleLiveMessage(event: MessageEvent, handlers: LiveMessageHandlers) {
   }
 }
 
-function listeningCreditLabel(track: CurrentTrack, progress: number | null) {
-  if (track.excluded) return "Исключено из статистики";
+function listeningCreditLabel(
+  track: CurrentTrack,
+  progress: number | null,
+  t: Translator,
+) {
+  if (track.excluded) return t("Исключено из статистики");
   const credited =
     !!track.duration &&
     track.listened_sec != null &&
     track.listened_sec * 100 >= track.duration * 85;
-  if (credited) return "Прослушивание засчитано";
-  return `${progress}% · зачёт от 85%`;
+  if (credited) return t("Прослушивание засчитано");
+  return t("{progress}% · зачёт от 85%", { progress: progress ?? 0 });
 }
 
 // WebSocket events refresh immediately; polling also reconciles heartbeat data.
@@ -95,6 +101,7 @@ export default function NowPlaying({
    * someone else's profile a socket is rejected and retried forever. */
   live?: boolean;
 }>) {
+  const t = useT();
   const mobileRef = useRef<HTMLDetailsElement>(null);
   const [track, setTrack] = useState<CurrentTrack | null>(null);
   const [clock, setClock] = useState(0);
@@ -173,7 +180,7 @@ export default function NowPlaying({
     if (variant !== "sidebar") return null;
     return (
       <p className="rounded-lg border border-dashed border-line px-3 py-2.5 text-xs text-fg-3">
-        Сейчас ничего не играет
+        {t("Сейчас ничего не играет")}
       </p>
     );
   }
@@ -184,7 +191,7 @@ export default function NowPlaying({
     elapsed,
     track.display_position_sec,
   );
-  const creditLabel = listeningCreditLabel(track, progress);
+  const creditLabel = listeningCreditLabel(track, progress, t);
   const details = (
     <div className="space-y-2">
       {live && (
@@ -193,8 +200,8 @@ export default function NowPlaying({
             className={`h-1.5 w-1.5 rounded-full ${connectionState === "live" ? "bg-emerald-500" : "bg-amber-500"}`}
           />
           {connectionState === "live"
-            ? "Обновляется мгновенно"
-            : "Переподключение…"}
+            ? t("Обновляется мгновенно")
+            : t("Переподключение…")}
         </p>
       )}
       {track.source && (
@@ -214,7 +221,7 @@ export default function NowPlaying({
       {progress !== null && (
         <>
           <progress
-            aria-label="Прогресс прослушивания"
+            aria-label={t("Прогресс прослушивания")}
             value={progress}
             max={100}
             className="music-progress block h-1.5 w-full"
@@ -244,7 +251,7 @@ export default function NowPlaying({
         <span className="block truncate text-xs text-fg-2">{track.artist}</span>
       </span>
       {track.paused ? (
-        <Pause className="h-4 w-4 text-fg-3" aria-label="Пауза" />
+        <Pause className="h-4 w-4 text-fg-3" aria-label={t("Пауза")} />
       ) : (
         <PlayingBars />
       )}
@@ -257,23 +264,23 @@ export default function NowPlaying({
         className="mobile-playing border-t border-line bg-surface px-4 py-3 shadow-lg"
       >
         <summary
-          aria-label="Сейчас играет — подробности"
+          aria-label={t("Сейчас играет — подробности")}
           className="cursor-pointer list-none"
         >
           {identity}
         </summary>
-        <section className="mt-3" aria-label="Подробности прослушивания">
+        <section className="mt-3" aria-label={t("Подробности прослушивания")}>
           {details}
         </section>
       </details>
     );
   return (
     <section
-      aria-label="Сейчас играет"
+      aria-label={t("Сейчас играет")}
       className="flex flex-col gap-3 rounded-xl border border-accent/20 bg-accent-soft p-4"
     >
       <p className="text-xs font-medium text-accent">
-        {track.paused ? "На паузе" : "Сейчас играет"}
+        {track.paused ? t("На паузе") : t("Сейчас играет")}
       </p>
       {identity}
       {details}

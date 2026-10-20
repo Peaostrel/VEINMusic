@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useT } from "@/app/lib/i18n/client";
 
 /** Five equalizer bars arranged as a V — the VEINMusic mark (32×32 grid). */
 export const LOGO_PATH = "M6 6V12.5M11 10V18M16 15V26M21 10V18M26 6V12.5";
@@ -54,9 +55,10 @@ export function Wordmark({ className = "" }: Readonly<{ className?: string }>) {
 export function BetaBadge({
   className = "",
 }: Readonly<{ className?: string }>) {
+  const t = useT();
   return (
     <span
-      title="VEINMusic на бета-тестировании: возможны ошибки и изменения"
+      title={t("VEINMusic на бета-тестировании: возможны ошибки и изменения")}
       className={`inline-flex h-[18px] shrink-0 items-center rounded-full border border-accent/50 px-1.5 font-mono text-[10px] font-medium uppercase leading-none tracking-[0.06em] text-accent ${className}`}
     >
       beta
@@ -76,10 +78,13 @@ export function BrandLink({
   textClass?: string;
   beta?: boolean;
 }>) {
+  const t = useT();
   return (
     <Link
       href={href}
-      aria-label={`VEINMusic${beta ? " (бета)" : ""} — на главную`}
+      aria-label={
+        beta ? t("VEINMusic (бета) — на главную") : t("VEINMusic — на главную")
+      }
       className="flex items-center gap-2.5 rounded-md"
     >
       <LogoTile size={size} />

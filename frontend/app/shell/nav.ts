@@ -9,6 +9,7 @@ import {
   Trophy,
   User,
 } from "lucide-react";
+import { msg } from "@/app/lib/i18n/core";
 
 export interface NavItem {
   id: string;
@@ -22,37 +23,37 @@ export interface NavItem {
 export function navItems(username: string): NavItem[] {
   const me = encodeURIComponent(username);
   return [
-    { id: "feed", label: "Лента", href: "/", icon: Rss },
-    { id: "top", label: "Топ", href: "/leaderboard", icon: Trophy },
+    { id: "feed", label: msg("Лента"), href: "/", icon: Rss },
+    { id: "top", label: msg("Топ"), href: "/leaderboard", icon: Trophy },
     {
       id: "together",
-      label: "Слушать вместе",
+      label: msg("Слушать вместе"),
       href: "/together",
       icon: Headphones,
     },
     {
       id: "stats",
-      label: "Статистика",
+      label: msg("Статистика"),
       href: `/user/${me}/stats`,
       icon: ChartColumn,
     },
     {
       id: "library",
-      label: "Моя библиотека",
+      label: msg("Моя библиотека"),
       href: "/library",
       icon: LibraryBig,
     },
-    { id: "goals", label: "Цели", href: "/goals", icon: Target },
-    { id: "profile", label: "Профиль", href: `/user/${me}`, icon: User },
+    { id: "goals", label: msg("Цели"), href: "/goals", icon: Target },
+    { id: "profile", label: msg("Профиль"), href: `/user/${me}`, icon: User },
     {
       id: "settings",
-      label: "Настройки",
+      label: msg("Настройки"),
       href: "/settings",
       icon: SlidersHorizontal,
     },
     {
       id: "admin",
-      label: "Админка",
+      label: msg("Админка"),
       href: "/admin",
       icon: Shield,
       staffOnly: true,

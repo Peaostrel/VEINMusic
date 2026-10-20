@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useT } from "@/app/lib/i18n/client";
 import { useEffect, useRef, useState } from "react";
 import { Award, LogOut, Shield, SlidersHorizontal, User } from "lucide-react";
 import { Avatar } from "@/components/ui";
@@ -28,6 +29,7 @@ export default function AccountMenu({
   onLogout: () => void;
   variant: "chip" | "avatar";
 }>) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const close = () => setOpen(false);
@@ -61,7 +63,7 @@ export default function AccountMenu({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        aria-label="Меню аккаунта"
+        aria-label={t("Меню аккаунта")}
         aria-expanded={open}
         aria-controls="account-menu"
         className={
@@ -83,7 +85,7 @@ export default function AccountMenu({
               {name}
             </span>
             <span className="truncate font-mono text-[11px] text-fg-3">
-              ур. {profile?.level ?? 1}
+              {t("ур. {level}", { level: profile?.level ?? 1 })}
             </span>
           </span>
         )}
@@ -110,10 +112,10 @@ export default function AccountMenu({
             </div>
             <div className="font-mono text-xs text-fg-3">@{username}</div>
           </div>
-          <nav aria-label="Аккаунт" className="flex flex-col p-1.5">
+          <nav aria-label={t("Аккаунт")} className="flex flex-col p-1.5">
             <Link href={`/user/${me}`} onClick={close} className={itemClass}>
               <User className="h-4 w-4" aria-hidden="true" />
-              Мой профиль
+              {t("Мой профиль")}
             </Link>
             <Link
               href={`/user/${me}/achievements`}
@@ -121,23 +123,23 @@ export default function AccountMenu({
               className={itemClass}
             >
               <Award className="h-4 w-4" aria-hidden="true" />
-              Достижения
+              {t("Достижения")}
             </Link>
             {compact && (
               <Link href="/settings" onClick={close} className={itemClass}>
                 <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
-                Настройки
+                {t("Настройки")}
               </Link>
             )}
             {compact && isStaff(profile?.role) && (
               <Link href="/admin" onClick={close} className={itemClass}>
                 <Shield className="h-4 w-4" aria-hidden="true" />
-                Админка
+                {t("Админка")}
               </Link>
             )}
           </nav>
           <div className="flex items-center justify-between gap-3 border-t border-line px-4 py-2.5 text-sm text-fg-2">
-            <span>Язык</span>
+            <span>{t("Язык")}</span>
             <LanguageSwitch />
           </div>
           <div className="border-t border-line p-1.5">
@@ -150,7 +152,7 @@ export default function AccountMenu({
               className={`${itemClass} w-full text-left hover:text-danger`}
             >
               <LogOut className="h-4 w-4" aria-hidden="true" />
-              Выйти
+              {t("Выйти")}
             </button>
           </div>
         </div>

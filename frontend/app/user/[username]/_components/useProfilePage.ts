@@ -11,6 +11,7 @@ import {
 } from "@/app/lib/api";
 import { applyPlaybackUpdate } from "@/app/lib/playback";
 import { useCountries } from "@/app/lib/geo";
+import { useT } from "@/app/lib/i18n/client";
 import { useProfileTheme } from "./hooks";
 import { fetchAndShowNotifications } from "./notifications";
 import type {
@@ -56,6 +57,7 @@ export interface FollowModalState {
 
 /** State, data loading and actions of the profile page. */
 export function useProfilePage() {
+  const t = useT();
   const username = useParams()?.username;
   const router = useRouter();
 
@@ -187,7 +189,7 @@ export function useProfilePage() {
       } catch (err) {
         if (!active) return;
         console.error("Ошибка загрузки профиля:", err);
-        setError("Ошибка подключения к серверу");
+        setError(t("Ошибка подключения к серверу"));
       } finally {
         refreshing = false;
         if (active && refreshQueued) {
@@ -274,7 +276,10 @@ export function useProfilePage() {
                 } else if (msg.type === "SYNC_INVITE") {
                   if (
                     confirm(
-                      `Пользователь ${msg.from} хочет слушать музыку вместе! Перейти к нему?`,
+                      t(
+                        "Пользователь {user} хочет слушать музыку вместе! Перейти к нему?",
+                        { user: msg.from },
+                      ),
                     )
                   ) {
                     router.push(`/user/${msg.from}`);
@@ -301,7 +306,7 @@ export function useProfilePage() {
       subscription?.close();
       if (wsRef.current === subscription) wsRef.current = null;
     };
-  }, [username, isMyProfile, identityReady, router]);
+  }, [username, isMyProfile, identityReady, router, t]);
 
   // Таймеры для уведомлений теперь создаются индивидуально при их добавлении
 
@@ -356,7 +361,7 @@ export function useProfilePage() {
     setFollowModal({
       isOpen: true,
       type,
-      title: type === "followers" ? "Подписчики" : "Подписки",
+      title: type === "followers" ? t("Подписчики") : t("Подписки"),
       users: [],
       loading: true,
     });
@@ -400,22 +405,24 @@ export function useProfilePage() {
         const started = await res.json();
         alert(
           started.status === "already_running"
-            ? "⏳ Импорт уже идёт. Прогресс виден в настройках → Интеграции."
-            : "✅ Импорт запущен в фоновом режиме. Прогресс виден в настройках → Интеграции.",
+            ? t("⏳ Импорт уже идёт. Прогресс виден в настройках → Интеграции.")
+            : t(
+                "✅ Импорт запущен в фоновом режиме. Прогресс виден в настройках → Интеграции.",
+              ),
         );
       } else {
-        let errorMessage = "Не удалось запустить импорт";
+        let errorMessage = t("Не удалось запустить импорт");
         try {
           const err = await res.json();
           errorMessage = err.detail || errorMessage;
         } catch {
-          errorMessage = `Ошибка сервера (${res.status})`;
+          errorMessage = t("Ошибка сервера ({status})", { status: res.status });
         }
-        alert(`Ошибка: ${errorMessage}`);
+        alert(t("Ошибка: {message}", { message: errorMessage }));
       }
     } catch (e) {
       console.error(e);
-      alert("Ошибка сети: Бэкенд не отвечает. Проверьте соединение.");
+      alert(t("Ошибка сети: Бэкенд не отвечает. Проверьте соединение."));
     } finally {
       setImportLoading(false);
     }

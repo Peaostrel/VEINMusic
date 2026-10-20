@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import { API_URL } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/client";
 
 interface AutocompleteInputProps {
   id?: string;
@@ -21,6 +22,7 @@ export default function AutocompleteInput({
   disabled,
   className,
 }: Readonly<AutocompleteInputProps>) {
+  const t = useT();
   const [suggestions, setSuggestions] = useState<
     { title: string; image: string }[]
   >([]);
@@ -79,7 +81,7 @@ export default function AutocompleteInput({
           {isLoading && suggestions.length === 0 ? (
             <li className="px-4 py-3 text-sm text-fg-2 text-center flex items-center justify-center gap-2">
               <div className="animate-spin border-2 border-accent border-t-transparent rounded-full w-4 h-4"></div>
-              Загрузка...
+              {t("Загрузка...")}
             </li>
           ) : (
             suggestions.map((suggestion) => (

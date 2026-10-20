@@ -9,29 +9,47 @@ import { formatNumber, plural } from "@/app/lib/plural";
 import { getSafeUrl } from "../../_components/profileUtils";
 import CalendarRange from "./CalendarRange";
 import { btn, Segmented } from "@/components/ui";
+import { msg } from "@/app/lib/i18n/core";
+import { currentLocale, tr } from "@/app/lib/i18n/active";
+import { useT } from "@/app/lib/i18n/client";
 
 const MONTHS = [
-  "Январь",
-  "Февраль",
-  "Март",
-  "Апрель",
-  "Май",
-  "Июнь",
-  "Июль",
-  "Август",
-  "Сентябрь",
-  "Октябрь",
-  "Ноябрь",
-  "Декабрь",
+  msg("Январь"),
+  msg("Февраль"),
+  msg("Март"),
+  msg("Апрель"),
+  msg("Май"),
+  msg("Июнь"),
+  msg("Июль"),
+  msg("Август"),
+  msg("Сентябрь"),
+  msg("Октябрь"),
+  msg("Ноябрь"),
+  msg("Декабрь"),
 ];
-const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const WEEKDAYS = [
+  msg("Пн"),
+  msg("Вт"),
+  msg("Ср"),
+  msg("Чт"),
+  msg("Пт"),
+  msg("Сб"),
+  msg("Вс"),
+];
+/** Names the server puts in place of a missing artist or title. */
+const PLACEHOLDERS = new Set([msg("Неизвестный артист"), msg("Без названия")]);
 
 function localDate(value: string) {
   return new Date(`${value}T12:00:00`);
 }
 
+/** A server placeholder ("Без названия") translated; real names unchanged. */
+function shown(value: string) {
+  return PLACEHOLDERS.has(value) ? tr(value) : value;
+}
+
 function dayLabel(value: string) {
-  return localDate(value).toLocaleDateString("ru-RU", {
+  return localDate(value).toLocaleDateString(currentLocale(), {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -54,6 +72,7 @@ function Month({
   selected: string | null;
   onSelect: (day: CalendarDay) => void;
 }>) {
+  const t = useT();
   const total = new Date(year, month + 1, 0).getDate();
   const leading = (new Date(year, month, 1).getDay() + 6) % 7;
   const cells: number[] = [
@@ -62,10 +81,10 @@ function Month({
   ];
   return (
     <section className="rounded-lg border border-line-soft p-3">
-      <h3 className="mb-3 text-sm font-medium">{MONTHS[month]}</h3>
+      <h3 className="mb-3 text-sm font-medium">{t(MONTHS[month])}</h3>
       <div className="mb-1 grid grid-cols-7 gap-1 text-center font-mono text-[10px] text-fg-3">
         {WEEKDAYS.map((weekday) => (
-          <span key={weekday}>{weekday}</span>
+          <span key={weekday}>{t(weekday)}</span>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-1">
@@ -92,13 +111,16 @@ function Month({
               onClick={() => day && onSelect(day)}
               aria-label={
                 day
-                  ? `${dayLabel(key)}: ${day.scrobbles} прослушиваний`
-                  : `${dayLabel(key)}: нет прослушиваний`
+                  ? t("{day}: {n} прослушиваний", {
+                      day: dayLabel(key),
+                      n: day.scrobbles,
+                    })
+                  : t("{day}: нет прослушиваний", { day: dayLabel(key) })
               }
               title={
                 day
-                  ? `${day.scrobbles} · ${day.top_artist}`
-                  : "Нет прослушиваний"
+                  ? `${day.scrobbles} · ${shown(day.top_artist)}`
+                  : t("Нет прослушиваний")
               }
               className={`h-11 min-w-0 rounded-lg border font-mono text-xs transition-transform enabled:hover:scale-110 enabled:focus-visible:outline enabled:focus-visible:outline-2 enabled:focus-visible:outline-accent ${
                 selected === key
@@ -121,6 +143,7 @@ function Month({
 }
 
 export function MusicCalendar({ username }: Readonly<{ username: string }>) {
+  const t = useT();
   const currentYear = new Date().getFullYear();
   const [mode, setMode] = useState<"month" | "year">("month");
   const [month, setMonth] = useState(new Date().getMonth());
@@ -181,16 +204,16 @@ export function MusicCalendar({ username }: Readonly<{ username: string }>) {
             className="flex items-center gap-2 text-base font-semibold"
           >
             <CalendarDays className="h-4 w-4 text-accent" aria-hidden="true" />
-            Музыкальный календарь
+            {t("Музыкальный календарь")}
           </h2>
           <p className="mt-1 text-xs text-fg-3">
-            Нажмите на активный день, чтобы увидеть его итоги.
+            {t("Нажмите на активный день, чтобы увидеть его итоги.")}
           </p>
         </div>
         <label className="flex items-center gap-2 text-xs text-fg-2">
-          <span>Год</span>
+          <span>{t("Год")}</span>
           <select
-            aria-label="Год календаря"
+            aria-label={t("Год календаря")}
             value={year}
             onChange={(event) => setYear(Number(event.target.value))}
             className="h-8 rounded-lg border border-line bg-bg px-2 font-mono text-xs text-fg outline-none"
@@ -206,22 +229,27 @@ export function MusicCalendar({ username }: Readonly<{ username: string }>) {
 
       {loading ? (
         <p className="py-12 text-center text-sm text-fg-3">
-          Собираем календарь…
+          {t("Собираем календарь…")}
         </p>
       ) : null}
       {!loading && error ? (
         <p className="rounded-lg border border-dashed border-line py-8 text-center text-sm text-fg-3">
-          Не удалось загрузить календарь. Обновите страницу и попробуйте снова.
+          {t(
+            "Не удалось загрузить календарь. Обновите страницу и попробуйте снова.",
+          )}
         </p>
       ) : null}
       {!loading && !error && (
         <>
           <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line-soft bg-line-soft sm:grid-cols-4">
             {[
-              ["активных дней", calendar?.summary.active_days ?? 0],
-              ["прослушиваний", calendar?.summary.total_scrobbles ?? 0],
-              ["минут музыки", calendar?.summary.total_minutes ?? 0],
-              ["лучшая серия", `${calendar?.summary.longest_streak ?? 0} дн.`],
+              [t("активных дней"), calendar?.summary.active_days ?? 0],
+              [t("прослушиваний"), calendar?.summary.total_scrobbles ?? 0],
+              [t("минут музыки"), calendar?.summary.total_minutes ?? 0],
+              [
+                t("лучшая серия"),
+                t("{n} дн.", { n: calendar?.summary.longest_streak ?? 0 }),
+              ],
             ].map(([label, value]) => (
               <div
                 key={label}
@@ -235,19 +263,19 @@ export function MusicCalendar({ username }: Readonly<{ username: string }>) {
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Segmented
-              label="Вид календаря"
+              label={t("Вид календаря")}
               value={mode}
               onChange={setMode}
               options={[
-                { id: "month", label: "Месяц" },
-                { id: "year", label: "Весь год" },
+                { id: "month", label: t("Месяц") },
+                { id: "year", label: t("Весь год") },
               ]}
             />
             {mode === "month" && (
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  aria-label="Предыдущий месяц"
+                  aria-label={t("Предыдущий месяц")}
                   disabled={month === 0}
                   className={btn.icon}
                   onClick={() => setMonth((value) => value - 1)}
@@ -258,11 +286,11 @@ export function MusicCalendar({ username }: Readonly<{ username: string }>) {
                   className="min-w-24 text-center text-sm font-medium"
                   aria-live="polite"
                 >
-                  {MONTHS[month]}
+                  {t(MONTHS[month])}
                 </span>
                 <button
                   type="button"
-                  aria-label="Следующий месяц"
+                  aria-label={t("Следующий месяц")}
                   disabled={month === 11}
                   className={btn.icon}
                   onClick={() => setMonth((value) => value + 1)}
@@ -321,27 +349,29 @@ export function MusicCalendar({ username }: Readonly<{ username: string }>) {
                       {dayLabel(selected.date)}
                     </p>
                     <p className="mt-1 truncate text-base font-medium">
-                      {selected.top_track.title}
+                      {shown(selected.top_track.title)}
                     </p>
                     <p className="truncate text-sm text-fg-2">
-                      {selected.top_track.artist}
+                      {shown(selected.top_track.artist)}
                     </p>
                   </div>
                   <dl className="grid w-full grid-cols-3 gap-3">
                     <div>
-                      <dt className="text-[10px] text-fg-3">прослушивания</dt>
+                      <dt className="text-[10px] text-fg-3">
+                        {t("прослушивания")}
+                      </dt>
                       <dd className="font-mono text-base">
                         {formatNumber(selected.scrobbles)}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-[10px] text-fg-3">минуты</dt>
+                      <dt className="text-[10px] text-fg-3">{t("минуты")}</dt>
                       <dd className="font-mono text-base">
                         {formatNumber(selected.minutes)}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-[10px] text-fg-3">артисты</dt>
+                      <dt className="text-[10px] text-fg-3">{t("артисты")}</dt>
                       <dd
                         className="font-mono text-base"
                         title={plural(
@@ -358,7 +388,7 @@ export function MusicCalendar({ username }: Readonly<{ username: string }>) {
                 </div>
               ) : (
                 <p className="rounded-lg border border-dashed border-line py-8 text-center text-sm text-fg-3">
-                  В этом году пока нет прослушиваний.
+                  {t("В этом году пока нет прослушиваний.")}
                 </p>
               )}
               {selected && (
