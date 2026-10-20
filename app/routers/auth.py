@@ -54,6 +54,19 @@ REGISTER_RATE_LIMIT = os.getenv("REGISTER_RATE_LIMIT", "3/minute")
 PD_CONSENT_VERSION = "2026-10-19"
 
 
+def set_session_cookie(response: Response, session_token: str) -> None:
+    """Hand the browser its signed session token."""
+    response.set_cookie(
+        key="api_key",
+        value=session_token.replace('\r', '').replace('\n', ''),
+        httponly=True,
+        # HTTPS only in production
+        secure=os.getenv("ENVIRONMENT") == "production",
+        samesite="strict",
+        max_age=30 * 24 * 3600
+    )
+
+
 @router.post("/register", responses={400: {"description": "Bad Request"},
                                       403: {"description": "Registration is switched off"}})
 @limiter.limit(REGISTER_RATE_LIMIT)
@@ -96,18 +109,7 @@ def register(request: Request, data: UserRegister, response: Response,
     db.add(UserIntegration(user_id=new_user.id))
     db.commit()
 
-    # Set signed session token in cookie
-    session_token = issue_session(db, new_user, request, notify=False, response=response)
-    safe_token = session_token.replace('\r', '').replace('\n', '')
-    response.set_cookie(
-        key="api_key",
-        value=safe_token,
-        httponly=True,
-        # Set to True in production (HTTPS)
-        secure=os.getenv("ENVIRONMENT") == "production",
-        samesite="strict",
-        max_age=30 * 24 * 3600
-    )
+    set_session_cookie(response, issue_session(db, new_user, request, notify=False, response=response))
     return {"message": "Успешная регистрация", "username": new_user.username, "api_key": raw_api_key}
 
 
@@ -151,18 +153,8 @@ def login(request: Request, data: UserLogin, response: Response, background_task
         db.commit()
     login_guard.reset(data.username, client_ip)
 
-    # Set signed session token in cookie
-    session_token = issue_session(db, user, request, response=response, background_tasks=background_tasks)
-    safe_token = session_token.replace('\r', '').replace('\n', '')
-    response.set_cookie(
-        key="api_key",
-        value=safe_token,
-        httponly=True,
-        # Set to True in production
-        secure=os.getenv("ENVIRONMENT") == "production",
-        samesite="strict",
-        max_age=30 * 24 * 3600
-    )
+    set_session_cookie(response, issue_session(
+        db, user, request, response=response, background_tasks=background_tasks))
     return {"username": user.username}
 
 

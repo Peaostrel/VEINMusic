@@ -11,6 +11,14 @@ import Captcha from "./Captcha";
 
 type Mode = "login" | "register";
 
+/** What the VK ID callback reports back in ?vk=… */
+const vkErrors: Record<string, string> = {
+  unknown:
+    "Этот VK ID не привязан ни к одному аккаунту. Войдите по логину и паролю и привяжите VK ID в настройках безопасности.",
+  banned: "Аккаунт заблокирован",
+  error: "Не удалось войти через VK ID. Попробуйте ещё раз.",
+};
+
 const nextSteps = [
   ["Подключите сервис", "Яндекс, Spotify или SoundCloud работают напрямую"],
   ["При необходимости — расширение", "Для YouTube Music, VK и веб-плееров"],
@@ -133,7 +141,47 @@ export default function Auth() {
   const [error, setError] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [loading, setLoading] = useState(false);
+  // VK ID sign-in: whether it is on, and whether it waits for the 2FA code
+  const [vkEnabled, setVkEnabled] = useState(false);
+  const [vkMfa, setVkMfa] = useState(false);
   const isLogin = mode === "login";
+
+  const signedIn = (name: string) => {
+    localStorage.setItem("username", name);
+    clearOfflineCache();
+    globalThis.dispatchEvent(new Event("themeChanged"));
+    go(afterLoginUrl(name));
+  };
+
+  /** Turn the ticket the VK ID callback left in a cookie into a session. */
+  const finishVk = async (otp?: string) => {
+    setError("");
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/auth/vk/finish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ otp_code: otp || undefined }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        signedIn(data.username);
+        return;
+      }
+      if (data.detail?.code === "mfa_required") {
+        setVkMfa(true);
+        setError(data.detail.message);
+      } else {
+        setError(
+          typeof data.detail === "string" ? data.detail : vkErrors.error,
+        );
+      }
+    } catch {
+      setError("Сервер не отвечает. Попробуйте ещё раз.");
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
     const stored = localStorage.getItem("username");
@@ -141,12 +189,25 @@ export default function Auth() {
       go("/");
       return;
     }
-    const wanted = new URLSearchParams(globalThis.location.search).get("mode");
-    if (wanted === "register") setMode("register");
+    const params = new URLSearchParams(globalThis.location.search);
+    if (params.get("mode") === "register") setMode("register");
+    const vk = params.get("vk");
+    if (vk === "finish") void finishVk();
+    else if (vk && vkErrors[vk]) setError(vkErrors[vk]);
+    fetch(`${API_URL}/auth/vk/config`)
+      .then((res) => (res.ok ? res.json() : { enabled: false }))
+      .then((config: { enabled: boolean }) => setVkEnabled(config.enabled))
+      .catch(() => setVkEnabled(false));
+    // finishVk only runs once, for the page the VK callback opened
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (vkMfa) {
+      await finishVk(otpCode);
+      return;
+    }
     setError("");
     setLoading(true);
     const endpoint = isLogin ? "/auth/login" : "/auth/register";
@@ -184,10 +245,6 @@ export default function Auth() {
         setLoading(false);
         return;
       }
-      localStorage.setItem("username", data.username);
-      clearOfflineCache();
-      globalThis.dispatchEvent(new Event("themeChanged"));
-
       // The raw API key is only returned once, on registration (the server
       // stores just a hash). Hand it to the browser extension directly
       // instead of persisting it in localStorage.
@@ -201,10 +258,13 @@ export default function Auth() {
           },
           globalThis.location.origin,
         );
+        localStorage.setItem("username", data.username);
+        clearOfflineCache();
+        globalThis.dispatchEvent(new Event("themeChanged"));
         setLoading(false);
         return;
       }
-      go(afterLoginUrl(data.username));
+      signedIn(data.username);
     } catch (err) {
       console.error(err);
       setError("Сервер не отвечает. Попробуйте ещё раз.");
@@ -255,43 +315,49 @@ export default function Auth() {
                 : "Регистрация занимает 10 секунд."}
             </p>
           </div>
-          <div>
-            <label htmlFor="auth-username" className={label}>
-              Логин
-            </label>
-            <input
-              id="auth-username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className={`${input} h-11 font-mono`}
-              placeholder="masha_l"
-              autoComplete="username"
-              required
-            />
-          </div>
-          <div>
-            <div className="flex items-baseline justify-between">
-              <label htmlFor="auth-password" className={label}>
-                Пароль
-              </label>
-              {!isLogin && (
-                <span className="text-xs text-fg-3">минимум 8 символов</span>
-              )}
-            </div>
-            <input
-              id="auth-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={`${input} h-11`}
-              placeholder="••••••••"
-              minLength={isLogin ? undefined : 8}
-              autoComplete={isLogin ? "current-password" : "new-password"}
-              required
-            />
-          </div>
-          {isLogin && mfaRequired && (
+          {!vkMfa && (
+            <>
+              <div>
+                <label htmlFor="auth-username" className={label}>
+                  Логин
+                </label>
+                <input
+                  id="auth-username"
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className={`${input} h-11 font-mono`}
+                  placeholder="masha_l"
+                  autoComplete="username"
+                  required
+                />
+              </div>
+              <div>
+                <div className="flex items-baseline justify-between">
+                  <label htmlFor="auth-password" className={label}>
+                    Пароль
+                  </label>
+                  {!isLogin && (
+                    <span className="text-xs text-fg-3">
+                      минимум 8 символов
+                    </span>
+                  )}
+                </div>
+                <input
+                  id="auth-password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={`${input} h-11`}
+                  placeholder="••••••••"
+                  minLength={isLogin ? undefined : 8}
+                  autoComplete={isLogin ? "current-password" : "new-password"}
+                  required
+                />
+              </div>
+            </>
+          )}
+          {((isLogin && mfaRequired) || vkMfa) && (
             <div>
               <label htmlFor="auth-otp" className={label}>
                 Код из приложения или резервный код
@@ -349,6 +415,14 @@ export default function Auth() {
           >
             {submitLabel}
           </button>
+          {isLogin && vkEnabled && !vkMfa && (
+            <a
+              href={`${API_URL}/auth/vk/login`}
+              className={`${btn.secondary} ${btn.lg}`}
+            >
+              Войти через VK ID
+            </a>
+          )}
           {isLogin && (
             <Link href="/email/forgot" className="text-sm text-accent">
               Забыли пароль?

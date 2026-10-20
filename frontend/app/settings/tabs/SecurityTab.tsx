@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import EmailSettings from "../components/EmailSettings";
 import BrowserSessions from "../components/BrowserSessions";
 import TwoFactorAuth from "../components/TwoFactorAuth";
+import VkIdSettings from "../components/VkIdSettings";
 import StatusText from "@/components/StatusText";
 import { ApiError, apiFetch, apiJson } from "@/app/lib/api";
 import {
@@ -193,6 +194,7 @@ export default function SecurityTab() {
       {message && <StatusText text={message} />}
 
       <TwoFactorAuth />
+      <VkIdSettings />
       <BrowserSessions />
 
       <section className={card}>

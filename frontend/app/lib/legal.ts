@@ -12,7 +12,7 @@ export const SERVER_COUNTRY = "США";
  * app/routers/auth.py: each account records the edition it agreed to.
  */
 export const PD_CONSENT_VERSION = "2026-10-19";
-export const LEGAL_UPDATED = "19 октября 2026";
+export const LEGAL_UPDATED = "20 октября 2026";
 
 /** Age category of the site (436-FZ): user texts and explicit lyrics. */
 export const AGE_RATING = "16+";

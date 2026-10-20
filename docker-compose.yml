@@ -23,6 +23,8 @@ x-backend-env: &backend-env
   SOUNDCLOUD_CLIENT_ID: ${SOUNDCLOUD_CLIENT_ID:-}
   SOUNDCLOUD_CLIENT_SECRET: ${SOUNDCLOUD_CLIENT_SECRET:-}
   SOUNDCLOUD_REDIRECT_URI: ${SOUNDCLOUD_REDIRECT_URI:-http://localhost:8000/auth/soundcloud/callback}
+  VK_CLIENT_ID: ${VK_CLIENT_ID:-}
+  VK_REDIRECT_URI: ${VK_REDIRECT_URI:-http://localhost:8000/auth/vk/callback}
 
 services:
   db:

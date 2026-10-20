@@ -45,6 +45,7 @@ from app.routers import (
     profile,
     reports,
     scrobbling,
+    vk_id,
     widgets,
 )
 from app.services import runtime_settings
@@ -200,6 +201,7 @@ app.add_middleware(
 
 # Include Routers
 app.include_router(auth.router)
+app.include_router(vk_id.router)
 app.include_router(email.router)
 app.include_router(profile.router)
 app.include_router(scrobbling.router)

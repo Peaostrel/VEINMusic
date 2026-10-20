@@ -155,6 +155,12 @@ export function useSettingsPage() {
       setStatus("❌ Не удалось подключить SoundCloud");
       setActiveTab("integrations");
     }
+    const vkResult = searchParams.get("vk");
+    if (vkResult === "linked")
+      setStatus("✅ VK ID привязан, теперь через него можно входить");
+    else if (vkResult === "taken")
+      setStatus("❌ Этот VK ID уже привязан к другому аккаунту");
+    else if (vkResult === "error") setStatus("❌ Не удалось привязать VK ID");
     const tabParam = searchParams.get("tab");
     const linkedTab = SETTINGS_TABS.find((t) => t.id === tabParam);
     if (linkedTab) setActiveTab(linkedTab.id);

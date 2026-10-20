@@ -28,6 +28,7 @@ DEFAULT_XP_MULTIPLIER = 1.0
 # Flags the application checks. A flag that has no row is treated as on.
 KNOWN_FEATURES: dict[str, str] = {
     "registration": "Регистрация новых аккаунтов",
+    "login_vk": "Вход и привязка через VK ID",
     "listen_together": "Комнаты «Слушать вместе»",
     "lastfm_import": "Импорт истории из Last.fm",
     "webhooks": "Создание и отправка вебхуков",
