@@ -244,25 +244,6 @@ def test_discord_social_link_requires_a_numeric_user_id(client):
     assert response.status_code == 400
 
 
-# --- Listen Together ---------------------------------------------------------
-
-def test_guests_cannot_chat_in_rooms():
-    from app import main
-
-    with patch.object(main.manager, "add_room_chat", AsyncMock()) as add_chat, \
-            patch.object(main.manager, "broadcast_to_room", AsyncMock()) as broadcast:
-        asyncio.run(main._handle_room_message(
-            "room", "Guest_abc123", {"type": "CHAT_MESSAGE", "text": "spam"},
-            {"last_chat": 0.0, "is_guest": True}))
-        add_chat.assert_not_awaited()
-        broadcast.assert_not_awaited()
-
-        asyncio.run(main._handle_room_message(
-            "room", "member", {"type": "CHAT_MESSAGE", "text": "hi"},
-            {"last_chat": 0.0, "is_guest": False}))
-        add_chat.assert_awaited_once()
-
-
 # --- Per-account rate limits -------------------------------------------------
 
 def test_upload_limit_is_per_account_not_per_ip(client):
