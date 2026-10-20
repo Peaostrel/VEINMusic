@@ -81,7 +81,7 @@ def build_account_export(user: User, db: Session, include_history: bool = True) 
 
     profile_fields = [
         "display_name", "bio", "avatar_url", "cover_url", "location", "favorite_genre", "equipment",
-        "social_links", "theme", "is_private", "hidden_artists", "sync_privacy", "favorite_artist",
+        "social_links", "theme", "is_private", "hidden_artists", "favorite_artist",
         "favorite_track", "favorite_album", "avatar_frame",
     ]
     email_account = db.get(EmailAccount, user.id)
