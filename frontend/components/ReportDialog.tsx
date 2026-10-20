@@ -153,6 +153,7 @@ export default function ReportDialog({
                 Подробности (необязательно)
               </span>
               <textarea
+                autoComplete="off"
                 value={details}
                 onChange={(e) => setDetails(e.target.value)}
                 maxLength={500}

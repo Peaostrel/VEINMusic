@@ -111,6 +111,7 @@ export default function LibraryPage() {
             aria-hidden="true"
           />
           <input
+            autoComplete="off"
             name="q"
             type="search"
             aria-label="Поиск в моей музыке"

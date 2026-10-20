@@ -83,6 +83,7 @@ export default function BroadcastPanel() {
         <label>
           <span className={labelClass}>Заголовок</span>
           <input
+            autoComplete="off"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             maxLength={80}
@@ -92,6 +93,7 @@ export default function BroadcastPanel() {
         <label>
           <span className={labelClass}>Ссылка на сайте (для push)</span>
           <input
+            autoComplete="off"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             pattern="/.*"
@@ -103,6 +105,7 @@ export default function BroadcastPanel() {
         <label className="sm:col-span-2">
           <span className={labelClass}>Текст ({message.length}/200)</span>
           <textarea
+            autoComplete="off"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             maxLength={200}
@@ -116,6 +119,7 @@ export default function BroadcastPanel() {
             Кому (ники через запятую; пусто — всем)
           </span>
           <input
+            autoComplete="off"
             value={usernames}
             onChange={(e) => setUsernames(e.target.value)}
             className={inputClass}

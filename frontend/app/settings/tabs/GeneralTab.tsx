@@ -121,6 +121,7 @@ export default function GeneralTab({
             Отображаемое Имя
           </label>
           <input
+            autoComplete="off"
             id="display-name"
             value={data.displayName}
             onChange={(e) => updateData("displayName", e.target.value)}
@@ -157,6 +158,7 @@ export default function GeneralTab({
           </label>
           <div className="relative">
             <input
+              autoComplete="off"
               id="city-input"
               value={data.city}
               onChange={(e) => updateData("city", e.target.value)}
@@ -193,6 +195,7 @@ export default function GeneralTab({
           О себе
         </label>
         <textarea
+          autoComplete="off"
           id="bio-textarea"
           value={data.bio}
           onChange={(e) => updateData("bio", e.target.value)}
@@ -245,6 +248,7 @@ export default function GeneralTab({
                   </select>
 
                   <input
+                    autoComplete="off"
                     type="text"
                     value={link.username}
                     onChange={(e) =>

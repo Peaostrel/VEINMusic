@@ -40,6 +40,7 @@ export default function CatalogTab({
                 Исходный ID (Дубликат)
               </span>
               <input
+                autoComplete="off"
                 type="number"
                 placeholder="Напр. 1045"
                 value={sourceTrackId}
@@ -52,6 +53,7 @@ export default function CatalogTab({
                 Канонический ID (Основной)
               </span>
               <input
+                autoComplete="off"
                 type="number"
                 placeholder="Напр. 42"
                 value={targetTrackId}
@@ -88,6 +90,7 @@ export default function CatalogTab({
                 Старое имя (с опечаткой)
               </span>
               <input
+                autoComplete="off"
                 type="text"
                 placeholder="Напр. The Weekndd"
                 value={sourceArtist}
@@ -100,6 +103,7 @@ export default function CatalogTab({
                 Правильное имя
               </span>
               <input
+                autoComplete="off"
                 type="text"
                 placeholder="Напр. The Weeknd"
                 value={targetArtist}

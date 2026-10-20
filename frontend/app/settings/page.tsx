@@ -193,6 +193,7 @@ function SettingsContent() {
             <label className="mb-3 flex h-9 items-center gap-2 rounded-lg border border-line bg-surface px-3 text-fg-3 focus-within:border-fg-3">
               <Search className="h-3.5 w-3.5" aria-hidden="true" />
               <input
+                autoComplete="off"
                 type="search"
                 value={settingsSearch}
                 onChange={(event) => setSettingsSearch(event.target.value)}

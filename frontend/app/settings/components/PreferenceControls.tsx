@@ -125,6 +125,7 @@ export function TagEditor({
       <p className="mt-0.5 text-xs leading-relaxed text-fg-2">{description}</p>
       <div className="mt-4 flex gap-2">
         <input
+          autoComplete="off"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {

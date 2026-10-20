@@ -133,6 +133,7 @@ export default function HistoryManager() {
         <label className="text-sm">
           <span>Поиск</span>
           <input
+            autoComplete="off"
             aria-label="Поиск в истории"
             className={input}
             value={q}
@@ -145,6 +146,7 @@ export default function HistoryManager() {
         <label className="text-sm">
           <span>Источник</span>
           <input
+            autoComplete="off"
             aria-label="Источник истории"
             placeholder="Точное название из записи"
             className={input}
@@ -311,6 +313,7 @@ export default function HistoryManager() {
             <label>
               <span>Новое название</span>
               <input
+                autoComplete="off"
                 className={input}
                 value={title}
                 onChange={(event) => {
@@ -322,6 +325,7 @@ export default function HistoryManager() {
             <label>
               <span>Новый исполнитель</span>
               <input
+                autoComplete="off"
                 className={input}
                 value={artist}
                 onChange={(event) => {

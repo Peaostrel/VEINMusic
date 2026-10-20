@@ -303,6 +303,7 @@ export default function IntegrationsTab({
           <label>
             <span className={labelClass}>Пользователь</span>
             <input
+              autoComplete="off"
               value={q}
               onChange={(e) => {
                 setQ(e.target.value.trim());

@@ -70,6 +70,7 @@ export default function EmailManager() {
         <label className={label}>
           <span>Никнейм</span>
           <input
+            autoComplete="off"
             className={`${input} mt-1`}
             value={username}
             onChange={(e) => {
@@ -84,6 +85,7 @@ export default function EmailManager() {
         <label className={label}>
           <span>Тема</span>
           <input
+            autoComplete="off"
             className={`${input} mt-1`}
             value={subject}
             onChange={(e) => {
@@ -97,6 +99,7 @@ export default function EmailManager() {
         <label className={label}>
           <span>Текст</span>
           <textarea
+            autoComplete="off"
             className={`${input} mt-1 min-h-28`}
             value={text}
             onChange={(e) => {

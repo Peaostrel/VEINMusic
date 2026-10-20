@@ -385,6 +385,7 @@ export default function TogetherRoomPage({ params }: Readonly<PageProps>) {
               className="flex gap-2 border-t border-line p-3"
             >
               <input
+                autoComplete="off"
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}

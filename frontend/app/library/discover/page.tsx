@@ -555,6 +555,7 @@ export default function DiscoverPage() {
           }}
         >
           <input
+            autoComplete="off"
             required
             aria-label="Имя второго участника"
             value={username}

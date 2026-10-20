@@ -220,6 +220,7 @@ export default function ListenTogetherLobby() {
                   Название комнаты
                 </label>
                 <input
+                  autoComplete="off"
                   id="room-name"
                   type="text"
                   value={newRoomName}

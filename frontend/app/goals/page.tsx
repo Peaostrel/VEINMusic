@@ -162,6 +162,7 @@ export default function GoalsPage() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <input
+                      autoComplete="off"
                       value={goal.title}
                       onChange={(event) =>
                         setPreferences({
@@ -192,6 +193,7 @@ export default function GoalsPage() {
                       <label className="flex items-center gap-2 text-xs text-fg-2">
                         <span>Цель</span>
                         <input
+                          autoComplete="off"
                           type="number"
                           min={1}
                           max={100000}
@@ -301,6 +303,7 @@ export default function GoalsPage() {
             ))}
           </select>
           <input
+            autoComplete="off"
             type="number"
             min={1}
             max={100000}

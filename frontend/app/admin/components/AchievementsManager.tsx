@@ -141,6 +141,7 @@ function ArtistTargetsEditor({
       {targets.map((target, index) => (
         <div key={ids[index]} className="flex items-center gap-2">
           <input
+            autoComplete="off"
             value={target}
             onChange={(event) => onChange(index, event.target.value)}
             required
@@ -287,6 +288,7 @@ export default function AchievementsManager({
           <label className="sm:col-span-2">
             <span className={labelClass}>Название</span>
             <input
+              autoComplete="off"
               value={form.name}
               onChange={set("name")}
               required
@@ -296,6 +298,7 @@ export default function AchievementsManager({
           <label>
             <span className={labelClass}>Иконка</span>
             <input
+              autoComplete="off"
               value={form.icon}
               onChange={set("icon")}
               required
@@ -305,6 +308,7 @@ export default function AchievementsManager({
           <label>
             <span className={labelClass}>Награда, XP</span>
             <input
+              autoComplete="off"
               type="number"
               min={0}
               value={form.reward_xp}
@@ -332,6 +336,7 @@ export default function AchievementsManager({
               )}
             </span>
             <input
+              autoComplete="off"
               id="achievement-description"
               value={form.description}
               onChange={set("description")}
@@ -368,6 +373,7 @@ export default function AchievementsManager({
             <label>
               <span className={labelClass}>Нужно раз / треков</span>
               <input
+                autoComplete="off"
                 type="number"
                 min={1}
                 value={form.rule_value}
@@ -388,6 +394,7 @@ export default function AchievementsManager({
               <label className="sm:col-span-2">
                 <span className={labelClass}>Подпись (необязательно)</span>
                 <input
+                  autoComplete="off"
                   value={form.rule_meta}
                   onChange={set("rule_meta")}
                   className={inputClass}
@@ -396,6 +403,7 @@ export default function AchievementsManager({
               <label className="sm:col-span-2">
                 <span className={labelClass}>Обложка достижения (URL)</span>
                 <input
+                  autoComplete="off"
                   type="url"
                   value={form.target_image}
                   onChange={set("target_image")}
@@ -411,6 +419,7 @@ export default function AchievementsManager({
                   Цель: «Исполнитель - Трек», имя или ссылка
                 </span>
                 <input
+                  autoComplete="off"
                   value={form.rule_target}
                   onChange={set("rule_target")}
                   required
@@ -420,6 +429,7 @@ export default function AchievementsManager({
               <label>
                 <span className={labelClass}>Подпись (необязательно)</span>
                 <input
+                  autoComplete="off"
                   value={form.rule_meta}
                   onChange={set("rule_meta")}
                   className={inputClass}
@@ -428,6 +438,7 @@ export default function AchievementsManager({
               <label>
                 <span className={labelClass}>Картинка (URL)</span>
                 <input
+                  autoComplete="off"
                   type="url"
                   value={form.target_image}
                   onChange={set("target_image")}

@@ -80,6 +80,7 @@ export default function BlacklistPanel() {
         <label>
           <span className={labelClass}>Шаблон</span>
           <input
+            autoComplete="off"
             value={pattern}
             onChange={(e) => setPattern(e.target.value)}
             required
@@ -104,6 +105,7 @@ export default function BlacklistPanel() {
         <label>
           <span className={labelClass}>Причина</span>
           <input
+            autoComplete="off"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             className={inputClass}

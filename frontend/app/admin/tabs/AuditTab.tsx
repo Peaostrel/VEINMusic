@@ -76,6 +76,7 @@ export default function AuditTab() {
           <label>
             <span className={labelClass}>Администратор</span>
             <input
+              autoComplete="off"
               value={admin}
               onChange={(e) => resetPage(setAdmin)(e.target.value.trim())}
               placeholder="ник"
@@ -85,6 +86,7 @@ export default function AuditTab() {
           <label>
             <span className={labelClass}>Объект</span>
             <input
+              autoComplete="off"
               value={target}
               onChange={(e) => resetPage(setTarget)(e.target.value)}
               placeholder="пользователь, трек, флаг…"

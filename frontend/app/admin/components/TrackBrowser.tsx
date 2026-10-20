@@ -79,6 +79,7 @@ function EditTrack({
           <label key={key} className="block">
             <span className={labelClass}>{label}</span>
             <input
+              autoComplete="off"
               type={type ?? "text"}
               value={form[key]}
               onChange={(e) => setForm({ ...form, [key]: e.target.value })}
@@ -142,6 +143,7 @@ export default function TrackBrowser() {
             aria-hidden="true"
           />
           <input
+            autoComplete="off"
             type="search"
             aria-label="Поиск по каталогу"
             placeholder="Название, исполнитель, альбом или ID…"

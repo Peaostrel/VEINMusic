@@ -2,6 +2,7 @@ import type { UserInfo } from "@/app/lib/types";
 import { useCallback, useEffect, useState } from "react";
 import { Cloud, Import, Puzzle, RefreshCw } from "lucide-react";
 import { useFeature } from "@/app/lib/featureFlags";
+import { SecretInput, noAutofill } from "@/components/autofill";
 import { LogoGlyph } from "@/components/brand";
 import { btn, inputOnCard } from "@/components/ui";
 import ConnectionCheck from "../components/ConnectionCheck";
@@ -426,16 +427,13 @@ function YandexConnection({
         )
       }
     >
-      <input
-        type="password"
+      <SecretInput
+        name="yandex-token"
         value={data.yandexToken}
         onChange={(e) => updateData("yandexToken", e.target.value)}
         placeholder="y0_AgAAA…"
         aria-label="OAuth-токен Яндекса"
-        autoComplete="new-password"
         disabled={!yandexEnabled}
-        readOnly
-        onFocus={(e) => e.target.removeAttribute("readonly")}
         className={`${inputOnCard} h-9`}
       />
       <div className="flex gap-2">
@@ -491,14 +489,15 @@ function LastfmConnection({
       footer={<LastfmImportStatus refreshKey={importRefresh ?? 0} />}
     >
       <input
+        {...noAutofill}
+        name="lastfm-user"
+        spellCheck={false}
+        autoCapitalize="none"
         value={data.lastfmUsername}
         onChange={(e) => updateData("lastfmUsername", e.target.value)}
         placeholder="Ник на Last.fm"
         aria-label="Ник на Last.fm"
-        autoComplete="off"
         disabled={!lastfmEnabled}
-        readOnly
-        onFocus={(e) => e.target.removeAttribute("readonly")}
         className={`${inputOnCard} h-9`}
       />
       <div className="flex gap-2">
@@ -660,20 +659,6 @@ export default function IntegrationsTab(props: Readonly<IntegrationsTabProps>) {
       {data.preferences.experiments.diagnostics && (
         <IntegrationDiagnostics {...props} />
       )}
-
-      {/* Hidden fields keep browsers from autofilling the token inputs */}
-      <input
-        type="text"
-        tabIndex={-1}
-        aria-hidden="true"
-        style={{ display: "none" }}
-      />
-      <input
-        type="password"
-        tabIndex={-1}
-        aria-hidden="true"
-        style={{ display: "none" }}
-      />
 
       <ul className="rounded-xl border border-line bg-surface">
         <SpotifyConnection {...props} />
