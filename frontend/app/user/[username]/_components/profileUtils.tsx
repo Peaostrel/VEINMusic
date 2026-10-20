@@ -1,6 +1,7 @@
 "use client";
 
 import { API_URL } from "@/app/lib/api";
+import { countryMatches } from "@/app/lib/geo";
 import {
   getSocialNetwork,
   getSocialUrl as buildSocialUrl,
@@ -191,7 +192,7 @@ export function getCountryCode(
   }
 
   // 2. Поиск по загруженному списку стран (если restcountries ответил)
-  const found = countries.find((c) => c.name.toLowerCase() === cleaned);
+  const found = countries.find((c) => countryMatches(c, cleaned));
   if (found) {
     return found.code;
   }

@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.constants import ACTIVE_PLAYBACK_WINDOW_SEC
+from app.core.i18n import request_lang
 from app.core.rate_limit import HEAVY_READ_LIMIT, credential_key, limiter
 from app.core.redis import redis_lock
 from app.core.security import get_current_user, get_current_user_optional
@@ -28,6 +29,7 @@ from app.routers.common import _can_view_section, _check_privacy_and_owner
 from app.schemas import CommentRequest, ScrobbleData
 from app.services import notifications
 from app.services.cache import TASTE_TWINS_KEY, delete_from_cache, get_from_cache, set_to_cache
+from app.services.localized import localize_history_items
 from app.services.metadata_cleaner import clean_track_metadata
 from app.services.privacy import (
     filter_public_feed,
@@ -199,8 +201,9 @@ def get_history(username: str,
     s_ids = [s.id for s, t in scrobbles]
     counters = get_scrobble_counters(db, s_ids)
 
+    lang = request_lang(request, current_user)
     history = [
-        format_history_item(s, t, counters=counters) for s, t in scrobbles
+        format_history_item(s, t, counters=counters, lang=lang) for s, t in scrobbles
     ]
     can_see_live = _can_view_section(user, request, db, "current_track")
     show_online = preference_enabled(
@@ -231,10 +234,11 @@ TASTE_TWINS_TTL = 600
 
 
 @router.get("/global-history")
-def get_global_history(db: Annotated[Session, Depends(get_db)]):
+def get_global_history(request: Request, db: Annotated[Session, Depends(get_db)]):
+    lang = request_lang(request)
     cached = get_from_cache(GLOBAL_HISTORY_CACHE_KEY, ttl=GLOBAL_HISTORY_TTL)
     if cached is not None:
-        return filter_public_feed(cached, db)
+        return localize_history_items(filter_public_feed(cached, db), lang)
     now = datetime.now(UTC)
     active_threshold = now - timedelta(seconds=ACTIVE_PLAYBACK_WINDOW_SEC)
 
@@ -283,7 +287,7 @@ def get_global_history(db: Annotated[Session, Depends(get_db)]):
         result.append(item)
     result = filter_public_feed(result, db)[:20]
     set_to_cache(GLOBAL_HISTORY_CACHE_KEY, jsonable_encoder(result))
-    return result
+    return localize_history_items(result, lang)
 
 
 @router.get("/friends-history/{username}",
@@ -336,7 +340,8 @@ def get_friends_history(username: str,
 
     result = []
     for scrobble, track in scrobbles:
-        item = format_history_item(scrobble, track, counters=counters)
+        item = format_history_item(scrobble, track, counters=counters,
+                                   lang=request_lang(request, current_user))
         if item["is_playing"] and (
             not _can_view_section(
                 scrobble.user, request, db, "current_track"

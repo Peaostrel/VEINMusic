@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 
 from desktop_client.config import CONFIG_DIR
+from desktop_client.i18n import tr
 
 QUEUE_FILE = CONFIG_DIR / "queue.json"
 
@@ -37,7 +38,7 @@ class DesktopScrobbler:
             with open(QUEUE_FILE, "w", encoding="utf-8") as f:
                 json.dump(self.queue, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"[Scrobbler] Error saving offline queue: {e}")
+            print(f"[Scrobbler] {tr('Ошибка сохранения офлайн-очереди', 'Error saving offline queue')}: {e}")
 
     def update_credentials(self, api_url: str, api_key: str) -> None:
         self.api_url = api_url.rstrip("/")
@@ -77,10 +78,10 @@ class DesktopScrobbler:
             with httpx.Client(timeout=4.0) as client:
                 res = client.post(f"{self.api_url}/api/scrobble", json=payload, headers=self._get_headers())
                 if res.is_success:
-                    print(f"[Scrobbler] 🎵 Now Playing: {artist} - {title}")
+                    print(f"[Scrobbler] 🎵 {tr('Сейчас играет', 'Now Playing')}: {artist} - {title}")
                     return True
         except Exception as e:
-            print(f"[Scrobbler] Now Playing network error: {e}")
+            print(f"[Scrobbler] {tr('Ошибка сети (сейчас играет)', 'Now Playing network error')}: {e}")
         return False
 
     def scrobble(self, title: str, artist: str, album: str = "", duration: int = 0, source: str = "desktop", listened_sec: int = 0) -> bool:
@@ -100,7 +101,8 @@ class DesktopScrobbler:
         }
 
         if not self.api_key:
-            print("[Scrobbler] Warning: No API key configured. Buffering scrobble locally.")
+            print("[Scrobbler] " + tr("API Key не задан. Скроббл сохранён локально.",
+                                       "Warning: No API key configured. Buffering scrobble locally."))
             self.queue.append(payload)
             self._save_queue()
             return False
@@ -110,17 +112,19 @@ class DesktopScrobbler:
             with httpx.Client(timeout=6.0) as client:
                 res = client.post(f"{self.api_url}/api/scrobble", json=payload, headers=self._get_headers())
                 if res.is_success:
-                    print(f"[Scrobbler] ✅ Scrobbled: {artist} - {title}")
+                    print(f"[Scrobbler] ✅ {tr('Заскробблено', 'Scrobbled')}: {artist} - {title}")
                     # Try to flush any offline items
                     self.flush_queue()
                     return True
                 elif res.status_code >= 500:
-                    print(f"[Scrobbler] Server error ({res.status_code}), buffering offline.")
+                    print("[Scrobbler] " + tr(f"Ошибка сервера ({res.status_code}), сохраняю офлайн.",
+                                            f"Server error ({res.status_code}), buffering offline."))
                     self.queue.append(payload)
                     self._save_queue()
                     return False
         except Exception as e:
-            print(f"[Scrobbler] Network error ({e}), saving to offline queue.")
+            print("[Scrobbler] " + tr(f"Ошибка сети ({e}), сохраняю в офлайн-очередь.",
+                                    f"Network error ({e}), saving to offline queue."))
             self.queue.append(payload)
             self._save_queue()
             return False
@@ -132,7 +136,8 @@ class DesktopScrobbler:
         if not self.queue or not self.api_key:
             return 0
 
-        print(f"[Scrobbler] Flushing {len(self.queue)} offline scrobbles...")
+        print("[Scrobbler] " + tr(f"Отправляю офлайн-скробблы: {len(self.queue)}...",
+                                f"Flushing {len(self.queue)} offline scrobbles..."))
         flushed = 0
         remaining: list[dict[str, Any]] = []
 
@@ -150,5 +155,6 @@ class DesktopScrobbler:
         self.queue = remaining
         self._save_queue()
         if flushed > 0:
-            print(f"[Scrobbler] 🎉 Successfully synced {flushed} offline scrobbles.")
+            print("[Scrobbler] 🎉 " + tr(f"Отправлено офлайн-скробблов: {flushed}.",
+                                        f"Successfully synced {flushed} offline scrobbles."))
         return flushed

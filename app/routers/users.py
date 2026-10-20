@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.constants import USER_NOT_FOUND
 from app.core.cover_urls import public_cover_url
+from app.core.i18n import request_lang, tr
 from app.core.rate_limit import HEAVY_READ_LIMIT, limiter
 from app.core.security import get_current_user, get_current_user_optional
 from app.database import get_db
@@ -42,8 +43,9 @@ from app.schemas import (
 )
 from app.services import notifications
 from app.services.achievements import (
+    achievement_name,
+    achievement_texts,
     normalize_showcase_order,
-    render_achievement_description,
 )
 from app.services.user_preferences import preferences_dict, public_preferences
 from app.services.user_stats import (
@@ -63,6 +65,7 @@ router = APIRouter(tags=["users"])
 @limiter.limit(HEAVY_READ_LIMIT)
 def get_user_mood(username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
     user = _get_visible_user(username, request, db, "statistics")
+    lang = request_lang(request)
 
     # Analyze last 10 tracks
     recent = db.query(
@@ -71,21 +74,21 @@ def get_user_mood(username: str, request: Request, db: Annotated[Session, Depend
         Scrobble.user_id == user.id).order_by(
             Scrobble.id.desc()).limit(10).all()
     if not recent:
-        return {"mood": "Тишина", "emoji": "😶"}
+        return {"mood": tr(lang, "Тишина"), "emoji": "😶"}
 
     genres = [r[0].lower() if r[0] else "" for r in recent]
     titles = [r[1].lower() if r[1] else "" for r in recent]
 
     if any(g in ['rock', 'metal', 'phonk'] for g in genres):
-        return {"mood": "Энергичный хайп", "emoji": "🔥"}
+        return {"mood": tr(lang, "Энергичный хайп"), "emoji": "🔥"}
     if any(g in ['lofi', 'jazz', 'ambient', 'classical'] for g in genres):
-        return {"mood": "Фокус и чилл", "emoji": "📚"}
+        return {"mood": tr(lang, "Фокус и чилл"), "emoji": "📚"}
     if any(g in ['pop', 'dance', 'electronic'] for g in genres):
-        return {"mood": "Танцевальный вайб", "emoji": "💃"}
+        return {"mood": tr(lang, "Танцевальный вайб"), "emoji": "💃"}
     if any(w in titles for w in ['sad', 'lonely', 'rain', 'cry']):
-        return {"mood": "Меланхолия", "emoji": "🌧️"}
+        return {"mood": tr(lang, "Меланхолия"), "emoji": "🌧️"}
 
-    return {"mood": "Меломан", "emoji": "🎧"}
+    return {"mood": tr(lang, "Меломан"), "emoji": "🎧"}
 
 
 # --- /api/user/{username} ---
@@ -130,7 +133,7 @@ def _owner_fields(user: User, is_owner: bool) -> dict:
         "has_api_key": bool(user.api_key)}
 
 
-def _earned_achievements(user: User, db: Session) -> list[dict]:
+def _earned_achievements(user: User, db: Session, lang: str = "ru") -> list[dict]:
     rows = db.query(Achievement, UserAchievement).join(
         UserAchievement, Achievement.id == UserAchievement.achievement_id).filter(
         UserAchievement.user_id == user.id).all()
@@ -142,8 +145,7 @@ def _earned_achievements(user: User, db: Session) -> list[dict]:
     ))
     return [{
         "id": a.id,
-        "name": a.name,
-        "description": render_achievement_description(a),
+        **achievement_texts(a, lang),
         "icon": a.icon,
         "target_image": public_cover_url(a.target_image),
         "reward_xp": a.reward_xp,
@@ -176,11 +178,13 @@ def get_user_info(username: str, request: Request,
             "role": role}
 
     lvl, rnk, _, _ = get_user_level_info(user, db)
+    rnk = tr(request_lang(request), rnk)
     can_showcase = _can_view_section(user, request, db, "showcase")
     can_social = _can_view_section(user, request, db, "social_links")
     return {
         "username": user.username,
         "display_name": user.profile.display_name or user.username,
+        # Kept in Russian: the site compares it to spot an empty bio
         "bio": user.profile.bio or "Этот пользователь пока ничего о себе не рассказал.",
         "avatar_url": user.profile.avatar_url,
         "cover_url": user.profile.cover_url,
@@ -198,7 +202,7 @@ def get_user_info(username: str, request: Request,
         "rank": rnk,
         "has_imported_lastfm": user.integration.has_imported_lastfm,
         "role": role,
-        "achievements": _earned_achievements(user, db),
+        "achievements": _earned_achievements(user, db, request_lang(request)),
         "streak": get_active_streak(user),
         "preferences": public_preferences(user.profile),
         **_owner_fields(user, is_owner)}
@@ -207,7 +211,7 @@ def get_user_info(username: str, request: Request,
 # --- /api/notifications/{username} ---
 @router.get("/api/notifications/{username}",
             responses={403: {"description": "Forbidden"}})
-def get_notifications(username: str,
+def get_notifications(username: str, request: Request,
                       db: Annotated[Session, Depends(get_db)],
                       current_user: Annotated[User, Depends(get_current_user)]):
     if current_user.username != username:
@@ -218,8 +222,9 @@ def get_notifications(username: str,
         return []
     new_achs = db.query(Achievement, UserAchievement).join(UserAchievement).filter(
         UserAchievement.user_id == user.id, UserAchievement.notified.is_(False)).all()
+    lang = request_lang(request, current_user)
     return [{"ua_id": ua.id,
-             "name": a.name,
+             "name": achievement_name(a, lang),
              "icon": a.icon,
              "reward_xp": a.reward_xp,
              "target_image": public_cover_url(a.target_image)} for a,

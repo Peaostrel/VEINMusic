@@ -29,6 +29,8 @@ const RULES: Record<string, string> = {
 type Form = {
   name: string;
   description: string;
+  name_en: string;
+  description_en: string;
   icon: string;
   rule_type: string;
   rule_value: string;
@@ -42,6 +44,8 @@ type Form = {
 const EMPTY: Form = {
   name: "",
   description: "",
+  name_en: "",
+  description_en: "",
   icon: "🏆",
   rule_type: "manual",
   rule_value: "1",
@@ -69,6 +73,8 @@ function toForm(a: Achievement): Form {
   return {
     name: a.name,
     description: textValue(a.description),
+    name_en: textValue(a.name_en),
+    description_en: textValue(a.description_en),
     icon: textValue(a.icon),
     rule_type: a.rule_type,
     rule_value: numberValue(a.rule_value),
@@ -94,6 +100,8 @@ function toPayload(form: Form) {
     ...form,
     rule_value: Number(form.rule_value || 0),
     reward_xp: Number(form.reward_xp || 0),
+    name_en: emptyAsNull(form.name_en.trim()),
+    description_en: emptyAsNull(form.description_en.trim()),
     rule_target: emptyAsNull(form.rule_target),
     artist_targets: artistTargetsPayload(form),
     rule_meta: emptyAsNull(form.rule_meta),
@@ -351,6 +359,26 @@ export default function AchievementsManager({
               className={inputClass}
             />
           </div>
+          <label className="sm:col-span-2">
+            <span className={labelClass}>{t("Название (английский)")}</span>
+            <input
+              value={form.name_en}
+              onChange={set("name_en")}
+              placeholder={t("Необязательно")}
+              lang="en"
+              className={inputClass}
+            />
+          </label>
+          <label className="sm:col-span-2">
+            <span className={labelClass}>{t("Описание (английский)")}</span>
+            <input
+              value={form.description_en}
+              onChange={set("description_en")}
+              placeholder={t("Необязательно — иначе покажем русское")}
+              lang="en"
+              className={inputClass}
+            />
+          </label>
           <label className="sm:col-span-2">
             <span className={labelClass}>{t("Правило")}</span>
             <select

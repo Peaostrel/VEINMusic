@@ -15,6 +15,7 @@ from sqlalchemy import func, text
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.constants import ACTIVE_PLAYBACK_WINDOW_SEC, ORDER_PLAYS_DESC
+from app.core.i18n import request_lang, tr
 from app.core.rate_limit import HEAVY_READ_LIMIT, limiter
 from app.database import get_db
 from app.models import (
@@ -29,6 +30,7 @@ from app.routers.common import (
     _get_visible_user,
 )
 from app.services.cache import get_from_cache, set_to_cache
+from app.services.localized import date_range, localize_history_items
 from app.services.scrobble_processor import format_history_item
 from app.services.privacy import filter_public_feed, public_feed_user_ids
 from app.services.user_preferences import preference_enabled
@@ -56,17 +58,19 @@ def _period_bounds(
         user: User,
         period: str,
         date_from: str | None,
-        date_to: str | None) -> tuple[datetime | None, datetime | None, str]:
-    """UTC bounds (end exclusive) and a human-readable period label."""
+        date_to: str | None,
+        lang: str = "ru") -> tuple[datetime | None, datetime | None, str]:
+    """UTC bounds (end exclusive) and a human-readable period label (in
+    `lang`; errors are raised with the Russian text, see tr)."""
     user_tz = _user_timezone(user)
     now_local = datetime.now(UTC).astimezone(user_tz)
     labels = {
-        "7d": "За последние 7 дней",
-        "30d": "За последние 30 дней",
-        "90d": "За последние 3 месяца",
-        "year": f"С начала {now_local.year} года",
-        "all": "За всё время",
-        "custom": "Выбранный период",
+        "7d": tr(lang, "За последние 7 дней"),
+        "30d": tr(lang, "За последние 30 дней"),
+        "90d": tr(lang, "За последние 3 месяца"),
+        "year": tr(lang, "С начала {year} года", year=now_local.year),
+        "all": tr(lang, "За всё время"),
+        "custom": tr(lang, "Выбранный период"),
     }
     if period not in labels:
         raise InvalidStatsPeriod("Неизвестный период")
@@ -87,7 +91,7 @@ def _period_bounds(
             raise InvalidStatsPeriod("Период не может быть длиннее 366 дней")
         start_local = datetime.combine(first, datetime.min.time(), tzinfo=user_tz)
         end_local = datetime.combine(last + timedelta(days=1), datetime.min.time(), tzinfo=user_tz)
-        label = f"{first.strftime('%d.%m.%Y')} — {last.strftime('%d.%m.%Y')}"
+        label = date_range(first, last, lang)
         return start_local.astimezone(UTC), end_local.astimezone(UTC), label
 
     end_local = datetime.combine(
@@ -199,11 +203,12 @@ def get_wrapped_stats(
         date_from: str | None = None,
         date_to: str | None = None):
     user = _get_visible_user(username, request, db, "statistics")
+    lang = request_lang(request)
     try:
         period_start, period_end, period_label = _period_bounds(
-            user, period, date_from, date_to)
+            user, period, date_from, date_to, lang)
     except InvalidStatsPeriod as exc:
-        raise HTTPException(422, str(exc)) from exc
+        raise HTTPException(422, tr(lang, str(exc))) from exc
     base_filter = _counted_filter(int(user.id), period_start, period_end)
     top_artist = db.query(
         Track.artist,
@@ -220,7 +225,7 @@ def get_wrapped_stats(
     totals = _period_totals(db, base_filter)
     hours_activity, days_activity, activity_graph = _get_activity_stats(
         db, base_filter, get_user_timezone_offset(
-            user.profile.location if user.profile else ""))
+            user.profile.location if user.profile else ""), lang)
     del hours_activity, days_activity
     peak_day = None
     if activity_graph:
@@ -229,10 +234,10 @@ def get_wrapped_stats(
         peak_day = {"date": peak_date, "scrobbles": peak_count}
     return {
         "period": period_label,
-        "top_artist": top_artist[0] if top_artist else "Нет данных",
+        "top_artist": top_artist[0] if top_artist else tr(lang, "Нет данных"),
         "total_minutes": int(total_min // 60),
         # total_min holds seconds: the badge is for 5000+ minutes
-        "status": "Легенда" if total_min // 60 > 5000 else "Активный слушатель",
+        "status": tr(lang, "Легенда" if total_min // 60 > 5000 else "Активный слушатель"),
         "total_scrobbles": totals["scrobbles"],
         "unique_artists": totals["artists"],
         "unique_tracks": totals["tracks"],
@@ -252,7 +257,7 @@ GLOBAL_FEED_TTL = 5
 
 
 @router.get("/api/feed/global")
-def get_global_feed(db: Annotated[Session, Depends(get_db)]):
+def get_global_feed(request: Request, db: Annotated[Session, Depends(get_db)]):
     cached = get_from_cache(GLOBAL_FEED_CACHE_KEY, ttl=GLOBAL_FEED_TTL)
     if cached is None:
         # Latest scrobbles from public users; tracks in the same query
@@ -263,13 +268,14 @@ def get_global_feed(db: Annotated[Session, Depends(get_db)]):
             Scrobble.id.desc()).limit(100).all()
         cached = jsonable_encoder([format_history_item(s, s.track) for s in scrobbles])
         set_to_cache(GLOBAL_FEED_CACHE_KEY, cached, expire=60)
-    return {"feed": filter_public_feed(cached, db)[:20]}
+    return {"feed": localize_history_items(filter_public_feed(cached, db)[:20], request_lang(request))}
 
 
 def _get_activity_stats(
         db: Session,
         base_filter,
-        timezone_offset: int = 0) -> tuple[dict[str, int], dict[str, int], dict[str, int]]:
+        timezone_offset: int = 0,
+        lang: str = "ru") -> tuple[dict[str, int], dict[str, int], dict[str, int]]:
     try:
         is_postgres = db.get_bind().dialect.name == "postgresql"
     except Exception:  # NOSONAR
@@ -374,6 +380,9 @@ def _get_activity_stats(
     for d, count in days_raw:
         if d in day_names:
             days_activity[day_names[d]] = count
+    if lang != "ru":
+        # Weekday keys in the visitor's language ("Mon"), same order
+        days_activity = {tr(lang, day): count for day, count in days_activity.items()}
 
     activity_graph = {
         date: count for date,
@@ -394,21 +403,22 @@ def get_detailed_stats(username: str,
                        date_from: str | None = None,
                        date_to: str | None = None):
     user = _get_visible_user(username, request, db, "statistics")
+    lang = request_lang(request)
     try:
         period_start, period_end, period_label = _period_bounds(
-            user, period, date_from, date_to)
+            user, period, date_from, date_to, lang)
     except InvalidStatsPeriod as exc:
-        raise HTTPException(422, str(exc)) from exc
+        raise HTTPException(422, tr(lang, str(exc))) from exc
     # ~17 queries: reused until the user's listening changes (or briefly,
     # for catalog edits and the moving edge of relative periods)
     location = user.profile.location if user.profile else ""
     key = (f"detailed_stats:{user.id}:{period}:{date_from}:{date_to}:"
-           f"{location}:{_listening_version(db, int(user.id))}")
+           f"{location}:{lang}:{_listening_version(db, int(user.id))}")
     cached = get_from_cache(key, ttl=DETAILED_STATS_TTL)
     if cached is not None:
         return cached
     result = jsonable_encoder(_detailed_stats(
-        db, user, period, period_start, period_end, period_label))
+        db, user, period, period_start, period_end, period_label, lang))
     set_to_cache(key, result, expire=DETAILED_STATS_TTL)
     return result
 
@@ -426,7 +436,8 @@ def _listening_version(db: Session, user_id: int) -> str:
     return ":".join(str(value) for value in row)
 
 
-def _detailed_stats(db: Session, user: User, period: str, period_start, period_end, period_label):
+def _detailed_stats(db: Session, user: User, period: str, period_start, period_end, period_label,
+                    lang: str = "ru"):
     base_filter = _counted_filter(int(user.id), period_start, period_end)
 
     # 1. General Stats
@@ -518,7 +529,7 @@ def _detailed_stats(db: Session, user: User, period: str, period_start, period_e
     # 6. Activity
     hours_activity, days_activity, activity_graph = _get_activity_stats(
         db, base_filter, get_user_timezone_offset(
-            user.profile.location if user.profile else ""))
+            user.profile.location if user.profile else ""), lang)
 
     current_totals = {
         "scrobbles": int(total_scrobbles),
@@ -703,7 +714,8 @@ def _longest_day_streak(day_keys: list[str]) -> int:
 # --- /api/stats/calendar/{username} ---
 
 
-def _aggregate_calendar_days(rows, user_tz):
+def _aggregate_calendar_days(rows, user_tz, lang: str = "ru"):
+    unknown_artist, untitled = tr(lang, "Неизвестный артист"), tr(lang, "Без названия")
     days: dict[str, dict[str, Any]] = {}
     artist_counts: dict[str, Counter] = {}
     track_counts: dict[str, Counter] = {}
@@ -722,8 +734,8 @@ def _aggregate_calendar_days(rows, user_tz):
         day["seconds"] += int(listened_sec or 0)
         if artist:
             day["artists"].add(artist)
-        artist_counts.setdefault(key, Counter())[artist or "Неизвестный артист"] += 1
-        track_key = (artist or "Неизвестный артист", title or "Без названия")
+        artist_counts.setdefault(key, Counter())[artist or unknown_artist] += 1
+        track_key = (artist or unknown_artist, title or untitled)
         track_counts.setdefault(key, Counter())[track_key] += 1
         track_covers[track_key] = cover_url
 
@@ -761,7 +773,7 @@ def get_listening_calendar(
     current_year = datetime.now(UTC).astimezone(user_tz).year
     selected_year = year or current_year
     if selected_year < 2000 or selected_year > current_year:
-        raise HTTPException(422, "Недоступный год")
+        raise HTTPException(422, tr(request_lang(request), "Недоступный год"))
 
     local_start = datetime(selected_year, 1, 1, tzinfo=user_tz)
     local_end = datetime(selected_year + 1, 1, 1, tzinfo=user_tz)
@@ -776,7 +788,7 @@ def get_listening_calendar(
             int(user.id), local_start.astimezone(UTC), local_end.astimezone(UTC))
     ).all()
 
-    days, calendar_days = _aggregate_calendar_days(rows, user_tz)
+    days, calendar_days = _aggregate_calendar_days(rows, user_tz, request_lang(request))
 
     first_play, last_play = db.query(
         func.min(Scrobble.played_at), func.max(Scrobble.played_at)
@@ -874,7 +886,7 @@ def get_current_track(username: str, request: Request, db: Annotated[Session, De
             "artist": t.artist,
             "cover_url": t.cover_url,
             "level": lvl,
-            "rank": rank,
+            "rank": tr(request_lang(request), rank),
             **_playback_details(user, s, t, is_owner),
         }
     return {"playing": False}

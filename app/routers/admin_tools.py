@@ -15,6 +15,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.constants import USER_NOT_FOUND
+from app.core.i18n import request_lang, tr
 from app.core.rate_limit import limiter
 from app.core.security import get_admin_user, revoke_all_sessions
 from app.database import get_db
@@ -448,16 +449,21 @@ class BroadcastRequest(BaseModel):
     @field_validator("channels")
     @classmethod
     def _known_channels(cls, value: list[str]) -> list[str]:
-        unknown = set(value) - {"inapp", "push"}
-        if unknown:
-            raise ValueError(f"Неизвестные каналы: {', '.join(sorted(unknown))}")
+        # Unknown channels are refused by send_broadcast, in the admin's language
         return sorted(set(value))
+
+
+BROADCAST_CHANNELS = {"inapp", "push"}
 
 
 @router.post("/broadcast", responses={400: {"description": "No recipients"}})
 @limiter.limit("10/hour")
 def send_broadcast(request: Request, data: BroadcastRequest, db: DB, admin: AdminUser):
     """Announcement to everyone (or the listed users): in-app and/or Web Push."""
+    unknown = set(data.channels) - BROADCAST_CHANNELS
+    if unknown:
+        raise HTTPException(422, tr(request_lang(request, admin), "Неизвестные каналы: {channels}",
+                                    channels=", ".join(sorted(unknown))))
     user_ids = broadcast.recipient_ids(db, data.usernames)
     if not user_ids:
         raise HTTPException(400, "Нет получателей")

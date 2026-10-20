@@ -14,6 +14,7 @@ from typing import Optional
 
 from desktop_client.config import load_config, save_config
 from desktop_client.discord_rpc import DiscordRPCManager
+from desktop_client.i18n import tr
 from desktop_client.media_listener import CompositeMediaListener, MediaTrackInfo
 from desktop_client.scrobbler import DesktopScrobbler
 
@@ -47,15 +48,19 @@ class DesktopClientApp:
 
         if not api_key:
             print(f"API Server: {api_url}")
-            print("Скопируйте ваш API Key со страницы настроек VEINMusic:")
-            print(f"  {DEFAULT_API_URL}/settings (Вкладка 'Интеграции' или 'Разработчикам')\n")
+            print(tr("Скопируйте ваш API Key со страницы настроек VEINMusic:",
+                     "Copy your API Key from the VEINMusic settings page:"))
+            print(f"  {DEFAULT_API_URL}/settings "
+                  + tr("(Вкладка 'Интеграции' или 'Разработчикам')\n",
+                       "('Integrations' or 'Developers' tab)\n"))
             try:
-                entered_key = input("Введите ваш API Key: ").strip()
+                entered_key = input(tr("Введите ваш API Key: ", "Enter your API Key: ")).strip()
                 if entered_key:
                     self.config["api_key"] = entered_key
                     self.scrobbler.update_credentials(api_url, entered_key)
                     save_config(self.config)
-                    print("✅ Настройки сохранены в ~/.veinmusic/config.json\n")
+                    print(tr("✅ Настройки сохранены в ~/.veinmusic/config.json\n",
+                             "✅ Settings saved to ~/.veinmusic/config.json\n"))
             except (KeyboardInterrupt, EOFError):
                 sys.exit(0)
 
@@ -105,7 +110,8 @@ class DesktopClientApp:
         self.listened_seconds = 0.0
         self.has_scrobbled_current = False
 
-        print(f"[Desktop] 🎧 Playing: {new_track.artist} - {new_track.title} ({new_track.player_name})")
+        print(f"[Desktop] 🎧 {tr('Играет', 'Playing')}: "
+              f"{new_track.artist} - {new_track.title} ({new_track.player_name})")
 
         self.scrobbler.send_now_playing(
             title=new_track.title,
@@ -151,7 +157,8 @@ class DesktopClientApp:
         poll_interval = float(self.config.get("poll_interval_sec", 3.0))
         last_flush_time = time.time()
 
-        print("[Desktop] 🚀 VEINMusic listener started. Monitoring media playback...")
+        print("[Desktop] 🚀 " + tr("VEINMusic запущен. Слежу за воспроизведением...",
+                                  "VEINMusic listener started. Monitoring media playback..."))
         last_tick = time.time()
 
         try:
@@ -173,12 +180,12 @@ class DesktopClientApp:
                 except asyncio.CancelledError:
                     raise
                 except Exception as e:
-                    print(f"[Desktop] Loop error: {e}")
+                    print(f"[Desktop] {tr('Ошибка цикла', 'Loop error')}: {e}")
                     await asyncio.sleep(poll_interval)
         finally:
             if self.discord:
                 self.discord.close()
-            print("[Desktop] Listener stopped.")
+            print("[Desktop] " + tr("Остановлено.", "Listener stopped."))
 
     def stop(self) -> None:
         self.is_running = False
@@ -186,9 +193,9 @@ class DesktopClientApp:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="VEINMusic Desktop Client")
-    parser.add_argument("--api-key", help="VEINMusic API Key")
-    parser.add_argument("--api-url", default="https://music.vein.guru", help="VEINMusic API URL")
-    parser.add_argument("--no-discord", action="store_true", help="Disable Discord Rich Presence")
+    parser.add_argument("--api-key", help=tr("API Key VEINMusic", "VEINMusic API Key"))
+    parser.add_argument("--api-url", default="https://music.vein.guru", help=tr("Адрес API VEINMusic", "VEINMusic API URL"))
+    parser.add_argument("--no-discord", action="store_true", help=tr("Не показывать статус в Discord", "Disable Discord Rich Presence"))
     args = parser.parse_args()
 
     config = load_config()

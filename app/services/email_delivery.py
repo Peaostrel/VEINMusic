@@ -9,6 +9,7 @@ from uuid import uuid4
 import httpx
 from sqlalchemy.orm import Session
 
+from app.core.i18n import normalize_lang, tr, user_lang
 from app.database import SessionLocal
 from app.models import EmailAccount, EmailOutbox, User
 
@@ -25,30 +26,47 @@ def site_url():
     return os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
 
 
-def queue(db: Session, user_id, kind, recipient, subject, text, link=None):
-    payload = {"to": recipient, "subject": subject, "text": text, "link": link}
+def queue(db: Session, user_id, kind, recipient, subject, text, link=None, lang="ru"):
+    """`subject` and `text` are already in `lang`, the recipient's language."""
+    payload = {"to": recipient, "subject": subject, "text": text, "link": link, "lang": lang}
     row = EmailOutbox(id=uuid4().hex, user_id=user_id, kind=kind, payload=json.dumps(payload))
     db.add(row)
     return row
 
 
+_MONTHS_EN = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def time_text(lang, value):
+    """20.10.2026 14:05 in Russian, Oct 20, 2026 14:05 in English."""
+    if lang == "en":
+        return f"{_MONTHS_EN[value.month - 1]} {value.day}, {value.year} {value:%H:%M}"
+    return f"{value:%d.%m.%Y %H:%M}"
+
+
 def new_login(db, user, device):
     if not configured():
         return
+    from app.services.sessions import localized_device
+
     account = db.get(EmailAccount, user.id)
     if account and account.email and account.security_alerts:
-        queue(db, user.id, "security", account.email, "Новый вход в VEIN Music",
-              f"В аккаунт {user.username} вошли с нового устройства: {device}.\n"
-              f"Время: {datetime.now(UTC):%d.%m.%Y %H:%M} UTC.\n"
-              "Если это не вы, смените пароль и завершите другие сеансы.",
-              site_url() + "/settings?tab=security")
+        lang = user_lang(user)
+        queue(db, user.id, "security", account.email, tr(lang, "Новый вход в VEIN Music"),
+              tr(lang, "В аккаунт {username} вошли с нового устройства: {device}.", username=user.username,
+                 device=localized_device(device, lang)) + "\n"
+              + tr(lang, "Время: {time} UTC.", time=time_text(lang, datetime.now(UTC))) + "\n"
+              + tr(lang, "Если это не вы, смените пароль и завершите другие сеансы."),
+              site_url() + "/settings?tab=security", lang=lang)
 
 
 def render(payload):
+    lang = normalize_lang(payload.get("lang")) or "ru"
     text = html.escape(payload["text"]).replace("\n", "<br>")
     link = payload.get("link")
-    action = f'<p><a href="{html.escape(link, quote=True)}">Открыть VEIN Music</a></p>' if link else ""
-    return f'<html lang="ru"><body><h2>VEIN Music</h2><p>{text}</p>{action}</body></html>'
+    label = html.escape(tr(lang, "Открыть VEIN Music"))
+    action = f'<p><a href="{html.escape(link, quote=True)}">{label}</a></p>' if link else ""
+    return f'<html lang="{lang}"><body><h2>VEIN Music</h2><p>{text}</p>{action}</body></html>'
 
 
 def _allowed(db, row, payload):

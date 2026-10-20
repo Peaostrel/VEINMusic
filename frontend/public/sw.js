@@ -157,11 +157,23 @@ self.addEventListener("fetch", (event) => {
   );
 });
 
+// Languages whose speakers get the Russian interface (as on the server)
+const RUSSIAN_SPEAKING = ["ru", "uk", "be", "kk", "ky", "uz", "tg", "hy", "az"];
+
+function fallbackPushBody() {
+  const lang = String(self.navigator?.language || "")
+    .toLowerCase()
+    .split("-")[0];
+  return RUSSIAN_SPEAKING.includes(lang)
+    ? "Новое событие в вашей музыкальной ленте!"
+    : "Something new in your music feed!";
+}
+
 // Web Push Notification Handler
 self.addEventListener("push", (event) => {
   let data = {
     title: "VEIN Music",
-    body: "Новое событие в вашей музыкальной ленте!",
+    body: fallbackPushBody(),
   };
   if (event.data) {
     try {

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+from app.core.i18n import tr, user_lang
 from app.database import SessionLocal
 from app.models import Notification, User
 from app.services.music_story import weekly_story
@@ -28,17 +29,28 @@ def _due_recap_messages(user, current):
     ):
         return []
 
-    messages: list[str] = []
-    date_label = local_now.strftime("%d.%m.%Y")
+    lang = user_lang(user)
+    messages: list[tuple[str, str]] = []
+    date_label = date_text(lang, local_now)
     if preferences.wrapped.auto_weekly and local_now.weekday() == 0:
-        messages.append(f"Недельные итоги за {date_label} готовы")
+        messages.append(("weekly", tr(lang, "Недельные итоги за {date} готовы", date=date_label)))
     if preferences.wrapped.auto_monthly and local_now.day == 1:
-        messages.append(f"Месячные итоги за {date_label} готовы")
+        messages.append(("monthly", tr(lang, "Месячные итоги за {date} готовы", date=date_label)))
 
     return messages
 
 
-def _create_recap_notification(db, user, message, current):
+_MONTHS_EN = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def date_text(lang, value):
+    """05.10.2026 in Russian, Oct 5, 2026 in English."""
+    if lang == "en":
+        return f"{_MONTHS_EN[value.month - 1]} {value.day}, {value.year}"
+    return value.strftime("%d.%m.%Y")
+
+
+def _create_recap_notification(db, user, period, message, current):
     exists = db.query(Notification.id).filter(
         Notification.user_id == user.id,
         Notification.kind == KIND_RECAP,
@@ -47,8 +59,8 @@ def _create_recap_notification(db, user, message, current):
     if exists:
         return None
     notification_message = message
-    if message.startswith("Недельные"):
-        narrative = weekly_story(user, db, current)["story"]
+    if period == "weekly":
+        narrative = weekly_story(user, db, current, lang=user_lang(user))["story"]
         notification_message = f"{message}. {narrative}"
     # Notification.message is VARCHAR(200) in production PostgreSQL.
     if len(notification_message) > 200:
@@ -73,8 +85,8 @@ def create_due_recap_notifications(now: datetime | None = None) -> list[int]:
     try:
         users = db.query(User).filter(User.is_banned.isnot(True)).all()
         for user in users:
-            for message in _due_recap_messages(user, current):
-                notification_id = _create_recap_notification(db, user, message, current)
+            for period, message in _due_recap_messages(user, current):
+                notification_id = _create_recap_notification(db, user, period, message, current)
                 if notification_id is not None:
                     created.append(notification_id)
         db.commit()

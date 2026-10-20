@@ -111,9 +111,21 @@ pub fn load_api_key() -> Option<String> {
 
 pub fn save_api_key(key: &str) -> Result<(), String> {
     entry()
-        .ok_or_else(|| "Хранилище учётных данных Windows недоступно".to_string())?
+        .ok_or_else(|| {
+            crate::i18n::tr(
+                "Хранилище учётных данных Windows недоступно",
+                "Windows Credential Manager is unavailable",
+            )
+            .to_string()
+        })?
         .set_password(key)
-        .map_err(|e| format!("Не удалось сохранить ключ: {e}"))
+        .map_err(|e| {
+            if crate::i18n::ru() {
+                format!("Не удалось сохранить ключ: {e}")
+            } else {
+                format!("Could not save the key: {e}")
+            }
+        })
 }
 
 pub fn delete_api_key() {

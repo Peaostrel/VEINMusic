@@ -22,6 +22,7 @@ from app.models import (
     User,
 )
 from app.services import runtime_settings
+from app.services.localized import relative_time
 from app.services.metadata_cleaner import clean_track_metadata
 from app.services.user_preferences import get_preferences
 
@@ -165,10 +166,6 @@ async def get_fallback_genre(title: str, artist: str) -> str | None:
         return None
 
 
-_RU_MONTHS = ("янв", "фев", "мар", "апр", "мая", "июн",
-              "июл", "авг", "сен", "окт", "ноя", "дек")
-
-
 def _shown_listened_sec(scrobble, track, is_playing: bool) -> int:
     """Listening shown for a scrobble: while it plays, with the stretch a
     live player connection has not confirmed yet (see pending_sec)."""
@@ -194,7 +191,8 @@ def format_history_item(
         scrobble,
         track,
         db: Session | None = None,
-        counters: dict | None = None):
+        counters: dict | None = None,
+        lang: str = "ru"):
     upd_time = scrobble.updated_at or scrobble.played_at
     if upd_time.tzinfo is None:
         upd_time = upd_time.replace(tzinfo=UTC)
@@ -206,15 +204,7 @@ def format_history_item(
     now = datetime.now(UTC)
     is_playing = scrobble.is_playing and (now - upd_time).total_seconds() < ACTIVE_PLAYBACK_WINDOW_SEC
 
-    diff = now - played_time
-    if diff.total_seconds() < 60:
-        rel_time = "только что"
-    elif diff.total_seconds() < 3600:
-        rel_time = f"{int(diff.total_seconds() // 60)}м назад"
-    elif diff.total_seconds() < 86400:
-        rel_time = f"{int(diff.total_seconds() // 3600)}ч назад"
-    else:
-        rel_time = f"{played_time.day} {_RU_MONTHS[played_time.month - 1]}"
+    rel_time = relative_time(played_time, lang, now)
 
     data = {
         "id": scrobble.id,

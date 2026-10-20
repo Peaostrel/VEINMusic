@@ -4,6 +4,7 @@
 
 mod api;
 mod discord;
+mod i18n;
 mod media;
 mod settings;
 mod tracker;
@@ -23,6 +24,7 @@ use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_opener::OpenerExt;
 
 use api::{Api, ApiError, Update};
+use i18n::{ru, tr};
 use settings::Settings;
 use tracker::{Snapshot, Tracker};
 
@@ -74,6 +76,8 @@ struct TrayItems {
 #[derive(Clone, Serialize)]
 struct StateDto {
     version: &'static str,
+    /// "ru" or "en": the language of the texts the app sends.
+    lang: &'static str,
     paired: bool,
     username: Option<String>,
     settings: Settings,
@@ -103,6 +107,7 @@ fn state_dto(app: &AppHandle) -> StateDto {
     let inner = state.inner.lock().unwrap();
     StateDto {
         version: env!("CARGO_PKG_VERSION"),
+        lang: i18n::lang(),
         paired: inner.api_key.is_some(),
         username: inner.settings.username.clone(),
         settings: inner.settings.clone(),
@@ -189,7 +194,7 @@ fn show_settings(app: &AppHandle) {
         return;
     }
     let built = WebviewWindowBuilder::new(app, SETTINGS, WebviewUrl::App("index.html".into()))
-        .title("Настройки VEINMusic")
+        .title(tr("Настройки VEINMusic", "VEINMusic settings"))
         .inner_size(460.0, 760.0)
         .resizable(false)
         .maximizable(false)
@@ -202,19 +207,37 @@ fn show_settings(app: &AppHandle) {
 // --- tray --------------------------------------------------------------------
 
 fn build_tray(app: &AppHandle, scrobbling: bool) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open", "Открыть VEINMusic", true, None::<&str>)?;
-    let now = MenuItem::with_id(app, "now", "Ничего не играет", false, None::<&str>)?;
+    let open = MenuItem::with_id(
+        app,
+        "open",
+        tr("Открыть VEINMusic", "Open VEINMusic"),
+        true,
+        None::<&str>,
+    )?;
+    let now = MenuItem::with_id(app, "now", nothing_playing(), false, None::<&str>)?;
     let scrobbling = CheckMenuItem::with_id(
         app,
         "scrobbling",
-        "Скробблинг",
+        tr("Скробблинг", "Scrobbling"),
         true,
         scrobbling,
         None::<&str>,
     )?;
-    let settings = MenuItem::with_id(app, "settings", "Настройки приложения", true, None::<&str>)?;
-    let update = MenuItem::with_id(app, "update", "Проверить обновления", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Выйти", true, None::<&str>)?;
+    let settings = MenuItem::with_id(
+        app,
+        "settings",
+        tr("Настройки приложения", "App settings"),
+        true,
+        None::<&str>,
+    )?;
+    let update = MenuItem::with_id(
+        app,
+        "update",
+        tr("Проверить обновления", "Check for updates"),
+        true,
+        None::<&str>,
+    )?;
+    let quit = MenuItem::with_id(app, "quit", tr("Выйти", "Quit"), true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
         &[
@@ -284,10 +307,14 @@ fn on_update_item(app: &AppHandle) {
     }
 }
 
+fn nothing_playing() -> &'static str {
+    tr("Ничего не играет", "Nothing is playing")
+}
+
 fn show_now_playing_in_tray(app: &AppHandle, now: Option<&NowPlaying>) {
     let text = match now {
         Some(n) => format!("{} — {} ({})", n.artist, n.title, n.player),
-        None => "Ничего не играет".to_string(),
+        None => nothing_playing().to_string(),
     };
     let short: String = text.chars().take(60).collect();
     if let Some(items) = app.try_state::<TrayItems>() {
@@ -333,7 +360,7 @@ fn set_option(
         } else {
             autolaunch.disable()
         };
-        result.map_err(|e| format!("Автозапуск: {e}"))?;
+        result.map_err(|e| format!("{}: {e}", tr("Автозапуск", "Start with Windows")))?;
     } else {
         let changed = app
             .state::<AppState>()
@@ -407,8 +434,11 @@ fn logout(window: Window, app: AppHandle) -> Result<StateDto, String> {
         inner.api_key = None;
         inner.settings.username = None;
         inner.message = Some(
-            "Аккаунт отключён. Ключ приложения можно отозвать на сайте: Настройки → Безопасность и данные."
-                .into(),
+            tr(
+                "Аккаунт отключён. Ключ приложения можно отозвать на сайте: Настройки → Безопасность и данные.",
+                "Account disconnected. You can revoke the app key on the site: Settings → Security and data.",
+            )
+            .into(),
         );
     }
     save_settings(&app);
@@ -457,11 +487,26 @@ async fn poll_pairing(app: AppHandle, code: api::DeviceCode, pairing_id: u64) {
                 }
                 return;
             }
-            "denied" => return end_pairing(&app, "Подключение отклонено на сайте."),
-            _ => return end_pairing(&app, "Код устарел. Попробуйте ещё раз."),
+            "denied" => {
+                return end_pairing(
+                    &app,
+                    tr(
+                        "Подключение отклонено на сайте.",
+                        "The connection was declined on the site.",
+                    ),
+                )
+            }
+            _ => return end_pairing(&app, code_expired()),
         }
     }
-    end_pairing(&app, "Код устарел. Попробуйте ещё раз.");
+    end_pairing(&app, code_expired());
+}
+
+fn code_expired() -> &'static str {
+    tr(
+        "Код устарел. Попробуйте ещё раз.",
+        "The code has expired. Try again.",
+    )
 }
 
 fn end_pairing(app: &AppHandle, message: &str) {
@@ -491,7 +536,11 @@ async fn finish_pairing(app: &AppHandle, key: &str, username: &str) {
         // the app would count it twice
         inner.settings.sources.yandex = !yandex_linked;
         inner.pairing = None;
-        inner.message = Some(format!("Готово: аккаунт @{username} подключён."));
+        inner.message = Some(if ru() {
+            format!("Готово: аккаунт @{username} подключён.")
+        } else {
+            format!("Done: account @{username} is connected.")
+        });
     }
     save_settings(app);
     // Scrobbling needs the app running: start it with Windows by default
@@ -562,7 +611,13 @@ async fn report(app: &AppHandle, tracker: &mut Tracker, key: &str, playing: Opti
         Err(ApiError::Unauthorized) => {
             set_message(
                 app,
-                Some("Ключ приложения отозван. Подключите аккаунт заново.".into()),
+                Some(
+                    tr(
+                        "Ключ приложения отозван. Подключите аккаунт заново.",
+                        "The app key was revoked. Connect the account again.",
+                    )
+                    .into(),
+                ),
             );
             settings::delete_api_key();
             app.state::<AppState>().inner.lock().unwrap().api_key = None;
@@ -604,9 +659,11 @@ async fn check_update(app: &AppHandle) {
         return;
     };
     if let Some(items) = app.try_state::<TrayItems>() {
-        let _ = items
-            .update
-            .set_text(format!("Обновить до {}", update.version));
+        let _ = items.update.set_text(format!(
+            "{} {}",
+            tr("Обновить до", "Update to"),
+            update.version
+        ));
     }
     app.state::<AppState>().inner.lock().unwrap().update = Some(update);
     notify(app);

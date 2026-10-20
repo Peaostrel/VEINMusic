@@ -9,6 +9,7 @@ import anyio
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from app.core.i18n import request_lang, tr
 from app.core.rate_limit import limiter
 from app.core.security import DEVELOPER_KEY_SCOPES, get_current_user, hash_developer_key
 from app.database import get_db
@@ -68,15 +69,17 @@ def create_api_key(
     if not requested_scopes or invalid:
         raise HTTPException(
             400,
-            f"Недопустимые scopes: {', '.join(invalid) or '(пусто)'}. "
-            f"Доступные: {', '.join(sorted(DEVELOPER_KEY_SCOPES))}, *")
+            tr(request_lang(request, current_user), "Недопустимые scopes: {invalid}. Доступные: {allowed}, *",
+               invalid=", ".join(invalid) or tr(request_lang(request, current_user), "(пусто)"),
+               allowed=", ".join(sorted(DEVELOPER_KEY_SCOPES))))
     normalized_scopes = ",".join(dict.fromkeys(requested_scopes))
 
     active_keys = db.query(ApiKey).filter(
         ApiKey.user_id == current_user.id, ApiKey.is_active == True).count()  # noqa: E712
     if active_keys >= MAX_ACTIVE_API_KEYS:
         raise HTTPException(
-            400, f"Слишком много активных ключей (максимум {MAX_ACTIVE_API_KEYS}). Отзовите ненужные.")
+            400, tr(request_lang(request, current_user),
+                    "Слишком много активных ключей (максимум {max}). Отзовите ненужные.", max=MAX_ACTIVE_API_KEYS))
 
     raw_secret = secrets.token_urlsafe(32)
     key_prefix = f"vm_{raw_secret[:6]}"
@@ -167,7 +170,8 @@ def create_webhook(
             "(внутренние и приватные адреса запрещены)")
     if db.query(Webhook).filter(Webhook.user_id == current_user.id).count() >= MAX_WEBHOOKS_PER_USER:
         raise HTTPException(
-            400, f"Можно создать не больше {MAX_WEBHOOKS_PER_USER} вебхуков. Удалите ненужные.")
+            400, tr(request_lang(request, current_user),
+                    "Можно создать не больше {max} вебхуков. Удалите ненужные.", max=MAX_WEBHOOKS_PER_USER))
     secret = secrets.token_hex(24)
     wh = Webhook(
         user_id=current_user.id,
@@ -221,7 +225,8 @@ def test_webhook(
         raise HTTPException(404, "Вебхук не найден")
 
     anyio.from_thread.run(send_test_ping, wh, str(current_user.username))
-    return {"status": "ok", "message": f"Тестовое событие отправлено на {wh.url}"}
+    return {"status": "ok", "message": tr(request_lang(request, current_user),
+                                          "Тестовое событие отправлено на {url}", url=wh.url)}
 
 
 # ─── EXTERNAL SCROBBLE EXPORT SETTINGS ───────────────────────────────────────

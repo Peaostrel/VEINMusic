@@ -477,5 +477,9 @@
   "трек": "track",
   "трек {id}": "track {id}",
   "удалён": "deleted",
-  "← Назад": "← Back"
+  "← Назад": "← Back",
+  "Название (английский)": "Name (English)",
+  "Описание (английский)": "Description (English)",
+  "Необязательно": "Optional",
+  "Необязательно — иначе покажем русское": "Optional — the Russian one is shown otherwise"
 }

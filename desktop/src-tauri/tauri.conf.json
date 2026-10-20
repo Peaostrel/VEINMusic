@@ -18,13 +18,13 @@
     "targets": ["nsis"],
     "publisher": "VEINMusic",
     "category": "Music",
-    "shortDescription": "VEINMusic для Windows",
-    "longDescription": "Сайт VEINMusic в отдельном окне и скробблинг всего, что играет на компьютере: Spotify, приложение Яндекс Музыки, AIMP, foobar2000 и других плееров.",
+    "shortDescription": "VEINMusic for Windows",
+    "longDescription": "The VEINMusic site in its own window and scrobbling of everything that plays on the computer: Spotify, the Yandex Music app, AIMP, foobar2000 and other players.",
     "copyright": "© VEINMusic",
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
     "windows": {
       "nsis": {
-        "languages": ["Russian", "English"],
+        "languages": ["English", "Russian"],
         "displayLanguageSelector": false,
         "installMode": "currentUser",
         "installerIcon": "icons/icon.ico",

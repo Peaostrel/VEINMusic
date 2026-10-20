@@ -3,10 +3,11 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.core.i18n import request_lang
 from app.core.security import get_current_user
 from app.database import get_db
 from app.models import User
@@ -22,12 +23,13 @@ class MarkNotificationsRead(BaseModel):
 
 @router.get("")
 def list_notifications(
+    request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
     limit: Annotated[int, Query(ge=1, le=notifications.MAX_LIST)] = 30,
 ):
     """Latest notifications and the number of unread ones."""
-    return notifications.list_for_user(db, int(current_user.id), limit)
+    return notifications.list_for_user(db, int(current_user.id), limit, lang=request_lang(request, current_user))
 
 
 @router.post("/read")

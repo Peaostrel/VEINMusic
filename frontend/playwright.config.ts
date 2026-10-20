@@ -9,6 +9,8 @@ export default defineConfig({
   reporter: "html",
   use: {
     baseURL: "http://localhost:3000",
+    // The site follows the browser language; the specs check the Russian texts
+    locale: "ru-RU",
     trace: "on-first-retry",
   },
   projects: [
