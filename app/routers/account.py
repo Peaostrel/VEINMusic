@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
@@ -152,6 +152,21 @@ def stream_account_export(bind, user_id):
             yield separator + json.dumps(item, ensure_ascii=False)
             separator = ","
         yield "]}"
+
+
+class LanguageUpdate(BaseModel):
+    lang: Literal["ru", "en"]
+
+
+@router.put("/lang")
+def set_language(payload: LanguageUpdate,
+                 current_user: Annotated[User, Depends(get_current_user)],
+                 db: Annotated[Session, Depends(get_db)]):
+    """Interface language chosen on the site; emails, push and notifications
+    are written in it."""
+    current_user.lang = payload.lang  # type: ignore[assignment]
+    db.commit()
+    return {"lang": payload.lang}
 
 
 @router.get("/export")

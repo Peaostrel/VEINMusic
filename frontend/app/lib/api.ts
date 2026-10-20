@@ -8,7 +8,8 @@
  *   (with the server's `detail` message) for non-2xx responses.
  */
 
-import { tr } from "./i18n/active";
+import { currentLang, tr } from "./i18n/active";
+import { LANG_HEADER } from "./i18n/core";
 
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
@@ -43,6 +44,9 @@ export type ApiInit = Omit<RequestInit, "body"> & {
 export function apiFetch(path: string, init: ApiInit = {}): Promise<Response> {
   const { json, headers, ...rest } = init;
   const finalHeaders = new Headers(headers);
+  // The API writes its own texts (labels, stories, errors) in this language
+  if (!finalHeaders.has(LANG_HEADER))
+    finalHeaders.set(LANG_HEADER, currentLang());
   let body = rest.body;
   if (json !== undefined) {
     finalHeaders.set("Content-Type", "application/json");

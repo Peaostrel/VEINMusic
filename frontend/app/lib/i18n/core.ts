@@ -16,6 +16,32 @@ export const LANGS: readonly Lang[] = ["ru", "en"];
 export const isLang = (value: unknown): value is Lang =>
   value === "ru" || value === "en";
 
+/** Languages whose speakers get the Russian interface by default. */
+const RUSSIAN_SPEAKING = new Set([
+  "ru",
+  "uk",
+  "be",
+  "kk",
+  "ky",
+  "uz",
+  "tg",
+  "hy",
+  "az",
+]);
+
+/**
+ * First choice of an Accept-Language header: Russian for Russian speakers,
+ * English for everyone else, null when the header says nothing (crawlers).
+ */
+export function langFromAccept(header: string | null | undefined): Lang | null {
+  const first = header?.split(",")[0]?.split(";")[0]?.trim().toLowerCase();
+  if (!first || first === "*") return null;
+  return RUSSIAN_SPEAKING.has(first.split("-")[0]) ? "ru" : "en";
+}
+
+/** Header the site sends the API with its language (app/core/i18n.py). */
+export const LANG_HEADER = "X-VEIN-Lang";
+
 /** BCP 47 tag for Intl / toLocaleString. */
 export const localeOf = (lang: Lang) => (lang === "en" ? "en-US" : "ru-RU");
 

@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core import login_guard
+from app.core.i18n import request_lang
 from app.core.rate_limit import limiter
 from app.core.security import (
     SECRET_KEY,
@@ -92,7 +93,8 @@ def register(request: Request, data: UserRegister, response: Response,
         username=data.username,
         hashed_password=get_password_hash(
             data.password),
-        api_key=hashed_api_key)
+        api_key=hashed_api_key,
+        lang=request_lang(request))
     if data.pd_consent:
         new_user.pd_consent_at = datetime.now(UTC)  # type: ignore[assignment]
         new_user.pd_consent_version = PD_CONSENT_VERSION  # type: ignore[assignment]
