@@ -443,3 +443,86 @@ def test_together_only_host_controls_playback(client):
             assert msg["type"] == "CHAT_MESSAGE"
             msg = guest_ws.receive_json()
             assert msg["type"] == "PLAYBACK_CONTROL"
+
+
+def test_together_host_can_configure_seek_and_delete_room(client):
+    host_token = _register(client, "roomowner")
+    client.cookies.clear()
+    guest_token = _register(client, "roomlistener")
+    client.cookies.clear()
+
+    client.cookies.set("api_key", host_token)
+    with client.websocket_connect(
+            "/ws/together/config-room?name=My%20Room", headers=ORIGIN) as host_ws:
+        state = host_ws.receive_json()
+        assert state["name"] == "My Room"
+        assert state["is_private"] is False
+
+        host_ws.send_json({
+            "type": "ROOM_SETTINGS",
+            "name": "Private party",
+            "is_private": True,
+        })
+        settings = host_ws.receive_json()
+        assert settings == {
+            "type": "ROOM_SETTINGS",
+            "name": "Private party",
+            "is_private": True,
+        }
+        own_rooms = client.get("/api/together/rooms").json()["rooms"]
+        assert any(room["room_id"] == "config-room" for room in own_rooms)
+
+        client.cookies.set("api_key", guest_token)
+        public_rooms = client.get("/api/together/rooms").json()["rooms"]
+        assert not any(room["room_id"] == "config-room" for room in public_rooms)
+
+        with client.websocket_connect(
+                "/ws/together/config-room", headers=ORIGIN) as guest_ws:
+            guest_state = guest_ws.receive_json()
+            assert guest_state["is_private"] is True
+            host_ws.receive_json()  # USER_JOINED
+
+            host_ws.send_json({
+                "type": "PLAYBACK_CONTROL",
+                "is_playing": True,
+                "progress_sec": 37,
+            })
+            seek = host_ws.receive_json()
+            assert seek["type"] == "PLAYBACK_CONTROL"
+            assert seek["progress_sec"] == 37
+            assert guest_ws.receive_json()["type"] == "PLAYBACK_CONTROL"
+
+            # A listener cannot delete the room.
+            guest_ws.send_json({"type": "DELETE_ROOM"})
+            guest_ws.send_json({"type": "CHAT_MESSAGE", "text": "still here"})
+            assert host_ws.receive_json()["type"] == "CHAT_MESSAGE"
+
+            host_ws.send_json({"type": "DELETE_ROOM"})
+            assert host_ws.receive_json()["type"] == "ROOM_DELETED"
+            assert guest_ws.receive_json()["type"] == "ROOM_DELETED"
+
+        assert not any(
+            room["room_id"] == "config-room"
+            for room in client.get("/api/together/rooms").json()["rooms"]
+        )
+
+
+def test_scrobble_is_mirrored_into_hosted_room(client, db):
+    from app.services import scrobble_processor as processor
+
+    _register(client, "roomdj")
+    user = db.query(User).filter_by(username="roomdj").one()
+    with patch.object(processor.manager, "broadcast_to_user", new=AsyncMock()), \
+            patch.object(processor.manager, "sync_host_track", new=AsyncMock()) as sync:
+        asyncio.run(processor.process_scrobble(
+            db, user, "Live title", "Live artist", "", "", "test",
+            12, True, 180, "Live album"))
+
+    sync.assert_awaited_once()
+    username, track = sync.await_args.args
+    assert username == "roomdj"
+    assert track["title"] == "Live title"
+    assert track["artist"] == "Live artist"
+    assert track["album"] == "Live album"
+    assert track["progress_sec"] == 12
+    assert track["is_playing"] is True
