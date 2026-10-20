@@ -2,7 +2,6 @@ import asyncio
 import logging
 import math
 import os
-import re
 import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
