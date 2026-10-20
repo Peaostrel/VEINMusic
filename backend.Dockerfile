@@ -38,6 +38,6 @@ ENTRYPOINT ["sh", "./docker-entrypoint.sh"]
 # --proxy-headers: take the client IP from X-Forwarded-For, but only when the
 # request comes from FORWARDED_ALLOW_IPS (env var read by uvicorn).
 # --ws-max-size: WebSocket messages are small JSON; uvicorn's 16 MB default
-# would let one message (even from a guest in a listening room) exhaust memory
+# would let one oversized message exhaust memory
 # --no-server-header: don't announce the server software and its version
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--ws-max-size", "65536", "--no-server-header"]
