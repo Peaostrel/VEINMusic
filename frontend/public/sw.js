@@ -86,6 +86,9 @@ const CACHE_BUSTERS = ["t", "_", "ts"];
 function apiCacheKey(request) {
   const url = new URL(request.url);
   for (const name of CACHE_BUSTERS) url.searchParams.delete(name);
+  // Answers carry texts in the site's language: keep each language apart
+  const lang = request.headers.get("X-VEIN-Lang");
+  if (lang) url.searchParams.set("__lang", lang);
   return url.toString();
 }
 

@@ -1,17 +1,15 @@
 "use client";
 
-import { createContext, useContext, useEffect, type ReactNode } from "react";
-import {
-  LANG_COOKIE,
-  makeTranslator,
-  type Lang,
-  type Messages,
-  type Translator,
-} from "./core";
+import { useContext, useEffect, type ReactNode } from "react";
+import { LANG_COOKIE, makeTranslator, type Lang, type Messages } from "./core";
 import { activeTranslator, setActiveTranslator } from "./active";
-import { apiFetch } from "../api";
+import { LangContext as SharedContext } from "./context";
+import { apiFetch, installLangHeader } from "../api";
 
-const LangContext = createContext<Translator>(makeTranslator("ru", null));
+// Always set in the client build (only the react-server build lacks it)
+const LangContext = SharedContext!;
+
+installLangHeader();
 
 /** Wraps the app in the root layout with the visitor's language. */
 export function LangProvider({
@@ -19,8 +17,9 @@ export function LangProvider({
   messages,
   children,
 }: Readonly<{ lang: Lang; messages: Messages | null; children: ReactNode }>) {
-  let t = activeTranslator();
-  if (t.lang !== lang) {
+  // In the browser: the translator from an earlier render, if still right
+  let t = typeof window === "undefined" ? null : activeTranslator();
+  if (!t || t.lang !== lang) {
     t = makeTranslator(lang, messages);
     setActiveTranslator(t);
   }

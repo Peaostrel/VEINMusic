@@ -60,6 +60,31 @@ export function apiFetch(path: string, init: ApiInit = {}): Promise<Response> {
   });
 }
 
+/**
+ * Adds the language header to the many direct `fetch(API_URL…)` calls too,
+ * so the site's RU/EN switch wins over the browser's Accept-Language.
+ */
+export function installLangHeader() {
+  if (typeof window === "undefined") return;
+  const marked = window as Window & { __veinLangFetch?: boolean };
+  if (marked.__veinLangFetch) return;
+  marked.__veinLangFetch = true;
+  const original = window.fetch.bind(window);
+  window.fetch = (input, init) => {
+    let url: string;
+    if (typeof input === "string") url = input;
+    else if (input instanceof URL) url = input.href;
+    else url = input.url;
+    if (!url.startsWith(API_URL)) return original(input, init);
+    const headers = new Headers(
+      init?.headers ?? (input instanceof Request ? input.headers : undefined),
+    );
+    if (headers.has(LANG_HEADER)) return original(input, init);
+    headers.set(LANG_HEADER, currentLang());
+    return original(input, { ...init, headers });
+  };
+}
+
 async function errorMessage(res: Response): Promise<string> {
   try {
     const data = await res.json();
