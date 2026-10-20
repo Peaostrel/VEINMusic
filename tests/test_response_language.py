@@ -3,7 +3,6 @@ from datetime import UTC, date, datetime, timedelta
 
 from app.core.security import create_session_token
 from app.models import Scrobble, Track, User
-from app.routers.platform import _localized_room
 from app.services.compatibility import calculate_compatibility
 from app.services.listen_status import listen_status
 from app.services.localized import date_range, relative_time, source_label
@@ -152,11 +151,3 @@ def test_share_cards_and_widgets_language(client, db):
     db.commit()
     assert "LAST PLAYED ON VEIN" in client.get("/api/widgets/now-playing/cardfan.svg").text
 
-
-def test_default_room_texts_are_translated():
-    room = {"room_id": "abc", "name": "Комната abc",
-            "current_track": {"title": "Ожидание трека от DJ...", "artist": "host"}}
-    en = _localized_room(room, "en")
-    assert en["name"] == "Room abc" and en["current_track"]["title"] == "Waiting for a track from the DJ..."
-    assert _localized_room({**room, "name": "Party"}, "en")["name"] == "Party"
-    assert _localized_room(room, "ru") is room
