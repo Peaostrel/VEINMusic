@@ -273,7 +273,7 @@ function platformForUrl(url) {
         'music.yandex.ru': 'yandex', 'music.yandex.com': 'yandex',
         'open.spotify.com': 'spotify', 'music.youtube.com': 'youtube_music',
         'vk.com': 'vk', 'vk.ru': 'vk', 'soundcloud.com': 'soundcloud',
-        'music.apple.com': 'apple_music'
+        'music.apple.com': 'apple_music', 'zvuk.com': 'zvuk'
     }[url.hostname] || null;
 }
 

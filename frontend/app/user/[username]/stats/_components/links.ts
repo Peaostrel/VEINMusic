@@ -17,6 +17,8 @@ export const getArtistUrl = (artist: string, source: string) => {
       return `https://soundcloud.com/search/people?q=${q}`;
     case "apple_music":
       return `https://music.apple.com/search?term=${q}`;
+    case "zvuk":
+      return `https://zvuk.com/search?query=${q}`;
     case "yandex":
       return `${API_URL}/api/redirect?source=yandex&type=artist&q=${q}`;
     default:
@@ -38,6 +40,8 @@ export const getAlbumUrl = (album: string, artist: string, source: string) => {
       return `https://soundcloud.com/search/albums?q=${q}`;
     case "apple_music":
       return `https://music.apple.com/search?term=${q}`;
+    case "zvuk":
+      return `https://zvuk.com/search?query=${q}`;
     case "yandex":
       return `${API_URL}/api/redirect?source=yandex&type=album&q=${q}`;
     default:
@@ -60,5 +64,8 @@ export const SOURCE_NAMES: Record<string, string> = {
   youtube_music: "YouTube Music",
   soundcloud: "SoundCloud",
   apple_music: "Apple Music",
+  zvuk: "Звук",
   lastfm: "Last.fm",
+  spotify_import: "Spotify (архив)",
+  listenbrainz_import: "ListenBrainz",
 };

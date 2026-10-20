@@ -56,7 +56,7 @@ RESTART_JUMP_SEC = 10
 TRACK_URL_HOSTS = (
     YANDEX_MUSIC_HOST, "music.yandex.com", "music.yandex.by", "music.yandex.kz",
     "open.spotify.com", "music.youtube.com", "www.youtube.com", "youtube.com",
-    "vk.com", "vk.ru", "soundcloud.com", "music.apple.com", "plat-music.ru",
+    "vk.com", "vk.ru", "soundcloud.com", "music.apple.com", "zvuk.com", "plat-music.ru",
 )
 
 

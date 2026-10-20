@@ -5,6 +5,7 @@ import hmac
 import io
 import json
 import time
+from bisect import bisect_left, insort
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any
 
@@ -66,27 +67,44 @@ def _signature(data, user_id, expiry):
     return hmac.new(SECRET_KEY.encode(), message, hashlib.sha256).hexdigest()
 
 
-def _key(played_at, artist, title):
-    if played_at.tzinfo is None:
-        played_at = played_at.replace(tzinfo=UTC)
-    return (played_at.astimezone(UTC).isoformat(), artist.strip().casefold(), title.strip().casefold())
+# Spotify and ListenBrainz exports put a play a few seconds away from the
+# moment VEIN tracked it live, so plays this close together are one play.
+SAME_PLAY = timedelta(seconds=90)
+
+
+def _utc(played_at):
+    return played_at.replace(tzinfo=UTC) if played_at.tzinfo is None else played_at.astimezone(UTC)
+
+
+def _track(artist, title):
+    return artist.strip().casefold(), title.strip().casefold()
 
 
 def _new_items(db, user_id, items):
-    first = min(item.played_at for item in items)
-    last = max(item.played_at for item in items)
+    first = min(item.played_at for item in items) - SAME_PLAY
+    last = max(item.played_at for item in items) + SAME_PLAY
     rows = db.query(Scrobble.played_at, Track.artist, Track.title).execution_options(
         include_excluded=True, include_deleted=True).join(Track).filter(
         Scrobble.user_id == user_id, Scrobble.played_at >= first, Scrobble.played_at <= last).yield_per(500)
-    wanted = {_key(item.played_at, item.artist, item.title) for item in items}
+    wanted = {_track(item.artist, item.title) for item in items}
     # Memory stays proportional to this upload, even for a huge existing history.
-    seen = {_key(when, artist, title) for when, artist, title in rows if _key(when, artist, title) in wanted}
+    seen: dict[tuple[str, str], list[datetime]] = {}
+    for when, artist, title in rows:
+        key = _track(artist, title)
+        if key in wanted:
+            seen.setdefault(key, []).append(_utc(when))
+    for times in seen.values():
+        times.sort()
     result = []
     for item in items:
-        key = _key(item.played_at, item.artist, item.title)
-        if key not in seen:
-            result.append(item)
-            seen.add(key)
+        key = _track(item.artist, item.title)
+        when = _utc(item.played_at)
+        times = seen.setdefault(key, [])
+        index = bisect_left(times, when)
+        if any(abs(times[near] - when) <= SAME_PLAY for near in (index - 1, index) if 0 <= near < len(times)):
+            continue
+        result.append(item)
+        insort(times, when)
     return result
 
 

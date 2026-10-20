@@ -7,7 +7,7 @@ const DELIVERY_TONES = {
 
 const SOURCE_LABELS = {
     yandex: 'Яндекс Музыка', spotify: 'Spotify', youtube_music: 'YouTube Music',
-    vk: 'VK', soundcloud: 'SoundCloud', apple_music: 'Apple Music'
+    vk: 'VK', soundcloud: 'SoundCloud', apple_music: 'Apple Music', zvuk: 'Звук'
 };
 
 function playbackDetail(delivery) {

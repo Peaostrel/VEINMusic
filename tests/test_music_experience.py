@@ -104,6 +104,16 @@ def test_import_rejects_changed_preview_and_does_not_resurrect_deleted(client, d
     assert db.query(Scrobble).execution_options(include_deleted=True).filter_by(id=row.id).one().deleted_at
 
 
+def test_import_skips_plays_already_tracked_live(client, db, owner):
+    add_play(db, owner, when=datetime(2024, 3, 1, 12, 0, 0, tzinfo=UTC))
+    near = {"title": "Own song", "artist": "Own artist", "played_at": "2024-03-01T12:00:40Z"}
+    later = dict(near, played_at="2024-03-01T12:05:00Z")
+    other = dict(near, title="Other song")
+    preview = client.post("/api/account/history/preview", json={"scrobbles": [near, later, other]}).json()
+    assert preview["new"] == 2
+    assert [row["played_at"][11:16] for row in preview["sample"]] == ["12:05", "12:00"]
+
+
 def test_csv_neutralizes_spreadsheet_formula(client, db, owner):
     add_play(db, owner, title='=HYPERLINK("https://example.org")')
     response = client.get("/api/account/history.csv")
