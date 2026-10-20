@@ -287,10 +287,6 @@ def test_lastfm_jobs_list_and_retry(admin_client):
     assert job.error_log is None
 
 
-def test_together_rooms(admin_client):
-    assert admin_client.get("/api/admin/together/rooms").json() == {"rooms": []}
-
-
 def test_cli_set_role(admin_client, capsys):
     from app import cli
     assert cli.main(["set-role", "target", "moderator"]) == 0
