@@ -72,6 +72,13 @@ def _allowed(db, row, payload):
     return False
 
 
+def _quota_exceeded(result):
+    try:
+        return result.json().get("name") in {"daily_quota_exceeded", "monthly_quota_exceeded"}
+    except ValueError:
+        return False
+
+
 def deliver_one(db, row, client):
     """Called under a database row lock; HTTP timeout bounds lock duration."""
     payload = json.loads(row.payload)
@@ -96,6 +103,12 @@ def deliver_one(db, row, client):
             row.payload = "{}"  # don't keep email bodies or actionable tokens after delivery
             return
         row.error_code = f"http_{result.status_code}"
+        if result.status_code == 429 and _quota_exceeded(result):
+            # The free plan's quota resets at 00:00 UTC; retrying sooner only burns attempts
+            row.attempts -= 1
+            row.error_code = "quota_exceeded"
+            row.next_attempt = (datetime.now(UTC) + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            return
         permanent = result.status_code in {400, 404, 422}
     except (httpx.HTTPError, ValueError):
         row.error_code = "transport_error"

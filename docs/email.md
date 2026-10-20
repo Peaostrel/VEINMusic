@@ -9,7 +9,8 @@ Resend's free plan (about 3,000 emails a month, 100 a day) is enough here. Sign-
 works with GitHub or email; no phone number is needed.
 
 1. Sign up at https://resend.com/signup.
-2. Domains → Add Domain: `music.vein.guru` (or `vein.guru`). Region: any.
+2. Domains → Add Domain: `music.vein.guru`. Region: any. `EMAIL_FROM` must use this exact
+   domain: a sender on `vein.guru` or another subdomain is rejected with HTTP 403.
 3. Copy the DNS records Resend shows (DKIM TXT, SPF MX + TXT on the `send` subdomain)
    into the DNS panel, then press Verify. Use the supplied values, not guessed ones.
    Preserve existing mail MX records. A DMARC record (`_dmarc` TXT `v=DMARC1; p=none;`)
@@ -23,7 +24,6 @@ works with GitHub or email; no phone number is needed.
    EMAIL_REPLY_TO=<existing support mailbox, optional>
    ```
 
-   `EMAIL_FROM` must be on the verified domain.
 6. Redeploy (`./deploy/deploy.sh`). Backend and worker share this environment.
    `FRONTEND_URL` must be the real HTTPS site.
 7. Confirm email in a real user's settings, test a new browser login, and password recovery.
@@ -33,7 +33,8 @@ works with GitHub or email; no phone number is needed.
 A cron job drains the encrypted SQL outbox every 30 seconds. PostgreSQL row locks
 prevent concurrent workers claiming the same row. Each request has a stable Resend
 Idempotency-Key. Upstream 429/5xx/network errors retry with exponential backoff, up
-to eight attempts; a pending message expires after 24 hours. Verification/reset
+to eight attempts (a daily or monthly quota error waits until 00:00 UTC without
+using an attempt); a pending message expires after 24 hours. Verification/reset
 messages must still match their current single-use token and 30-minute expiry.
 Bodies are cleared after send/cancel/failure; technical rows expire after 30 days.
 

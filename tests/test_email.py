@@ -229,3 +229,15 @@ def test_disabled_worker_still_purges_expired_data(client, db, owner, monkeypatc
     mail.drain()
     db.expire_all()
     assert db.query(EmailOutbox).count() == 0
+
+
+def test_resend_quota_waits_for_reset(client, db, owner):
+    verified(client, db, owner)
+    row = mail.queue(db, owner.id, "security", "user@example.com", "Subject", "Hello")
+    db.commit()
+    transport = Mock()
+    transport.post.return_value = httpx.Response(429, json={"name": "daily_quota_exceeded"})
+    mail.deliver_one(db, row, transport); db.commit()
+    assert (row.status, row.attempts, row.error_code) == ("pending", 0, "quota_exceeded")
+    assert row.next_attempt.replace(tzinfo=UTC) > datetime.now(UTC)
+    assert (row.next_attempt.hour, row.next_attempt.minute) == (0, 0)
