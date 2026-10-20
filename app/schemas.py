@@ -7,7 +7,6 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_valida
 
 from app.core.sources import normalize_source
 
-SyncPrivacy = Literal["all", "followers", "none"]
 Visibility = Literal["all", "followers", "private"]
 ProfileSection = Literal[
     "showcase", "recommendations", "history", "wrapped",
@@ -117,7 +116,6 @@ class ProfileUpdate(BaseModel):
     avatar_frame: str | None = Field(None, max_length=64)
     is_private: bool | None = None
     hidden_artists: str | None = Field(None, max_length=4096)
-    sync_privacy: SyncPrivacy | None = None
     lastfm_username: str | None = Field(None, max_length=64)
 
 
@@ -318,7 +316,6 @@ class NotificationChannelPreferences(BaseModel):
     system: bool = True
     weekly_digest: bool = True
     new_releases: bool = False
-    room_invites: bool = True
 
 
 class NotificationPreferences(BaseModel):
