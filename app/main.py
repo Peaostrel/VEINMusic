@@ -496,16 +496,30 @@ async def _handle_room_message(room_id: str, username: str, data: dict, state: d
     if msg_type == "CHAT_MESSAGE":
         await _room_chat(room_id, username, data, state)
         return
-    if msg_type not in ("TRACK_SYNC", "PLAYBACK_CONTROL"):
+    if msg_type not in (
+            "TRACK_SYNC", "PLAYBACK_CONTROL", "ROOM_SETTINGS", "DELETE_ROOM"):
         return
 
     room = await manager.room_state(room_id)
     if room is None or room["host"] != username:
-        return  # only the host (DJ) controls playback
+        return  # only the host (DJ) controls the room
     if msg_type == "TRACK_SYNC":
         await _room_track_sync(room_id, username, data)
-    else:
+    elif msg_type == "PLAYBACK_CONTROL":
         await _room_playback_control(room_id, username, data)
+    elif msg_type == "ROOM_SETTINGS":
+        name = data.get("name")
+        is_private = data.get("is_private")
+        if not isinstance(name, str) or not isinstance(is_private, bool):
+            return
+        settings = await manager.update_room_settings(
+            room_id, name, is_private)
+        await manager.broadcast_to_room(room_id, {
+            "type": "ROOM_SETTINGS",
+            **settings,
+        })
+    else:
+        await manager.delete_room(room_id)
 
 
 @app.websocket("/ws/together/{room_id}")
@@ -521,7 +535,15 @@ async def together_websocket_route(websocket: WebSocket, room_id: str):
     username = authenticated_username or f"Guest_{secrets.token_hex(3)}"
 
     await websocket.accept()
-    room = await manager.join_room(room_id, username, websocket)
+    requested_name = websocket.query_params.get("name")
+    requested_private = websocket.query_params.get("private") == "1"
+    room = await manager.join_room(
+        room_id,
+        username,
+        websocket,
+        name=requested_name if authenticated_username else None,
+        is_private=requested_private if authenticated_username else False,
+    )
     if room is None:
         await websocket.close(code=4008)  # room/listener limits reached
         return
