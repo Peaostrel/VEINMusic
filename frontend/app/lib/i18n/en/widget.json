@@ -21,5 +21,9 @@
   "Создать ключ и скрипт": "Create key and script",
   "Команда для Siri": "Siri shortcut",
   "В приложении «Команды» создайте команду с действием Scriptable «Run Script», выберите скрипт VEIN Music и добавьте «Показать результат» или «Произнести текст». Назовите команду, например, «Что я слушаю», и вызывайте её через Siri.": "In the Shortcuts app, create a shortcut with Scriptable's “Run Script” action, pick the VEIN Music script and add “Show Result” or “Speak Text”. Name it, for example, “What am I listening to”, and run it with Siri.",
-  "Что вы слушаете и статистика недели на экране iPhone: виджет Scriptable и команда для Siri.": "What you're playing and your weekly stats on your iPhone screen: a Scriptable widget and a Siri shortcut."
+  "Что вы слушаете и статистика недели на экране iPhone: виджет Scriptable и команда для Siri.": "What you're playing and your weekly stats on your iPhone screen: a Scriptable widget and a Siri shortcut.",
+  "Лента прослушиваний со всего мира": "Plays from listeners around the world",
+  "Комнаты совместного прослушивания": "Rooms for listening together",
+  "Топ слушателей недели": "This week's top listeners",
+  "Управление профилем и интеграциями": "Manage your profile and integrations"
 }
