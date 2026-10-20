@@ -1,7 +1,13 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowUpRight, Headphones, Pause, ShieldCheck } from "lucide-react";
+import {
+  ArrowUpRight,
+  CircleCheck,
+  Headphones,
+  Pause,
+  ShieldCheck,
+} from "lucide-react";
 import { btn, card } from "@/components/ui";
 
 export const metadata: Metadata = {
@@ -22,7 +28,7 @@ function firefoxListing(): string | null {
     const url = new URL(value);
     return url.protocol === "https:" &&
       url.hostname === "addons.mozilla.org" &&
-      /^\/(?:[a-z]{2}(?:-[A-Z]{2})\/)?firefox\/addon\/[^/]+\/?$/.test(
+      /^\/(?:[a-z]{2}(?:-[A-Z]{2})?\/)?firefox\/addon\/[^/]+\/?$/.test(
         url.pathname,
       ) &&
       !url.username &&
@@ -31,6 +37,26 @@ function firefoxListing(): string | null {
       !url.search &&
       !url.hash
       ? url.href
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+// Optional Chrome Web Store listing; the button stays hidden until it is set.
+function chromeListing(): string | null {
+  const value = process.env.CHROME_EXTENSION_URL?.trim();
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" &&
+      url.hostname === "chromewebstore.google.com" &&
+      /^\/detail\/(?:[^/]+\/)?[a-p]{32}\/?$/.test(url.pathname) &&
+      !url.username &&
+      !url.password &&
+      !url.port &&
+      !url.hash
+      ? `${url.origin}${url.pathname}`
       : null;
   } catch {
     return null;
@@ -48,20 +74,51 @@ const services = [
 const steps = [
   [
     "Установите расширение",
-    "Откройте карточку в Firefox Add-ons и подтвердите установку в браузере.",
+    "Откройте карточку в магазине дополнений и подтвердите установку в браузере.",
   ],
   [
     "Подключите VEIN",
-    "Откройте расширение, включите «Передавать прослушивания в VEIN» и нажмите «Подключить через сайт». Войдите в VEIN и подтвердите код.",
+    "Откройте расширение, включите переключатель «Передавать прослушивания» и нажмите «Подключить через сайт». Войдите в VEIN и подтвердите код: пароль в расширение вводить не нужно.",
   ],
   [
     "Включите музыку",
-    "Откройте любимый веб-плеер. Если вкладка была открыта до установки, перезагрузите её. Прослушивания появятся в вашем профиле.",
+    "Откройте любимый веб-плеер. Если вкладка была открыта до установки, перезагрузите её. В окне расширения сразу видно, принят ли трек.",
+  ],
+];
+
+const statuses = [
+  [
+    "Трек принят",
+    "Сервер получил событие. Прослушивание засчитывается по реально прослушанному времени, а не по одному запуску.",
+  ],
+  [
+    "Нужно действие",
+    "Интеграция выключена в настройках, включена приватная сессия или ключ устарел: расширение так и напишет.",
+  ],
+  [
+    "Ничего не теряется",
+    "Если связь пропала, до 500 событий ждут в очереди и отправляются, когда сеть вернётся.",
+  ],
+];
+
+const faq = [
+  [
+    "Трек играет, но в окне расширения пусто",
+    "Перезагрузите вкладку плеера: расширение подключается к страницам, открытым после установки. Проверьте, что переключатель «Передавать прослушивания» включён и сервис есть в списке выше.",
+  ],
+  [
+    "Прослушивание не появилось в профиле",
+    "Короткие отрывки не засчитываются. Посмотрите статус последнего события в окне расширения: там указана причина, например выключенная интеграция или приватная сессия.",
+  ],
+  [
+    "Как перенести расширение на другой компьютер",
+    "Установите его и снова нажмите «Подключить через сайт». Каждое устройство подтверждается отдельно, а лишние можно отозвать в настройках VEIN, раздел «Безопасность».",
   ],
 ];
 
 export default function ExtensionPage() {
   const firefoxUrl = firefoxListing();
+  const chromeUrl = chromeListing();
   return (
     <div className="mx-auto flex w-full max-w-[1080px] flex-col gap-16 px-4 py-12 md:px-8 md:py-20">
       <section className="grid items-center gap-10 md:grid-cols-[1.3fr_1fr]">
@@ -79,16 +136,31 @@ export default function ExtensionPage() {
             в VEIN, чтобы вы видели свои любимые треки, артистов и статистику
             вместе.
           </p>
-          {firefoxUrl ? (
-            <a
-              href={firefoxUrl}
-              className={`${btn.primary} ${btn.lg}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Установить в Firefox{" "}
-              <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
-            </a>
+          {firefoxUrl || chromeUrl ? (
+            <div className="flex flex-wrap gap-3">
+              {firefoxUrl && (
+                <a
+                  href={firefoxUrl}
+                  className={`${btn.primary} ${btn.lg}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Установить в Firefox{" "}
+                  <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+                </a>
+              )}
+              {chromeUrl && (
+                <a
+                  href={chromeUrl}
+                  className={`${firefoxUrl ? btn.secondary : btn.primary} ${btn.lg}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Установить в Chrome{" "}
+                  <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+                </a>
+              )}
+            </div>
           ) : (
             <div className="rounded-xl border border-line bg-surface px-5 py-4">
               <p className="font-medium">Скоро в Firefox Add-ons</p>
@@ -99,7 +171,8 @@ export default function ExtensionPage() {
             </div>
           )}
           <p className="text-xs text-fg-3">
-            Бесплатно · Firefox 142+ на компьютере · нужен аккаунт VEIN
+            Бесплатно · {chromeUrl ? "Firefox 142+ и Chrome" : "Firefox 142+"}{" "}
+            на компьютере · нужен аккаунт VEIN
           </p>
           <a
             href="#browsers"
@@ -108,13 +181,18 @@ export default function ExtensionPage() {
             Другие браузеры
           </a>
         </div>
-        <figure className="flex flex-col items-center gap-4 rounded-2xl border border-line bg-surface-2 p-6">
+        <figure className="relative flex flex-col items-center gap-4">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-6 top-10 bottom-16 rounded-full bg-accent/15 blur-3xl"
+          />
           <Image
             src="/extension/popup-connected.png"
-            alt="Окно VEIN Music Tracker: подключён демонстрационный профиль, передача прослушиваний включена"
-            width={292}
-            height={370}
-            className="h-auto w-full max-w-[320px] rounded-xl border border-line shadow-xl"
+            alt="Окно VEIN Music: передача прослушиваний включена, аккаунт подключён, последний трек принят сервером"
+            width={640}
+            height={996}
+            sizes="(min-width: 768px) 320px, 80vw"
+            className="relative h-auto w-full max-w-[320px] rounded-2xl border border-line shadow-2xl"
             priority
           />
           <figcaption className="text-xs text-fg-3">
@@ -141,6 +219,36 @@ export default function ExtensionPage() {
           Работает с веб-версиями сервисов. Для мобильных и настольных
           приложений используйте доступные интеграции VEIN.
         </p>
+      </section>
+
+      <section
+        aria-labelledby="status-title"
+        className={`${card} grid gap-8 p-6 md:grid-cols-[1fr_1.2fr] md:p-8`}
+      >
+        <div>
+          <h2 id="status-title" className="text-2xl font-semibold">
+            Видно, что трек дошёл
+          </h2>
+          <p className="mt-3 text-sm leading-relaxed text-fg-2">
+            В окне расширения показан последний трек и ответ сервера. Не нужно
+            гадать, записалось ли прослушивание: если что-то не так, расширение
+            подскажет причину.
+          </p>
+        </div>
+        <ul className="flex flex-col gap-4">
+          {statuses.map(([title, text]) => (
+            <li key={title} className="flex gap-3">
+              <CircleCheck
+                className="mt-0.5 h-5 w-5 shrink-0 text-accent"
+                aria-hidden="true"
+              />
+              <div>
+                <h3 className="font-medium">{title}</h3>
+                <p className="mt-1 text-sm leading-relaxed text-fg-2">{text}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section aria-labelledby="steps-title" className="flex flex-col gap-6">
@@ -183,7 +291,7 @@ export default function ExtensionPage() {
             {
               icon: Pause,
               title: "Пауза в любой момент",
-              text: "Снимите галочку, чтобы остановить передачу и очистить очередь. Кнопка «Отключить» также удаляет ключ аккаунта из расширения.",
+              text: "Выключите переключатель, чтобы остановить передачу и очистить очередь. Кнопка «Отключить» также удаляет ключ аккаунта из расширения.",
             },
           ].map(({ icon: Icon, title, text }) => (
             <div key={title}>
@@ -223,9 +331,20 @@ export default function ExtensionPage() {
               Chrome, Edge и другие Chromium-браузеры
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-fg-2">
-              В магазинах пока недоступно. Для опытных пользователей есть ручная
-              установка через режим разработчика, без автоматических обновлений.
+              {chromeUrl
+                ? "Установка через Chrome Web Store, подходит и для Edge, Яндекс Браузера и других Chromium-браузеров. Обновления приходят автоматически."
+                : "В магазинах пока недоступно. Для опытных пользователей есть ручная установка через режим разработчика, без автоматических обновлений."}
             </p>
+            {chromeUrl && (
+              <a
+                href={chromeUrl}
+                className="mt-4 mr-4 inline-block text-sm text-fg-2 underline underline-offset-4 hover:text-fg"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Открыть в Chrome Web Store
+              </a>
+            )}
             <a
               href="https://github.com/Peaostrel/VEINMusic/tree/VEIN/music-extension#chromium"
               className="mt-4 inline-block text-sm text-fg-2 underline underline-offset-4 hover:text-fg"
@@ -235,6 +354,30 @@ export default function ExtensionPage() {
               Инструкция по ручной установке
             </a>
           </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="faq-title" className="flex flex-col gap-5">
+        <h2 id="faq-title" className="text-2xl font-semibold">
+          Частые вопросы
+        </h2>
+        <div className="flex flex-col gap-3">
+          {faq.map(([question, answer]) => (
+            <details key={question} className={`${card} group px-6 py-4`}>
+              <summary className="cursor-pointer list-none font-medium marker:hidden [&::-webkit-details-marker]:hidden">
+                <span className="flex items-center justify-between gap-4">
+                  {question}
+                  <span
+                    aria-hidden="true"
+                    className="text-fg-3 transition-transform group-open:rotate-45"
+                  >
+                    +
+                  </span>
+                </span>
+              </summary>
+              <p className="mt-3 text-sm leading-relaxed text-fg-2">{answer}</p>
+            </details>
+          ))}
         </div>
         <p className="text-sm text-fg-3">
           Нужна помощь?{" "}
