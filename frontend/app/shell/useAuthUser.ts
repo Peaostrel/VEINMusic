@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { API_URL } from "@/app/lib/api";
-import { isValidUser, setProfileTheme } from "@/app/lib/theme";
+import { isValidUser } from "@/app/lib/theme";
 import {
   applyAppearance,
   mergePreferences,
@@ -147,7 +147,6 @@ export function useAuthUser(pathname: string | null) {
     syncAuthFlag(false);
     setUsername(null);
     setProfile(null);
-    setProfileTheme(undefined);
     // Full reload on purpose: drops all client state of the old session
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     globalThis.location.href = "/auth";

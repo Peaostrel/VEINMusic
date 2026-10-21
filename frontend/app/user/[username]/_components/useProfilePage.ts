@@ -12,7 +12,6 @@ import {
 import { applyPlaybackUpdate } from "@/app/lib/playback";
 import { useCountries } from "@/app/lib/geo";
 import { useT } from "@/app/lib/i18n/client";
-import { useProfileTheme } from "./hooks";
 import { fetchAndShowNotifications } from "./notifications";
 import type {
   AchievementInfo,
@@ -86,8 +85,6 @@ export function useProfilePage() {
   const [isLogged, setIsLogged] = useState(false);
 
   const countries = useCountries();
-  useProfileTheme(data.user?.theme);
-
   const [error, setError] = useState("");
   const [compatibility, setCompatibility] =
     useState<CompatibilityResult | null>(null);
