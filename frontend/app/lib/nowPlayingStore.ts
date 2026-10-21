@@ -25,6 +25,44 @@ interface Entry {
 }
 
 const entries = new Map<string, Entry>();
+const MAX_CLOCK_DRIFT_SEC = 2;
+
+function isSameTrack(current: CurrentTrack, next: CurrentTrack) {
+  return (
+    current.title === next.title &&
+    current.artist === next.artist &&
+    current.source === next.source
+  );
+}
+
+function displayedPosition(track: CurrentTrack, now: number) {
+  if (track.display_position_sec == null) return null;
+  const elapsed = track.playing
+    ? Math.max(0, now - (track.receivedAt ?? now)) / 1_000
+    : 0;
+  return Math.min(
+    track.duration ?? Infinity,
+    track.display_position_sec + elapsed,
+  );
+}
+
+function withoutSmallClockRollback(
+  current: CurrentTrack | null,
+  next: CurrentTrack,
+  now: number,
+) {
+  if (!current || !isSameTrack(current, next)) return next;
+  const currentPosition = displayedPosition(current, now);
+  const nextPosition = next.display_position_sec;
+  if (
+    currentPosition == null ||
+    nextPosition == null ||
+    nextPosition >= currentPosition ||
+    currentPosition - nextPosition > MAX_CLOCK_DRIFT_SEC
+  )
+    return next;
+  return { ...next, display_position_sec: currentPosition };
+}
 
 function entryFor(username: string) {
   let entry = entries.get(username);
@@ -63,7 +101,11 @@ export function publishCurrentTrack(
 ) {
   const entry = entryFor(username);
   if (eventKey && entry.eventKey === eventKey) return;
-  entry.track = { ...track, receivedAt: performance.now() };
+  const now = performance.now();
+  entry.track = {
+    ...withoutSmallClockRollback(entry.track, track, now),
+    receivedAt: now,
+  };
   entry.revision++;
   entry.eventKey = eventKey;
   for (const listener of entry.listeners) listener(entry.track);

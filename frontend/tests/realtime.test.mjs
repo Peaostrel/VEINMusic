@@ -62,6 +62,23 @@ test("now playing cards share one snapshot and reject a late HTTP response", asy
   }
 });
 
+test("now playing clock ignores tiny rollbacks but accepts a real seek", () => {
+  const username = "monotonic-now-playing";
+  const base = {
+    playing: true,
+    title: "Track",
+    artist: "Artist",
+    source: "plat",
+    duration: 180,
+  };
+  publishCurrentTrack(username, { ...base, display_position_sec: 32 });
+  publishCurrentTrack(username, { ...base, display_position_sec: 31 });
+  assert.ok(getCurrentTrack(username).display_position_sec >= 32);
+
+  publishCurrentTrack(username, { ...base, display_position_sec: 10 });
+  assert.equal(getCurrentTrack(username).display_position_sec, 10);
+});
+
 test("playback snapshots freeze pauses, re-anchor resumes and reject older tracks", () => {
   const start = "2026-10-15T12:00:00Z";
   const first = {
