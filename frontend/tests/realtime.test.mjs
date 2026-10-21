@@ -12,6 +12,72 @@ const {
   playbackProgress,
   playbackTime,
 } = await load("../app/lib/playback.ts");
+const {
+  getCurrentTrack,
+  loadCurrentTrack,
+  publishCurrentTrack,
+  subscribeCurrentTrack,
+} = await load("../app/lib/nowPlayingStore.ts");
+
+test("now playing cards share one snapshot and reject a late HTTP response", async () => {
+  const username = "shared-now-playing";
+  const seenBySidebar = [];
+  const seenByProfile = [];
+  const closeSidebar = subscribeCurrentTrack(username, (track) =>
+    seenBySidebar.push(track?.title ?? "stopped"),
+  );
+  const closeProfile = subscribeCurrentTrack(username, (track) =>
+    seenByProfile.push(track?.title ?? "stopped"),
+  );
+  const originalFetch = globalThis.fetch;
+  let completeRequest;
+  let requests = 0;
+  globalThis.fetch = () => {
+    requests++;
+    return new Promise((resolve) => {
+      completeRequest = resolve;
+    });
+  };
+  try {
+    const first = loadCurrentTrack(username);
+    const second = loadCurrentTrack(username);
+    assert.equal(requests, 1);
+    publishCurrentTrack(
+      username,
+      { playing: true, title: "Live track" },
+      "live:1",
+    );
+    completeRequest({
+      ok: true,
+      json: async () => ({ playing: true, title: "Old HTTP track" }),
+    });
+    await Promise.all([first, second]);
+    assert.equal(getCurrentTrack(username).title, "Live track");
+    assert.deepEqual(seenBySidebar, ["Live track"]);
+    assert.deepEqual(seenByProfile, ["Live track"]);
+  } finally {
+    closeSidebar();
+    closeProfile();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("now playing clock ignores tiny rollbacks but accepts a real seek", () => {
+  const username = "monotonic-now-playing";
+  const base = {
+    playing: true,
+    title: "Track",
+    artist: "Artist",
+    source: "plat",
+    duration: 180,
+  };
+  publishCurrentTrack(username, { ...base, display_position_sec: 32 });
+  publishCurrentTrack(username, { ...base, display_position_sec: 31 });
+  assert.ok(getCurrentTrack(username).display_position_sec >= 32);
+
+  publishCurrentTrack(username, { ...base, display_position_sec: 10 });
+  assert.equal(getCurrentTrack(username).display_position_sec, 10);
+});
 
 test("playback snapshots freeze pauses, re-anchor resumes and reject older tracks", () => {
   const start = "2026-10-15T12:00:00Z";

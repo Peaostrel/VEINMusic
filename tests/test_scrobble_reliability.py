@@ -148,6 +148,41 @@ def test_extension_position_pause_resume_and_seek_are_live(client, db, listener,
         assert row.listened_sec < 5
 
 
+def test_closed_extension_tab_stops_without_leaving_a_paused_track(client, db, listener):
+    user, headers = listener
+    payload = {
+        **report(source="yandex"),
+        "player_position": True,
+        "progress_sec": 42,
+    }
+    assert client.post("/api/scrobble", headers=headers, json=payload).json()["status"] == "ok"
+
+    with patch("app.services.scrobble_processor.manager.broadcast_to_user", new_callable=AsyncMock) as broadcast:
+        response = client.post(
+            "/api/scrobble",
+            headers=headers,
+            json={**payload, "is_playing": False, "stopped": True},
+        )
+
+    assert response.json()["status"] == "ok"
+    row = db.query(Scrobble).one()
+    db.refresh(row)
+    assert row.is_playing is False
+    assert row.position_sec is None
+    assert client.get(f"/api/current-track/{user.username}", headers=headers).json() == {
+        "playing": False
+    }
+    event = broadcast.await_args.args[1]
+    assert event == {
+        "type": "PLAYBACK_STATE",
+        "counted": False,
+        "id": row.id,
+        "is_playing": False,
+        "track": None,
+        "stopped": True,
+    }
+
+
 def test_live_extension_takes_over_fresh_cloud_state_and_broadcasts_position(client, db, listener):
     user, headers = listener
     payload = {**report(source="spotify"), "progress_sec": 42, "player_position": True}

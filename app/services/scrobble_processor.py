@@ -32,6 +32,7 @@ class ScrobbleCreditOptions(TypedDict, total=False):
     pending_sec: int
     collector: str
     player_position: bool
+    stopped: bool
 
 
 YANDEX_MUSIC_HOST = "music.yandex.ru"
@@ -726,7 +727,7 @@ def _start_scrobble(db: Session, user_id: int, track: Track, source: str, source
 def _record_scrobble(db: Session, user: User, track: Track, source: str,
                      progress_sec: float, is_playing: bool, credit_sec: int | None = None,
                      pending_sec: int = 0, collector: str = "client",
-                     player_position: bool = False) -> dict[str, Any]:
+                     player_position: bool = False, stopped: bool = False) -> dict[str, Any]:
     """Create or advance the user's current scrobble (blocking DB work).
 
     Returns plain data only, so nothing touches expired ORM objects (and the
@@ -778,7 +779,18 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
         result["counted"] = _counted_scrobble_payload(last_scrobble, track)
     if positional:
         _set_position(db, current, now, progress_sec)
-    if is_new:
+    if stopped and current is not None:
+        # A closed player has no resumable selection. Clearing the position
+        # distinguishes it from an explicit pause in /api/current-track.
+        current.position_sec = None
+        current.is_playing = False
+        current.pending_sec = 0
+        db.commit()
+    if stopped and current is not None:
+        result["state_change"] = {
+            "id": int(current.id), "is_playing": False, "track": None, "stopped": True,
+        }
+    elif is_new:
         # Publish only after storing the position: the first frame must not
         # temporarily show credited listening (often zero) as player time.
         result["new_item"] = format_history_item(current, track)
@@ -787,8 +799,11 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
         # Position, timestamp and listening must travel together, including
         # heartbeats/seeks and the heartbeat that crosses the counted
         # threshold. A bare play/pause flag reuses a stale timer anchor.
-        result["state_change"] = {"id": int(current.id), "is_playing": bool(is_playing),
-                                  "track": format_history_item(current, track)}
+        result["state_change"] = {
+            "id": int(current.id), "is_playing": False if stopped else bool(is_playing),
+            "track": None if stopped else format_history_item(current, track),
+            **({"stopped": True} if stopped else {}),
+        }
     return result
 
 
@@ -884,7 +899,8 @@ async def _process_scrobble(
         enrich=False, user_id=int(user.id))
     result = await _run_db(_record_scrobble, db, user, track, source, progress_sec, is_playing,
                            credit_options.get("credit_sec"), credit_options.get("pending_sec", 0),
-                           credit_options.get("collector", "client"), credit_options.get("player_position", False))
+                           credit_options.get("collector", "client"), credit_options.get("player_position", False),
+                           credit_options.get("stopped", False))
 
     if result["new_item"] is not None:
         await manager.broadcast_to_user(result["username"], {
