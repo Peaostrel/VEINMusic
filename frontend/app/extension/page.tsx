@@ -49,10 +49,10 @@ function firefoxListing(): string | null {
   }
 }
 
-// Optional Chrome Web Store listing; the button stays hidden until it is set.
 function chromeListing(): string | null {
-  const value = process.env.CHROME_EXTENSION_URL?.trim();
-  if (!value) return null;
+  const value =
+    process.env.CHROME_EXTENSION_URL?.trim() ||
+    "https://chromewebstore.google.com/detail/eiplflcaijcgflagdmkiohajhhecnapg";
   try {
     const url = new URL(value);
     return url.protocol === "https:" &&
@@ -63,6 +63,27 @@ function chromeListing(): string | null {
       !url.port &&
       !url.hash
       ? `${url.origin}${url.pathname}`
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function operaListing(): string | null {
+  const value =
+    process.env.OPERA_ADDON_URL?.trim() ||
+    "https://addons.opera.com/ru/extensions/details/vein-music-tracker/";
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" &&
+      url.hostname === "addons.opera.com" &&
+      /^\/(?:[a-z]{2}\/)?extensions\/details\/[^/]+\/?$/.test(url.pathname) &&
+      !url.username &&
+      !url.password &&
+      !url.port &&
+      !url.search &&
+      !url.hash
+      ? url.href
       : null;
   } catch {
     return null;
@@ -145,6 +166,7 @@ export default async function ExtensionPage() {
   const t = await getT();
   const firefoxUrl = firefoxListing();
   const chromeUrl = chromeListing();
+  const operaUrl = operaListing();
   return (
     <div className="mx-auto flex w-full max-w-[1080px] flex-col gap-16 px-4 py-12 md:px-8 md:py-20">
       <section className="grid items-center gap-10 md:grid-cols-[1.3fr_1fr]">
@@ -162,7 +184,7 @@ export default async function ExtensionPage() {
               "Слушайте в привычных веб-плеерах. Расширение сохраняет прослушивания в VEIN, чтобы вы видели свои любимые треки, артистов и статистику вместе.",
             )}
           </p>
-          {firefoxUrl || chromeUrl ? (
+          {firefoxUrl || chromeUrl || operaUrl ? (
             <div className="flex flex-wrap gap-3">
               {firefoxUrl && (
                 <a
@@ -186,6 +208,28 @@ export default async function ExtensionPage() {
                   <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
                 </a>
               )}
+              {operaUrl && (
+                <a
+                  href={operaUrl}
+                  className={`${btn.secondary} ${btn.lg}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {t("Установить в Opera")}{" "}
+                  <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+                </a>
+              )}
+              {operaUrl && (
+                <a
+                  href={operaUrl}
+                  className={`${btn.secondary} ${btn.lg}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {t("Установить в Яндекс Браузер")}{" "}
+                  <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+                </a>
+              )}
             </div>
           ) : (
             <div className="rounded-xl border border-line bg-surface px-5 py-4">
@@ -199,7 +243,7 @@ export default async function ExtensionPage() {
           )}
           <p className="text-xs text-fg-3">
             {t("Бесплатно · {browsers} на компьютере · нужен аккаунт VEIN", {
-              browsers: chromeUrl ? t("Firefox 142+ и Chrome") : "Firefox 142+",
+              browsers: t("Firefox 142+, Chrome, Opera и Яндекс Браузер"),
             })}
           </p>
           <a
@@ -372,15 +416,23 @@ export default async function ExtensionPage() {
                     "Публикация в Firefox Add-ons готовится. Постоянная установка станет доступна после появления подписанной версии.",
                   )}
             </p>
+            {firefoxUrl && (
+              <a
+                href={firefoxUrl}
+                className="mt-4 inline-block text-sm text-fg-2 underline underline-offset-4 hover:text-fg"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t("Открыть в Firefox Add-ons")}
+              </a>
+            )}
           </div>
           <div className={`${card} p-6`}>
-            <h3 className="font-semibold">
-              {t("Chrome, Edge и другие Chromium-браузеры")}
-            </h3>
+            <h3 className="font-semibold">Google Chrome</h3>
             <p className="mt-2 text-sm leading-relaxed text-fg-2">
               {chromeUrl
                 ? t(
-                    "Установка через Chrome Web Store, подходит и для Edge, Яндекс Браузера и других Chromium-браузеров. Обновления приходят автоматически.",
+                    "Установка через Chrome Web Store. Обновления приходят автоматически.",
                   )
                 : t(
                     "В магазинах пока недоступно. Для опытных пользователей есть ручная установка через режим разработчика, без автоматических обновлений.",
@@ -396,6 +448,52 @@ export default async function ExtensionPage() {
                 {t("Открыть в Chrome Web Store")}
               </a>
             )}
+          </div>
+          <div className={`${card} p-6`}>
+            <h3 className="font-semibold">Opera</h3>
+            <p className="mt-2 text-sm leading-relaxed text-fg-2">
+              {t(
+                "Установка через каталог Opera Add-ons. После публикации обновления будут приходить автоматически.",
+              )}
+            </p>
+            {operaUrl && (
+              <a
+                href={operaUrl}
+                className="mt-4 inline-block text-sm text-fg-2 underline underline-offset-4 hover:text-fg"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t("Открыть в Opera Add-ons")}
+              </a>
+            )}
+          </div>
+          <div className={`${card} p-6`}>
+            <h3 className="font-semibold">{t("Яндекс Браузер")}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-fg-2">
+              {t(
+                "Яндекс Браузер поддерживает расширения из Opera Add-ons. Откройте карточку и подтвердите установку в браузере.",
+              )}
+            </p>
+            {operaUrl && (
+              <a
+                href={operaUrl}
+                className="mt-4 inline-block text-sm text-fg-2 underline underline-offset-4 hover:text-fg"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t("Установить в Яндекс Браузер")}
+              </a>
+            )}
+          </div>
+          <div className={`${card} p-6 md:col-span-2`}>
+            <h3 className="font-semibold">
+              {t("Edge и другие Chromium-браузеры")}
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-fg-2">
+              {t(
+                "Расширение совместимо с другими Chromium-браузерами. Если магазин недоступен, используйте ручную установку через режим разработчика.",
+              )}
+            </p>
             <a
               href="https://github.com/Peaostrel/VEINMusic/tree/VEIN/music-extension#chromium"
               className="mt-4 inline-block text-sm text-fg-2 underline underline-offset-4 hover:text-fg"
