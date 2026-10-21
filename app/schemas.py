@@ -87,6 +87,7 @@ class ScrobbleData(BaseModel):
     player_position: bool = False
     progress_sec: Position = 0
     is_playing: bool | None = True
+    stopped: bool = False
     duration: Seconds = 0
     client_event_id: str | None = Field(None, max_length=64)
     client_observed_at_ms: int | None = Field(None, ge=0, le=10_000_000_000_000)
