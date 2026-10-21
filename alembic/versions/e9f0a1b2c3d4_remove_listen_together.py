@@ -1,7 +1,7 @@
 """Remove Listen Together profile and feature data
 
 Revision ID: e9f0a1b2c3d4
-Revises: e4f5a6b7c8d9
+Revises: b3d4e5f6a7b8
 Create Date: 2026-10-21 00:45:00.000000
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "e9f0a1b2c3d4"
-down_revision: str | Sequence[str] | None = "e4f5a6b7c8d9"
+down_revision: str | Sequence[str] | None = "b3d4e5f6a7b8"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
