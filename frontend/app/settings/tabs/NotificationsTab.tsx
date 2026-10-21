@@ -37,11 +37,6 @@ const EVENTS: {
     description: msg("Получена новая награда"),
   },
   {
-    key: "room_invites",
-    label: msg("Комнаты"),
-    description: msg("Приглашения слушать вместе"),
-  },
-  {
     key: "weekly_digest",
     label: msg("Недельные итоги"),
     description: msg("Готов новый дайджест"),

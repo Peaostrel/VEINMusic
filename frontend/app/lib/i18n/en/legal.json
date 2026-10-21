@@ -16,7 +16,6 @@
   "Если вы привяжете почту, мы храним подтверждённый адрес, ожидающий подтверждения адрес и настройки писем. Почта не показывается другим пользователям. Она используется для восстановления пароля и предупреждений о новых входах; письма от администрации включаются отдельно по вашему желанию.": "If you link an email address, we store the confirmed address, the address awaiting confirmation and your email settings. Your email is not shown to other users. It is used for password recovery and warnings about new sign-ins; emails from the administration are turned on separately, at your choice.",
   "Для доставки используется Resend: ему передаются адрес получателя, тема и содержание письма. Ссылки подтверждения и восстановления действуют 30 минут и используются один раз. Ожидающие отправки письма шифруются в нашей базе; после отправки их содержание удаляется, техническая история отправки хранится до 30 дней. Почту можно отвязать в настройках безопасности.": "Resend is used for delivery: it receives the recipient’s address and the subject and content of the email. Confirmation and recovery links are valid for 30 minutes and can be used once. Emails waiting to be sent are encrypted in our database; after sending, their content is deleted, and the technical sending history is kept for up to 30 days. You can unlink your email in the security settings.",
   "История прослушиваний и активность": "Listening history and activity",
-  "Чтобы строить статистику, ленту, достижения и совместные функции, VEINMusic хранит данные о прослушиваниях и действиях внутри сервиса:": "To build statistics, the feed, achievements and shared features, VEINMusic stores data about plays and actions within the service:",
   "название трека, исполнитель, альбом, источник, время прослушивания и длительность;": "track title, artist, album, source, play time and duration;",
   "техническое состояние текущего прослушивания, данные импорта и начисленный опыт;": "the technical state of the current play, import data and experience earned;",
   "подписки, лайки, комментарии, достижения и связанные уведомления;": "following, likes, comments, achievements and related notifications;",
@@ -106,7 +105,6 @@
   "имя пользователя, хэш пароля, отображаемое имя, описание, аватар, обложка, местоположение, жанр, оборудование и ссылки на соцсети, если я их заполнил;": "username, password hash, display name, description, avatar, cover, location, genre, equipment and social media links, if I have filled them in;",
   "адрес электронной почты, если я его привязал;": "email address, if I have linked it;",
   "история прослушиваний: треки, исполнители, альбомы, время, длительность и источник;": "listening history: tracks, artists, albums, time, duration and source;",
-  "подписки, лайки, комментарии, сообщения в комнатах совместного прослушивания, жалобы;": "following, likes, comments, messages in Listen Together rooms, reports;",
   "данные подключённых мною интеграций (токены доступа Spotify, Яндекс Музыки, SoundCloud, Last.fm и других);": "data of the integrations I have connected (access tokens for Spotify, Yandex Music, SoundCloud, Last.fm and others);",
   "технические данные: IP-адрес, сведения о браузере и устройстве, cookie сеанса и устройства.": "technical data: IP address, browser and device information, session and device cookies.",
   "Зачем": "Why",
@@ -128,5 +126,7 @@
   "Это перевод для удобства. Юридическую силу имеет русская версия.": "This is a translation for convenience. The Russian version is the legally binding one.",
   "Акиншин Максим Владиславович": "Akinshin Maksim Vladislavovich",
   "США": "the USA",
-  "20 октября 2026": "October 20, 2026"
+  "20 октября 2026": "October 20, 2026",
+  "подписки, лайки, комментарии и жалобы;": "following, likes, comments and reports;",
+  "Чтобы строить статистику, ленту, достижения и социальные функции, VEINMusic хранит данные о прослушиваниях и действиях внутри сервиса:": "To build statistics, the feed, achievements and social features, VEINMusic stores data about plays and actions within the service:"
 }

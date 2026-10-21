@@ -379,7 +379,6 @@ export function useSettingsPage() {
           avatar_frame: data.avatarFrame,
           is_private: data.isPrivate,
           hidden_artists: data.hiddenArtists,
-          sync_privacy: data.syncPrivacy,
           lastfm_username: data.lastfmUsername,
           social_links: JSON.stringify(
             socialLinks.filter((l) => l.username.trim() !== ""),

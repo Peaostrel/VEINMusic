@@ -59,7 +59,6 @@ export default function Profile() {
     error,
     handleShowCompatibility,
     mood,
-    wsRef,
     handleFollow,
     openFollowModal,
     importLoading,
@@ -182,11 +181,6 @@ export default function Profile() {
             onFollow={handleFollow}
             onImport={handleLastfmImport}
             onShowWrapped={() => setShowWrapped(true)}
-            onListenTogether={() =>
-              wsRef.current?.send(
-                JSON.stringify({ type: "SYNC_REQUEST", target: username }),
-              )
-            }
             onShowCompatibility={handleShowCompatibility}
           />
         }

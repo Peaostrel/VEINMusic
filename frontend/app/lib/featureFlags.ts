@@ -6,7 +6,6 @@ import { API_URL } from "@/app/lib/api";
 /** Features an admin can switch off (see runtime_settings.KNOWN_FEATURES). */
 export type Feature =
   | "registration"
-  | "listen_together"
   | "lastfm_import"
   | "webhooks"
   | "integration_yandex"

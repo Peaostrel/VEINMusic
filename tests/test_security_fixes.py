@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-from starlette.websockets import WebSocketDisconnect
 
 from app.models import (
     Follow,
@@ -53,7 +52,7 @@ def _add_listened_scrobble(db, user_id: int, title="Secret Song", artist="Secret
 def test_profile_update_does_not_reset_privacy(client, db):
     key = _register(client, "alice")
     resp = client.post("/api/profile/privacy", headers=_auth(key),
-                       json={"is_private": True, "sync_privacy": "none", "hidden_artists": "X"})
+                       json={"is_private": True, "hidden_artists": "X"})
     assert resp.status_code == 200
 
     resp = client.post("/api/profile/update", headers=_auth(key), json={"bio": "hello"})
@@ -62,14 +61,7 @@ def test_profile_update_does_not_reset_privacy(client, db):
     user = db.query(User).filter_by(username="alice").first()
     db.refresh(user.profile)
     assert user.profile.is_private is True
-    assert user.profile.sync_privacy == "none"
     assert user.profile.hidden_artists == "X"
-
-
-def test_sync_privacy_is_validated(client):
-    key = _register(client, "valid")
-    resp = client.post("/api/profile/privacy", headers=_auth(key), json={"sync_privacy": "whatever"})
-    assert resp.status_code == 422
 
 
 # --- Bans are enforced ---
@@ -396,50 +388,3 @@ def test_svg_truncation_never_splits_entities():
     title = "A" * 30 + "&&&&&&&&&&"
     svg = _render_now_playing_svg("user", title, "Artist & Co", True)
     xml.dom.minidom.parseString(svg)  # must be well-formed XML
-
-
-# --- Listen Together WebSocket ---
-
-
-def test_together_ws_rejects_foreign_origin(client):
-    connection = client.websocket_connect("/ws/together/room1", headers={"origin": "https://evil.example"})
-    with pytest.raises(WebSocketDisconnect):
-        with connection:
-            pass
-
-
-def test_together_only_host_controls_playback(client):
-    # Chat is for signed-in listeners only, so both sides are real accounts
-    _register(client, "partyhost")
-    host_token = client.cookies.get("api_key")
-    client.cookies.clear()
-    _register(client, "partyguest")
-    guest_token = client.cookies.get("api_key")
-    client.cookies.clear()
-
-    # Session tokens travel in the cookie: ?token= accepts only API keys
-    with client.websocket_connect(f"/ws/together/probe?token={host_token}", headers=ORIGIN) as anonymous_ws:
-        assert anonymous_ws.receive_json()["you"] != "partyhost"
-
-    client.cookies.set("api_key", host_token)
-    with client.websocket_connect("/ws/together/party", headers=ORIGIN) as host_ws:
-        host_state = host_ws.receive_json()
-        assert host_state["host"] == host_state["you"] == "partyhost"
-
-        client.cookies.set("api_key", guest_token)
-        with client.websocket_connect("/ws/together/party", headers=ORIGIN) as guest_ws:
-            guest_state = guest_ws.receive_json()
-            assert guest_state["you"] != guest_state["host"]
-            host_ws.receive_json()  # USER_JOINED
-
-            guest_ws.send_json({"type": "PLAYBACK_CONTROL", "is_playing": True, "progress_sec": 5})
-            guest_ws.send_json({"type": "CHAT_MESSAGE", "text": "hi"})
-            # The guest's control message is ignored; the next broadcast is the chat
-            msg = host_ws.receive_json()
-            assert msg["type"] == "CHAT_MESSAGE"
-
-            host_ws.send_json({"type": "PLAYBACK_CONTROL", "is_playing": True, "progress_sec": 5})
-            msg = guest_ws.receive_json()
-            assert msg["type"] == "CHAT_MESSAGE"
-            msg = guest_ws.receive_json()
-            assert msg["type"] == "PLAYBACK_CONTROL"

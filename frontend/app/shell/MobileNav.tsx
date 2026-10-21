@@ -2,15 +2,13 @@
 
 import Link from "next/link";
 import { useT } from "@/app/lib/i18n/client";
-import { msg } from "@/app/lib/i18n/core";
 import { BetaBadge, LogoTile } from "@/components/brand";
 import NotificationsBell from "@/components/NotificationsBell";
 import AccountMenu from "./AccountMenu";
 import { navItems } from "./nav";
 import type { NavUser } from "./types";
 
-const TAB_IDS = new Set(["feed", "top", "together", "stats", "profile"]);
-const SHORT_LABEL: Record<string, string> = { together: msg("Вместе") };
+const TAB_IDS = new Set(["feed", "top", "stats", "profile"]);
 
 /** Phone header: mark, bell and account button. */
 export function MobileTopBar({
@@ -46,7 +44,7 @@ export function MobileTopBar({
   );
 }
 
-/** Phone bottom tab bar with the five main sections. */
+/** Phone bottom tab bar with the four main sections. */
 export function MobileTabBar({
   username,
   active,
@@ -56,7 +54,7 @@ export function MobileTabBar({
   return (
     <nav
       aria-label={t("Разделы")}
-      className="grid grid-cols-5 border-t border-line-soft bg-sidebar px-1 pb-[calc(6px+env(safe-area-inset-bottom))] pt-1.5"
+      className="grid grid-cols-4 border-t border-line-soft bg-sidebar px-1 pb-[calc(6px+env(safe-area-inset-bottom))] pt-1.5"
     >
       {tabs.map((item) => {
         const current = item.id === active;
@@ -71,7 +69,7 @@ export function MobileTabBar({
             }`}
           >
             <Icon className="h-[22px] w-[22px]" aria-hidden="true" />
-            {t(SHORT_LABEL[item.id] ?? item.label)}
+            {t(item.label)}
           </Link>
         );
       })}

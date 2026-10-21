@@ -74,7 +74,7 @@ import /srv/routing/upstreams.caddy
 		request_body {
 			max_size 20MB
 		}
-		# WebSockets (rooms, live status) are proxied as-is
+		# WebSockets for live status are proxied as-is
 		import api_upstream
 	}
 	handle_errors 502 503 504 {

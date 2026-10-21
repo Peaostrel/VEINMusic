@@ -23,7 +23,7 @@ const { steps, faq } = content;
 
 const title = "VEIN Music — every song you play, in one history";
 const description =
-  "Scrobbler and listening stats for Yandex Music, Spotify, SoundCloud, YouTube Music and VK: charts, levels, achievements and listening together.";
+  "Scrobbler and listening stats for Yandex Music, Spotify, SoundCloud, YouTube Music and VK: charts, levels and achievements.";
 
 export const metadata: Metadata = {
   title: { absolute: title },

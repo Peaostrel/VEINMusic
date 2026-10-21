@@ -23,7 +23,11 @@ def get_preferences(profile: Any) -> UserPreferences:
         for key, default_value in defaults.items():
             incoming = data.get(key)
             if isinstance(default_value, dict) and isinstance(incoming, dict):
-                merged[key] = {**default_value, **incoming}
+                # Retired keys are discarded while known values are retained.
+                merged[key] = {
+                    nested_key: incoming.get(nested_key, nested_default)
+                    for nested_key, nested_default in default_value.items()
+                }
             elif incoming is not None:
                 merged[key] = incoming
         return UserPreferences.model_validate(merged)

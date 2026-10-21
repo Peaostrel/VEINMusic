@@ -1,6 +1,5 @@
 import {
   ChartColumn,
-  Headphones,
   LibraryBig,
   Rss,
   Shield,
@@ -25,12 +24,6 @@ export function navItems(username: string): NavItem[] {
   return [
     { id: "feed", label: msg("Лента"), href: "/", icon: Rss },
     { id: "top", label: msg("Топ"), href: "/leaderboard", icon: Trophy },
-    {
-      id: "together",
-      label: msg("Слушать вместе"),
-      href: "/together",
-      icon: Headphones,
-    },
     {
       id: "stats",
       label: msg("Статистика"),
@@ -69,7 +62,6 @@ export function activeSection(
   if (!pathname) return null;
   if (pathname === "/" || pathname.startsWith("/feed")) return "feed";
   if (pathname.startsWith("/leaderboard")) return "top";
-  if (pathname.startsWith("/together")) return "together";
   if (pathname.startsWith("/settings")) return "settings";
   if (pathname.startsWith("/library")) return "library";
   if (pathname.startsWith("/goals")) return "goals";

@@ -15,7 +15,6 @@ export default function robots(): MetadataRoute.Robots {
         "/library",
         "/link",
         "/settings",
-        "/together/",
       ],
     },
     sitemap: `${SITE_URL}/sitemap.xml`,
