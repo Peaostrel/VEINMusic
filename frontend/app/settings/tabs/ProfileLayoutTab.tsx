@@ -46,17 +46,21 @@ export default function ProfileLayoutTab({
   const settings = data.preferences.profile;
   const update = (patch: Partial<typeof settings>) =>
     updatePreference("profile", { ...settings, ...patch });
-  const movableSections = settings.section_order.filter(
+  // Keep the retired section in saved preferences for API compatibility only.
+  const visibleSections = settings.section_order.filter(
+    (section) => section !== "recommendations",
+  );
+  const movableSections = visibleSections.filter(
     (section) => section !== "showcase",
   );
   const move = (section: ProfileSection, direction: -1 | 1) => {
-    if (section === "showcase") return;
+    if (section === "showcase" || section === "recommendations") return;
     const index = movableSections.indexOf(section);
     const target = index + direction;
     if (target < 0 || target >= movableSections.length) return;
     const next = [...movableSections];
     [next[index], next[target]] = [next[target], next[index]];
-    update({ section_order: ["showcase", ...next] });
+    update({ section_order: ["showcase", ...next, "recommendations"] });
   };
   const toggle = (section: ProfileSection) =>
     update({
@@ -74,7 +78,7 @@ export default function ProfileLayoutTab({
         )}
       />
       <ol className={settingsCard}>
-        {settings.section_order.map((section, index) => {
+        {visibleSections.map((section, index) => {
           const hidden = settings.hidden_sections.includes(section);
           const fixed = section === "showcase";
           const movableIndex = fixed ? -1 : movableSections.indexOf(section);

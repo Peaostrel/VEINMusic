@@ -33,7 +33,6 @@ function Cover({
 
 export function ProfileMainGrid({
   data,
-  recs,
   wrapped,
   u,
   isMyProfile,
@@ -57,8 +56,6 @@ export function ProfileMainGrid({
     const index = order.indexOf(section);
     return index < 0 ? 99 : index;
   };
-  const smartRecommendations =
-    u.preferences?.experiments.smart_recommendations ?? true;
   const alternateLayout =
     u.preferences?.experiments.new_profile_layout ?? false;
   const tastePassport = u.preferences?.experiments.taste_passport ?? false;
@@ -72,45 +69,6 @@ export function ProfileMainGrid({
       }`}
     >
       <div className="flex min-w-0 flex-col gap-10">
-        {smartRecommendations &&
-          !hidden.has("recommendations") &&
-          recs.length > 0 && (
-            <section
-              aria-labelledby="recs-title"
-              className="flex flex-col gap-4"
-              style={{ order: priority("recommendations") }}
-            >
-              <h2 id="recs-title" className="text-base font-semibold">
-                {t("Может понравиться")}
-              </h2>
-              <ul className="hide-scrollbar flex gap-3 overflow-x-auto pb-1">
-                {recs.map((r) => (
-                  <li
-                    key={r.artist}
-                    className="flex w-[150px] shrink-0 flex-col gap-2 rounded-xl border border-line bg-surface p-3"
-                  >
-                    {r.cover_url ? (
-                      <img
-                        src={getSafeUrl(coverAt(r.cover_url, 126))}
-                        alt=""
-                        loading="lazy"
-                        className="aspect-square w-full rounded-lg object-cover"
-                      />
-                    ) : (
-                      <span className="aspect-square w-full rounded-lg bg-surface-2" />
-                    )}
-                    <span className="truncate text-sm font-medium">
-                      {r.artist}
-                    </span>
-                    <span className="line-clamp-2 text-xs text-fg-3">
-                      {t(r.reason)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
         {!hidden.has("history") && (
           <section
             aria-labelledby="history-title"
