@@ -14,11 +14,13 @@ function harness(items, fetch) {
         offline_scrobbles: items.map((id) => ({ id, accountKey: 'test-key', payload: { id }, queuedAt: Date.now() }))
     };
     let onMessage;
+    let onTabRemoved;
     const chrome = {
         alarms: null,
         i18n: i18nMock('ru'),
         runtime: { id: 'test-extension', getURL: (path) => `chrome-extension://test-extension/${path}`,
             onMessage: { addListener(listener) { onMessage = listener; } } },
+        tabs: { onRemoved: { addListener(listener) { onTabRemoved = listener; } } },
         storage: { local: {
             get(keys, cb) {
                 cb(Object.fromEntries(keys.map((key) => [key, structuredClone(state[key])])));
@@ -43,7 +45,7 @@ function harness(items, fetch) {
     });
     vm.runInContext(pairing, context);
     vm.runInContext(source, context);
-    return { context, state, onMessage };
+    return { context, state, onMessage, onTabRemoved };
 }
 
 test('fresh extension uses the API host', () => {
@@ -132,6 +134,58 @@ test('pairing network failure keeps authorization available for retry', async ()
 const payload = {title: 'Song', artist: 'Artist', source: 'yandex', progress_sec: 12, duration: 180, is_playing: true};
 const musicSender = {url: 'https://music.yandex.ru/'};
 const tick = () => new Promise((resolve) => setImmediate(resolve));
+
+test('closing the active music tab stops instead of pausing its track', async () => {
+    const sent = [];
+    const {context, onMessage, onTabRemoved} = harness([], async (_url, options) => {
+        sent.push(JSON.parse(options.body));
+        return {ok: true};
+    });
+    onMessage({type: 'SCROBBLE', data: payload}, {...musicSender, tab: {id: 17}});
+    await tick();
+    onTabRemoved(17);
+    await tick();
+    await vm.runInContext('deliveryChain', context);
+    assert.equal(sent.length, 2);
+    assert.equal(sent[1].is_playing, false);
+    assert.equal(sent[1].stopped, true);
+});
+
+test('closing a paused tab still stops it after the background worker restarts', async () => {
+    const sent = [];
+    const {context, state, onTabRemoved} = harness([], async (_url, options) => {
+        sent.push(JSON.parse(options.body));
+        return {ok: true};
+    });
+    state.active_playback_tab = {
+        tabId: 17,
+        payload: {...payload, is_playing: false, progress_sec: 42},
+    };
+    onTabRemoved(17);
+    await tick();
+    await tick();
+    await vm.runInContext('deliveryChain', context);
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].stopped, true);
+    assert.equal(state.active_playback_tab, undefined);
+});
+
+test('closing an older music tab does not stop the newer active tab', async () => {
+    const sent = [];
+    const {context, onMessage, onTabRemoved} = harness([], async (_url, options) => {
+        sent.push(JSON.parse(options.body));
+        return {ok: true};
+    });
+    onMessage({type: 'SCROBBLE', data: payload}, {...musicSender, tab: {id: 17}});
+    await tick();
+    onMessage({type: 'SCROBBLE', data: {...payload, title: 'New song'}}, {...musicSender, tab: {id: 18}});
+    await tick();
+    onTabRemoved(17);
+    await tick();
+    await vm.runInContext('deliveryChain', context);
+    assert.deepEqual(sent.map((item) => item.title), ['Song', 'New song']);
+    assert.equal(sent.some((item) => item.stopped), false);
+});
 
 for (const setting of ['disconnected', 'paused']) {
     test(`does not collect or send while ${setting}`, async () => {

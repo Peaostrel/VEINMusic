@@ -45,6 +45,13 @@ const storageSet = (values) => new Promise((resolve, reject) => {
         else resolve();
     });
 });
+const storageRemove = (keys) => new Promise((resolve, reject) => {
+    chrome.storage.local.remove(keys, () => {
+        const error = chrome.runtime.lastError;
+        if (error) reject(new Error(error.message));
+        else resolve();
+    });
+});
 
 // Chrome storage has no atomic read-modify-write. Serialize queue writes so
 // scrobbles arriving during a flush are not overwritten by its final write.
@@ -234,9 +241,15 @@ async function deliverLiveSnapshot(event) {
 
 let pendingLive = null;
 let sendingLive = false;
-async function sendScrobble(payload) {
+async function sendScrobble(payload, {force = false} = {}) {
     const settings = await storageGet(['apiUrl', 'apiKey', 'trackingEnabled']);
-    if (!settings.apiKey || settings.trackingEnabled !== true || !shouldSendScrobble(payload)) return;
+    if (!settings.apiKey || settings.trackingEnabled !== true || (!force && !shouldSendScrobble(payload))) return;
+    if (force) {
+        lastScrobbleSent = {
+            key: `${payload.source}|${payload.artist}|${payload.title}`,
+            playing: Boolean(payload.is_playing), at: Date.now(), position: payload.progress_sec
+        };
+    }
     const observedAt = Date.now();
     payload = {...payload, client_event_id: crypto.randomUUID(),
         client_observed_at_ms: observedAt, client_version: extensionVersion};
@@ -298,6 +311,44 @@ function safeTrackPayload(data, source) {
     };
 }
 
+// A pause keeps the selected track visible. Closing the tab ends that player
+// session instead. Remember which tab most recently owned live playback so an
+// older/background music tab cannot stop a newer one when it is closed.
+const tabPlayback = new Map();
+let activePlaybackTabId = null;
+let persistedPlayback = {key: '', at: 0};
+
+function rememberTabPlayback(tabId, payload) {
+    if (!Number.isInteger(tabId)) return;
+    tabPlayback.set(tabId, payload);
+    if (payload.is_playing) activePlaybackTabId = tabId;
+    if (activePlaybackTabId !== tabId) return;
+    const key = `${tabId}|${payload.source}|${payload.artist}|${payload.title}|${payload.is_playing}`;
+    const now = Date.now();
+    if (key === persistedPlayback.key && now - persistedPlayback.at < SCROBBLE_MIN_INTERVAL_MS) return;
+    persistedPlayback = {key, at: now};
+    void storageSet({active_playback_tab: {tabId, payload}}).catch((error) =>
+        console.warn('[VEIN] Не удалось запомнить активную вкладку:', error));
+}
+
+if (chrome.tabs?.onRemoved) {
+    chrome.tabs.onRemoved.addListener((tabId) => {
+        const payload = tabPlayback.get(tabId);
+        tabPlayback.delete(tabId);
+        void (async () => {
+            const stored = await storageGet(['active_playback_tab']);
+            const saved = stored.active_playback_tab;
+            const activePayload = activePlaybackTabId === tabId ? payload :
+                (saved?.tabId === tabId ? saved.payload : null);
+            if (!activePayload) return;
+            activePlaybackTabId = null;
+            persistedPlayback = {key: '', at: 0};
+            await storageRemove(['active_playback_tab']);
+            await sendScrobble({...activePayload, is_playing: false, stopped: true}, {force: true});
+        })().catch((error) => console.warn('[VEIN] Не удалось завершить воспроизведение:', error));
+    });
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (!request || typeof request !== 'object') return;
     // Security: only the VEIN site may change the stored key (see sync-key.js)
@@ -329,7 +380,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     // 2. Стираем ключи, если вышли
     if (request.type === 'LOGOUT' && isTrusted) {
-        chrome.storage.local.remove(['username', 'apiKey', 'pairing', 'offline_scrobbles', 'trackingEnabled', 'last_delivery'], () => {
+        chrome.storage.local.remove(['username', 'apiKey', 'pairing', 'offline_scrobbles', 'trackingEnabled', 'last_delivery', 'active_playback_tab'], () => {
             const error = chrome.runtime.lastError;
             if (error) console.warn('[VEIN] Не удалось удалить ключи:', error.message);
             else console.log('[VEIN] Ключи стерты по запросу с сайта.');
@@ -343,6 +394,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === 'SCROBBLE') {
         const source = platformForUrl(senderUrl);
         const payload = source && safeTrackPayload(request.data, source);
-        if (payload) void sendScrobble(payload).catch((error) => console.warn('[VEIN] Ошибка приёма состояния:', error));
+        if (payload) {
+            rememberTabPlayback(sender.tab?.id, payload);
+            void sendScrobble(payload).catch((error) => console.warn('[VEIN] Ошибка приёма состояния:', error));
+        }
     }
 });

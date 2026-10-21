@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { API_URL, subscribeSocket } from "@/app/lib/api";
+import { subscribeSocket } from "@/app/lib/api";
 import { useVisiblePolling } from "@/app/lib/usePolling";
 import { useT } from "@/app/lib/i18n/client";
 import type { Translator } from "@/app/lib/i18n/core";
@@ -15,27 +15,17 @@ import {
 import { sourceLabel } from "@/utils/formatters";
 import { PlayingBars } from "@/components/ui";
 import { coverAt } from "@/app/lib/coverSize";
-
-interface CurrentTrack {
-  playing: boolean;
-  paused?: boolean;
-  title?: string;
-  artist?: string;
-  cover_url?: string | null;
-  source?: string;
-  duration?: number | null;
-  listened_sec?: number | null;
-  excluded?: boolean | null;
-  display_listened_sec?: number | null;
-  display_position_sec?: number | null;
-  playback_remaining_sec?: number | null;
-  receivedAt?: number;
-}
+import {
+  getCurrentTrack,
+  loadCurrentTrack,
+  publishCurrentTrack,
+  subscribeCurrentTrack,
+  type CurrentTrack,
+} from "@/app/lib/nowPlayingStore";
 
 interface LiveMessageHandlers {
   reload: () => Promise<void>;
-  invalidateRequest: () => void;
-  setTrack: (track: CurrentTrack) => void;
+  setTrack: (track: CurrentTrack, eventKey?: string) => void;
 }
 
 function handleLiveMessage(event: MessageEvent, handlers: LiveMessageHandlers) {
@@ -45,28 +35,32 @@ function handleLiveMessage(event: MessageEvent, handlers: LiveMessageHandlers) {
       return;
     }
     globalThis.dispatchEvent(new Event("account_data_update"));
+    if (message.stopped) {
+      handlers.setTrack({ playing: false }, `stopped:${message.id ?? ""}`);
+      return;
+    }
     if (!message.track) {
       void handlers.reload();
       return;
     }
-    // A late HTTP response must not undo a pause or skip.
-    handlers.invalidateRequest();
     const item = message.track;
     const age = Math.max(
       0,
       (Date.now() - playbackTimestamp(item.updated_at)) / 1000,
     );
     const advance = item.is_playing ? Math.min(age, 45) : 0;
-    handlers.setTrack({
-      ...item,
-      playing: item.is_playing && age < 45,
-      paused: !item.is_playing,
-      display_listened_sec: item.listened_sec + advance,
-      display_position_sec:
-        item.position_sec == null ? null : item.position_sec + advance,
-      playback_remaining_sec: Math.max(0, 45 - age),
-      receivedAt: performance.now(),
-    });
+    handlers.setTrack(
+      {
+        ...item,
+        playing: item.is_playing && age < 45,
+        paused: !item.is_playing,
+        display_listened_sec: item.listened_sec + advance,
+        display_position_sec:
+          item.position_sec == null ? null : item.position_sec + advance,
+        playback_remaining_sec: Math.max(0, 45 - age),
+      },
+      `${message.type}:${item.id ?? ""}:${item.updated_at ?? ""}:${item.is_playing}`,
+    );
   } catch {
     // Ignore malformed messages; polling still reconciles state.
   }
@@ -103,28 +97,19 @@ export default function NowPlaying({
 }>) {
   const t = useT();
   const mobileRef = useRef<HTMLDetailsElement>(null);
-  const [track, setTrack] = useState<CurrentTrack | null>(null);
+  const [track, setTrack] = useState<CurrentTrack | null>(() =>
+    getCurrentTrack(username),
+  );
   const [clock, setClock] = useState(0);
   const [connectionState, setConnectionState] = useState<
     "connecting" | "live" | "retrying"
   >("connecting");
-  const requestSequence = useRef(0);
 
-  const load = useCallback(async () => {
-    const sequence = ++requestSequence.current;
-    try {
-      const res = await fetch(
-        `${API_URL}/api/current-track/${encodeURIComponent(username)}`,
-        { credentials: "include", cache: "no-store" },
-      );
-      if (res.ok) {
-        const data: CurrentTrack = await res.json();
-        if (sequence === requestSequence.current)
-          setTrack({ ...data, receivedAt: performance.now() });
-      }
-    } catch {
-      // keep the last state
-    }
+  const load = useCallback(() => loadCurrentTrack(username), [username]);
+
+  useEffect(() => {
+    setTrack(getCurrentTrack(username));
+    return subscribeCurrentTrack(username, setTrack);
   }, [username]);
 
   useVisiblePolling(load, POLL_MS);
@@ -160,8 +145,8 @@ export default function NowPlaying({
         onMessage: (event) =>
           handleLiveMessage(event, {
             reload: load,
-            invalidateRequest: () => requestSequence.current++,
-            setTrack,
+            setTrack: (next, eventKey) =>
+              publishCurrentTrack(username, next, eventKey),
           }),
       },
       { authed: true },
