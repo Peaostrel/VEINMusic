@@ -16,7 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.constants import USER_AGENT_MOZILLA, YANDEX_MUSIC_DOMAIN
-from app.core.i18n import request_lang, tr
+from app.core.i18n import request_lang
 from app.core.rate_limit import HEAVY_READ_LIMIT, OUTBOUND_LIMIT, limiter
 from app.core.security import get_current_user
 from app.database import get_db
@@ -24,7 +24,7 @@ from app.models import User
 from app.routers.common import _can_view_section, _get_visible_user
 from app.services.cache import get_from_cache, set_to_cache
 from app.services.privacy import public_statistics_users
-from app.services.taste import get_taste_match_internal, get_taste_twins
+from app.services.taste import get_taste_match_internal
 
 logger = logging.getLogger(__name__)
 
