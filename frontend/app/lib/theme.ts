@@ -43,19 +43,6 @@ export const THEMES = {
   },
 };
 
-/** The profile page overrides the site theme through this global. */
-type ThemeGlobal = typeof globalThis & { __ACTIVE_PROFILE_THEME__?: string };
-
-export function getProfileTheme(): string | undefined {
-  return (globalThis as ThemeGlobal).__ACTIVE_PROFILE_THEME__;
-}
-
-export function setProfileTheme(theme: string | undefined) {
-  if (theme) (globalThis as ThemeGlobal).__ACTIVE_PROFILE_THEME__ = theme;
-  else delete (globalThis as ThemeGlobal).__ACTIVE_PROFILE_THEME__;
-  globalThis.dispatchEvent(new Event("theme_update"));
-}
-
 /** Username in localStorage, ignoring junk values left by old builds. */
 export const isValidUser = (u: unknown): u is string => {
   if (typeof u !== "string") return false;
@@ -124,16 +111,14 @@ export const applyTheme = (themeKey: string) => {
 function currentThemeKey(): string {
   const path = globalThis.location.pathname.toLowerCase();
   if (path.includes("/auth")) return "classic";
-  const profileTheme = getProfileTheme();
-  if (path.startsWith("/user/") && profileTheme) return profileTheme;
   if (isValidUser(localStorage.getItem("username")))
     return localStorage.getItem("site_theme") || "classic";
   return "classic";
 }
 
 /**
- * Applies the site theme (the viewed profile's theme on /user pages) and
- * re-applies it on the "theme_update" event; animates the rainbow theme.
+ * Applies the signed-in user's site theme and re-applies it on the
+ * "theme_update" event; animates the rainbow theme.
  */
 export function useSiteTheme(pathname: string | null) {
   const [currentTheme, setCurrentTheme] = useState("classic");

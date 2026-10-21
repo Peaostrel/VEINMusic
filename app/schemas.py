@@ -1,7 +1,7 @@
 
 import math
 from datetime import datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, get_args
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
 
@@ -9,14 +9,14 @@ from app.core.sources import normalize_source
 
 Visibility = Literal["all", "followers", "private"]
 ProfileSection = Literal[
-    "showcase", "recommendations", "history", "wrapped",
+    "showcase", "history", "wrapped",
     "top_tracks", "top_artists",
 ]
 
 
 def _default_profile_section_order() -> list[ProfileSection]:
     return [
-        "showcase", "recommendations", "history", "wrapped",
+        "showcase", "history", "wrapped",
         "top_tracks", "top_artists",
     ]
 
@@ -236,14 +236,22 @@ class ProfilePreferences(BaseModel):
 
     section_order: list[ProfileSection] = Field(
         default_factory=_default_profile_section_order,
-        min_length=6,
-        max_length=6,
+        min_length=5,
+        max_length=5,
     )
     hidden_sections: list[ProfileSection] = Field(
         default_factory=list,
-        max_length=6,
+        max_length=5,
     )
     show_online_status: bool = True
+
+    @field_validator("section_order", "hidden_sections", mode="before")
+    @classmethod
+    def discard_retired_sections(cls, value):
+        if not isinstance(value, list):
+            return value
+        allowed = set(get_args(ProfileSection))
+        return [section for section in value if section in allowed]
 
     @field_validator("section_order")
     @classmethod
@@ -355,9 +363,9 @@ class IntegrationPreferences(BaseModel):
 
 
 class ExperimentPreferences(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # Ignore flags retired by newer releases so stale clients can still save.
+    model_config = ConfigDict(extra="ignore")
 
-    smart_recommendations: bool = True
     taste_passport: bool = False
     new_profile_layout: bool = False
     diagnostics: bool = False

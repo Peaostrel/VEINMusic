@@ -186,12 +186,7 @@ export interface UserInfo {
 
 export type Visibility = "all" | "followers" | "private";
 export type ProfileSection =
-  | "showcase"
-  | "recommendations"
-  | "history"
-  | "wrapped"
-  | "top_tracks"
-  | "top_artists";
+  "showcase" | "history" | "wrapped" | "top_tracks" | "top_artists";
 
 export interface NotificationChannels {
   likes: boolean;
@@ -275,7 +270,6 @@ export interface UserPreferences {
     auto_sync: boolean;
   };
   experiments: {
-    smart_recommendations: boolean;
     taste_passport: boolean;
     new_profile_layout: boolean;
     diagnostics: boolean;
@@ -298,7 +292,7 @@ export interface PublicUserPreferences {
   wrapped: UserPreferences["wrapped"];
   experiments: Pick<
     UserPreferences["experiments"],
-    "smart_recommendations" | "taste_passport" | "new_profile_layout"
+    "taste_passport" | "new_profile_layout"
   >;
 }
 
@@ -436,13 +430,6 @@ export interface CompatibilityResult {
   }[];
   common_genres: string[];
   summary?: string;
-}
-
-/** GET /api/recommendations?username= (artists liked by taste twins) */
-export interface ArtistRecommendation {
-  artist: string;
-  cover_url: string | null;
-  reason: string;
 }
 
 export interface MoodInfo {

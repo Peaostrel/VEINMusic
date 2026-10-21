@@ -268,7 +268,6 @@ HEAVY_ENDPOINTS = [
     "app.routers.leaderboard.get_public_week",
     "app.routers.experience.calendar_range",
     "app.routers.discovery.get_taste_match",
-    "app.routers.discovery.get_recommendations",
     "app.routers.discovery.get_user_taste_compatibility",
     "app.routers.discovery.get_user_recommendations",
     "app.routers.discovery.smart_redirect",

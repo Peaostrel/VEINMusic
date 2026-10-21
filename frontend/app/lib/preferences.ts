@@ -1,4 +1,4 @@
-import type { UserPreferences } from "./types";
+import type { ProfileSection, UserPreferences } from "./types";
 
 type PartialPreferences = {
   version?: 1;
@@ -31,7 +31,6 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   profile: {
     section_order: [
       "showcase",
-      "recommendations",
       "history",
       "wrapped",
       "top_tracks",
@@ -97,7 +96,6 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
     auto_sync: true,
   },
   experiments: {
-    smart_recommendations: true,
     taste_passport: false,
     new_profile_layout: false,
     diagnostics: false,
@@ -107,6 +105,35 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   },
 };
 
+const PROFILE_SECTIONS: ProfileSection[] = [
+  "showcase",
+  "history",
+  "wrapped",
+  "top_tracks",
+  "top_artists",
+];
+
+function normalizeProfilePreferences(
+  value?: Partial<UserPreferences["profile"]>,
+): UserPreferences["profile"] {
+  const merged = { ...DEFAULT_PREFERENCES.profile, ...value };
+  const validOrder = merged.section_order.filter((section) =>
+    PROFILE_SECTIONS.includes(section),
+  );
+  return {
+    ...merged,
+    section_order: [
+      ...new Set([
+        ...validOrder,
+        ...PROFILE_SECTIONS.filter((section) => !validOrder.includes(section)),
+      ]),
+    ],
+    hidden_sections: merged.hidden_sections.filter((section) =>
+      PROFILE_SECTIONS.includes(section),
+    ),
+  };
+}
+
 export function mergePreferences(
   value?: PartialPreferences | null,
 ): UserPreferences {
@@ -115,7 +142,7 @@ export function mergePreferences(
     ...structuredClone(DEFAULT_PREFERENCES),
     ...value,
     appearance: { ...DEFAULT_PREFERENCES.appearance, ...value.appearance },
-    profile: { ...DEFAULT_PREFERENCES.profile, ...value.profile },
+    profile: normalizeProfilePreferences(value.profile),
     privacy: { ...DEFAULT_PREFERENCES.privacy, ...value.privacy },
     listening: { ...DEFAULT_PREFERENCES.listening, ...value.listening },
     feed: { ...DEFAULT_PREFERENCES.feed, ...value.feed },
@@ -137,8 +164,15 @@ export function mergePreferences(
       ...value.integrations,
     },
     experiments: {
-      ...DEFAULT_PREFERENCES.experiments,
-      ...value.experiments,
+      taste_passport:
+        value.experiments?.taste_passport ??
+        DEFAULT_PREFERENCES.experiments.taste_passport,
+      new_profile_layout:
+        value.experiments?.new_profile_layout ??
+        DEFAULT_PREFERENCES.experiments.new_profile_layout,
+      diagnostics:
+        value.experiments?.diagnostics ??
+        DEFAULT_PREFERENCES.experiments.diagnostics,
     },
     goals: { ...DEFAULT_PREFERENCES.goals, ...value.goals },
   };

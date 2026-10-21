@@ -16,10 +16,6 @@ const LABELS: Record<ProfileSection, { title: string; description: string }> = {
     title: msg("Витрина"),
     description: msg("Любимый артист, трек и альбом"),
   },
-  recommendations: {
-    title: msg("Рекомендации"),
-    description: msg("Артисты, которые могут понравиться"),
-  },
   history: {
     title: msg("История"),
     description: msg("Последние прослушивания"),

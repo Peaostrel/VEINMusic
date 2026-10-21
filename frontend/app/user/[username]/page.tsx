@@ -187,6 +187,12 @@ export default function Profile() {
         hasBanner
       />
 
+      <ProfileAchievements
+        username={String(username)}
+        displayedAchs={displayedAchs}
+        total={u.achievements?.length ?? 0}
+      />
+
       <NowPlaying
         username={String(username)}
         variant="profile"
@@ -245,11 +251,6 @@ export default function Profile() {
         )}
 
       <ProfileMainGrid {...view} />
-      <ProfileAchievements
-        username={String(username)}
-        displayedAchs={displayedAchs}
-        total={u.achievements?.length ?? 0}
-      />
     </div>
   );
 }

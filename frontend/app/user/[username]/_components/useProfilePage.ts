@@ -12,11 +12,9 @@ import {
 import { applyPlaybackUpdate } from "@/app/lib/playback";
 import { useCountries } from "@/app/lib/geo";
 import { useT } from "@/app/lib/i18n/client";
-import { useProfileTheme } from "./hooks";
 import { fetchAndShowNotifications } from "./notifications";
 import type {
   AchievementInfo,
-  ArtistRecommendation,
   CompatibilityResult,
   FollowStats,
   HistoryEntry,
@@ -87,10 +85,7 @@ export function useProfilePage() {
   const [isLogged, setIsLogged] = useState(false);
 
   const countries = useCountries();
-  useProfileTheme(data.user?.theme);
-
   const [error, setError] = useState("");
-  const [recs, setRecs] = useState<ArtistRecommendation[]>([]);
   const [compatibility, setCompatibility] =
     useState<CompatibilityResult | null>(null);
   const [compatModalOpen, setCompatModalOpen] = useState(false);
@@ -207,22 +202,18 @@ export function useProfilePage() {
         fetch(url, { credentials: "include" })
           .then((response) => (response.ok ? response.json() : fallback))
           .catch(() => fallback);
-      const [taste, recommendations, wrappedData, moodData] = await Promise.all(
-        [
-          viewer && viewer !== username
-            ? json(`${API_URL}/api/taste-match/${viewer}/${username}`, null)
-            : Promise.resolve(null),
-          json(`${API_URL}/api/recommendations?username=${username}`, []),
-          json(`${API_URL}/api/stats/wrapped?username=${username}`, null),
-          json(`${API_URL}/api/user/mood?username=${username}`, null),
-        ],
-      );
+      const [taste, wrappedData, moodData] = await Promise.all([
+        viewer && viewer !== username
+          ? json(`${API_URL}/api/taste-match/${viewer}/${username}`, null)
+          : Promise.resolve(null),
+        json(`${API_URL}/api/stats/wrapped?username=${username}`, null),
+        json(`${API_URL}/api/user/mood?username=${username}`, null),
+      ]);
       if (!active) return;
       setData((previous) => ({
         ...previous,
         taste: taste as TasteMatch | null,
       }));
-      setRecs(recommendations as ArtistRecommendation[]);
       setWrapped(wrappedData as WrappedStats | null);
       setMood(moodData as MoodInfo | null);
     };
@@ -438,8 +429,6 @@ export function useProfilePage() {
     countries,
     error,
     setError,
-    recs,
-    setRecs,
     compatibility,
     setCompatibility,
     compatModalOpen,
