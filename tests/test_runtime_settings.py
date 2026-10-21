@@ -4,7 +4,6 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from starlette.websockets import WebSocketDisconnect
 
 from app.core.security import create_session_token
 from app.database import SessionLocal
@@ -101,19 +100,6 @@ def test_registration_can_be_closed(client):
     assert client.get("/api/feature-flags").json()["flags"]["registration"] is False
 
 
-def _join_room(client):
-    with client.websocket_connect("/ws/together/room1", headers=ORIGIN) as ws:
-        return ws.receive_json()
-
-
-def test_listen_together_can_be_switched_off(client):
-    _set_flag("listen_together", False)
-    assert client.get("/api/together/rooms").status_code == 503
-    with pytest.raises(WebSocketDisconnect) as closed:
-        _join_room(client)
-    assert closed.value.code == 4010
-
-
 def test_lastfm_import_can_be_switched_off(client):
     client.headers.update(ORIGIN)
     client.post("/auth/register", json={"username": "importer", "password": "password"})
@@ -137,19 +123,10 @@ def test_webhooks_can_be_switched_off(client, db):
         deliver.assert_not_awaited()
 
 
-def test_admin_toggle_takes_effect_immediately(admin_client):
-    assert admin_client.get("/api/together/rooms").status_code == 200  # value now cached
-    res = admin_client.put("/api/admin/feature-flags/listen_together", json={"is_enabled": False})
-    assert res.status_code == 404  # not seeded in tests: create it instead
-    admin_client.post("/api/admin/feature-flags", json={"key": "listen_together", "is_enabled": False})
-    assert admin_client.get("/api/together/rooms").status_code == 503
-    admin_client.put("/api/admin/feature-flags/listen_together", json={"is_enabled": True})
-    assert admin_client.get("/api/together/rooms").status_code == 200
-    admin_client.delete("/api/admin/feature-flags/listen_together")
-    assert admin_client.get("/api/together/rooms").status_code == 200
-
+def test_removed_room_flag_is_not_advertised(admin_client):
     listing = admin_client.get("/api/admin/feature-flags").json()
     assert "registration" in listing["known_features"]
+    assert "listen_together" not in listing["known_features"]
 
 
 def test_cached_values_expire(db, monkeypatch):

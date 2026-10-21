@@ -67,9 +67,6 @@ export default function OverviewTab({
           <div className="text-3xl font-semibold text-fg">
             {health?.websockets.connected_clients || 0}
           </div>
-          <div className="text-[11px] text-fg-2 mt-1">
-            {t("В {n} комнатах", { n: health?.websockets.active_rooms || 0 })}
-          </div>
         </div>
       </div>
 

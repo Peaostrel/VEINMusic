@@ -92,7 +92,6 @@ export interface SystemHealth {
     pool_status: string;
   };
   websockets: {
-    active_rooms: number;
     connected_clients: number;
   };
   cloud_scrobblers: {
@@ -283,15 +282,6 @@ export interface LastfmJob {
   error_log: string | null;
   started_at: string | null;
   finished_at: string | null;
-}
-
-export interface TogetherRoom {
-  room_id: string;
-  name: string;
-  host_username: string;
-  listeners_count: number;
-  listeners: string[];
-  current_track: { title?: string; artist?: string } | null;
 }
 
 export interface BlacklistFilter {

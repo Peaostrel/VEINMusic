@@ -12,7 +12,6 @@
   "API-ключи и устройства": "API keys and devices",
   "Resend подключён. Письма доступны пользователям с подтверждённой почтой и включённым согласием.": "Resend is connected. Emails can go to users with a confirmed address who have opted in.",
   "Resend пока не подключён: настройте отправителя и ключ сервиса.": "Resend isn't connected yet: set up the sender and the service key.",
-  "DJ @{host} · слушателей: {n}": "DJ @{host} · listeners: {n}",
   "ID {id} · регистрация: {date}": "ID {id} · signed up: {date}",
   "Last.fm: {name} · синхронизация: {date} · push-подписок: {n}": "Last.fm: {name} · sync: {date} · push subscriptions: {n}",
   "Redis / воркер": "Redis / worker",
@@ -46,7 +45,6 @@
   "Активно": "Active",
   "Активные слушатели": "Active listeners",
   "Активных блокировок нет.": "No active blocks.",
-  "Активных комнат нет": "No active rooms",
   "Алгоритм анализирует скорость скробблинга (>70 треков/час) и короткие треки (<20с).": "The algorithm looks at scrobbling speed (>70 tracks/hour) and short tracks (<20s).",
   "Альбом (уникальные треки)": "Album (unique tracks)",
   "Альбом / жанр": "Album / genre",
@@ -64,7 +62,6 @@
   "Бонус XP": "Bonus XP",
   "Бэкапов пока нет.": "No backups yet.",
   "Бэкапы БД": "DB backups",
-  "В {n} комнатах": "In {n} rooms",
   "В колокольчике на сайте": "In the bell on the site",
   "ВЕРИФИЦИРОВАН": "VERIFIED",
   "ВСЕМ пользователям": "ALL users",
@@ -73,7 +70,6 @@
   "Верифицировать": "Verify",
   "Вернулись на 2-й неделе": "Returned in week 2",
   "Витрина обновлена по поиску": "Showcase refreshed from search",
-  "Включает режим синхронного прослушивания": "Turns on synced listening",
   "Включить двухфакторную защиту": "Turn on two-factor authentication",
   "Внешний бэкап:": "Off-site backup:",
   "Внизу письма будет ссылка на настройки отключения писем.": "The email will end with a link to the settings for turning emails off.",
@@ -481,5 +477,6 @@
   "Название (английский)": "Name (English)",
   "Описание (английский)": "Description (English)",
   "Необязательно": "Optional",
-  "Необязательно — иначе покажем русское": "Optional — the Russian one is shown otherwise"
+  "Необязательно — иначе покажем русское": "Optional — the Russian one is shown otherwise",
+  "Временно ограничивает доступ к сервису": "Temporarily limits access to the service"
 }

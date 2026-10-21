@@ -51,17 +51,6 @@ export default function PrivacyTab({
           checked={data.isPrivate}
           onChange={(isPrivate) => updateData("isPrivate", isPrivate)}
         />
-        <SelectRow
-          title={t("Совместное прослушивание")}
-          description={t("Кто может приглашать вас слушать музыку вместе.")}
-          value={data.syncPrivacy || "all"}
-          options={[
-            { value: "all", label: t("Все пользователи") },
-            { value: "followers", label: t("Только мои подписки") },
-            { value: "none", label: t("Никто") },
-          ]}
-          onChange={(value) => updateData("syncPrivacy", value)}
-        />
       </section>
 
       <section className={settingsCard}>

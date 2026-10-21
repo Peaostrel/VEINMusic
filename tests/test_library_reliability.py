@@ -256,28 +256,39 @@ def test_repeated_impression_moves_to_front_and_timestamp_cursor_pages(client, d
     assert client.get("/api/me/recommendations/history?before=bad").status_code == 422
 
 
-def test_every_room_tab_receives_events_and_is_revoked_without_removing_other_tab():
+def test_every_user_tab_receives_events_and_session_revoke_is_scoped():
     import asyncio
     from app.core.websockets import ConnectionManager
 
     async def scenario():
         manager = ConnectionManager()
         manager._redis_down_until = float("inf")
-        sockets = [SimpleNamespace(state=SimpleNamespace(session_id=session), close=AsyncMock(), send_json=AsyncMock())
-                   for session in ("first", "first", "second")]
+        sockets = [
+            SimpleNamespace(
+                state=SimpleNamespace(session_id=session),
+                accept=AsyncMock(),
+                close=AsyncMock(),
+                send_json=AsyncMock(),
+            )
+            for session in ("first", "first", "second")
+        ]
         for socket in sockets:
-            await manager.join_room("room", "alice", socket)
-        await manager.broadcast_to_room("room", {"type": "example"})
+            await manager.connect(socket, "alice")
+        await manager.broadcast_to_user("alice", {"type": "example"})
         for socket in sockets:
             socket.send_json.assert_awaited_once()
-        await manager._deliver({"kind": "session_revoke", "key": "alice", "session_id": "first"})
+        await manager._deliver({
+            "kind": "session_revoke",
+            "key": "alice",
+            "session_id": "first",
+        })
         sockets[0].close.assert_awaited_once_with(code=1008)
         sockets[1].close.assert_awaited_once_with(code=1008)
         sockets[2].close.assert_not_awaited()
-        await manager.leave_room("room", "alice", sockets[0])
-        await manager.leave_room("room", "alice", sockets[1])
-        assert (await manager.room_state("room"))["listeners"] == ["alice"]
-        await manager.leave_room("room", "alice", sockets[2])
-        assert await manager.room_state("room") is None
+        manager.disconnect(sockets[0], "alice")
+        manager.disconnect(sockets[1], "alice")
+        assert manager.active_connections["alice"] == [sockets[2]]
+        manager.disconnect(sockets[2], "alice")
+        assert "alice" not in manager.active_connections
 
     asyncio.run(scenario())

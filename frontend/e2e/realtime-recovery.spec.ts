@@ -1,4 +1,4 @@
-import { test, expect, type WebSocketRoute } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 import { API_URL, scrobble, signUp } from "./helpers";
 
 // Worker-owned API requests bypass page routes. These tests mock API snapshots;
@@ -84,47 +84,4 @@ test("statistics refresh in place while retaining the selected period", async ({
   total = 9;
   await expect(counter).toContainText("9", { timeout: 35_000 });
   await expect(page).toHaveURL(new RegExp(`/user/${username}/stats$`));
-});
-
-test("room freezes after disconnect and resumes only after an authoritative snapshot", async ({
-  page,
-}) => {
-  const username = await signUp(page, "roomrecovery");
-  const sockets: WebSocketRoute[] = [];
-  const state = (progress: number, playing: boolean) =>
-    JSON.stringify({
-      type: "ROOM_STATE",
-      listeners: [username],
-      host: username,
-      you: username,
-      chat_history: [],
-      current_track: {
-        title: "Room recovery track",
-        artist: "Artist",
-        duration: 200,
-        progress_sec: progress,
-        is_playing: playing,
-        updated_at: Date.now() / 1000,
-      },
-    });
-  await page.routeWebSocket("**/ws/together/recovery-room*", (socket) => {
-    sockets.push(socket);
-    if (sockets.length === 1) socket.send(state(10, true));
-  });
-  await page.goto("/together/recovery-room?name=Recovery");
-  await expect(page.getByText("синхронно", { exact: true })).toBeVisible();
-  const card = page.getByRole("region", { name: "Сейчас играет", exact: true });
-  const elapsed = card.getByText(/^\d+:\d{2}$/).first();
-  await expect(elapsed).toHaveText(/0:1\d/);
-  await sockets[0].close({ code: 1012 });
-  await expect.poll(() => sockets.length).toBe(2);
-  await expect(page.getByText("подключение…", { exact: true })).toBeVisible();
-  await expect(card.getByRole("button", { name: "Пауза" })).toBeDisabled();
-  const frozen = await elapsed.textContent();
-  await page.waitForTimeout(1200);
-  await expect(elapsed).toHaveText(frozen!);
-  sockets[1].send(state(40, false));
-  await expect(page.getByText("синхронно", { exact: true })).toBeVisible();
-  await expect(elapsed).toHaveText("0:40");
-  await expect(card.getByRole("button", { name: "Играть" })).toBeEnabled();
 });

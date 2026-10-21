@@ -6,7 +6,6 @@ import {
   ChartColumn,
   Download,
   Flag,
-  Headphones,
   Percent,
   Share2,
   SlidersHorizontal,
@@ -26,7 +25,6 @@ export interface ProfileActionsProps {
   onFollow: () => void;
   onImport: () => void;
   onShowWrapped: () => void;
-  onListenTogether: () => void;
   onShowCompatibility: () => void;
   router?: ReturnType<typeof useRouter>;
 }
@@ -43,7 +41,6 @@ export function ProfileActions({
   onFollow,
   onImport,
   onShowWrapped,
-  onListenTogether,
   onShowCompatibility,
 }: Readonly<ProfileActionsProps>) {
   const t = useT();
@@ -65,24 +62,14 @@ export function ProfileActions({
         </button>
       )}
       {!isMyProfile && isLogged && (
-        <>
-          <button
-            type="button"
-            onClick={onShowCompatibility}
-            className={secondary}
-          >
-            <Percent className="h-3.5 w-3.5" aria-hidden="true" />
-            {t("Совместимость")}
-          </button>
-          <button
-            type="button"
-            onClick={onListenTogether}
-            className={secondary}
-          >
-            <Headphones className="h-3.5 w-3.5" aria-hidden="true" />
-            {t("Слушать вместе")}
-          </button>
-        </>
+        <button
+          type="button"
+          onClick={onShowCompatibility}
+          className={secondary}
+        >
+          <Percent className="h-3.5 w-3.5" aria-hidden="true" />
+          {t("Совместимость")}
+        </button>
       )}
       <Link href={`/user/${username}/stats`} className={secondary}>
         <ChartColumn className="h-3.5 w-3.5" aria-hidden="true" />

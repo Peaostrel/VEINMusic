@@ -155,7 +155,7 @@ export default function AnnouncementsTab({
             <input
               autoComplete="off"
               type="text"
-              placeholder="enable_listen_together"
+              placeholder="maintenance_mode"
               value={newFlag.key}
               onChange={(e) => setNewFlag({ ...newFlag, key: e.target.value })}
               className="w-full mt-1 px-3 py-2 bg-bg border border-line rounded-xl text-xs text-fg font-mono"
@@ -169,7 +169,7 @@ export default function AnnouncementsTab({
             <input
               autoComplete="off"
               type="text"
-              placeholder={t("Включает режим синхронного прослушивания")}
+              placeholder={t("Временно ограничивает доступ к сервису")}
               value={newFlag.description}
               onChange={(e) =>
                 setNewFlag({ ...newFlag, description: e.target.value })

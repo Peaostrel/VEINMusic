@@ -152,7 +152,6 @@ export interface UserInfo {
   is_private: boolean;
   can_view_private?: boolean;
   hidden_artists: string;
-  sync_privacy: "all" | "followers" | "none";
   is_verified: boolean;
   favorite_artist: string | null;
   favorite_artist_url: string | null;
@@ -202,7 +201,6 @@ export interface NotificationChannels {
   system: boolean;
   weekly_digest: boolean;
   new_releases: boolean;
-  room_invites: boolean;
 }
 
 export interface UserPreferences {

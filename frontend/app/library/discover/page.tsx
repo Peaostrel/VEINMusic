@@ -630,9 +630,6 @@ export default function DiscoverPage() {
                 </span>
               </p>
             ))}
-            <Link className={`${btn.secondary} ${btn.sm}`} href="/together">
-              {t("Открыть Together")}
-            </Link>
           </div>
         )}
       </section>

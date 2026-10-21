@@ -2,8 +2,6 @@ import asyncio
 import logging
 import math
 import os
-import re
-import secrets
 import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -16,10 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from sqlalchemy.orm import Session
 
 from app.core.body_limit import BodySizeLimitMiddleware
-from app.core.cover_urls import proxied_image_url
 from app.core.flood_guard import FloodGuardMiddleware
 from app.core.observability import setup_observability
 from app.core.performance import record_request
@@ -49,7 +45,6 @@ from app.routers import (
     vk_id,
     widgets,
 )
-from app.services import runtime_settings
 from app.services.cloud_scrobbling import poll_external_services
 from app.services.scrobble_processor import process_scrobble
 
@@ -276,10 +271,6 @@ async def health():
 
 # Setup WebSocket manually at root
 
-MAX_TEXT_FIELD_LENGTH = 300
-_ROOM_ID_RE = re.compile(r"^[\w\-. ]{1,64}$", re.UNICODE)
-
-
 def _is_ws_origin_allowed(websocket: WebSocket) -> bool:
     # Browsers always send Origin for WebSocket handshakes; reject foreign
     # origins to prevent cross-site WebSocket hijacking.
@@ -339,219 +330,23 @@ def _get_ticket_username(ticket: str, db) -> str | None:
     return None
 
 
-def _is_sync_allowed(target_user, sender_username: str, db: Session) -> bool:
-    if not target_user.profile:
-        return False
-    sp = target_user.profile.sync_privacy
-    if sp == "all" or sp is None:
-        return True
-    if sp == "followers":
-        from app.models import Follow, User
-        sender_user = db.query(User).filter(User.username == sender_username).first()
-        if sender_user:
-            return db.query(Follow).filter(
-                Follow.follower_id == target_user.id,
-                Follow.following_id == sender_user.id
-            ).first() is not None
-    return False
-
-
-def _sync_request_allowed(target: str, sender_username: str) -> bool:
-    from app.models import User
-    db = SessionLocal()
-    try:
-        target_user = db.query(User).filter(User.username == target).first()
-        return bool(target_user and _is_sync_allowed(target_user, sender_username, db))
-    finally:
-        db.close()
-
-
-async def _handle_sync_request(target: str, sender_username: str):
-    # DB work runs in a thread so the event loop keeps serving other sockets
-    allowed = await anyio.to_thread.run_sync(_sync_request_allowed, target, sender_username)
-    if allowed:
-        await manager.broadcast_to_user(target, {
-            "type": "SYNC_INVITE",
-            "from": sender_username
-        })
-
-
-async def _receive_sync_requests(websocket, authenticated_username):
-    last_sync_request = 0.0
-    while True:
-        data = await websocket.receive_json()
-        if not isinstance(data, dict):
-            continue
-        if data.get("type") == "SYNC_REQUEST":
-            now = time.time()
-            if now - last_sync_request < 10.0:
-                continue  # Rate limit: 1 request per 10 seconds
-            last_sync_request = now
-            target = data.get("target")
-            if isinstance(target, str) and target:
-                await _handle_sync_request(target, authenticated_username)
-
-
 @app.websocket("/ws/{username}")
 async def websocket_route(websocket: WebSocket, username: str):
     if not _is_ws_origin_allowed(websocket):
         await websocket.close(code=4003)
         return
 
-    # DB lookup (and PBKDF2 for personal keys) off the event loop
-    authenticated_username = await anyio.to_thread.run_sync(_get_ws_authenticated_username, websocket)
-
-    # Enforce authentication: only the owner can connect to their own websocket
+    authenticated_username = await anyio.to_thread.run_sync(
+        _get_ws_authenticated_username, websocket)
     if not authenticated_username or authenticated_username != username:
         await websocket.close(code=4003)
         return
 
     await manager.connect(websocket, username)
     try:
-        await _receive_sync_requests(websocket, authenticated_username)
+        while True:
+            await websocket.receive()
     except Exception:
         pass
     finally:
         manager.disconnect(websocket, username)
-
-
-def _clean_track_update(track_data) -> dict:
-    """Keep only known track fields with sane types/lengths from a client TRACK_SYNC."""
-    if not isinstance(track_data, dict):
-        return {}
-    clean: dict = {}
-    for key in ("title", "artist", "album"):
-        val = track_data.get(key)
-        if isinstance(val, str):
-            clean[key] = val[:MAX_TEXT_FIELD_LENGTH]
-    cover = track_data.get("cover_url")
-    if isinstance(cover, str) and cover.startswith(("http://", "https://")):
-        # The host's cover reaches every listener: never from an unknown server
-        clean["cover_url"] = proxied_image_url(cover[:2048])
-    for key in ("duration", "progress_sec"):
-        val = track_data.get(key)
-        if isinstance(val, (int, float)) and not isinstance(val, bool) and 0 <= val < 86400:
-            clean[key] = val
-    if isinstance(track_data.get("is_playing"), bool):
-        clean["is_playing"] = track_data["is_playing"]
-    return clean
-
-
-async def _room_track_sync(room_id: str, username: str, data: dict) -> None:
-    fields = _clean_track_update(data.get("track"))
-    fields["updated_at"] = time.time()
-    track = await manager.update_room_track(room_id, fields)
-    await manager.broadcast_to_room(room_id, {
-        "type": "TRACK_SYNC",
-        "track": track,
-        "from": username,
-    })
-
-
-async def _room_chat(room_id: str, username: str, data: dict, state: dict) -> None:
-    if state.get("is_guest"):
-        return  # guests may listen, but only signed-in users can chat
-    now = time.time()
-    if now - state["last_chat"] < 0.5:
-        return  # simple per-connection flood protection
-    state["last_chat"] = now
-    text = str(data.get("text", "")).strip()
-    if not text:
-        return
-    msg_obj = {
-        "from": username,
-        "text": text[:500],
-        "timestamp": int(now),
-    }
-    await manager.add_room_chat(room_id, msg_obj)
-    await manager.broadcast_to_room(room_id, {
-        "type": "CHAT_MESSAGE",
-        **msg_obj,
-    })
-
-
-async def _room_playback_control(room_id: str, username: str, data: dict) -> None:
-    try:
-        progress_sec = float(data.get("progress_sec", 0))
-    except (TypeError, ValueError):
-        return
-    if not 0 <= progress_sec < 86400:
-        return
-    is_playing = bool(data.get("is_playing"))
-    await manager.update_room_track(room_id, {
-        "is_playing": is_playing,
-        "progress_sec": progress_sec,
-        "updated_at": time.time(),
-    })
-    await manager.broadcast_to_room(room_id, {
-        "type": "PLAYBACK_CONTROL",
-        "is_playing": is_playing,
-        "progress_sec": progress_sec,
-        "from": username,
-    })
-
-
-async def _handle_room_message(room_id: str, username: str, data: dict, state: dict) -> None:
-    msg_type = data.get("type")
-    if msg_type == "CHAT_MESSAGE":
-        await _room_chat(room_id, username, data, state)
-        return
-    if msg_type not in ("TRACK_SYNC", "PLAYBACK_CONTROL"):
-        return
-
-    room = await manager.room_state(room_id)
-    if room is None or room["host"] != username:
-        return  # only the host (DJ) controls playback
-    if msg_type == "TRACK_SYNC":
-        await _room_track_sync(room_id, username, data)
-    else:
-        await _room_playback_control(room_id, username, data)
-
-
-@app.websocket("/ws/together/{room_id}")
-async def together_websocket_route(websocket: WebSocket, room_id: str):
-    if not _is_ws_origin_allowed(websocket) or not _ROOM_ID_RE.match(room_id):
-        await websocket.close(code=4003)
-        return
-    if not await anyio.to_thread.run_sync(runtime_settings.is_feature_enabled, "listen_together"):
-        await websocket.close(code=4010)  # switched off by an admin
-        return
-
-    authenticated_username = await anyio.to_thread.run_sync(_get_ws_authenticated_username, websocket)
-    username = authenticated_username or f"Guest_{secrets.token_hex(3)}"
-
-    await websocket.accept()
-    room = await manager.join_room(room_id, username, websocket)
-    if room is None:
-        await websocket.close(code=4008)  # room/listener limits reached
-        return
-
-    # Send current room state to newly joined user
-    await websocket.send_json({"type": "ROOM_STATE", "you": username, **room})
-
-    # Broadcast user joined to other listeners
-    await manager.broadcast_to_room(room_id, {
-        "type": "USER_JOINED",
-        "username": username,
-        "listeners": room["listeners"],
-    }, exclude_user=username)
-
-    state = {"last_chat": 0.0, "is_guest": authenticated_username is None}
-    try:
-        while True:
-            data = await websocket.receive_json()
-            if isinstance(data, dict):
-                await _handle_room_message(room_id, username, data, state)
-    except Exception:
-        pass
-    finally:
-        # The handler task is usually being cancelled here (client went away);
-        # shield the async cleanup so the listener is always unregistered.
-        with anyio.CancelScope(shield=True):
-            remaining = await manager.leave_room(room_id, username, websocket)
-            if remaining and username not in remaining:
-                await manager.broadcast_to_room(room_id, {
-                    "type": "USER_LEFT",
-                    "username": username,
-                    "listeners": remaining,
-                })

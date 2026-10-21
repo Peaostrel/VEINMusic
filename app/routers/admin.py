@@ -477,8 +477,6 @@ async def get_system_health(db: Annotated[Session, Depends(get_db)], admin: Anno
      spotify_sync_users, soundcloud_sync_users) = await asyncio.to_thread(_counts)
     # WebSockets are held per API process; this is the count for this process
     ws_connections = sum(len(c) for c in manager.active_connections.values())
-    rooms = await manager.get_active_rooms_info()
-
     return {
         "status": "healthy",
         "timestamp": datetime.now(UTC).isoformat(),
@@ -489,7 +487,6 @@ async def get_system_health(db: Annotated[Session, Depends(get_db)], admin: Anno
             "pool_status": "active",
         },
         "websockets": {
-            "active_rooms": len(rooms),
             "connected_clients": ws_connections,
         },
         "cloud_scrobblers": {
@@ -752,17 +749,6 @@ def retry_lastfm_import_job(
     anyio.from_thread.run(enqueue_import, job_id)
     return {"status": "ok", "message": tr(request_lang(request, admin), "Задача импорта #{id} поставлена в очередь на повтор",
                                           id=job_id)}
-
-
-# ─── LISTEN TOGETHER ROOMS MONITORING ─────────────────────────────────────────
-
-
-@router.get("/together/rooms")
-async def list_admin_together_rooms(
-    admin: Annotated[User, Depends(get_admin_user)],
-):
-    """List live Listen Together rooms and metrics."""
-    return {"rooms": await manager.get_active_rooms_info()}
 
 
 # ─── AUDIT LOG ────────────────────────────────────────────────────────────────

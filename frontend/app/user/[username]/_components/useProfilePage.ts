@@ -273,17 +273,6 @@ export function useProfilePage() {
                 } else if (msg.type === "ACHIEVEMENTS_UNLOCKED") {
                   refresh();
                   checkNotifications();
-                } else if (msg.type === "SYNC_INVITE") {
-                  if (
-                    confirm(
-                      t(
-                        "Пользователь {user} хочет слушать музыку вместе! Перейти к нему?",
-                        { user: msg.from },
-                      ),
-                    )
-                  ) {
-                    router.push(`/user/${msg.from}`);
-                  }
                 } else if (msg.type === "IMPORT_FINISHED") {
                   alert(msg.message);
                   void fetchSnapshot();
@@ -462,7 +451,6 @@ export function useProfilePage() {
     setWrapped,
     mood,
     setMood,
-    wsRef,
     handleNewScrobble,
     handleFollow,
     openFollowModal,
