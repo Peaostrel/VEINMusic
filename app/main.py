@@ -271,8 +271,6 @@ async def health():
 
 # Setup WebSocket manually at root
 
-
-
 def _is_ws_origin_allowed(websocket: WebSocket) -> bool:
     # Browsers always send Origin for WebSocket handshakes; reject foreign
     # origins to prevent cross-site WebSocket hijacking.
