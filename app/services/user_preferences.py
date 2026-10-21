@@ -52,7 +52,6 @@ def public_preferences(profile: Any) -> dict[str, Any]:
         "privacy": data["privacy"],
         "wrapped": data["wrapped"],
         "experiments": {
-            "smart_recommendations": data["experiments"]["smart_recommendations"],
             "taste_passport": data["experiments"]["taste_passport"],
             "new_profile_layout": data["experiments"]["new_profile_layout"],
         },

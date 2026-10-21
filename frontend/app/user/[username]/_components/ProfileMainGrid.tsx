@@ -46,7 +46,6 @@ export function ProfileMainGrid({
   const hidden = new Set(profileSettings?.hidden_sections ?? []);
   const order = profileSettings?.section_order ?? [
     "showcase",
-    "recommendations",
     "history",
     "wrapped",
     "top_tracks",

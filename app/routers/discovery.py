@@ -12,11 +12,10 @@ from fastapi import (
     Request,
 )
 from fastapi.responses import RedirectResponse
-from sqlalchemy import bindparam, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.constants import USER_AGENT_MOZILLA, YANDEX_MUSIC_DOMAIN
-from app.core.cover_urls import public_cover_url
 from app.core.i18n import request_lang, tr
 from app.core.rate_limit import HEAVY_READ_LIMIT, OUTBOUND_LIMIT, limiter
 from app.core.security import get_current_user
@@ -83,40 +82,6 @@ def get_taste_match(viewer: str, profile: str, request: Request,
     match_percent = int((len(common_artists) / total_unique) * 100)
     return {"match": min(match_percent, 100),
             "common_artists": common_artists[:5]}
-
-
-# --- /api/recommendations ---
-@router.get("/api/recommendations",
-            responses={403: {"description": "Statistics hidden"}, 404: {"description": "User not found"}})
-@limiter.limit(HEAVY_READ_LIMIT)
-def get_recommendations(
-        username: str, request: Request, db: Annotated[Session, Depends(get_db)]):
-    user = _get_visible_user(username, request, db, "statistics")
-
-    twins = get_taste_twins(username, db)
-    if not twins:
-        return []
-    twin_names = [t['username'] for t in twins]
-    # MAX(cover_url): Postgres rejects a column that is neither grouped nor
-    # aggregated; an expanding bind works for IN on every database
-    sql = text("""
-        SELECT t.artist, MAX(t.cover_url), COUNT(s.id) as plays
-        FROM scrobbles s
-        JOIN tracks t ON s.track_id = t.id
-        JOIN users u ON s.user_id = u.id
-        WHERE s.excluded_from_stats = false AND s.deleted_at IS NULL AND u.username IN :twins
-          AND t.artist NOT IN (
-              SELECT DISTINCT t2.artist FROM scrobbles s2 JOIN tracks t2 ON s2.track_id = t2.id WHERE s2.excluded_from_stats = false AND s2.deleted_at IS NULL AND s2.user_id = :my_id
-          )
-        GROUP BY t.artist
-        ORDER BY plays DESC
-        LIMIT 10
-    """).bindparams(bindparam("twins", expanding=True))
-    recs = db.execute(sql, {"twins": twin_names, "my_id": user.id}).fetchall()
-    # Raw SQL skips the TrackCoverURL column type: proxy partner artwork here
-    data = [{"artist": r[0], "cover_url": public_cover_url(r[1]),
-             "reason": tr(request_lang(request), "Слушают ваши вкусовые близнецы")} for r in recs]
-    return data
 
 
 # --- /api/search/taste ---

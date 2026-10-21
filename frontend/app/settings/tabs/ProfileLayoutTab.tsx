@@ -16,10 +16,6 @@ const LABELS: Record<ProfileSection, { title: string; description: string }> = {
     title: msg("Витрина"),
     description: msg("Любимый артист, трек и альбом"),
   },
-  recommendations: {
-    title: msg("Рекомендации"),
-    description: msg("Артисты, которые могут понравиться"),
-  },
   history: {
     title: msg("История"),
     description: msg("Последние прослушивания"),
@@ -46,21 +42,17 @@ export default function ProfileLayoutTab({
   const settings = data.preferences.profile;
   const update = (patch: Partial<typeof settings>) =>
     updatePreference("profile", { ...settings, ...patch });
-  // Keep the retired section in saved preferences for API compatibility only.
-  const visibleSections = settings.section_order.filter(
-    (section) => section !== "recommendations",
-  );
-  const movableSections = visibleSections.filter(
+  const movableSections = settings.section_order.filter(
     (section) => section !== "showcase",
   );
   const move = (section: ProfileSection, direction: -1 | 1) => {
-    if (section === "showcase" || section === "recommendations") return;
+    if (section === "showcase") return;
     const index = movableSections.indexOf(section);
     const target = index + direction;
     if (target < 0 || target >= movableSections.length) return;
     const next = [...movableSections];
     [next[index], next[target]] = [next[target], next[index]];
-    update({ section_order: ["showcase", ...next, "recommendations"] });
+    update({ section_order: ["showcase", ...next] });
   };
   const toggle = (section: ProfileSection) =>
     update({
@@ -78,7 +70,7 @@ export default function ProfileLayoutTab({
         )}
       />
       <ol className={settingsCard}>
-        {visibleSections.map((section, index) => {
+        {settings.section_order.map((section, index) => {
           const hidden = settings.hidden_sections.includes(section);
           const fixed = section === "showcase";
           const movableIndex = fixed ? -1 : movableSections.indexOf(section);

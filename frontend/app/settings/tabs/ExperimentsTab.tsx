@@ -36,16 +36,6 @@ export default function ExperimentsTab({
       </div>
       <section className={settingsCard}>
         <ToggleRow
-          title={t("Умные рекомендации")}
-          description={t(
-            "Использовать музыкальных двойников и историю вкуса при подборе артистов.",
-          )}
-          checked={settings.smart_recommendations}
-          onChange={(smart_recommendations) =>
-            update({ smart_recommendations })
-          }
-        />
-        <ToggleRow
           title={t("Музыкальный паспорт")}
           description={t(
             "Разрешить VEIN строить расширенный портрет вашего музыкального вкуса.",

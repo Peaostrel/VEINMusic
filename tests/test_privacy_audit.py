@@ -68,7 +68,6 @@ def test_warm_feed_rechecks_privacy_and_bans_without_invalidation(client, db, li
 
 
 STAT_ENDPOINTS = [
-    "/api/user/mood?username=owner", "/api/recommendations?username=owner",
     "/api/discovery/taste-twins?username=owner", "/api/user/stranger/compatibility/owner",
     "/api/recommendations/user/owner", "/api/search/taste?my_username=owner",
 ]

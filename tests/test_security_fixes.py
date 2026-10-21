@@ -143,7 +143,6 @@ def test_webhook_to_internal_address_rejected(client):
     "/api/activity/henry",
     "/api/stats/wrapped?username=henry",
     "/api/user/mood?username=henry",
-    "/api/recommendations?username=henry",
     "/api/achievements/all/henry",
     "/api/recommendations/user/henry",
 ])
