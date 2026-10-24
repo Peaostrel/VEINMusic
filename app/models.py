@@ -203,6 +203,8 @@ class Track(Base):
     __table_args__ = (
         # Case-insensitive catalog lookup when processing scrobbles
         Index("ix_tracks_lower_title_artist", func.lower(text("title")), func.lower(text("artist"))),
+        # One spelling per artist for new tracks (known_artist_spelling)
+        Index("ix_tracks_lower_artist", func.lower(text("artist"))),
     )
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, index=True)
