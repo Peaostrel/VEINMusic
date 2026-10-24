@@ -705,8 +705,10 @@ def _locked_last_scrobble(db: Session, user_id: int):
     Never sum two clocks for the same play: secondary sources only confirm
     provenance."""
     db.query(User.id).filter(User.id == user_id).with_for_update().first()
+    # Imported history is inserted later than the live play it may run beside:
+    # it must never be taken for the play in progress
     last_scrobble = db.query(Scrobble).execution_options(include_excluded=True).filter(
-        Scrobble.user_id == user_id).order_by(
+        Scrobble.user_id == user_id, Scrobble.is_imported.isnot(True)).order_by(
         Scrobble.id.desc()).first()
     if last_scrobble is None:
         return None, None

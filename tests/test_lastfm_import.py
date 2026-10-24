@@ -272,3 +272,42 @@ def test_one_lastfm_history_goes_to_one_vein_account(db, owner):
     with pytest.raises(lastfm_import.ImportAlreadyDone) as refused:
         lastfm_import.prepare_import_job(db, twin)
     assert refused.value.message == lastfm_import.TAKEN_ACCOUNT
+
+
+def test_imported_history_is_not_taken_for_the_live_play(db, owner):
+    from app.services.scrobble_processor import _locked_last_scrobble
+    live = live_play(db, owner, "Now", datetime.now(UTC))
+    run_import(db, owner, [lastfm_track("Old", T0)])  # inserted later: a higher id
+    last, _ = _locked_last_scrobble(db, int(owner.id))
+    assert last.id == live.id
+
+
+def test_history_lists_new_plays_before_imported_ones(client, db, owner):
+    live = live_play(db, owner, "Now", datetime.now(UTC) - timedelta(minutes=10))
+    run_import(db, owner, [lastfm_track("Old", T0)])
+    history = client.get("/api/history/fmowner").json()["history"]
+    assert history[0]["id"] == live.id
+    assert [item["title"] for item in history] == ["Now", "Old"]
+
+    # Search pages follow the same order, and the cursor keeps it
+    first = client.get("/api/me/library/search").json()
+    assert [item["track"]["title"] for item in first["history"]][:2] == ["Now", "Old"]
+    after_live = client.get("/api/me/library/search", params={"before": live.id}).json()
+    assert [item["track"]["title"] for item in after_live["history"]] == ["Old"]
+
+
+def test_stalled_import_shows_as_interrupted(client, db, owner):
+    job = LastfmImportJob(user_id=owner.id, lastfm_username="fmowner", status="in_progress", current_page=91,
+                          total_pages=131, updated_at=datetime.now(UTC) - timedelta(minutes=30))
+    db.add(job)
+    db.commit()
+    status = client.get("/api/import/lastfm/status").json()
+    assert status["status"] == "failed"
+    assert status["error"] == lastfm_import.STOPPED
+    assert status["locked"] is False
+
+
+def test_worker_gives_the_import_enough_time():
+    from app.worker import WorkerSettings
+    job = next(f for f in WorkerSettings.functions if getattr(f, "name", None) == "import_lastfm")
+    assert job.timeout_s >= 3600

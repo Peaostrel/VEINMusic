@@ -45,7 +45,7 @@ def _check_micro_tracks(user_id: int, db: Session) -> tuple[int, list[str]]:
     recent = (
         db.query(Scrobble).execution_options(include_excluded=True)
         .filter(Scrobble.user_id == user_id)
-        .order_by(Scrobble.id.desc())
+        .order_by(Scrobble.played_at.desc(), Scrobble.id.desc())
         .limit(40)
         .all()
     )

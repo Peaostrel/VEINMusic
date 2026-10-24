@@ -197,7 +197,9 @@ class WorkerSettings:
         func(poll_cloud_user, timeout=60, keep_result=0),
         # The API reads the result; keeping it briefly also debounces repeat clicks.
         func(sync_cloud_user, timeout=60, keep_result=10),
-        import_lastfm,
+        # A long history takes many pages: arq's default 5-minute limit cut
+        # imports off midway. A job also resumes from its last page.
+        func(import_lastfm, timeout=4 * 3600, max_tries=1),
         send_social_push,
         broadcast_push,
     ]

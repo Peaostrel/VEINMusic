@@ -280,5 +280,6 @@
   "Счётчики источников накопительные с момента установки. API-процентили считаются для текущего процесса с момента запуска.": "Source counters are cumulative since installation. API percentiles are for the current process since it started.",
   "Импорт из Last.fm уже выполнен. Повторно его запустить нельзя.": "Your Last.fm history has already been imported. The import can't be run again.",
   "История этого аккаунта Last.fm уже перенесена в другой профиль VEIN.": "This Last.fm account's history has already been imported into another VEIN profile.",
-  "Подтвердите аккаунт Last.fm: войдите через Last.fm в настройках, вкладка «Интеграции».": "Confirm your Last.fm account: sign in with Last.fm in Settings, Integrations tab."
+  "Подтвердите аккаунт Last.fm: войдите через Last.fm в настройках, вкладка «Интеграции».": "Confirm your Last.fm account: sign in with Last.fm in Settings, Integrations tab.",
+  "импорт был остановлен на сервере": "the server stopped the import"
 }

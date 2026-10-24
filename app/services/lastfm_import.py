@@ -51,6 +51,7 @@ SAME_MOMENT_SEC = 2
 SAME_TRACK_WINDOW_SEC = 300
 # Last.fm's grey star shown for tracks without artwork
 LASTFM_PLACEHOLDER_COVER = "2a96cbd8b46e442fc41c2b86b821562f"
+STOPPED = "импорт был остановлен на сервере"
 ALREADY_IMPORTED = "Импорт из Last.fm уже выполнен. Повторно его запустить нельзя."
 TAKEN_ACCOUNT = "История этого аккаунта Last.fm уже перенесена в другой профиль VEIN."
 NOT_VERIFIED = "Подтвердите аккаунт Last.fm: войдите через Last.fm в настройках, вкладка «Интеграции»."
@@ -108,7 +109,7 @@ def latest_job(db, user_id: int) -> Optional[LastfmImportJob]:
         LastfmImportJob.user_id == user_id).order_by(LastfmImportJob.id.desc()).first()
 
 
-def _is_stale(job: LastfmImportJob) -> bool:
+def is_stale(job: LastfmImportJob) -> bool:
     last = _as_aware(job.updated_at) or _as_aware(job.started_at)  # type: ignore[arg-type]
     return last is None or datetime.now(UTC) - last > STALE_AFTER
 
@@ -161,9 +162,9 @@ def prepare_import_job(db, user: User) -> tuple[LastfmImportJob, bool]:
 
     Raises ImportAlreadyDone when the history has already been imported."""
     job = latest_job(db, int(user.id))
-    if job is not None and job.status in ACTIVE_STATUSES and not _is_stale(job):
+    if job is not None and job.status in ACTIVE_STATUSES and not is_stale(job):
         return job, False  # already running
-    if job is not None and (job.status == "failed" or (job.status in ACTIVE_STATUSES and _is_stale(job))):
+    if job is not None and (job.status == "failed" or (job.status in ACTIVE_STATUSES and is_stale(job))):
         job.status = "pending"  # type: ignore[assignment]
         job.error_log = None  # type: ignore[assignment]
         job.updated_at = datetime.now(UTC)  # type: ignore[assignment]
@@ -417,6 +418,10 @@ async def run_import_job(job_id: int) -> None:
                 logger.info(f"Last.fm import job {job_id}: page {page}/{total_pages}")
                 page += 1
                 await asyncio.sleep(PAGE_DELAY_SEC)
+    except asyncio.CancelledError:
+        # Worker shutdown or job timeout: leave the job resumable, not "running"
+        _set_job_state(job_id, status="failed", error_log=STOPPED)
+        raise
     except Exception as e:
         logger.warning(f"Last.fm import job {job_id} failed: {e}")
         error_text = str(e)[:500]

@@ -3,7 +3,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.core.rate_limit import HEAVY_READ_LIMIT, limiter
@@ -26,6 +26,13 @@ def date_bounds(user, start, end):
     lower = datetime.combine(start, datetime.min.time(), zone).astimezone(UTC) if start else None
     upper = datetime.combine(end + timedelta(days=1), datetime.min.time(), zone).astimezone(UTC) if end else None
     return lower, upper
+
+
+def _older_than(db, before: int):
+    """Plays after the listen ``before`` (the page cursor) in newest-first order."""
+    played_at = db.query(Scrobble.played_at).execution_options(
+        include_excluded=True, include_deleted=True).filter(Scrobble.id == before).scalar_subquery()
+    return or_(Scrobble.played_at < played_at, and_(Scrobble.played_at == played_at, Scrobble.id < before))
 
 
 def _search_filters(user, q, source, lower, upper):
@@ -56,8 +63,8 @@ def personal_search(db: DB, user: Owner,
     filters = _search_filters(user, q, source, lower, upper)
     history = db.query(Scrobble, Track).execution_options(include_excluded=True).join(Track).filter(*filters)
     if before:
-        history = history.filter(Scrobble.id < before)
-    rows = history.order_by(Scrobble.id.desc()).limit(31).all()
+        history = history.filter(_older_than(db, before))
+    rows = history.order_by(Scrobble.played_at.desc(), Scrobble.id.desc()).limit(31).all()
     plays = db.query(Scrobble.track_id, func.count(Scrobble.id).label("plays")).join(Track).filter(
         *filters).group_by(Scrobble.track_id).subquery()
     tracks = db.query(Track, plays.c.plays).join(plays, plays.c.track_id == Track.id).order_by(
@@ -106,8 +113,8 @@ def calendar_range(username: str, request: Request, db: DB,
         Track.artist).order_by(func.count(Scrobble.id).desc(), Track.artist).limit(10).all()
     query = db.query(Scrobble, Track).join(Track).filter(*filters)
     if before:
-        query = query.filter(Scrobble.id < before)
-    rows = query.order_by(Scrobble.id.desc()).limit(51).all()
+        query = query.filter(_older_than(db, before))
+    rows = query.order_by(Scrobble.played_at.desc(), Scrobble.id.desc()).limit(51).all()
     return {"date_from": date_from, "date_to": date_to, "scrobbles": count, "minutes": int(seconds) // 60,
             "artists": [{"artist": artist, "plays": plays} for artist, plays in artists],
             "history": [{"id": row.id, "played_at": row.played_at, "source": row.source,
