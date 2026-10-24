@@ -277,5 +277,8 @@
   "Внешний бэкап не подтверждён за последние 30 часов": "Offsite backup not confirmed in the last 30 hours",
   "Диск заполнен на 90% или больше": "Disk is 90% full or more",
   "Успешная отправка не заменяет проверку восстановления из копии.": "A successful upload doesn't replace testing a restore from the backup.",
-  "Счётчики источников накопительные с момента установки. API-процентили считаются для текущего процесса с момента запуска.": "Source counters are cumulative since installation. API percentiles are for the current process since it started."
+  "Счётчики источников накопительные с момента установки. API-процентили считаются для текущего процесса с момента запуска.": "Source counters are cumulative since installation. API percentiles are for the current process since it started.",
+  "Импорт из Last.fm уже выполнен. Повторно его запустить нельзя.": "Your Last.fm history has already been imported. The import can't be run again.",
+  "История этого аккаунта Last.fm уже перенесена в другой профиль VEIN.": "This Last.fm account's history has already been imported into another VEIN profile.",
+  "Подтвердите аккаунт Last.fm: войдите через Last.fm в настройках, вкладка «Интеграции».": "Confirm your Last.fm account: sign in with Last.fm in Settings, Integrations tab."
 }

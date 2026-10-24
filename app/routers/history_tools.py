@@ -17,6 +17,7 @@ from app.routers.library import _track_dict
 from app.services.cache import invalidate_user
 from app.services.listen_status import listen_status
 from app.services.localized import source_label
+from app.services.scrobble_processor import full_listen_sec
 
 router = APIRouter(tags=["library"])
 DB = Annotated[Session, Depends(get_db)]
@@ -62,6 +63,8 @@ def _apply(row, data, db):
             db.add(track)
             db.flush()
         row.track_id = track.id
+        if row.import_job_id is not None:  # an imported play stays one full play
+            row.listened_sec = max(int(row.listened_sec or 0), full_listen_sec(track))
     else:
         row.excluded_from_stats = data.action != "restore"
         if data.action == "delete":

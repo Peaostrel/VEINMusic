@@ -1,10 +1,11 @@
-"""Device pairing, account export/deletion and the incremental Last.fm import."""
+"""Device pairing, account export/deletion and the Last.fm import."""
 import asyncio
 import json
 import secrets
 from unittest.mock import patch
 
 import httpx
+import pytest
 from sqlalchemy import text
 
 from app.models import ApiKey, Follow, LastfmImportJob, Scrobble, Track, User
@@ -156,13 +157,15 @@ def _run_import(fake: _FakeLastfm, job_id: int):
         asyncio.run(lastfm_import.run_import_job(job_id))
 
 
-def test_lastfm_import_is_paged_resumable_and_incremental(client, db):
+def test_lastfm_import_is_paged_resumable_and_one_time(client, db):
     from app.services import lastfm_import
 
     key = _register(client, "importer")
     client.post("/api/profile/update", json={"lastfm_username": "lfmuser"}, headers={"X-API-Key": key})
     user = db.query(User).filter_by(username="importer").first()
     db.refresh(user.integration)
+    user.integration.lastfm_verified = True  # as after signing in to Last.fm
+    db.commit()
 
     # First run fails on page 2 of 3...
     job, needs_enqueue = lastfm_import.prepare_import_job(db, user)
@@ -190,16 +193,16 @@ def test_lastfm_import_is_paged_resumable_and_incremental(client, db):
     db.refresh(user.integration)
     assert user.integration.has_imported_lastfm is True
 
-    # A later import only asks for what was scrobbled after the last window
-    next_job, _ = lastfm_import.prepare_import_job(db, user)
-    assert next_job.window_from == job.window_to
-    fake = _FakeLastfm(total_pages=1)
-    _run_import(fake, next_job.id)
-    assert int(fake.requests[0]["from"]) == job.window_to + 1
+    # The history is imported once: a second import is refused
+    with pytest.raises(lastfm_import.ImportAlreadyDone):
+        lastfm_import.prepare_import_job(db, user)
+    with patch("app.routers.integrations.LASTFM_API_KEY", "k"):
+        again = client.post("/api/import/lastfm", json={}, headers={"X-API-Key": key})
+    assert again.status_code == 409
 
     status = client.get("/api/import/lastfm/status", headers={"X-API-Key": key}).json()
     assert status["status"] == "completed"
-    assert status["incremental"] is True
+    assert status["locked"] is True
 
 
 def test_start_import_endpoint_enqueues_once(client, db):
@@ -207,6 +210,9 @@ def test_start_import_endpoint_enqueues_once(client, db):
 
     key = _register(client, "starter")
     client.post("/api/profile/update", json={"lastfm_username": "lfmuser2"}, headers={"X-API-Key": key})
+    starter = db.query(User).filter_by(username="starter").first()
+    starter.integration.lastfm_verified = True
+    db.commit()
     with patch.object(lastfm_import, "LASTFM_API_KEY", "k"), \
          patch("app.routers.integrations.LASTFM_API_KEY", "k"), \
          patch("app.routers.integrations.enqueue_import") as enqueue:

@@ -26,6 +26,8 @@ export interface SettingsData {
   hiddenArtists: string;
   yandexToken: string;
   lastfmUsername: string;
+  /** lastfmUsername came from signing in to Last.fm */
+  lastfmVerified: boolean;
   preferences: UserPreferences;
 }
 
@@ -67,6 +69,7 @@ export const EMPTY_SETTINGS: SettingsData = {
   hiddenArtists: "",
   yandexToken: "",
   lastfmUsername: "",
+  lastfmVerified: false,
   preferences: structuredClone(DEFAULT_PREFERENCES),
 };
 
@@ -101,6 +104,7 @@ export function settingsFromProfile(
     hiddenArtists: u.hidden_artists || "",
     yandexToken: u.yandex_token || "",
     lastfmUsername: u.lastfm_username || "",
+    lastfmVerified: Boolean(u.lastfm_verified),
     preferences: mergePreferences(preferences),
   };
 }

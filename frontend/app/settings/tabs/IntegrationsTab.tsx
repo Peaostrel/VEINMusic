@@ -5,7 +5,7 @@ import { currentLocale, tr } from "@/app/lib/i18n/active";
 import { useCallback, useEffect, useState } from "react";
 import { Cloud, Import, Puzzle, RefreshCw } from "lucide-react";
 import { useFeature } from "@/app/lib/featureFlags";
-import { SecretInput, noAutofill } from "@/components/autofill";
+import { SecretInput } from "@/components/autofill";
 import { LogoGlyph } from "@/components/brand";
 import { btn, inputOnCard } from "@/components/ui";
 import ConnectionCheck from "../components/ConnectionCheck";
@@ -500,49 +500,51 @@ function YandexConnection({
 
 function LastfmConnection({
   data,
-  updateData,
   handleDisconnect,
   startLastfmImport,
   importRefresh,
+  API_URL,
 }: Readonly<IntegrationsTabProps>) {
   const t = useT();
   const lastfmEnabled = useFeature("integration_lastfm");
   const importEnabled = useFeature("lastfm_import");
   const preferences = data.preferences.integrations;
-  const pausedTitle = preferences.lastfm_enabled
-    ? t("Импорт временно отключён")
-    : t("Last.fm приостановлен в настройках аккаунта");
+  // Only an account confirmed by signing in to Last.fm can be imported
+  const verified = data.lastfmVerified && Boolean(data.lastfmUsername);
+  // The history is imported once; the status below tells when that happened
+  const [imported, setImported] = useState(false);
+  let pausedTitle: string | undefined;
+  if (imported) pausedTitle = t("История из Last.fm уже перенесена");
+  else if (!importEnabled || !lastfmEnabled)
+    pausedTitle = t("Импорт временно отключён");
+  else if (!preferences.lastfm_enabled)
+    pausedTitle = t("Last.fm приостановлен в настройках аккаунта");
+  let status = t("не подключено");
+  if (verified) status = t("аккаунт {name}", { name: data.lastfmUsername });
+  else if (data.lastfmUsername)
+    status = t("аккаунт {name} не подтверждён", {
+      name: data.lastfmUsername,
+    });
   return (
     <Row
       logo="fm"
       name="Last.fm"
-      status={
-        data.lastfmUsername
-          ? t("аккаунт {name}", { name: data.lastfmUsername })
-          : t("не подключено")
-      }
-      statusOk={Boolean(data.lastfmUsername)}
+      status={status}
+      statusOk={verified}
       description={
         lastfmEnabled
           ? t(
-              "Импорт истории. Повторный импорт добавит только новые прослушивания.",
+              "Разовый перенос всей истории с исходными датами. Войдите через Last.fm, чтобы подтвердить, что аккаунт ваш. Повторно запустить импорт нельзя.",
             )
           : t("Временно приостановлено администратором.")
       }
-      footer={<LastfmImportStatus refreshKey={importRefresh ?? 0} />}
+      footer={
+        <LastfmImportStatus
+          refreshKey={importRefresh ?? 0}
+          onLocked={setImported}
+        />
+      }
     >
-      <input
-        {...noAutofill}
-        name="lastfm-user"
-        spellCheck={false}
-        autoCapitalize="none"
-        value={data.lastfmUsername}
-        onChange={(e) => updateData("lastfmUsername", e.target.value)}
-        placeholder={t("Ник на Last.fm")}
-        aria-label={t("Ник на Last.fm")}
-        disabled={!lastfmEnabled}
-        className={`${inputOnCard} h-9`}
-      />
       <div className="flex gap-2">
         {data.lastfmUsername && (
           <button
@@ -550,24 +552,30 @@ function LastfmConnection({
             onClick={() => handleDisconnect("lastfm")}
             className={`${small} flex-1`}
           >
-            {t("Очистить")}
+            {t("Отвязать")}
           </button>
         )}
-        <button
-          type="button"
-          onClick={startLastfmImport}
-          disabled={
-            !importEnabled || !lastfmEnabled || !preferences.lastfm_enabled
-          }
-          title={
-            importEnabled && lastfmEnabled && preferences.lastfm_enabled
-              ? undefined
-              : pausedTitle
-          }
-          className={`${smallPrimary} flex-1`}
-        >
-          {t("Импорт")}
-        </button>
+        {verified ? (
+          <button
+            type="button"
+            onClick={startLastfmImport}
+            disabled={Boolean(pausedTitle)}
+            title={pausedTitle}
+            className={`${smallPrimary} flex-1`}
+          >
+            {imported ? t("Импортировано") : t("Импорт")}
+          </button>
+        ) : (
+          <a
+            href={`${API_URL}/api/integrations/lastfm/connect?tab=integrations`}
+            aria-disabled={!lastfmEnabled}
+            className={`${smallPrimary} flex-1 text-center ${
+              lastfmEnabled ? "" : "pointer-events-none opacity-50"
+            }`}
+          >
+            {t("Войти через Last.fm")}
+          </a>
+        )}
       </div>
     </Row>
   );

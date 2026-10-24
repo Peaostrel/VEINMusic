@@ -156,7 +156,6 @@
   "Достижения · {total} →": "Achievements · {total} →",
   "Импорт Last.fm": "Import Last.fm",
   "Запуск…": "Starting…",
-  "Синхронизировать Last.fm": "Sync Last.fm",
   "Отписаться": "Unfollow",
   "Подписаться": "Follow",
   "Совместимость": "Compatibility",
@@ -206,7 +205,6 @@
   "Общие жанры": "Shared genres",
   "Войдите в аккаунт, чтобы сравнить вкусы.": "Sign in to compare tastes.",
   "Импорт из Last.fm": "Import from Last.fm",
-  "История из Last.fm перенесётся в фоне. Повторный импорт добавит только новые прослушивания — дубликатов не будет.": "Your Last.fm history will be transferred in the background. Importing again only adds new plays, with no duplicates.",
   "Отмена": "Cancel",
   "Перенести": "Transfer",
   "Новое достижение": "New achievement",
@@ -353,5 +351,6 @@
   "Топ исполнителей": "Top artists",
   "В выбранном периоде нет засчитанных прослушиваний.": "No counted plays in the selected period.",
   "Показать ещё": "Show more",
-  "Как считается опыт": "How XP is counted"
+  "Как считается опыт": "How XP is counted",
+  "История из Last.fm перенесётся в фоне с исходными датами, за каждое прослушивание начислится XP. Прослушивания, которые уже есть в VEIN, не задвоятся. Импорт разовый: повторно запустить его будет нельзя.": "Your Last.fm history will be transferred in the background with the original dates, and each play earns XP. Plays already in VEIN won't be counted twice. This is a one-time import: you won't be able to run it again."
 }

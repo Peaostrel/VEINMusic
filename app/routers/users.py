@@ -120,7 +120,7 @@ def _owner_fields(user: User, is_owner: bool) -> dict:
     if not is_owner:
         return {"hidden_artists": "", "spotify_linked": False,
                 "yandex_linked": False, "soundcloud_linked": False, "lastfm_username": None,
-                "last_sync": None, "has_api_key": False}
+                "lastfm_verified": False, "last_sync": None, "has_api_key": False}
     integration = user.integration
     return {
         "hidden_artists": user.profile.hidden_artists,
@@ -128,6 +128,7 @@ def _owner_fields(user: User, is_owner: bool) -> dict:
         "yandex_linked": bool(integration.yandex_token),
         "soundcloud_linked": bool(integration.soundcloud_refresh_token),
         "lastfm_username": integration.lastfm_username,
+        "lastfm_verified": bool(integration.lastfm_verified),
         "last_sync": integration.last_sync,
         "has_api_key": bool(user.api_key)}
 

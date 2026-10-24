@@ -1,9 +1,13 @@
-"""Connect a Last.fm account for scrobble export (Last.fm web authentication).
+"""Connect a Last.fm account (Last.fm web authentication).
 
 1. GET /api/integrations/lastfm/connect (signed in) redirects to Last.fm,
    with a signed state bound to this browser through a short-lived cookie.
 2. Last.fm redirects back to the callback with a one-time token, which is
    exchanged for a permanent session key (auth.getSession).
+
+The session key is used for scrobble export; the account name that comes
+with it proves the user owns that Last.fm account, which the history import
+requires.
 """
 from __future__ import annotations
 
@@ -13,11 +17,11 @@ import logging
 import os
 import secrets
 import urllib.parse
-from typing import Annotated
+from typing import Annotated, Literal
 
 import anyio
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -36,6 +40,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/integrations/lastfm", tags=["integrations"])
 
 STATE_COOKIE = "lastfm_auth_state"
+# Settings tab to come back to: export (scrobble export) or integrations (import)
+TAB_COOKIE = "lastfm_auth_tab"
 LASTFM_AUTH_URL = "https://www.last.fm/api/auth/"
 
 
@@ -71,7 +77,8 @@ def _configured() -> bool:
 @router.get("/connect",
             dependencies=[Depends(require_feature("integration_lastfm"))],
             responses={503: {"description": "Last.fm API is not configured"}})
-def lastfm_connect(current_user: Annotated[User, Depends(get_current_user)]):
+def lastfm_connect(current_user: Annotated[User, Depends(get_current_user)],
+                   tab: Annotated[Literal["export", "integrations"], Query()] = "export"):
     if not _configured():
         raise HTTPException(503, "Last.fm API не настроен на сервере")
     nonce = secrets.token_hex(16)
@@ -88,10 +95,15 @@ def lastfm_connect(current_user: Annotated[User, Depends(get_current_user)]):
         samesite="lax",  # sent on the top-level redirect back from Last.fm
         max_age=600,
     )
+    # A fixed value, never the query string itself
+    back_to = "integrations" if tab == "integrations" else "export"
+    redirect.set_cookie(key=TAB_COOKIE, value=back_to, httponly=True,
+                        secure=os.getenv("ENVIRONMENT") == "production", samesite="lax", max_age=600)
     return redirect
 
 
-async def _get_session_key(token: str) -> str | None:
+async def _get_session(token: str) -> tuple[str, str] | None:
+    """(session key, Last.fm account name) for an authorized token."""
     params = {"method": "auth.getSession", "api_key": LASTFM_API_KEY, "token": token}
     params["api_sig"] = _generate_lastfm_signature(params, LASTFM_SHARED_SIGNING_SALT)
     params["format"] = "json"
@@ -103,8 +115,9 @@ async def _get_session_key(token: str) -> str | None:
         logger.warning(f"[Last.fm] auth.getSession failed: {e}")
         return None
     session = data.get("session") if isinstance(data, dict) else None
-    key = session.get("key") if isinstance(session, dict) else None
-    return str(key) if key else None
+    if not isinstance(session, dict) or not session.get("key") or not session.get("name"):
+        return None
+    return str(session["key"]), str(session["name"])
 
 
 @router.get("/callback",
@@ -121,18 +134,24 @@ def lastfm_callback(state: str, token: str, request: Request,
     if not user or user.is_banned:
         raise HTTPException(400, "Некорректный запрос авторизации Last.fm")
 
-    session_key = anyio.from_thread.run(_get_session_key, token)
+    session = anyio.from_thread.run(_get_session, token)
     result = "lastfm_error"
-    if session_key:
+    if session:
+        session_key, account = session
         config = db.query(ExternalSyncConfig).filter(ExternalSyncConfig.user_id == user.id).first()
         if not config:
             config = ExternalSyncConfig(user_id=user.id)
             db.add(config)
         config.lastfm_session_key = session_key  # type: ignore[assignment]
         config.is_lastfm_enabled = True  # type: ignore[assignment]
+        # The account the user signed in to on Last.fm: the import uses it
+        user.integration.lastfm_username = account
+        user.integration.lastfm_verified = True
         db.commit()
         result = "lastfm_connected"
 
-    redirect = RedirectResponse(f"{_frontend_url()}/settings?tab=export&status={result}")
+    tab = "integrations" if request.cookies.get(TAB_COOKIE) == "integrations" else "export"
+    redirect = RedirectResponse(f"{_frontend_url()}/settings?tab={tab}&status={result}")
     redirect.delete_cookie(STATE_COOKIE)
+    redirect.delete_cookie(TAB_COOKIE)
     return redirect

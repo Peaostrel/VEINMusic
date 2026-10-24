@@ -394,7 +394,7 @@ export function useProfilePage() {
         let errorMessage = t("Не удалось запустить импорт");
         try {
           const err = await res.json();
-          errorMessage = err.detail || errorMessage;
+          errorMessage = err.detail ? t(err.detail) : errorMessage;
         } catch {
           errorMessage = t("Ошибка сервера ({status})", { status: res.status });
         }

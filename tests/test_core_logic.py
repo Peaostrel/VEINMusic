@@ -145,7 +145,7 @@ def test_format_history_item_old_play_shows_date(db):
                  listened_sec=200, played_at=played, updated_at=None)
     db.add(s)
     db.commit()
-    assert sp.format_history_item(s, track)["relative_time"] == "5 мар"
+    assert sp.format_history_item(s, track)["relative_time"] == "5 мар 2024"
 
 
 # --- catalog -----------------------------------------------------------------------

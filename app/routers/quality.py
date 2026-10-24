@@ -22,8 +22,9 @@ from app.models import (
 from app.routers.common import _get_visible_user
 from app.routers.library import _track_dict
 from app.services.cache import invalidate_user
-from app.services.lastfm_import import job_to_dict
+from app.services.lastfm_import import job_to_dict, refresh_import_flag
 from app.services.music_story import weekly_story as build_weekly_story
+from app.services.scrobble_processor import full_listen_sec
 from app.services.source_health import MESSAGES, SOURCES
 
 router = APIRouter(tags=["quality"])
@@ -100,6 +101,8 @@ def edit_history(scrobble_id: int, data: HistoryEdit, db: DB, user: Owner):
         db.add(track)
         db.flush()
     row.track_id = track.id
+    if row.import_job_id is not None:  # an imported play stays one full play
+        row.listened_sec = max(int(row.listened_sec or 0), full_listen_sec(track))
     db.commit()
     invalidate_user(str(user.username))
     return {"status": "ok", "track": _track_dict(track)}
@@ -131,6 +134,8 @@ def undo_import(job_id: int, db: DB, user: Owner):
         raise HTTPException(409, "Дождитесь завершения импорта")
     count = db.query(Scrobble).filter_by(user_id=user.id, import_job_id=job.id).delete(synchronize_session=False)
     job.status = "undone"  # type: ignore[assignment]
+    # With the imported history gone, Last.fm can be imported again
+    refresh_import_flag(db, user)
     db.commit()
     invalidate_user(str(user.username))
     return {"status": "ok", "removed": count}

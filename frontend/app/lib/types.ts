@@ -1,7 +1,7 @@
 /** Typed shapes of backend API responses used by the frontend. */
 
 export type ImportStatus =
-  "none" | "pending" | "in_progress" | "completed" | "failed";
+  "none" | "pending" | "in_progress" | "completed" | "failed" | "undone";
 
 export interface LastfmImportJob {
   id?: number;
@@ -16,6 +16,8 @@ export interface LastfmImportJob {
   started_at?: string | null;
   finished_at?: string | null;
   incremental?: boolean;
+  /** The history has been imported: a new import is refused. */
+  locked?: boolean;
 }
 
 export interface StartImportResponse {
@@ -172,6 +174,7 @@ export interface UserInfo {
   yandex_linked: boolean;
   soundcloud_linked: boolean;
   lastfm_username: string | null;
+  lastfm_verified?: boolean;
   has_imported_lastfm: boolean;
   last_sync: string | null;
   role: string;
