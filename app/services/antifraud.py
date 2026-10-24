@@ -7,12 +7,19 @@ from sqlalchemy.orm import Session
 from app.models import Scrobble, User
 
 
+def _live_plays(query, user_id: int):
+    """Plays the user listened to in VEIN: an imported history (Last.fm and
+    the like) arrives in bulk and says nothing about the listening pace."""
+    return query.execution_options(include_excluded=True).filter(
+        Scrobble.user_id == user_id, Scrobble.is_imported.isnot(True))
+
+
 def _check_hourly_velocity(user_id: int, db: Session, one_hour_ago: datetime) -> tuple[int, list[str]]:
     reasons = []
     risk = 0
     hourly_count = (
-        db.query(func.count(Scrobble.id)).execution_options(include_excluded=True)
-        .filter(Scrobble.user_id == user_id, Scrobble.played_at >= one_hour_ago)
+        _live_plays(db.query(func.count(Scrobble.id)), user_id)
+        .filter(Scrobble.played_at >= one_hour_ago)
         .scalar()
         or 0
     )
@@ -28,8 +35,8 @@ def _check_daily_velocity(user_id: int, db: Session, one_day_ago: datetime) -> t
     reasons = []
     risk = 0
     daily_count = (
-        db.query(func.count(Scrobble.id)).execution_options(include_excluded=True)
-        .filter(Scrobble.user_id == user_id, Scrobble.played_at >= one_day_ago)
+        _live_plays(db.query(func.count(Scrobble.id)), user_id)
+        .filter(Scrobble.played_at >= one_day_ago)
         .scalar()
         or 0
     )
@@ -39,12 +46,14 @@ def _check_daily_velocity(user_id: int, db: Session, one_day_ago: datetime) -> t
     return risk, reasons
 
 
-def _check_micro_tracks(user_id: int, db: Session) -> tuple[int, list[str]]:
+def _check_micro_tracks(user_id: int, db: Session, since: datetime | None = None) -> tuple[int, list[str]]:
     reasons = []
     risk = 0
+    query = _live_plays(db.query(Scrobble), user_id)
+    if since is not None:
+        query = query.filter(Scrobble.played_at >= since)
     recent = (
-        db.query(Scrobble).execution_options(include_excluded=True)
-        .filter(Scrobble.user_id == user_id)
+        query
         .order_by(Scrobble.played_at.desc(), Scrobble.id.desc())
         .limit(40)
         .all()
@@ -63,10 +72,14 @@ def scan_user_antifraud(user: User, db: Session) -> tuple[bool, int, list[str]]:
     one_hour_ago = now - timedelta(hours=1)
     one_day_ago = now - timedelta(days=1)
     u_id = int(user.id)
+    # Plays an admin already reviewed ("Снять флаг") are not counted again
+    cleared: datetime | None = user.antifraud_cleared_at  # type: ignore[assignment]
+    if cleared is not None and cleared.tzinfo is None:
+        cleared = cleared.replace(tzinfo=UTC)
 
-    r1, reasons1 = _check_hourly_velocity(u_id, db, one_hour_ago)
-    r2, reasons2 = _check_daily_velocity(u_id, db, one_day_ago)
-    r3, reasons3 = _check_micro_tracks(u_id, db)
+    r1, reasons1 = _check_hourly_velocity(u_id, db, max(one_hour_ago, cleared or one_hour_ago))
+    r2, reasons2 = _check_daily_velocity(u_id, db, max(one_day_ago, cleared or one_day_ago))
+    r3, reasons3 = _check_micro_tracks(u_id, db, cleared)
 
     total_risk = r1 + r2 + r3
     all_reasons = reasons1 + reasons2 + reasons3

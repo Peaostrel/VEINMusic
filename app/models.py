@@ -50,6 +50,8 @@ class User(Base):
     totp_setup_expires_at = Column(DateTime(timezone=True), nullable=True)
     totp_recovery_codes = Column(String, nullable=True)
     antifraud_reason = Column(String, nullable=True)
+    # "Снять флаг": plays before this moment no longer trigger the scan
+    antifraud_cleared_at = Column(DateTime(timezone=True), nullable=True)
     # Interface language ("ru" / "en") for emails, push and notifications
     lang = Column(String(2), default="ru", server_default="ru", nullable=False)
     # NULL for accounts created before this column existed

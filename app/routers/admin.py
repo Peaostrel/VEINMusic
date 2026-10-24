@@ -181,6 +181,9 @@ def unflag_user_antifraud(
         raise HTTPException(404, USER_NOT_FOUND)
     target.is_flagged_antifraud = False  # type: ignore[assignment]
     target.antifraud_reason = None  # type: ignore[assignment]
+    # The scan is recomputed on every listing: without this the same plays
+    # would list the user again right after the flag was taken off
+    target.antifraud_cleared_at = datetime.now(UTC)  # type: ignore[assignment]
     audit.record(db, admin, "antifraud.unflag", target_username)
     db.commit()
     return {"status": "ok", "message": tr(request_lang(request, admin), "Флаг подозрительного аккаунта снят с @{username}",
