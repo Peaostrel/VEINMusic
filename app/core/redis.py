@@ -165,16 +165,17 @@ _ASYNC_JOB_FALLBACKS: dict[str, Callable[..., Coroutine[Any, Any, None]]] = {
 }
 
 
-async def enqueue_background_task(job_name: str, *args, background_tasks=None):
+async def enqueue_background_task(job_name: str, *args, background_tasks=None, unique_id: str | None = None):
     """
     Enqueue a background job using arq/Redis.
     If Redis is down or unavailable, falls back to FastAPI's BackgroundTasks
     (if available) or runs the synchronous function safely in a separate thread.
+    With unique_id, arq skips the job while one with that id is queued or running.
     """
     pool = await get_arq_pool()
     if pool:
         try:
-            await pool.enqueue_job(job_name, *args)
+            await pool.enqueue_job(job_name, *args, _job_id=unique_id)
             return True
         except Exception:
             logging.exception(

@@ -311,3 +311,21 @@ def test_worker_gives_the_import_enough_time():
     from app.worker import WorkerSettings
     job = next(f for f in WorkerSettings.functions if getattr(f, "name", None) == "import_lastfm")
     assert job.timeout_s >= 3600
+
+
+def test_import_job_runs_once_at_a_time():
+    from app.worker import WorkerSettings
+    job = next(f for f in WorkerSettings.functions if getattr(f, "name", None) == "import_lastfm")
+    assert job.keep_result_s == 0  # a finished import does not block a retry
+
+    class Pool:
+        calls: list = []
+
+        async def enqueue_job(self, name, *args, _job_id=None):
+            self.calls.append((name, args, _job_id))
+
+    pool = Pool()
+    with patch("app.core.redis.get_arq_pool", new=lambda: asyncio.sleep(0, pool)):
+        asyncio.run(lastfm_import.enqueue_import(7))
+        asyncio.run(lastfm_import.enqueue_import(7))
+    assert pool.calls == [("import_lastfm", (7,), "lastfm-import:7")] * 2

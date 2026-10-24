@@ -194,7 +194,9 @@ def prepare_import_job(db, user: User) -> tuple[LastfmImportJob, bool]:
 
 async def enqueue_import(job_id: int) -> None:
     from app.core.redis import enqueue_background_task
-    await enqueue_background_task("import_lastfm", job_id)
+    # One execution per import: retrying a job that only looked stale must
+    # not start a second worker on the same pages (duplicate plays and XP)
+    await enqueue_background_task("import_lastfm", job_id, unique_id=f"lastfm-import:{job_id}")
 
 
 @dataclass

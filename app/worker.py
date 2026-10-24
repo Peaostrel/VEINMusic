@@ -199,7 +199,7 @@ class WorkerSettings:
         func(sync_cloud_user, timeout=60, keep_result=10),
         # A long history takes many pages: arq's default 5-minute limit cut
         # imports off midway. A job also resumes from its last page.
-        func(import_lastfm, timeout=4 * 3600, max_tries=1),
+        func(import_lastfm, timeout=4 * 3600, max_tries=1, keep_result=0),
         send_social_push,
         broadcast_push,
     ]
