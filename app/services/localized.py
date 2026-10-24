@@ -47,6 +47,8 @@ def relative_time(moment: datetime, lang: str, now: datetime | None = None) -> s
     if seconds < 86400:
         hours = int(seconds // 3600)
         return f"{hours}h ago" if english else f"{hours}ч назад"
+    if moment.year != (now or datetime.now(UTC)).year:  # imported history goes back years
+        return f"{short_date(moment, lang)}, {moment.year}" if english else f"{short_date(moment, lang)} {moment.year}"
     return short_date(moment, lang)
 
 

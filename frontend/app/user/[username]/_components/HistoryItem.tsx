@@ -102,18 +102,34 @@ function PlayState({
       </span>
     );
   }
-  const timeStr = new Date(playbackTimestamp(item.time)).toLocaleTimeString(
-    t.locale,
-    {
-      hour: "2-digit",
-      minute: "2-digit",
-    },
-  );
+  const played = new Date(playbackTimestamp(item.time));
+  const timeStr = played.toLocaleTimeString(t.locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  // Older plays (an imported history goes back years) also show their date
+  const today = new Date();
+  const dateStr =
+    Number.isNaN(played.getTime()) ||
+    played.toDateString() === today.toDateString()
+      ? null
+      : played.toLocaleDateString(t.locale, {
+          day: "numeric",
+          month: "short",
+          ...(played.getFullYear() === today.getFullYear()
+            ? {}
+            : { year: "numeric" }),
+        });
   let note: string | null = null;
   if (item.is_imported) note = t("импорт");
   else if (item.listened_sec > 0) note = mmss(item.listened_sec);
   return (
     <span className="flex flex-col items-end gap-0.5 font-mono text-[11px] text-fg-3">
+      {dateStr && (
+        <time dateTime={played.toISOString()} className="whitespace-nowrap">
+          {dateStr}
+        </time>
+      )}
       <span>{timeStr}</span>
       {note && <span>{note}</span>}
     </span>

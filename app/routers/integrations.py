@@ -24,8 +24,11 @@ from app.schemas import (
     YandexTokenUpdate,
 )
 from app.services.lastfm_import import (
+    ALREADY_IMPORTED,
     LASTFM_API_KEY,
+    ImportAlreadyDone,
     enqueue_import,
+    import_locked,
     job_to_dict,
     latest_job,
     prepare_import_job,
@@ -101,7 +104,8 @@ async def sync_integrations_now(
 @router.post("/api/import/lastfm",
              dependencies=[Depends(require_feature("lastfm_import")),
                            Depends(require_feature("integration_lastfm"))],
-             responses={409: {"description": "Last.fm is paused in account settings"},
+             responses={409: {"description": "Last.fm is paused in account settings, "
+                                             "or the history has already been imported"},
                         400: {"description": "Last.fm username not set"},
                         503: {"description": "API key not configured or import switched off"}})
 async def start_lastfm_import(data: LikeRequest,
@@ -111,8 +115,9 @@ async def start_lastfm_import(data: LikeRequest,
                                                       Depends(get_current_user)]):
     """Start (or resume) importing Last.fm history.
 
-    The first import takes the whole history; later ones import only what was
-    scrobbled since the previous import. Progress: GET /api/import/lastfm/status."""
+    The history is imported once: after an import that added plays, a new one
+    is refused with 409 (an interrupted import can still be resumed).
+    Progress: GET /api/import/lastfm/status."""
     user = current_user
     if not get_preferences(user.profile).integrations.lastfm_enabled:
         raise HTTPException(409, "Last.fm приостановлен в настройках аккаунта")
@@ -122,7 +127,10 @@ async def start_lastfm_import(data: LikeRequest,
         raise HTTPException(503, "Last.fm API key not configured on server")
 
     async with redis_lock(f"lastfm_import:{user.id}", expire_sec=10):
-        job, needs_enqueue = await anyio.to_thread.run_sync(prepare_import_job, db, user)
+        try:
+            job, needs_enqueue = await anyio.to_thread.run_sync(prepare_import_job, db, user)
+        except ImportAlreadyDone:
+            raise HTTPException(409, ALREADY_IMPORTED) from None
         job_info = job_to_dict(job)
     if needs_enqueue:
         await enqueue_import(int(job_info["id"]))
@@ -132,7 +140,10 @@ async def start_lastfm_import(data: LikeRequest,
 @router.get("/api/import/lastfm/status")
 def get_lastfm_import_status(db: Annotated[Session, Depends(get_db)],
                              current_user: Annotated[User, Depends(get_current_user)]):
-    return job_to_dict(latest_job(db, int(current_user.id)))
+    job = latest_job(db, int(current_user.id))
+    # A running or interrupted import can still be continued
+    unfinished = job is not None and job.status in ("pending", "in_progress", "failed")
+    return {**job_to_dict(job), "locked": not unfinished and import_locked(db, current_user)}
 
 
 # --- /api/integrations/yandex ---

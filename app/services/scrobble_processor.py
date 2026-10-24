@@ -260,9 +260,52 @@ def _update_existing_track(
     # to rewrite the duration of an existing catalog track for everyone.
     if duration and track.duration in (0, None, PLACEHOLDER_DURATION) and duration != track.duration:
         track.duration = duration  # type: ignore[assignment]
+        sync_imported_listens(db, int(track.id), duration)
         updated = True
     if updated:
         db.commit()
+
+
+def lookup_track(db: Session, title: str, artist: str,
+                 user_id: int | None = None) -> tuple[Track | None, bool]:
+    """Catalog track for raw player metadata, without creating one.
+
+    Returns (track, aliased): aliased is True when a user's or a global
+    alias (see TrackAlias) redirected the metadata to a canonical track."""
+    alias = db.query(TrackAlias).filter(
+        func.lower(TrackAlias.original_title) == func.lower(title),
+        func.lower(TrackAlias.original_artist) == func.lower(artist),
+        or_(TrackAlias.user_id == user_id, TrackAlias.user_id.is_(None)),
+    ).order_by(TrackAlias.user_id.desc().nullslast()).first()
+    if alias and alias.canonical_track:
+        return alias.canonical_track, True
+    norm_title, norm_artist = clean_track_metadata(title, artist)
+    track = db.query(Track).filter(
+        func.lower(Track.title) == func.lower(norm_title),
+        func.lower(Track.artist) == func.lower(norm_artist)
+    ).first()
+    return track, False
+
+
+def full_listen_sec(track: Track) -> int:
+    """Listening credited to an imported play: the whole track."""
+    return int(track.duration) if track.duration and int(track.duration) > 0 else PLACEHOLDER_DURATION
+
+
+def sync_imported_listens(db: Session, track_id: int, duration: int | None) -> None:
+    """Keep imported plays of a track counted when its duration becomes known.
+
+    History imports carry no listening time, so an imported play is stored
+    as one full play of the track's duration at import time (or the 180 s
+    placeholder). Once the real duration arrives, those plays must still
+    reach the 85% rule used by statistics, XP and achievements."""
+    if not duration or duration <= 0:
+        return
+    db.query(Scrobble).filter(
+        Scrobble.track_id == track_id,
+        Scrobble.import_job_id.isnot(None),
+        Scrobble.listened_sec < duration,
+    ).update({Scrobble.listened_sec: int(duration)}, synchronize_session=False)
 
 
 def _find_or_create_track(
@@ -281,19 +324,9 @@ def _find_or_create_track(
     track_url = _safe_track_url(track_url)
     duration = _valid_duration(duration)
 
-    alias = db.query(TrackAlias).filter(
-        func.lower(TrackAlias.original_title) == func.lower(title),
-        func.lower(TrackAlias.original_artist) == func.lower(artist),
-        or_(TrackAlias.user_id == user_id, TrackAlias.user_id.is_(None)),
-    ).order_by(TrackAlias.user_id.desc().nullslast()).first()
-
-    if alias and alias.canonical_track:
-        return alias.canonical_track, False
-
-    track = db.query(Track).filter(
-        func.lower(Track.title) == func.lower(norm_title),
-        func.lower(Track.artist) == func.lower(norm_artist)
-    ).first()
+    track, aliased = lookup_track(db, title, artist, user_id)
+    if aliased and track is not None:
+        return track, False
 
     if not track:
         track = Track(
@@ -330,6 +363,9 @@ def _set_track_fields(db: Session, track: Track, fields: dict[str, Any]) -> None
         empty = 0 if name == "duration" else ""
         db.query(Track).filter(Track.id == track.id, or_(column.is_(None), column == empty)).update(
             {name: value}, synchronize_session=False)
+    if "duration" in fields:
+        duration = db.query(Track.duration).filter(Track.id == track.id).scalar()
+        sync_imported_listens(db, int(track.id), duration)
     db.commit()
 
 

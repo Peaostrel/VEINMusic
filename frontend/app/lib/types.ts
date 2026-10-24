@@ -1,7 +1,7 @@
 /** Typed shapes of backend API responses used by the frontend. */
 
 export type ImportStatus =
-  "none" | "pending" | "in_progress" | "completed" | "failed";
+  "none" | "pending" | "in_progress" | "completed" | "failed" | "undone";
 
 export interface LastfmImportJob {
   id?: number;
@@ -16,6 +16,8 @@ export interface LastfmImportJob {
   started_at?: string | null;
   finished_at?: string | null;
   incremental?: boolean;
+  /** The history has been imported: a new import is refused. */
+  locked?: boolean;
 }
 
 export interface StartImportResponse {

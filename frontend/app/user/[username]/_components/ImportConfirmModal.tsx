@@ -21,7 +21,7 @@ export function ImportConfirmModal({
         <h2 className="text-lg font-semibold">{t("Импорт из Last.fm")}</h2>
         <p className="text-sm leading-relaxed text-fg-2">
           {t(
-            "История из Last.fm перенесётся в фоне. Повторный импорт добавит только новые прослушивания — дубликатов не будет.",
+            "История из Last.fm перенесётся в фоне с исходными датами, за каждое прослушивание начислится XP. Прослушивания, которые уже есть в VEIN, не задвоятся. Импорт разовый: повторно запустить его будет нельзя.",
           )}
         </p>
         <div className="flex justify-end gap-2">

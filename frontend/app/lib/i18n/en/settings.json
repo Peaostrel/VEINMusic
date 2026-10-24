@@ -112,9 +112,7 @@
   "Игнорируемые треки": "Ignored tracks",
   "Импорт Last.fm не подтверждает живое подключение. Для расширения проверьте разрешение на доступ к музыкальному сайту.": "A Last.fm import doesn’t confirm a live connection. For the extension, check that it has access to the music site.",
   "Импорт временно отключён": "Import is temporarily disabled",
-  "Импорт истории. Повторный импорт добавит только новые прослушивания.": "History import. Importing again adds only new plays.",
   "Импорт истории…": "Importing history…",
-  "Импорт новых прослушиваний…": "Importing new plays…",
   "Импорт прервался.": "The import stopped.",
   "Импорт прервался: {error}.": "The import stopped: {error}.",
   "Импорт": "Import",
@@ -256,7 +254,6 @@
   "Период по умолчанию": "Default period",
   "Плотность интерфейса": "Interface density",
   "По умолчанию": "Defaults",
-  "Повторный импорт добавит только новые прослушивания.": "Importing again adds only new plays.",
   "Повышенный контраст": "High contrast",
   "Подключено {created} · последняя активность {used}": "Connected {created} · last active {used}",
   "Подключено": "Connected",
@@ -290,7 +287,6 @@
   "Последнее событие: {time}": "Last event: {time}",
   "Последние прослушивания": "Recent plays",
   "Последние треки и подробная история.": "Recent tracks and detailed history.",
-  "Последний импорт завершён: добавлено {n} {tracks}.": "Last import finished: {n} {tracks} added.",
   "Последняя активность {time}": "Last activity {time}",
   "Последняя активность: {time}": "Last activity: {time}",
   "Последняя синхронизация": "Last sync",
@@ -461,5 +457,11 @@
   "Ошибка сервера ({status})": "Server error ({status})",
   "Не удалось запустить импорт": "Couldn’t start the import",
   "Язык интерфейса": "Interface language",
-  "Устройство: {client}": "Device: {client}"
+  "Устройство: {client}": "Device: {client}",
+  "Импорт завершён: добавлено {n} {tracks}.": "Import finished: {n} {tracks} added.",
+  "История перенесена, повторный импорт недоступен.": "Your history has been transferred; the import can't be run again.",
+  "Импорт отменён, историю можно перенести заново.": "The import was undone; you can transfer the history again.",
+  "История из Last.fm уже перенесена": "Your Last.fm history has already been imported",
+  "Разовый перенос всей истории с исходными датами. Повторно запустить его нельзя.": "A one-time transfer of your whole history with the original dates. It can't be run again.",
+  "Импортировано": "Imported"
 }

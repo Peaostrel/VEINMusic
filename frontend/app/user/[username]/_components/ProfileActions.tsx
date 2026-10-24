@@ -45,9 +45,7 @@ export function ProfileActions({
 }: Readonly<ProfileActionsProps>) {
   const t = useT();
   const [reporting, setReporting] = useState(false);
-  let importLabel = t("Импорт Last.fm");
-  if (importLoading) importLabel = t("Запуск…");
-  else if (hasImportedLastfm) importLabel = t("Синхронизировать Last.fm");
+  const importLabel = importLoading ? t("Запуск…") : t("Импорт Last.fm");
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -75,7 +73,8 @@ export function ProfileActions({
         <ChartColumn className="h-3.5 w-3.5" aria-hidden="true" />
         {t("Статистика")}
       </Link>
-      {isMyProfile && (
+      {/* Last.fm history is imported once */}
+      {isMyProfile && !hasImportedLastfm && (
         <button
           type="button"
           onClick={onImport}

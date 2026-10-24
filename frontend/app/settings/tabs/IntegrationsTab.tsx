@@ -509,9 +509,14 @@ function LastfmConnection({
   const lastfmEnabled = useFeature("integration_lastfm");
   const importEnabled = useFeature("lastfm_import");
   const preferences = data.preferences.integrations;
-  const pausedTitle = preferences.lastfm_enabled
-    ? t("Импорт временно отключён")
-    : t("Last.fm приостановлен в настройках аккаунта");
+  // The history is imported once; the status below tells when that happened
+  const [imported, setImported] = useState(false);
+  let pausedTitle: string | undefined;
+  if (imported) pausedTitle = t("История из Last.fm уже перенесена");
+  else if (!importEnabled || !lastfmEnabled)
+    pausedTitle = t("Импорт временно отключён");
+  else if (!preferences.lastfm_enabled)
+    pausedTitle = t("Last.fm приостановлен в настройках аккаунта");
   return (
     <Row
       logo="fm"
@@ -525,11 +530,16 @@ function LastfmConnection({
       description={
         lastfmEnabled
           ? t(
-              "Импорт истории. Повторный импорт добавит только новые прослушивания.",
+              "Разовый перенос всей истории с исходными датами. Повторно запустить его нельзя.",
             )
           : t("Временно приостановлено администратором.")
       }
-      footer={<LastfmImportStatus refreshKey={importRefresh ?? 0} />}
+      footer={
+        <LastfmImportStatus
+          refreshKey={importRefresh ?? 0}
+          onLocked={setImported}
+        />
+      }
     >
       <input
         {...noAutofill}
@@ -556,17 +566,11 @@ function LastfmConnection({
         <button
           type="button"
           onClick={startLastfmImport}
-          disabled={
-            !importEnabled || !lastfmEnabled || !preferences.lastfm_enabled
-          }
-          title={
-            importEnabled && lastfmEnabled && preferences.lastfm_enabled
-              ? undefined
-              : pausedTitle
-          }
+          disabled={Boolean(pausedTitle)}
+          title={pausedTitle}
           className={`${smallPrimary} flex-1`}
         >
-          {t("Импорт")}
+          {imported ? t("Импортировано") : t("Импорт")}
         </button>
       </div>
     </Row>

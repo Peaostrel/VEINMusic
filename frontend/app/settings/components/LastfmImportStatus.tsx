@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiJson } from "@/app/lib/api";
 import { useT } from "@/app/lib/i18n/client";
 import { plural } from "@/app/lib/plural";
@@ -11,12 +11,19 @@ const POLL_MS = 3000;
 /**
  * Shows the state of the latest Last.fm import and polls while it runs.
  * `refreshKey` changes when a new import is started, restarting the polling.
+ * `onLocked` reports whether the history is already imported (one-time import).
  */
 export default function LastfmImportStatus({
   refreshKey,
-}: Readonly<{ refreshKey: number }>) {
+  onLocked,
+}: Readonly<{ refreshKey: number; onLocked?: (locked: boolean) => void }>) {
   const t = useT();
   const [job, setJob] = useState<LastfmImportJob | null>(null);
+  // Kept in a ref: a new callback must not restart the polling
+  const onLockedRef = useRef(onLocked);
+  useEffect(() => {
+    onLockedRef.current = onLocked;
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -29,6 +36,7 @@ export default function LastfmImportStatus({
         );
         if (cancelled) return;
         setJob(next);
+        onLockedRef.current?.(Boolean(next.locked));
         if (next.status === "pending" || next.status === "in_progress") {
           timer = setTimeout(load, POLL_MS);
         }
@@ -53,11 +61,7 @@ export default function LastfmImportStatus({
       {running && (
         <>
           <div className="flex justify-between text-fg-2">
-            <span>
-              {job.incremental
-                ? t("Импорт новых прослушиваний…")
-                : t("Импорт истории…")}
-            </span>
+            <span>{t("Импорт истории…")}</span>
             <span>
               {job.total_pages
                 ? t("стр. {current}/{total}", {
@@ -80,11 +84,18 @@ export default function LastfmImportStatus({
       )}
       {job.status === "completed" && (
         <p className="text-ok">
-          {t("Последний импорт завершён: добавлено {n} {tracks}.", {
+          {t("Импорт завершён: добавлено {n} {tracks}.", {
             n: job.imported_tracks ?? 0,
             tracks: plural(job.imported_tracks ?? 0, "трек", "трека", "треков"),
-          })}{" "}
-          {t("Повторный импорт добавит только новые прослушивания.")}
+          })}
+          {job.locked && (
+            <> {t("История перенесена, повторный импорт недоступен.")}</>
+          )}
+        </p>
+      )}
+      {job.status === "undone" && !job.locked && (
+        <p className="text-fg-2">
+          {t("Импорт отменён, историю можно перенести заново.")}
         </p>
       )}
       {job.status === "failed" && (
