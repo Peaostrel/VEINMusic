@@ -95,7 +95,9 @@ def lastfm_connect(current_user: Annotated[User, Depends(get_current_user)],
         samesite="lax",  # sent on the top-level redirect back from Last.fm
         max_age=600,
     )
-    redirect.set_cookie(key=TAB_COOKIE, value=tab, httponly=True,
+    # A fixed value, never the query string itself
+    back_to = "integrations" if tab == "integrations" else "export"
+    redirect.set_cookie(key=TAB_COOKIE, value=back_to, httponly=True,
                         secure=os.getenv("ENVIRONMENT") == "production", samesite="lax", max_age=600)
     return redirect
 
