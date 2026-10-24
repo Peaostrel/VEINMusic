@@ -213,7 +213,10 @@ def update_profile(request: Request, data: ProfileUpdate, db: Annotated[Session,
     if data.hidden_artists is not None:
         user.profile.hidden_artists = sanitize_text(data.hidden_artists) or ""
     if data.lastfm_username is not None:
-        user.integration.lastfm_username = sanitize_text(data.lastfm_username)
+        name = sanitize_text(data.lastfm_username)
+        if (name or "").casefold() != (user.integration.lastfm_username or "").casefold():
+            user.integration.lastfm_verified = False  # a typed name proves nothing
+        user.integration.lastfm_username = name
 
     _validate_and_set_social(user.profile, data.social_links)
 

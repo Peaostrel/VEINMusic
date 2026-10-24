@@ -364,6 +364,7 @@ def unlink_integration(
         integration.soundcloud_track_started_at = None
     else:
         integration.lastfm_username = None
+        integration.lastfm_verified = False
     audit.record(db, admin, "integration.unlink", username, provider=provider)
     db.commit()
     return {"status": "ok"}

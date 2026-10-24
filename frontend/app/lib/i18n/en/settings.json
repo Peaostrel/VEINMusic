@@ -42,7 +42,6 @@
   "В настройках Plat Music откройте «Интеграции», выберите VEIN Music и подтвердите подключение на сайте VEIN. После этого включите музыку: прослушивания будут приходить напрямую, расширение не требуется.": "In Plat Music settings, open “Integrations”, choose VEIN Music and confirm the connection on the VEIN site. Then play some music: plays will arrive directly, no extension needed.",
   "Важные сообщения VEIN": "Important messages from VEIN",
   "Введите название...": "Enter a name...",
-  "Введите никнейм Last.fm": "Enter your Last.fm username",
   "Вебхуки временно отключены администратором: события не отправляются, новые вебхуки создать нельзя.": "Webhooks are temporarily disabled by an administrator: events aren’t sent and new webhooks can’t be created.",
   "Вебхуки": "Webhooks",
   "Вебхуков пока нет.": "No webhooks yet.",
@@ -195,7 +194,6 @@
   "Недельные итоги": "Weekly recap",
   "Недоступно: браузер не поддерживает push или уведомления не настроены на сервере.": "Unavailable: the browser doesn’t support push or notifications aren’t set up on the server.",
   "Нет подключённых устройств.": "No connected devices.",
-  "Ник на Last.fm": "Last.fm username",
   "Никнейм или ID": "Username or ID",
   "Никто": "No one",
   "Новая компоновка профиля": "New profile layout",
@@ -462,6 +460,8 @@
   "История перенесена, повторный импорт недоступен.": "Your history has been transferred; the import can't be run again.",
   "Импорт отменён, историю можно перенести заново.": "The import was undone; you can transfer the history again.",
   "История из Last.fm уже перенесена": "Your Last.fm history has already been imported",
-  "Разовый перенос всей истории с исходными датами. Повторно запустить его нельзя.": "A one-time transfer of your whole history with the original dates. It can't be run again.",
-  "Импортировано": "Imported"
+  "Импортировано": "Imported",
+  "аккаунт {name} не подтверждён": "account {name} not confirmed",
+  "Разовый перенос всей истории с исходными датами. Войдите через Last.fm, чтобы подтвердить, что аккаунт ваш. Повторно запустить импорт нельзя.": "A one-time transfer of your whole history with the original dates. Sign in with Last.fm to confirm the account is yours. The import can't be run again.",
+  "Войти через Last.fm": "Sign in with Last.fm"
 }

@@ -113,7 +113,7 @@ def test_connect_requires_auth(client, lastfm_configured):
 
 def test_callback_saves_session_key(signed_in, lastfm_configured):
     state = _connect(signed_in)
-    with patch.object(lastfm_connect, "_get_session_key", new=AsyncMock(return_value="sk-1")):
+    with patch.object(lastfm_connect, "_get_session", new=AsyncMock(return_value=("sk-1", "RealFm"))):
         res = signed_in.get("/api/integrations/lastfm/callback",
                             params={"state": state, "token": "tok"}, follow_redirects=False)
     assert res.status_code == 307
@@ -125,13 +125,37 @@ def test_callback_saves_session_key(signed_in, lastfm_configured):
         config = db.query(ExternalSyncConfig).filter_by(user_id=user.id).one()
         assert config.lastfm_session_key == "sk-1"
         assert config.is_lastfm_enabled is True
+        # Signing in proves the account: the import may use it
+        assert user.integration.lastfm_username == "RealFm"
+        assert user.integration.lastfm_verified is True
     finally:
         db.close()
 
 
+def test_connect_from_integrations_returns_there(signed_in, lastfm_configured):
+    res = signed_in.get("/api/integrations/lastfm/connect", params={"tab": "integrations"}, follow_redirects=False)
+    state = urllib.parse.parse_qs(urllib.parse.urlparse(
+        urllib.parse.parse_qs(urllib.parse.urlparse(res.headers["location"]).query)["cb"][0]).query)["state"][0]
+    with patch.object(lastfm_connect, "_get_session", new=AsyncMock(return_value=("sk-1", "RealFm"))):
+        res = signed_in.get("/api/integrations/lastfm/callback",
+                            params={"state": state, "token": "tok"}, follow_redirects=False)
+    assert res.headers["location"].endswith("/settings?tab=integrations&status=lastfm_connected")
+
+
+def test_typed_lastfm_name_is_not_verified(signed_in, lastfm_configured):
+    state = _connect(signed_in)
+    with patch.object(lastfm_connect, "_get_session", new=AsyncMock(return_value=("sk-1", "RealFm"))):
+        signed_in.get("/api/integrations/lastfm/callback", params={"state": state, "token": "tok"},
+                      follow_redirects=False)
+    signed_in.post("/api/profile/update", json={"lastfm_username": "realfm"})  # same account
+    assert signed_in.get("/api/user/fmuser").json()["lastfm_verified"] is True
+    signed_in.post("/api/profile/update", json={"lastfm_username": "someone_else"})
+    assert signed_in.get("/api/user/fmuser").json()["lastfm_verified"] is False
+
+
 def test_callback_reports_failed_exchange(signed_in, lastfm_configured):
     state = _connect(signed_in)
-    with patch.object(lastfm_connect, "_get_session_key", new=AsyncMock(return_value=None)):
+    with patch.object(lastfm_connect, "_get_session", new=AsyncMock(return_value=None)):
         res = signed_in.get("/api/integrations/lastfm/callback",
                             params={"state": state, "token": "tok"}, follow_redirects=False)
     assert res.headers["location"].endswith("status=lastfm_error")
@@ -187,7 +211,7 @@ def test_get_session_key_signs_request(lastfm_configured):
         return httpx.Response(200, json={"session": {"key": "abc", "name": "fm"}})
 
     with _mock_lastfm(handler):
-        assert asyncio.run(lastfm_connect._get_session_key("tok")) == "abc"
+        assert asyncio.run(lastfm_connect._get_session("tok")) == ("abc", "fm")
     assert seen["method"] == "auth.getSession"
     assert seen["token"] == "tok"
     assert len(seen["api_sig"]) == 32
@@ -200,7 +224,7 @@ def test_get_session_key_signs_request(lastfm_configured):
 ])
 def test_get_session_key_handles_errors(lastfm_configured, response):
     with _mock_lastfm(lambda request: response):
-        assert asyncio.run(lastfm_connect._get_session_key("tok")) is None
+        assert asyncio.run(lastfm_connect._get_session("tok")) is None
 
 
 def test_get_session_key_handles_network_error(lastfm_configured):
@@ -208,7 +232,7 @@ def test_get_session_key_handles_network_error(lastfm_configured):
         raise httpx.ConnectError("down")
 
     with _mock_lastfm(handler):
-        assert asyncio.run(lastfm_connect._get_session_key("tok")) is None
+        assert asyncio.run(lastfm_connect._get_session("tok")) is None
 
 
 # --- worker jobs -------------------------------------------------------------

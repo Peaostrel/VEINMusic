@@ -174,6 +174,7 @@ export interface UserInfo {
   yandex_linked: boolean;
   soundcloud_linked: boolean;
   lastfm_username: string | null;
+  lastfm_verified?: boolean;
   has_imported_lastfm: boolean;
   last_sync: string | null;
   role: string;

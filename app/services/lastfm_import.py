@@ -52,6 +52,8 @@ SAME_TRACK_WINDOW_SEC = 300
 # Last.fm's grey star shown for tracks without artwork
 LASTFM_PLACEHOLDER_COVER = "2a96cbd8b46e442fc41c2b86b821562f"
 ALREADY_IMPORTED = "Импорт из Last.fm уже выполнен. Повторно его запустить нельзя."
+TAKEN_ACCOUNT = "История этого аккаунта Last.fm уже перенесена в другой профиль VEIN."
+NOT_VERIFIED = "Подтвердите аккаунт Last.fm: войдите через Last.fm в настройках, вкладка «Интеграции»."
 
 
 class LastfmApiError(Exception):
@@ -59,7 +61,11 @@ class LastfmApiError(Exception):
 
 
 class ImportAlreadyDone(Exception):
-    """The user has already imported their Last.fm history."""
+    """The user, or another VEIN account, already imported this history."""
+
+    def __init__(self, message: str = ALREADY_IMPORTED):
+        super().__init__(message)
+        self.message = message
 
 
 def _as_aware(dt: Any) -> Optional[datetime]:
@@ -127,6 +133,21 @@ def import_locked(db, user: User) -> bool:
         Scrobble.user_id == user.id, Scrobble.is_imported.is_(True), Scrobble.source == "lastfm").exists()).scalar()
 
 
+def _imported_elsewhere(db, user: User) -> bool:
+    """The same Last.fm history already went to another VEIN account."""
+    from sqlalchemy import func
+    name = (user.integration.lastfm_username or "").strip().lower()
+    if not name:
+        return False
+    done = db.query(LastfmImportJob.id).filter(
+        LastfmImportJob.user_id != user.id,
+        func.lower(LastfmImportJob.lastfm_username) == name,
+        LastfmImportJob.status == "completed",
+        LastfmImportJob.imported_tracks > 0,
+    )
+    return bool(db.query(done.exists()).scalar())
+
+
 def refresh_import_flag(db, user: User) -> None:
     """Recompute has_imported_lastfm after an import was undone (no commit)."""
     if user.integration is not None:
@@ -150,6 +171,8 @@ def prepare_import_job(db, user: User) -> tuple[LastfmImportJob, bool]:
         return job, True  # resume where it stopped
     if import_locked(db, user):
         raise ImportAlreadyDone()
+    if _imported_elsewhere(db, user):
+        raise ImportAlreadyDone(TAKEN_ACCOUNT)
 
     job = LastfmImportJob(
         user_id=user.id,

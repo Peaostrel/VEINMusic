@@ -164,6 +164,8 @@ def test_lastfm_import_is_paged_resumable_and_one_time(client, db):
     client.post("/api/profile/update", json={"lastfm_username": "lfmuser"}, headers={"X-API-Key": key})
     user = db.query(User).filter_by(username="importer").first()
     db.refresh(user.integration)
+    user.integration.lastfm_verified = True  # as after signing in to Last.fm
+    db.commit()
 
     # First run fails on page 2 of 3...
     job, needs_enqueue = lastfm_import.prepare_import_job(db, user)
@@ -208,6 +210,9 @@ def test_start_import_endpoint_enqueues_once(client, db):
 
     key = _register(client, "starter")
     client.post("/api/profile/update", json={"lastfm_username": "lfmuser2"}, headers={"X-API-Key": key})
+    starter = db.query(User).filter_by(username="starter").first()
+    starter.integration.lastfm_verified = True
+    db.commit()
     with patch.object(lastfm_import, "LASTFM_API_KEY", "k"), \
          patch("app.routers.integrations.LASTFM_API_KEY", "k"), \
          patch("app.routers.integrations.enqueue_import") as enqueue:

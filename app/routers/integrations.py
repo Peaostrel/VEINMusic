@@ -24,8 +24,8 @@ from app.schemas import (
     YandexTokenUpdate,
 )
 from app.services.lastfm_import import (
-    ALREADY_IMPORTED,
     LASTFM_API_KEY,
+    NOT_VERIFIED,
     ImportAlreadyDone,
     enqueue_import,
     import_locked,
@@ -107,6 +107,7 @@ async def sync_integrations_now(
              responses={409: {"description": "Last.fm is paused in account settings, "
                                              "or the history has already been imported"},
                         400: {"description": "Last.fm username not set"},
+                        403: {"description": "The Last.fm account is not confirmed by signing in"},
                         503: {"description": "API key not configured or import switched off"}})
 async def start_lastfm_import(data: LikeRequest,
                               db: Annotated[Session,
@@ -123,14 +124,16 @@ async def start_lastfm_import(data: LikeRequest,
         raise HTTPException(409, "Last.fm приостановлен в настройках аккаунта")
     if not user.integration.lastfm_username:
         raise HTTPException(400, "Last.fm username not set in profile")
+    if not user.integration.lastfm_verified:
+        raise HTTPException(403, NOT_VERIFIED)
     if not LASTFM_API_KEY:
         raise HTTPException(503, "Last.fm API key not configured on server")
 
     async with redis_lock(f"lastfm_import:{user.id}", expire_sec=10):
         try:
             job, needs_enqueue = await anyio.to_thread.run_sync(prepare_import_job, db, user)
-        except ImportAlreadyDone:
-            raise HTTPException(409, ALREADY_IMPORTED) from None
+        except ImportAlreadyDone as done:
+            raise HTTPException(409, done.message) from None
         job_info = job_to_dict(job)
     if needs_enqueue:
         await enqueue_import(int(job_info["id"]))
@@ -203,5 +206,6 @@ def disconnect_lastfm(data: LikeRequest, db: Annotated[Session, Depends(
     user = current_user
 
     user.integration.lastfm_username = None
+    user.integration.lastfm_verified = False
     db.commit()
     return {"status": "ok"}

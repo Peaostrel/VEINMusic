@@ -27,7 +27,7 @@ T0 = 1_700_000_000  # 2023-11-14
 @pytest.fixture
 def owner(client, db):
     user = User(username="fmowner", hashed_password="fixture-hash", profile=UserProfile(),
-                integration=UserIntegration(lastfm_username="fmowner"))
+                integration=UserIntegration(lastfm_username="fmowner", lastfm_verified=True))
     db.add(user)
     db.commit()
     client.headers.update({"Origin": "http://localhost:3000"})
@@ -250,3 +250,25 @@ def test_legacy_imported_plays_follow_the_learned_duration(db, owner):
     _update_existing_track(db, legacy.track, "", "", 400, "")
     db.expire_all()
     assert db.get(Scrobble, legacy.id).listened_sec == 400
+
+
+def test_import_needs_a_confirmed_account(client, db, owner):
+    owner.integration.lastfm_verified = False
+    db.commit()
+    with patch("app.routers.integrations.LASTFM_API_KEY", "k"), \
+         patch("app.routers.integrations.enqueue_import") as enqueue:
+        res = client.post("/api/import/lastfm", json={})
+    assert res.status_code == 403
+    assert res.json()["detail"] == lastfm_import.NOT_VERIFIED
+    enqueue.assert_not_called()
+
+
+def test_one_lastfm_history_goes_to_one_vein_account(db, owner):
+    run_import(db, owner, [lastfm_track("Song", T0)])
+    twin = User(username="twin", hashed_password="fixture-hash", profile=UserProfile(),
+                integration=UserIntegration(lastfm_username="FMOWNER", lastfm_verified=True))
+    db.add(twin)
+    db.commit()
+    with pytest.raises(lastfm_import.ImportAlreadyDone) as refused:
+        lastfm_import.prepare_import_job(db, twin)
+    assert refused.value.message == lastfm_import.TAKEN_ACCOUNT

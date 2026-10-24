@@ -179,6 +179,8 @@ class UserIntegration(Base):
     is_verified = Column(Boolean, default=False)
     yandex_token = Column(EncryptedString, nullable=True)
     lastfm_username = Column(String, nullable=True)
+    # lastfm_username came from signing in to Last.fm, not typed in by hand
+    lastfm_verified = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     spotify_access_token = Column(EncryptedString, nullable=True)
     spotify_refresh_token = Column(EncryptedString, nullable=True)
     soundcloud_access_token = Column(EncryptedString, nullable=True)

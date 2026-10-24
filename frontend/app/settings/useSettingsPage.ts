@@ -169,7 +169,7 @@ export function useSettingsPage() {
     const tabParam = searchParams.get("tab");
     const linkedTab = SETTINGS_TABS.find((tab) => tab.id === tabParam);
     if (linkedTab) setActiveTab(linkedTab.id);
-    if (tabParam === "export") {
+    if (tabParam === "export" || tabParam === "integrations") {
       const result = searchParams.get("status");
       if (result === "lastfm_connected") setStatus(t("✅ Last.fm подключён"));
       else if (result === "lastfm_error")
@@ -479,7 +479,10 @@ export function useSettingsPage() {
           setUserProfile((prev) => prev && { ...prev, yandex_linked: false });
           updateData("yandexToken", "");
         }
-        if (service === "lastfm") updateData("lastfmUsername", "");
+        if (service === "lastfm") {
+          updateData("lastfmUsername", "");
+          updateData("lastfmVerified", false);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -488,20 +491,10 @@ export function useSettingsPage() {
   };
 
   const startLastfmImport = async () => {
-    if (!data.lastfmUsername) return alert(t("Введите никнейм Last.fm"));
+    // The import uses the account confirmed by signing in to Last.fm
+    if (!data.lastfmVerified) return;
     setStatus(t("Запускаем импорт..."));
     try {
-      const updateRes = await fetch(`${API_URL}/api/profile/update`, {
-        credentials: "include",
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lastfm_username: data.lastfmUsername }),
-      });
-      if (!updateRes.ok) {
-        setStatus(t("❌ Ошибка сохранения профиля"));
-        return;
-      }
-
       const res = await fetch(`${API_URL}/api/import/lastfm`, {
         credentials: "include",
         method: "POST",
