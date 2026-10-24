@@ -104,6 +104,20 @@ def test_imported_plays_keep_original_time_and_count(client, db, owner):
     assert stats["top_tracks"][0]["plays"] == 2
 
 
+def test_favourites_earn_double_xp_like_live_plays(db, owner):
+    owner.profile.favorite_artist = "Loved"
+    owner.profile.favorite_album = "Best album"
+    db.commit()
+    run_import(db, owner, [
+        lastfm_track("Any", T0, artist="Loved"),
+        {**lastfm_track("Other", T0 + 300), "album": {"#text": "Best album"}},
+        lastfm_track("Plain", T0 + 600),
+    ])
+    xp = {r.track.title: r.xp_earned for r in imported(db, owner)}
+    # A play matching several favourites still earns 2, as live
+    assert xp == {"Any": 2, "Other": 2, "Plain": 1}
+
+
 def test_import_uses_the_existing_catalog_track(db, owner):
     track = Track(title="Song", artist="Artist", duration=240, cover_url="https://example.com/c.jpg")
     db.add(track)

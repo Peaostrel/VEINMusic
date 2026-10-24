@@ -7,7 +7,7 @@ which makes Last.fm's pagination stable, so a job can stop (worker restart,
 API error) and resume from ``current_page``.
 
 Imported plays keep their original Last.fm time, count as one full play
-(1 XP each, like a live play) and are matched against plays VEIN already
+(1 XP each, 2 for a favourite, like a live play) and are matched against plays VEIN already
 recorded, so a history that VEIN itself exported to Last.fm, or that
 another scrobbler sent there, is not counted twice. When the job finishes,
 achievements are checked for the whole history.
@@ -256,8 +256,8 @@ def _new_plays(db, user_id: int, plays: list[_Play]) -> list[tuple[_Play, Option
     return result
 
 
-def _import_play(db, job: LastfmImportJob, play: _Play, track: Optional[Track]) -> None:
-    from app.services.scrobble_processor import _find_or_create_track, full_listen_sec
+def _import_play(db, job: LastfmImportJob, owner: Optional[User], play: _Play, track: Optional[Track]) -> None:
+    from app.services.scrobble_processor import _check_favorite, _find_or_create_track, full_listen_sec
     if track is None:
         track, _ = _find_or_create_track(db, play.title, play.artist, play.cover or "", "", 0,
                                          play.album or "", int(job.user_id))
@@ -268,9 +268,12 @@ def _import_play(db, job: LastfmImportJob, play: _Play, track: Optional[Track]) 
         if play.album and not track.album:
             track.album = play.album  # type: ignore[assignment]
     played_at = datetime.fromtimestamp(play.ts, tz=UTC)
+    # As for a live play: 2 XP for a favourite artist, track or album. The
+    # event multiplier is left out: it rewards listening during the event
+    xp = 2 if owner is not None and _check_favorite(track, owner) else 1
     db.add(Scrobble(user_id=job.user_id, track_id=track.id, source="lastfm",
                     played_at=played_at, listened_sec=full_listen_sec(track), is_playing=False,
-                    updated_at=played_at, xp_earned=1, is_imported=True, import_job_id=job.id))
+                    updated_at=played_at, xp_earned=xp, is_imported=True, import_job_id=job.id))
 
 
 def _store_page(job_id: int, tracks: list[dict], page: int, total_pages: int, total_tracks: int) -> int:
@@ -282,8 +285,9 @@ def _store_page(job_id: int, tracks: list[dict], page: int, total_pages: int, to
             return 0
         plays = [play for play in map(_parse_play, tracks) if play is not None]
         new = _new_plays(db, int(job.user_id), plays)
+        owner = db.query(User).filter(User.id == job.user_id).first()
         for play, track in new:
-            _import_play(db, job, play, track)
+            _import_play(db, job, owner, play, track)
         job.current_page = page  # type: ignore[assignment]
         job.total_pages = total_pages  # type: ignore[assignment]
         job.total_tracks = total_tracks  # type: ignore[assignment]
