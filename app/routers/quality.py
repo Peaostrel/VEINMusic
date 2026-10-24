@@ -148,7 +148,7 @@ def connection_check(request: Request, db: DB, user: Owner, source: Annotated[Li
     recent = db.query(Scrobble).filter(
         Scrobble.user_id == user.id, Scrobble.is_imported.isnot(True), Scrobble.played_at >= cutoff)
     recent = _source_listens(recent, source)
-    listen = recent.order_by(Scrobble.id.desc()).first()
+    listen = recent.order_by(Scrobble.played_at.desc(), Scrobble.id.desc()).first()
     stale = health is None or _aware(health.received_at) < datetime.now(UTC) - timedelta(minutes=3)
     status = str(health.status) if health and not stale else "waiting"
     return {"source": source, "received": bool(listen), "counted": bool(listen and

@@ -26,9 +26,11 @@ from app.schemas import (
 from app.services.lastfm_import import (
     LASTFM_API_KEY,
     NOT_VERIFIED,
+    STOPPED,
     ImportAlreadyDone,
     enqueue_import,
     import_locked,
+    is_stale,
     job_to_dict,
     latest_job,
     prepare_import_job,
@@ -146,7 +148,11 @@ def get_lastfm_import_status(db: Annotated[Session, Depends(get_db)],
     job = latest_job(db, int(current_user.id))
     # A running or interrupted import can still be continued
     unfinished = job is not None and job.status in ("pending", "in_progress", "failed")
-    return {**job_to_dict(job), "locked": not unfinished and import_locked(db, current_user)}
+    status = {**job_to_dict(job), "locked": not unfinished and import_locked(db, current_user)}
+    if job is not None and job.status in ("pending", "in_progress") and is_stale(job):
+        # No progress for a while: the worker lost it; "Import" resumes it
+        status.update(status="failed", error=STOPPED)
+    return status
 
 
 # --- /api/integrations/yandex ---

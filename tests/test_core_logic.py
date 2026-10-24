@@ -176,6 +176,9 @@ def test_find_or_create_track_follows_alias_and_normalises(db):
     assert (new.cover_url, new.track_url, new.duration) == ("", "", 0)
     again, _ = sp._find_or_create_track(db, "brand new", "SOMEONE", "", "", 0, "")
     assert again.id == new.id
+    # Another song of the artist keeps the spelling the catalog already has
+    other, _ = sp._find_or_create_track(db, "Second Song", "SOMEONE", "", "", 0, "")
+    assert other.artist == "Someone"
 
 
 def test_get_or_create_track_enriches_from_yandex(db):

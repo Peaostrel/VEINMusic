@@ -200,7 +200,7 @@ def user_details(username: str, db: DB, admin: AdminUser):
     uid = int(user.id)
     export = db.query(ExternalSyncConfig).filter(ExternalSyncConfig.user_id == uid).first()
     recent = (db.query(Scrobble, Track).execution_options(include_excluded=True).join(Track).filter(Scrobble.user_id == uid)
-              .order_by(Scrobble.id.desc()).limit(15).all())
+              .order_by(Scrobble.played_at.desc(), Scrobble.id.desc()).limit(15).all())
     achievements = (db.query(UserAchievement).filter(UserAchievement.user_id == uid)
                     .order_by(UserAchievement.earned_at.desc()).all())
     return {

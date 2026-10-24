@@ -229,7 +229,7 @@ def _now_playing_text(db: Session, user: User, lang: str = "en") -> tuple[str, s
     recent = (
         db.query(Scrobble)
         .filter(Scrobble.user_id == user.id, Scrobble.deleted_at.is_(None))
-        .order_by(Scrobble.id.desc())
+        .order_by(Scrobble.played_at.desc(), Scrobble.id.desc())
         .limit(2)
         .all()
     )
@@ -446,7 +446,7 @@ def get_my_widget_summary(current_user: Annotated[User, Depends(get_current_user
     latest = (
         db.query(Scrobble)
         .filter(Scrobble.user_id == current_user.id, Scrobble.deleted_at.is_(None))
-        .order_by(Scrobble.id.desc())
+        .order_by(Scrobble.played_at.desc(), Scrobble.id.desc())
         .first()
     )
     now = None

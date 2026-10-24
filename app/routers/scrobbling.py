@@ -151,7 +151,7 @@ def _anti_abuse_check(db: Session, user_id: int, data: ScrobbleData | None = Non
     # Changes of the playback are never dropped: a lost pause would leave the
     # track "playing" (and its time running) until the next report.
     last_s = db.query(Scrobble).execution_options(include_excluded=True).filter(
-        Scrobble.user_id == user_id).order_by(
+        Scrobble.user_id == user_id, Scrobble.is_imported.isnot(True)).order_by(
         Scrobble.id.desc()).first()
     if last_s:
         updated_at = last_s.updated_at
@@ -185,8 +185,9 @@ def get_history(username: str,
     now = datetime.now(UTC)
     active_threshold = now - timedelta(seconds=ACTIVE_PLAYBACK_WINDOW_SEC)
     _, is_owner = _check_privacy_and_owner(user, request, db)
-    latest_id = db.query(func.max(Scrobble.id)).filter(
-        Scrobble.user_id == user.id).scalar_subquery()
+    latest_id = db.query(Scrobble.id).filter(
+        Scrobble.user_id == user.id).order_by(
+        Scrobble.played_at.desc(), Scrobble.id.desc()).limit(1).scalar_subquery()
 
     scrobbles = db.query(
         Scrobble,
@@ -199,7 +200,7 @@ def get_history(username: str,
             & Scrobble.position_sec.isnot(None)
         )
     ).order_by(
-            Scrobble.id.desc()).limit(10).all()
+            Scrobble.played_at.desc(), Scrobble.id.desc()).limit(10).all()
 
     s_ids = [s.id for s, t in scrobbles]
     counters = get_scrobble_counters(db, s_ids)
@@ -258,7 +259,7 @@ def get_global_history(request: Request, db: Annotated[Session, Depends(get_db)]
                     Scrobble.is_playing.is_(True) & (Scrobble.updated_at >= active_threshold)
                 )
             ).order_by(
-                    Scrobble.id.desc()).limit(100).all()
+                    Scrobble.played_at.desc(), Scrobble.id.desc()).limit(100).all()
 
     scrobbles = [
         row for row in scrobbles
@@ -330,7 +331,7 @@ def get_friends_history(username: str,
             Scrobble.is_playing.is_(True) & (Scrobble.updated_at >= active_threshold)
         )
     ).order_by(
-            Scrobble.id.desc()).limit(100).all()
+            Scrobble.played_at.desc(), Scrobble.id.desc()).limit(100).all()
 
     scrobbles = [
         row for row in scrobbles

@@ -95,6 +95,27 @@ def test_antifraud_reset_and_unflag(admin_client):
     assert admin_client.post("/api/admin/antifraud/ghost/unflag").status_code == 404
 
 
+def test_unflag_dismisses_the_reviewed_plays(admin_client):
+    _add_scrobbles("target", count=80)
+    names = lambda: [u["username"] for u in admin_client.get("/api/admin/antifraud/suspicious").json()["suspicious_users"]]  # noqa: E731
+    assert names() == ["target"]
+    assert admin_client.post("/api/admin/antifraud/target/unflag").status_code == 200
+    assert names() == []
+
+
+def test_imported_history_is_not_a_listening_spike(admin_client):
+    track_id = _add_scrobbles("target", count=0)
+    s = SessionLocal()
+    try:
+        user = s.query(User).filter(User.username == "target").one()
+        s.add_all([Scrobble(user_id=user.id, track_id=track_id, source="lastfm", is_imported=True,
+                            is_playing=False, xp_earned=1, listened_sec=200) for _ in range(800)])
+        s.commit()
+    finally:
+        s.close()
+    assert admin_client.get("/api/admin/antifraud/suspicious").json()["suspicious_users"] == []
+
+
 def test_ban_and_unban(admin_client):
     version = _target().session_version
     assert admin_client.post("/api/admin/users/target/ban", json={"is_banned": True}).json()["is_banned"] is True

@@ -287,6 +287,19 @@ def lookup_track(db: Session, title: str, artist: str,
     return track, False
 
 
+def known_artist_spelling(db: Session, artist: str) -> str:
+    """Spelling the catalog already uses for this artist, else the given one.
+
+    Players and Last.fm write the same artist in different letter case
+    ("Джизус" / "ДЖИЗУС"). Statistics group tracks by the exact name, so a
+    new track takes the spelling of the artist's existing tracks."""
+    if not artist:
+        return artist
+    known = db.query(Track.artist).filter(
+        func.lower(Track.artist) == func.lower(artist)).order_by(Track.id).limit(1).scalar()
+    return str(known) if known else artist
+
+
 def full_listen_sec(track: Track) -> int:
     """Listening credited to an imported play: the whole track."""
     return int(track.duration) if track.duration and int(track.duration) > 0 else PLACEHOLDER_DURATION
@@ -332,7 +345,7 @@ def _find_or_create_track(
     if not track:
         track = Track(
             title=norm_title,
-            artist=norm_artist,
+            artist=known_artist_spelling(db, norm_artist),
             cover_url=cover_url,
             track_url=track_url,
             duration=duration or 0,
@@ -705,8 +718,10 @@ def _locked_last_scrobble(db: Session, user_id: int):
     Never sum two clocks for the same play: secondary sources only confirm
     provenance."""
     db.query(User.id).filter(User.id == user_id).with_for_update().first()
+    # Imported history is inserted later than the live play it may run beside:
+    # it must never be taken for the play in progress
     last_scrobble = db.query(Scrobble).execution_options(include_excluded=True).filter(
-        Scrobble.user_id == user_id).order_by(
+        Scrobble.user_id == user_id, Scrobble.is_imported.isnot(True)).order_by(
         Scrobble.id.desc()).first()
     if last_scrobble is None:
         return None, None

@@ -72,7 +72,7 @@ def get_user_mood(username: str, request: Request, db: Annotated[Session, Depend
         Track.genre,
         Track.title).join(Scrobble).filter(
         Scrobble.user_id == user.id).order_by(
-            Scrobble.id.desc()).limit(10).all()
+            Scrobble.played_at.desc(), Scrobble.id.desc()).limit(10).all()
     if not recent:
         return {"mood": tr(lang, "Тишина"), "emoji": "😶"}
 

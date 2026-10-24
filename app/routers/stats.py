@@ -265,7 +265,7 @@ def get_global_feed(request: Request, db: Annotated[Session, Depends(get_db)]):
             UserProfile).filter(
             UserProfile.is_private.is_(False), User.is_banned.isnot(True),
             User.id.in_(public_feed_user_ids(db))).order_by(
-            Scrobble.id.desc()).limit(100).all()
+            Scrobble.played_at.desc(), Scrobble.id.desc()).limit(100).all()
         cached = jsonable_encoder([format_history_item(s, s.track) for s in scrobbles])
         set_to_cache(GLOBAL_FEED_CACHE_KEY, cached, expire=60)
     return {"feed": localize_history_items(filter_public_feed(cached, db)[:20], request_lang(request))}
@@ -862,7 +862,7 @@ def get_current_track(username: str, request: Request, db: Annotated[Session, De
     last_scrobble = db.query(
         Scrobble,
         Track).join(Track).filter(
-        Scrobble.user_id == user.id).order_by(
+        Scrobble.user_id == user.id, Scrobble.is_imported.isnot(True)).order_by(
             Scrobble.id.desc()).first()
 
     if not last_scrobble:
