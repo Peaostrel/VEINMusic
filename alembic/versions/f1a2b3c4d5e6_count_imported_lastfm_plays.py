@@ -25,7 +25,8 @@ FULL_PLAY = "(SELECT COALESCE(NULLIF(tracks.duration, 0), 180) FROM tracks WHERE
 def upgrade() -> None:
     op.execute(
         f"UPDATE scrobbles SET listened_sec = {FULL_PLAY} "
-        f"WHERE import_job_id IS NOT NULL AND listened_sec < {FULL_PLAY}"
+        "WHERE (import_job_id IS NOT NULL OR (is_imported AND source = 'lastfm')) "
+        f"AND listened_sec < {FULL_PLAY}"
     )
 
 

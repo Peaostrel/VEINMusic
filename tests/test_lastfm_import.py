@@ -215,3 +215,38 @@ def test_old_dates_show_the_year():
     assert relative_time(datetime(2026, 5, 12, tzinfo=UTC), "ru", now) == "12 мая"
     assert relative_time(datetime(2019, 5, 12, tzinfo=UTC), "ru", now) == "12 мая 2019"
     assert relative_time(datetime(2019, 5, 12, tzinfo=UTC), "en", now) == "May 12, 2019"
+
+
+def test_incomplete_live_play_does_not_hide_the_lastfm_play(db, owner):
+    base = datetime.fromtimestamp(T0, tz=UTC)
+    partial = live_play(db, owner, "Cut short", base)
+    partial.listened_sec = 30  # the player stopped reporting early
+    db.commit()
+    run_import(db, owner, [lastfm_track("Cut short", T0 + 20)])
+    assert [r.track.title for r in imported(db, owner)] == ["Cut short"]
+
+
+def test_deleted_play_is_not_brought_back(db, owner):
+    row = live_play(db, owner, "Removed", datetime.fromtimestamp(T0, tz=UTC))
+    row.deleted_at = datetime.now(UTC)
+    db.commit()
+    assert run_import(db, owner, [lastfm_track("Removed", T0)]).imported_tracks == 0
+
+
+def test_legacy_flag_without_imported_plays_does_not_lock(db, owner):
+    owner.integration.has_imported_lastfm = True
+    db.commit()
+    assert not lastfm_import.import_locked(db, owner)
+    legacy = live_play(db, owner, "Legacy", datetime.fromtimestamp(T0, tz=UTC))
+    legacy.is_imported, legacy.source = True, "lastfm"
+    db.commit()
+    assert lastfm_import.import_locked(db, owner)
+
+
+def test_legacy_imported_plays_follow_the_learned_duration(db, owner):
+    legacy = live_play(db, owner, "Legacy", datetime.fromtimestamp(T0, tz=UTC), duration=180)
+    legacy.is_imported, legacy.source = True, "lastfm"
+    db.commit()
+    _update_existing_track(db, legacy.track, "", "", 400, "")
+    db.expire_all()
+    assert db.get(Scrobble, legacy.id).listened_sec == 400

@@ -117,9 +117,14 @@ def _done_imports(db, user_id: int):
 
 def import_locked(db, user: User) -> bool:
     """True once the user's Last.fm history has been imported."""
-    if user.integration is not None and user.integration.has_imported_lastfm:
+    if db.query(_done_imports(db, int(user.id)).exists()).scalar():
         return True
-    return db.query(_done_imports(db, int(user.id)).exists()).scalar()
+    # The flag alone also comes from older imports that added nothing:
+    # it counts only while imported Last.fm plays exist
+    if user.integration is None or not user.integration.has_imported_lastfm:
+        return False
+    return db.query(db.query(Scrobble.id).execution_options(include_excluded=True, include_deleted=True).filter(
+        Scrobble.user_id == user.id, Scrobble.is_imported.is_(True), Scrobble.source == "lastfm").exists()).scalar()
 
 
 def refresh_import_flag(db, user: User) -> None:
@@ -213,15 +218,24 @@ def _track_key(title: str, artist: str) -> tuple[str, str]:
 
 
 def _known_plays(db, user_id: int, first: int, last: int) -> list[_Known]:
+    """Plays that stand for a Last.fm scrobble around the page's time range.
+
+    A live play that never reached the 85% rule is left out, so the full
+    play Last.fm counted is still imported; a play the user excluded or
+    deleted is kept, so the import does not bring it back."""
+    from sqlalchemy import func, or_
     start = datetime.fromtimestamp(first - SAME_TRACK_WINDOW_SEC, tz=UTC)
     end = datetime.fromtimestamp(last + SAME_TRACK_WINDOW_SEC, tz=UTC)
-    rows = db.query(Scrobble.played_at, Scrobble.track_id, Scrobble.import_job_id, Track.title, Track.artist) \
+    counted = Scrobble.listened_sec * 100 >= func.coalesce(func.nullif(Track.duration, 0), 180) * 85
+    rows = db.query(Scrobble.played_at, Scrobble.track_id, Scrobble.is_imported, Track.title, Track.artist) \
         .execution_options(include_excluded=True, include_deleted=True) \
         .join(Track, Track.id == Scrobble.track_id) \
-        .filter(Scrobble.user_id == user_id, Scrobble.played_at >= start, Scrobble.played_at <= end).all()
+        .filter(Scrobble.user_id == user_id, Scrobble.played_at >= start, Scrobble.played_at <= end,
+                or_(counted, Scrobble.is_imported.is_(True), Scrobble.excluded_from_stats.is_(True),
+                    Scrobble.deleted_at.isnot(None))).all()
     return [_Known(ts=int(_as_aware(played_at).timestamp()), track_id=int(track_id),  # type: ignore[union-attr]
-                   key=(str(title).casefold(), str(artist).casefold()), exact_only=import_job_id is not None)
-            for played_at, track_id, import_job_id, title, artist in rows]
+                   key=(str(title).casefold(), str(artist).casefold()), exact_only=bool(is_imported))
+            for played_at, track_id, is_imported, title, artist in rows]
 
 
 def _take(known: list[_Known], ts: int, window: int, match=None) -> bool:

@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 
 import anyio
 import httpx
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.core.constants import ACTIVE_PLAYBACK_WINDOW_SEC
@@ -303,7 +303,8 @@ def sync_imported_listens(db: Session, track_id: int, duration: int | None) -> N
         return
     db.query(Scrobble).filter(
         Scrobble.track_id == track_id,
-        Scrobble.import_job_id.isnot(None),
+        or_(Scrobble.import_job_id.isnot(None),
+            and_(Scrobble.is_imported.is_(True), Scrobble.source == "lastfm")),  # imported before job ids
         Scrobble.listened_sec < duration,
     ).update({Scrobble.listened_sec: int(duration)}, synchronize_session=False)
 
