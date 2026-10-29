@@ -7,13 +7,17 @@ import PWARegistration from "../components/PWARegistration";
 import { SITE_URL, openGraph } from "./lib/preview";
 import MaintenanceOverlay from "../components/MaintenanceOverlay";
 import { LangProvider } from "./lib/i18n/client";
-import { getLang, getT, messagesFor } from "./lib/i18n/server";
+import { getLang, getT } from "./lib/i18n/server";
 
+// No preload: six font files (~100 KB) preloaded from the response headers
+// took a phone's bandwidth from the stylesheet and delayed the first paint.
+// Text shows in the size-matched fallback and swaps when a font arrives.
 const plexSans = IBM_Plex_Sans({
   subsets: ["latin", "cyrillic"],
   weight: ["400", "500", "600"],
   variable: "--font-plex-sans",
   display: "swap",
+  preload: false,
 });
 
 const plexMono = IBM_Plex_Mono({
@@ -21,6 +25,7 @@ const plexMono = IBM_Plex_Mono({
   weight: ["400", "500"],
   variable: "--font-plex-mono",
   display: "swap",
+  preload: false,
 });
 
 export const viewport: Viewport = {
@@ -89,7 +94,7 @@ export default async function RootLayout({
         >
           {t("К содержимому")}
         </a>
-        <LangProvider lang={lang} messages={messagesFor(lang)}>
+        <LangProvider lang={lang}>
           <AppShell>{children}</AppShell>
           <PWARegistration />
           <MaintenanceOverlay />

@@ -212,11 +212,15 @@ function shortNumber(n: number, t: Translator) {
 
 function weekRange(week: Week, t: Translator) {
   const day = (iso: string) => new Date(`${iso}T00:00:00Z`);
+  // Node puts thin spaces around the dash, Chrome plain ones: plain spaces
+  // everywhere, so the server's text matches the browser's when it hydrates
   return new Intl.DateTimeFormat(t.locale, {
     day: "numeric",
     month: "long",
     timeZone: "UTC",
-  }).formatRange(day(week.from), day(week.to));
+  })
+    .formatRange(day(week.from), day(week.to))
+    .replace(/\s/g, " ");
 }
 
 /** "VEIN за неделю": site-wide plays per day, totals and artist of the week. */
