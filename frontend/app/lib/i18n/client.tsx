@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext, useEffect, type ReactNode } from "react";
+import { use, useContext, useEffect, type ReactNode } from "react";
 import { LANG_COOKIE, makeTranslator, type Lang, type Messages } from "./core";
 import { activeTranslator, setActiveTranslator } from "./active";
 import { LangContext as SharedContext } from "./context";
@@ -11,12 +11,23 @@ const LangContext = SharedContext!;
 
 installLangHeader();
 
+let english: Promise<Messages> | null = null;
+
+/**
+ * The English dictionary as a chunk of its own: loaded once and cached by
+ * the browser, instead of riding in every page's HTML (≈250 KB). Russian
+ * pages never load it.
+ */
+const loadEnglish = () =>
+  (english ??= import("./en").then((module) => module.default));
+
 /** Wraps the app in the root layout with the visitor's language. */
 export function LangProvider({
   lang,
-  messages,
   children,
-}: Readonly<{ lang: Lang; messages: Messages | null; children: ReactNode }>) {
+}: Readonly<{ lang: Lang; children: ReactNode }>) {
+  // Hydration waits for the dictionary, so English text matches the server's
+  const messages = lang === "en" ? use(loadEnglish()) : null;
   // In the browser: the translator from an earlier render, if still right
   let t = typeof window === "undefined" ? null : activeTranslator();
   if (!t || t.lang !== lang) {

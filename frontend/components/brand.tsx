@@ -80,16 +80,13 @@ export function BrandLink({
 }>) {
   const t = useT();
   return (
-    <Link
-      href={href}
-      aria-label={
-        beta ? t("VEINMusic (бета) — на главную") : t("VEINMusic — на главную")
-      }
-      className="flex items-center gap-2.5 rounded-md"
-    >
+    // The name is a text, not aria-label: a label that does not start with
+    // the visible "VEINMusic beta" trips voice control (and Lighthouse)
+    <Link href={href} className="flex items-center gap-2.5 rounded-md">
       <LogoTile size={size} />
       <Wordmark className={textClass} />
       {beta && <BetaBadge className="-ml-0.5" />}
+      <span className="sr-only">{t("— на главную")}</span>
     </Link>
   );
 }
