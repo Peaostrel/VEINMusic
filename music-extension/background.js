@@ -340,12 +340,14 @@ function endTabPlayback(tabId) {
     void (async () => {
         const stored = await storageGet(['active_playback_tab']);
         const saved = stored.active_playback_tab;
+        // The stored record only stands in for a restarted worker's memory:
+        // while another tab is known to play, it may simply not be saved yet
         const activePayload = activePlaybackTabId === tabId ? payload :
-            (saved?.tabId === tabId ? saved.payload : null);
+            (activePlaybackTabId === null && saved?.tabId === tabId ? saved.payload : null);
         if (!activePayload) return;
         activePlaybackTabId = null;
         persistedPlayback = {key: '', at: 0};
-        await storageRemove(['active_playback_tab']);
+        if (saved?.tabId === tabId) await storageRemove(['active_playback_tab']);
         await sendScrobble({...activePayload, is_playing: false, stopped: true}, {force: true});
     })().catch((error) => console.warn('[VEIN] Не удалось завершить воспроизведение:', error));
 }

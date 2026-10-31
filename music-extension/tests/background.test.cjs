@@ -451,3 +451,22 @@ test('only a music page can report that its player closed', async () => {
     await vm.runInContext('deliveryChain', context);
     assert.equal(sent.some((item) => item.stopped), false);
 });
+
+test('an older tab unloading before the newer tab is saved does not stop it', async () => {
+    const sent = [];
+    const {context, state, onMessage} = harness([], async (_url, options) => {
+        sent.push(JSON.parse(options.body));
+        return {ok: true};
+    });
+    onMessage({type: 'SCROBBLE', data: payload}, {...musicSender, tab: {id: 17}});
+    await tick();
+    onMessage({type: 'SCROBBLE', data: payload}, {...musicSender, tab: {id: 18}});
+    // The newer tab's record has not reached storage yet
+    state.active_playback_tab = {tabId: 17, payload};
+    onMessage({type: 'PLAYER_CLOSED'}, {...musicSender, tab: {id: 17}});
+    await tick();
+    await tick();
+    await vm.runInContext('deliveryChain', context);
+    assert.equal(sent.some((item) => item.stopped), false);
+    assert.equal(vm.runInContext('activePlaybackTabId', context), 18);
+});
