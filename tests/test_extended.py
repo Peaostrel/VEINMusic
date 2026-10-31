@@ -98,6 +98,26 @@ def test_get_detailed_stats(auth_client, db, auth_user):
     assert data["top_artists"][0]["name"] == "DetailArtist"
 
 
+def test_top_albums_show_an_album_once(auth_client, db, auth_user):
+    # Tracks of one album from Last.fm and the player: other covers, other case
+    tracks = [Track(title="One", artist="Band", album="Spirit", duration=120, cover_url="https://img/a.jpg"),
+              Track(title="Two", artist="Band", album="SPIRIT", duration=120, cover_url=""),
+              Track(title="Three", artist="Band", album="Spirit", duration=120, cover_url="https://img/b.jpg")]
+    db.add_all(tracks)
+    db.flush()
+    now = datetime.datetime.now(datetime.timezone.utc)
+    db.add_all([Scrobble(user_id=auth_user.id, track_id=t.id, played_at=now, listened_sec=120, source=source)
+                for t, source in zip(tracks, ("yandex", "transfer", "lastfm"))])
+    db.commit()
+
+    albums = auth_client.get(f"/api/detailed-stats/{auth_user.username}?period=all").json()["top_albums"]
+    assert len(albums) == 1
+    assert albums[0]["plays"] == 3
+    assert albums[0]["album"] in ("Spirit", "SPIRIT")
+    assert albums[0]["cover_url"]
+    assert albums[0]["source"] == "yandex"  # the one with a link, not max() of the names
+
+
 def test_calendar_and_custom_wrapped_use_local_days(auth_client, db, auth_user):
     year = datetime.datetime.now(datetime.timezone.utc).year
     first = Track(title="First", artist="Calendar Artist", duration=120)
