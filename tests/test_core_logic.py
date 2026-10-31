@@ -179,6 +179,10 @@ def test_find_or_create_track_follows_alias_and_normalises(db):
     # Another song of the artist keeps the spelling the catalog already has
     other, _ = sp._find_or_create_track(db, "Second Song", "SOMEONE", "", "", 0, "")
     assert other.artist == "Someone"
+    # ...and of the album
+    first, _ = sp._find_or_create_track(db, "Third Song", "Someone", "", "", 0, "Big Album")
+    second, _ = sp._find_or_create_track(db, "Fourth Song", "Someone", "", "", 0, "BIG ALBUM")
+    assert (first.album, second.album) == ("Big Album", "Big Album")
 
 
 def test_get_or_create_track_enriches_from_yandex(db):

@@ -493,20 +493,21 @@ def _detailed_stats(db: Session, user: User, period: str, period_start, period_e
                         text(ORDER_PLAYS_DESC)).limit(10).all()
 
     # 4. Top Albums
+    # One row per album: its tracks may carry different covers (Last.fm and
+    # the player give their own) and letter case of the name
     top_albums_raw = db.query(
-        Track.album,
+        func.max(Track.album).label('album'),
         Track.artist,
-        Track.cover_url,
+        func.max(func.nullif(Track.cover_url, '')).label('cover_url'),
         func.count(
             Scrobble.id).label('plays'),
         func.max(
             Scrobble.source).label('source')) .join(Scrobble).filter(
                 *
                 base_filter,
-                Track.album.isnot(None)) .group_by(
-                    Track.album,
-                    Track.artist,
-                    Track.cover_url) .order_by(
+                Track.album.isnot(None), Track.album != "") .group_by(
+                    func.lower(Track.album),
+                    Track.artist) .order_by(
                         text(ORDER_PLAYS_DESC)).limit(10).all()
 
     # 5. Genre & Source counts

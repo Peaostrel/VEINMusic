@@ -297,7 +297,12 @@ def _new_plays(db, user_id: int, plays: list[_Play]) -> list[tuple[_Play, Option
 
 
 def _import_play(db, job: LastfmImportJob, owner: Optional[User], play: _Play, track: Optional[Track]) -> None:
-    from app.services.scrobble_processor import _check_favorite, _find_or_create_track, full_listen_sec
+    from app.services.scrobble_processor import (
+        _check_favorite,
+        _find_or_create_track,
+        full_listen_sec,
+        known_album_spelling,
+    )
     if track is None:
         track, _ = _find_or_create_track(db, play.title, play.artist, play.cover or "", "", 0,
                                          play.album or "", int(job.user_id))
@@ -306,7 +311,7 @@ def _import_play(db, job: LastfmImportJob, owner: Optional[User], play: _Play, t
             from app.core.cover_urls import proxied_image_url
             track.cover_url = proxied_image_url(play.cover) or None  # type: ignore[assignment]
         if play.album and not track.album:
-            track.album = play.album  # type: ignore[assignment]
+            track.album = known_album_spelling(db, str(track.artist or ""), play.album)  # type: ignore[assignment]
     played_at = datetime.fromtimestamp(play.ts, tz=UTC)
     # As for a live play: 2 XP for a favourite artist, track or album. The
     # event multiplier is left out: it rewards listening during the event
