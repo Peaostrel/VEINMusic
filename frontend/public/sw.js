@@ -22,6 +22,11 @@ const API_CACHED_PATHS = [
   /^\/api\/leaderboard\b/,
   /^\/api\/discovery\/taste-twins\b/,
 ];
+// Live feeds: the network answer always wins while there is one. A saved
+// answer on a slow connection showed hours-old plays until a reload, and a
+// late one could replace a fresher feed already on the page.
+const API_LIVE_PATHS =
+  /^\/api\/(global-history|friends-history|history-friends)\b/;
 const API_CACHE_LIMIT = 150;
 // On a bad connection wait this long before falling back to the cache
 const API_TIMEOUT_MS = 1500;
@@ -92,12 +97,13 @@ function apiCacheKey(request) {
   return url.toString();
 }
 
-async function apiNetworkFirst(request) {
+async function apiNetworkFirst(request, live) {
   const cache = await caches.open(API_CACHE);
   const key = apiCacheKey(request);
-  const timeout = new Promise((resolve) =>
-    setTimeout(resolve, API_TIMEOUT_MS, null),
-  );
+  // A live feed waits for the network; the cache is only for offline
+  const timeout = live
+    ? new Promise(() => {})
+    : new Promise((resolve) => setTimeout(resolve, API_TIMEOUT_MS, null));
   const network = fetch(request).then(async (response) => {
     if (response.status === 200) {
       await cache.delete(key);
@@ -125,7 +131,9 @@ self.addEventListener("fetch", (event) => {
 
   if (API_ORIGIN && url.origin === API_ORIGIN) {
     if (API_CACHED_PATHS.some((re) => re.test(url.pathname))) {
-      event.respondWith(apiNetworkFirst(request));
+      event.respondWith(
+        apiNetworkFirst(request, API_LIVE_PATHS.test(url.pathname)),
+      );
     }
     return;
   }
