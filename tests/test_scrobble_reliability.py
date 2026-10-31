@@ -207,19 +207,22 @@ def test_polled_client_does_not_claim_an_exact_player_position(client, db, liste
     assert db.query(Scrobble).one().position_sec is None
 
 
-def _cloud_report(db, user, playing=True):
+def _cloud_report(db, user, collector, playing=True):
     from app.services import scrobble_processor as sp
+    # Ynison passes credit_sec and reports as "live"; polling reports as "cloud"
+    options = {"credit_sec": 0, "pending_sec": 0} if collector == "live" else {}
     return asyncio.run(sp.process_scrobble(
         db, user, "Current", "Fixture Artist", "", "", "yandex", 60, playing, 180,
-        collector="cloud", credit_sec=0))
+        collector=collector, **options))
 
 
-def test_closed_tab_is_not_revived_by_the_cloud_connection(client, db, listener):
+@pytest.mark.parametrize("collector", ["live", "cloud"])
+def test_closed_tab_is_not_revived_by_the_cloud_connection(client, db, listener, collector):
     user, headers = listener
     payload = {**report(source="yandex"), "player_position": True, "progress_sec": 42}
     assert client.post("/api/scrobble", headers=headers, json=payload).json()["status"] == "ok"
     row = db.query(Scrobble).one()
-    row.credit_source = "yandex:cloud"  # Ynison reported the same track first
+    row.credit_source = f"yandex:{collector}"  # Ynison reported the same track first
     db.commit()
 
     stop = {**payload, "is_playing": False, "stopped": True}
@@ -232,7 +235,7 @@ def test_closed_tab_is_not_revived_by_the_cloud_connection(client, db, listener)
     # extrapolating "playing" and ticking well past the 40 s window
     row.updated_at = datetime.now(UTC) - timedelta(seconds=90)
     db.commit()
-    assert _cloud_report(db, user) == "ignored_inactive"
+    assert _cloud_report(db, user, collector) == "ignored_inactive"
     db.refresh(row)
     assert row.is_playing is False
     assert client.get(f"/api/current-track/{user.username}", headers=headers).json() == {"playing": False}
@@ -240,7 +243,7 @@ def test_closed_tab_is_not_revived_by_the_cloud_connection(client, db, listener)
     # Once the track could no longer be playing, cloud reports count again
     row.updated_at = datetime.now(UTC) - timedelta(seconds=180 + 61)
     db.commit()
-    assert _cloud_report(db, user) != "ignored_inactive"
+    assert _cloud_report(db, user, collector) != "ignored_inactive"
 
 
 def test_reopened_tab_resumes_the_closed_track_at_once(client, db, listener):
