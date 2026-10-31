@@ -55,6 +55,10 @@ POSITION_SOURCES = frozenset({"plat"})
 # reports a closed tab); cloud reports of that track are ignored for at most
 # its length plus the slack, after which they stop extrapolating anyway
 CLOSED_SUFFIX = ":closed"
+# Collectors the server runs itself: polling ("cloud") and the open Ynison
+# connection ("live"). Neither can see a browser tab close.
+SERVER_COLLECTORS = frozenset({"cloud", "live"})
+SERVER_COLLECTOR_SUFFIXES = (":cloud", ":live")
 CLOSED_SLACK_SEC = 60
 CLOSED_UNKNOWN_LENGTH_SEC = 900
 # Longest gap between two reports still taken as continuous playback
@@ -688,7 +692,8 @@ def _confirm_scrobble_source(db, last_scrobble, source_label, source_id, l_updat
     primary = last_scrobble.credit_source or f"{last_scrobble.source}:client"
     # A cloud connection cannot see a tab close, so a client's stop wins over
     # it; after a stop any client may take the play over again
-    live_over_cloud = (player_position or stopped) and primary.endswith(":cloud")
+    live_over_cloud = ((player_position and primary.endswith(":cloud"))
+                       or (stopped and primary.endswith(SERVER_COLLECTOR_SUFFIXES)))
     if (primary != source_id and not live_over_cloud and not primary.endswith(CLOSED_SUFFIX)
             and l_updated_at is not None
             and (now - l_updated_at).total_seconds() < 40):
@@ -832,7 +837,7 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
         # It must not replace the user's fresh, actually playing track.
         result["status"] = "ignored_inactive"
         return result
-    if collector == "cloud" and _closed_by_client(last_scrobble, track, now, l_updated_at):
+    if collector in SERVER_COLLECTORS and _closed_by_client(last_scrobble, track, now, l_updated_at):
         # The player tab was closed after the cloud connection last heard
         # from it (the Yandex web player sends nothing on close): its
         # extrapolated "still playing" must not bring the track back
