@@ -342,8 +342,9 @@ function endTabPlayback(tabId) {
         const saved = stored.active_playback_tab;
         // The stored record only stands in for a restarted worker's memory:
         // while another tab is known to play, it may simply not be saved yet
-        const activePayload = activePlaybackTabId === tabId ? payload :
-            (activePlaybackTabId === null && saved?.tabId === tabId ? saved.payload : null);
+        let activePayload = null;
+        if (activePlaybackTabId === tabId) activePayload = payload;
+        else if (activePlaybackTabId === null && saved?.tabId === tabId) activePayload = saved.payload;
         if (!activePayload) return;
         activePlaybackTabId = null;
         persistedPlayback = {key: '', at: 0};
