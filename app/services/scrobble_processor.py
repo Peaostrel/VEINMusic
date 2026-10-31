@@ -260,7 +260,7 @@ def _update_existing_track(
         track.track_url = track_url  # type: ignore[assignment]
         updated = True
     if album and not track.album:
-        track.album = album  # type: ignore[assignment]
+        track.album = known_album_spelling(db, str(track.artist or ""), album)  # type: ignore[assignment]
         updated = True
     # Only fill in an unknown/placeholder duration: a client must not be able
     # to rewrite the duration of an existing catalog track for everyone.
@@ -306,6 +306,19 @@ def known_artist_spelling(db: Session, artist: str) -> str:
     return str(known) if known else artist
 
 
+def known_album_spelling(db: Session, artist: str, album: str) -> str:
+    """Spelling the catalog already uses for this album of the artist.
+
+    Same reason as known_artist_spelling: top albums group by the name, so
+    "Психо-неврологические…" and "ПСИХО-НЕВРОЛОГИЧЕСКИЕ…" were two albums."""
+    if not album or not artist:
+        return album
+    known = db.query(Track.album).filter(
+        func.lower(Track.artist) == func.lower(artist),
+        func.lower(Track.album) == func.lower(album)).order_by(Track.id).limit(1).scalar()
+    return str(known) if known else album
+
+
 def full_listen_sec(track: Track) -> int:
     """Listening credited to an imported play: the whole track."""
     return int(track.duration) if track.duration and int(track.duration) > 0 else PLACEHOLDER_DURATION
@@ -349,13 +362,14 @@ def _find_or_create_track(
         return track, False
 
     if not track:
+        artist = known_artist_spelling(db, norm_artist)
         track = Track(
             title=norm_title,
-            artist=known_artist_spelling(db, norm_artist),
+            artist=artist,
             cover_url=cover_url,
             track_url=track_url,
             duration=duration or 0,
-            album=album)
+            album=known_album_spelling(db, artist, album))
         db.add(track)
         db.commit()
         db.refresh(track)
