@@ -419,3 +419,35 @@ test('a seek bypasses the heartbeat throttle without sending ordinary progress t
     await vm.runInContext('sendScrobble(livePayload)', context);
     assert.equal(sent.at(-1).is_playing, true);
 });
+
+test('a music page that unloads stops its track', async () => {
+    const sent = [];
+    const {context, onMessage} = harness([], async (_url, options) => {
+        sent.push(JSON.parse(options.body));
+        return {ok: true};
+    });
+    onMessage({type: 'SCROBBLE', data: payload}, {...musicSender, tab: {id: 21}});
+    await tick();
+    onMessage({type: 'PLAYER_CLOSED'}, {...musicSender, tab: {id: 21}});
+    await tick();
+    await tick();
+    await vm.runInContext('deliveryChain', context);
+    assert.equal(sent.length, 2);
+    assert.equal(sent[1].stopped, true);
+    assert.equal(sent[1].title, 'Song');
+});
+
+test('only a music page can report that its player closed', async () => {
+    const sent = [];
+    const {context, onMessage} = harness([], async (_url, options) => {
+        sent.push(JSON.parse(options.body));
+        return {ok: true};
+    });
+    onMessage({type: 'SCROBBLE', data: payload}, {...musicSender, tab: {id: 21}});
+    await tick();
+    onMessage({type: 'PLAYER_CLOSED'}, {url: 'https://example.com/', tab: {id: 21}});
+    await tick();
+    await tick();
+    await vm.runInContext('deliveryChain', context);
+    assert.equal(sent.some((item) => item.stopped), false);
+});

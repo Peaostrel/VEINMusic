@@ -205,3 +205,54 @@ def test_polled_client_does_not_claim_an_exact_player_position(client, db, liste
     _, headers = listener
     assert client.post("/api/scrobble", headers=headers, json={**report(), "progress_sec": 42}).json()["status"] == "ok"
     assert db.query(Scrobble).one().position_sec is None
+
+
+def _cloud_report(db, user, playing=True):
+    from app.services import scrobble_processor as sp
+    return asyncio.run(sp.process_scrobble(
+        db, user, "Current", "Fixture Artist", "", "", "yandex", 60, playing, 180,
+        collector="cloud", credit_sec=0))
+
+
+def test_closed_tab_is_not_revived_by_the_cloud_connection(client, db, listener):
+    user, headers = listener
+    payload = {**report(source="yandex"), "player_position": True, "progress_sec": 42}
+    assert client.post("/api/scrobble", headers=headers, json=payload).json()["status"] == "ok"
+    row = db.query(Scrobble).one()
+    row.credit_source = "yandex:cloud"  # Ynison reported the same track first
+    db.commit()
+
+    stop = {**payload, "is_playing": False, "stopped": True}
+    assert client.post("/api/scrobble", headers=headers, json=stop).json()["status"] == "ok"
+    db.refresh(row)
+    assert row.is_playing is False
+    assert row.credit_source == "yandex:closed"
+
+    # The Yandex web player sends nothing on close: Ynison keeps
+    # extrapolating "playing" and ticking well past the 40 s window
+    row.updated_at = datetime.now(UTC) - timedelta(seconds=90)
+    db.commit()
+    assert _cloud_report(db, user) == "ignored_inactive"
+    db.refresh(row)
+    assert row.is_playing is False
+    assert client.get(f"/api/current-track/{user.username}", headers=headers).json() == {"playing": False}
+
+    # Once the track could no longer be playing, cloud reports count again
+    row.updated_at = datetime.now(UTC) - timedelta(seconds=180 + 61)
+    db.commit()
+    assert _cloud_report(db, user) != "ignored_inactive"
+
+
+def test_reopened_tab_resumes_the_closed_track_at_once(client, db, listener):
+    user, headers = listener
+    payload = {**report(source="yandex"), "player_position": True, "progress_sec": 42}
+    assert client.post("/api/scrobble", headers=headers, json=payload).json()["status"] == "ok"
+    stop = {**payload, "is_playing": False, "stopped": True}
+    assert client.post("/api/scrobble", headers=headers, json=stop).json()["status"] == "ok"
+    response = client.post("/api/scrobble", headers=headers, json={**payload, "progress_sec": 43})
+    assert response.json()["status"] == "ok"
+    row = db.query(Scrobble).one()
+    db.refresh(row)
+    assert row.is_playing is True
+    assert row.credit_source == "yandex:client"
+    assert client.get(f"/api/current-track/{user.username}", headers=headers).json()["playing"] is True

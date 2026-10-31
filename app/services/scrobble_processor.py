@@ -51,6 +51,12 @@ PLACEHOLDER_DURATION = 180
 # is their position, and a pause or switch credits the stretch played since
 # the previous report. Polled sources see a pause late, so they never do.
 POSITION_SOURCES = frozenset({"plat"})
+# credit_source of a play whose player was closed (the browser extension
+# reports a closed tab); cloud reports of that track are ignored for at most
+# its length plus the slack, after which they stop extrapolating anyway
+CLOSED_SUFFIX = ":closed"
+CLOSED_SLACK_SEC = 60
+CLOSED_UNKNOWN_LENGTH_SEC = 900
 # Longest gap between two reports still taken as continuous playback
 LIVE_GAP_SEC = 35
 # A position this far behind the expected one, reached from the start since
@@ -649,15 +655,28 @@ async def _dispatch_counted_scrobble(user_id: int, counted: dict[str, Any]) -> N
         counted["timestamp"])
 
 
+def _closed_by_client(last_scrobble, track: Track, now, l_updated_at) -> bool:
+    """The same track's player was closed by a client (see CLOSED_SUFFIX)
+    recently enough that a cloud copy of it could still claim to play."""
+    if (last_scrobble is None or last_scrobble.track_id != track.id or last_scrobble.is_playing
+            or not str(last_scrobble.credit_source or "").endswith(CLOSED_SUFFIX) or l_updated_at is None):
+        return False
+    duration = int(track.duration or 0) or CLOSED_UNKNOWN_LENGTH_SEC
+    return (now - l_updated_at).total_seconds() < duration + CLOSED_SLACK_SEC
+
+
 def _confirm_scrobble_source(db, last_scrobble, source_label, source_id, l_updated_at, now,
-                             player_position: bool = False):
+                             player_position: bool = False, stopped: bool = False):
     sources = list(last_scrobble.confirmed_sources or [last_scrobble.source])
     if source_label not in sources:
         sources.append(source_label)
     last_scrobble.confirmed_sources = sources[:20]  # type: ignore[assignment]
     primary = last_scrobble.credit_source or f"{last_scrobble.source}:client"
-    live_over_cloud = player_position and primary.endswith(":cloud")
-    if (primary != source_id and not live_over_cloud and l_updated_at is not None
+    # A cloud connection cannot see a tab close, so a client's stop wins over
+    # it; after a stop any client may take the play over again
+    live_over_cloud = (player_position or stopped) and primary.endswith(":cloud")
+    if (primary != source_id and not live_over_cloud and not primary.endswith(CLOSED_SUFFIX)
+            and l_updated_at is not None
             and (now - l_updated_at).total_seconds() < 40):
         db.commit()
         return True
@@ -799,10 +818,16 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
         # It must not replace the user's fresh, actually playing track.
         result["status"] = "ignored_inactive"
         return result
+    if collector == "cloud" and _closed_by_client(last_scrobble, track, now, l_updated_at):
+        # The player tab was closed after the cloud connection last heard
+        # from it (the Yandex web player sends nothing on close): its
+        # extrapolated "still playing" must not bring the track back
+        result["status"] = "ignored_inactive"
+        return result
     was_playing = bool(last_scrobble.is_playing) if last_scrobble else None
     if (last_scrobble and last_scrobble.track_id == track.id
             and _confirm_scrobble_source(db, last_scrobble, source_label, source_id, l_updated_at, now,
-                                         player_position)):
+                                         player_position, stopped)):
         result["status"] = "confirmed_duplicate"
         return result
     positional = (source in POSITION_SOURCES or player_position) and credit_sec is None
@@ -837,6 +862,7 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
         current.position_sec = None
         current.is_playing = False
         current.pending_sec = 0
+        current.credit_source = f"{source}{CLOSED_SUFFIX}"  # type: ignore[assignment]
         db.commit()
     if stopped and current is not None:
         result["state_change"] = {

@@ -331,22 +331,27 @@ function rememberTabPlayback(tabId, payload) {
         console.warn('[VEIN] Не удалось запомнить активную вкладку:', error));
 }
 
+// Ends the player session of a tab that is gone: closed, reloaded or
+// navigated away from the music site.
+function endTabPlayback(tabId) {
+    if (!Number.isInteger(tabId)) return;
+    const payload = tabPlayback.get(tabId);
+    tabPlayback.delete(tabId);
+    void (async () => {
+        const stored = await storageGet(['active_playback_tab']);
+        const saved = stored.active_playback_tab;
+        const activePayload = activePlaybackTabId === tabId ? payload :
+            (saved?.tabId === tabId ? saved.payload : null);
+        if (!activePayload) return;
+        activePlaybackTabId = null;
+        persistedPlayback = {key: '', at: 0};
+        await storageRemove(['active_playback_tab']);
+        await sendScrobble({...activePayload, is_playing: false, stopped: true}, {force: true});
+    })().catch((error) => console.warn('[VEIN] Не удалось завершить воспроизведение:', error));
+}
+
 if (chrome.tabs?.onRemoved) {
-    chrome.tabs.onRemoved.addListener((tabId) => {
-        const payload = tabPlayback.get(tabId);
-        tabPlayback.delete(tabId);
-        void (async () => {
-            const stored = await storageGet(['active_playback_tab']);
-            const saved = stored.active_playback_tab;
-            const activePayload = activePlaybackTabId === tabId ? payload :
-                (saved?.tabId === tabId ? saved.payload : null);
-            if (!activePayload) return;
-            activePlaybackTabId = null;
-            persistedPlayback = {key: '', at: 0};
-            await storageRemove(['active_playback_tab']);
-            await sendScrobble({...activePayload, is_playing: false, stopped: true}, {force: true});
-        })().catch((error) => console.warn('[VEIN] Не удалось завершить воспроизведение:', error));
-    });
+    chrome.tabs.onRemoved.addListener((tabId) => endTabPlayback(tabId));
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -391,6 +396,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // Вкладка присылает события плеера сразу; серверу достаточно сигнала
     // раз в несколько секунд (он учитывает паузы между сигналами до 35 с),
     // поэтому одинаковые сигналы чаще раза в 5 секунд не отправляем.
+    // 4. Страница плеера выгружается (вкладку закрыли, перезагрузили или
+    // ушли с сайта): музыка в ней остановилась.
+    if (request.type === 'PLAYER_CLOSED' && platformForUrl(senderUrl)) {
+        endTabPlayback(sender.tab?.id);
+    }
+
     if (request.type === 'SCROBBLE') {
         const source = platformForUrl(senderUrl);
         const payload = source && safeTrackPayload(request.data, source);

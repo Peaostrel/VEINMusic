@@ -10,12 +10,16 @@ const source = fs.readFileSync(path.join(__dirname, '../content.js'), 'utf8');
 // window; Chromium's isolated world uses the window itself as the global.
 function runContent({ firefox }) {
     const listeners = [];
+    const unloads = [];
     const sent = [];
     const context = vm.createContext({
         console: { debug() {} },
         location: { origin: 'https://soundcloud.com', hostname: 'soundcloud.com' },
         setInterval() {},
-        addEventListener: (name, handler) => { if (name === 'message') listeners.push(handler); },
+        addEventListener: (name, handler) => {
+            if (name === 'message') listeners.push(handler);
+            if (name === 'pagehide') unloads.push(handler);
+        },
         chrome: {
             storage: {
                 local: { get: (_keys, callback) => callback({ trackingEnabled: true, apiKey: 'key' }) },
@@ -29,7 +33,8 @@ function runContent({ firefox }) {
     vm.runInContext(source, context);
     const post = (data, sourceWindow = pageWindow) => listeners.forEach((listener) =>
         listener({ origin: 'https://soundcloud.com', source: sourceWindow, data }));
-    return { sent, post };
+    const unload = () => unloads.forEach((handler) => handler({ persisted: false }));
+    return { sent, post, unload };
 }
 
 for (const firefox of [false, true]) {
@@ -44,4 +49,10 @@ test('ignores messages from other windows', () => {
     const { sent, post } = runContent({ firefox: true });
     post({ type: 'VEIN_SCROBBLE', payload: { title: 'Song' } }, {});
     assert.equal(sent.length, 0);
+});
+
+test('tells the extension when the player page unloads', () => {
+    const { sent, unload } = runContent({ firefox: false });
+    unload();
+    assert.equal(JSON.stringify(sent), JSON.stringify([{ type: 'PLAYER_CLOSED' }]));
 });
