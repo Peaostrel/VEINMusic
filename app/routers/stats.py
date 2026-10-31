@@ -11,7 +11,7 @@ from fastapi import (
     Request,
 )
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import func, text
+from sqlalchemy import case, func, text
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.constants import ACTIVE_PLAYBACK_WINDOW_SEC, ORDER_PLAYS_DESC
@@ -436,6 +436,20 @@ def _listening_version(db: Session, user_id: int) -> str:
     return ":".join(str(value) for value in row)
 
 
+# Sources the stats page can link an artist, track or album to (links.ts)
+_LINKABLE_SOURCES = ("yandex", "spotify", "vk", "youtube_music", "soundcloud", "apple_music", "zvuk")
+
+
+def _link_source():
+    """Source of a top row: one with a link when any of its plays has one.
+
+    A row joins plays from several sources (live, Last.fm, transfers), and a
+    plain max() could pick one without a link, such as "transfer"."""
+    return func.coalesce(
+        func.max(case((Scrobble.source.in_(_LINKABLE_SOURCES), Scrobble.source))),
+        func.max(Scrobble.source))
+
+
 def _detailed_stats(db: Session, user: User, period: str, period_start, period_end, period_label,
                     lang: str = "ru"):
     base_filter = _counted_filter(int(user.id), period_start, period_end)
@@ -465,8 +479,7 @@ def _detailed_stats(db: Session, user: User, period: str, period_start, period_e
         Track.artist,
         func.count(
             Scrobble.id).label('plays'),
-        func.max(
-            Scrobble.source).label('source'),
+        _link_source().label('source'),
         func.max(Track.cover_url).label('cover_url')) .join(Scrobble).filter(
                 *
                 base_filter).group_by(
@@ -481,8 +494,7 @@ def _detailed_stats(db: Session, user: User, period: str, period_start, period_e
         Track.track_url,
         func.count(
             Scrobble.id).label('plays'),
-        func.max(
-            Scrobble.source).label('source')) .join(Scrobble).filter(
+        _link_source().label('source')) .join(Scrobble).filter(
                 *
                 base_filter).group_by(
                     Track.id,
@@ -501,8 +513,7 @@ def _detailed_stats(db: Session, user: User, period: str, period_start, period_e
         func.max(func.nullif(Track.cover_url, '')).label('cover_url'),
         func.count(
             Scrobble.id).label('plays'),
-        func.max(
-            Scrobble.source).label('source')) .join(Scrobble).filter(
+        _link_source().label('source')) .join(Scrobble).filter(
                 *
                 base_filter,
                 Track.album.isnot(None), Track.album != "") .group_by(

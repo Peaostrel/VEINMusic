@@ -106,8 +106,8 @@ def test_top_albums_show_an_album_once(auth_client, db, auth_user):
     db.add_all(tracks)
     db.flush()
     now = datetime.datetime.now(datetime.timezone.utc)
-    db.add_all([Scrobble(user_id=auth_user.id, track_id=t.id, played_at=now, listened_sec=120, source="yandex")
-                for t in tracks])
+    db.add_all([Scrobble(user_id=auth_user.id, track_id=t.id, played_at=now, listened_sec=120, source=source)
+                for t, source in zip(tracks, ("yandex", "transfer", "lastfm"))])
     db.commit()
 
     albums = auth_client.get(f"/api/detailed-stats/{auth_user.username}?period=all").json()["top_albums"]
@@ -115,6 +115,7 @@ def test_top_albums_show_an_album_once(auth_client, db, auth_user):
     assert albums[0]["plays"] == 3
     assert albums[0]["album"] in ("Spirit", "SPIRIT")
     assert albums[0]["cover_url"]
+    assert albums[0]["source"] == "yandex"  # the one with a link, not max() of the names
 
 
 def test_calendar_and_custom_wrapped_use_local_days(auth_client, db, auth_user):
