@@ -33,6 +33,16 @@ globalThis.addEventListener('message', (event) => {
     }).catch(() => {});
 });
 
+// The page is unloading (tab closed, reloaded, or left for another site): its
+// player stops. The tab-close event alone misses navigation within the tab,
+// and a page restored from the back/forward cache reports itself again.
+globalThis.addEventListener('pagehide', () => {
+    if (!trackingEnabled) return;
+    try {
+        chrome.runtime.sendMessage({ type: 'PLAYER_CLOSED' }).catch(() => {});
+    } catch { /* The extension was reloaded: nothing to notify. */ }
+});
+
 // Helper to extract metadata from MediaSession
 function getMediaSessionMetadata() {
     if (navigator.mediaSession?.metadata) {
