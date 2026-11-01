@@ -259,3 +259,28 @@ def test_reopened_tab_resumes_the_closed_track_at_once(client, db, listener):
     assert row.is_playing is True
     assert row.credit_source == "yandex:client"
     assert client.get(f"/api/current-track/{user.username}", headers=headers).json()["playing"] is True
+
+
+def test_closed_tab_is_not_replaced_by_a_lagging_queue_track(client, db, listener):
+    """Without Ynison, the Yandex fallback reads the play queue, whose current
+    item can lag behind the player: after the tab closes it reports another
+    queue track as playing. That must not start a play either."""
+    from app.services import scrobble_processor as sp
+    user, headers = listener
+    payload = {**report(source="yandex"), "player_position": True, "progress_sec": 42}
+    assert client.post("/api/scrobble", headers=headers, json=payload).json()["status"] == "ok"
+    stop = {**payload, "is_playing": False, "stopped": True}
+    assert client.post("/api/scrobble", headers=headers, json=stop).json()["status"] == "ok"
+
+    status = asyncio.run(sp.process_scrobble(
+        db, user, "Queue Neighbour", "Fixture Artist", "", "", "yandex", 28, True, 124,
+        collector="cloud"))
+    assert status == "ignored_inactive"
+    assert db.query(Scrobble).count() == 1
+    assert client.get(f"/api/current-track/{user.username}", headers=headers).json() == {"playing": False}
+
+    # Another service is not affected by the closed Yandex tab
+    status = asyncio.run(sp.process_scrobble(
+        db, user, "Elsewhere", "Fixture Artist", "", "", "spotify", 5, True, 200,
+        collector="cloud"))
+    assert status != "ignored_inactive"

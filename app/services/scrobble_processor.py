@@ -52,8 +52,8 @@ PLACEHOLDER_DURATION = 180
 # the previous report. Polled sources see a pause late, so they never do.
 POSITION_SOURCES = frozenset({"plat"})
 # credit_source of a play whose player was closed (the browser extension
-# reports a closed tab); cloud reports of that track are ignored for at most
-# its length plus the slack, after which they stop extrapolating anyway
+# reports a closed tab); server reports of that source are ignored for at
+# most the closed track's length plus the slack (see _closed_by_client)
 CLOSED_SUFFIX = ":closed"
 # Collectors the server runs itself: polling ("cloud") and the open Ynison
 # connection ("live"). Neither can see a browser tab close.
@@ -673,14 +673,21 @@ async def _dispatch_counted_scrobble(user_id: int, counted: dict[str, Any]) -> N
         counted["timestamp"])
 
 
-def _closed_by_client(last_scrobble, track: Track, now, l_updated_at) -> bool:
-    """The same track's player was closed by a client (see CLOSED_SUFFIX)
-    recently enough that a cloud copy of it could still claim to play."""
-    if (last_scrobble is None or last_scrobble.track_id != track.id or last_scrobble.is_playing
-            or not str(last_scrobble.credit_source or "").endswith(CLOSED_SUFFIX) or l_updated_at is None):
+def _closed_by_client(last_scrobble, source: str, now, l_updated_at) -> bool:
+    """A client closed this source's player (see CLOSED_SUFFIX) recently
+    enough that the server's own view of it could still claim to play.
+
+    Any track counts, not only the closed one: without the live Ynison
+    connection the Yandex fallback reads the play queue, whose current item
+    can lag behind the player, and estimates playback from the time the
+    queue last changed, so it reports some queue track as playing."""
+    if (last_scrobble is None or last_scrobble.is_playing or l_updated_at is None
+            or str(last_scrobble.credit_source or "") != f"{source}{CLOSED_SUFFIX}"):
         return False
-    duration = int(track.duration or 0) or CLOSED_UNKNOWN_LENGTH_SEC
-    return (now - l_updated_at).total_seconds() < duration + CLOSED_SLACK_SEC
+    closed_track = last_scrobble.track
+    duration = int(closed_track.duration or 0) if closed_track is not None else 0
+    window = (duration or CLOSED_UNKNOWN_LENGTH_SEC) + CLOSED_SLACK_SEC
+    return (now - l_updated_at).total_seconds() < window
 
 
 def _confirm_scrobble_source(db, last_scrobble, source_label, source_id, l_updated_at, now,
@@ -837,7 +844,7 @@ def _record_scrobble(db: Session, user: User, track: Track, source: str,
         # It must not replace the user's fresh, actually playing track.
         result["status"] = "ignored_inactive"
         return result
-    if collector in SERVER_COLLECTORS and _closed_by_client(last_scrobble, track, now, l_updated_at):
+    if collector in SERVER_COLLECTORS and _closed_by_client(last_scrobble, source, now, l_updated_at):
         # The player tab was closed after the cloud connection last heard
         # from it (the Yandex web player sends nothing on close): its
         # extrapolated "still playing" must not bring the track back
