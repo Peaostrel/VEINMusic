@@ -1077,9 +1077,9 @@ cryptography==50.0.1 \
 pycparser==3.12 \
     --hash=sha256:a076f3f489b39b43ed13563a1dafe42447445bec2e294154ec5c57fcdda4c85e \
     --hash=sha256:f03387877eab82ce01bbdfd0ba7252ee55a90b1c708d5129e2ce915475cf1db6
-sentry-sdk==2.73.0 \
-    --hash=sha256:0bcfa6928ea5adbb89591858b514d27adac27c7a3cccc31b20ed10e0b09eda9e \
-    --hash=sha256:4a2ab97b16e4693c325ab361c7bbbb346dbc7d0bc0150922d795a25bac8d5280
+sentry-sdk==2.74.0 \
+    --hash=sha256:40b205af015649df3ec9986e057ce24ce85956bee3fb75efa72c93aa7036bdff \
+    --hash=sha256:dd91d75aacaef636006b579ac3ddb2fdbc9dce35f00f4b353b6b1b110c6b256a
 pillow==13.0.0 \
     --hash=sha256:02464da86f561f410e13b061ec37c3068a9cb557a095494157742d07b3c24a27 \
     --hash=sha256:04a63720f79e22fd54d897c233a68314c50ca0603360f54ce2bd5db8f0f43782 \
